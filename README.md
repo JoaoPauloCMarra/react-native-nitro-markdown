@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./apps/example/assets/icon.png" alt="react-native-nitro-markdown logo" width="150" height="150" />
+  <img src="./readme/demo.gif" alt="react-native-nitro-markdown demo" width="300" />
 </p>
 
 # react-native-nitro-markdown 🚀
