@@ -241,7 +241,7 @@ export type NodeType =
 
 We parse math delimiters (`$` and `$$`) natively using the `MD_FLAG_LATEXMATHSPANS` flag in `md4c`.
 
-To render the math, you should use a library like `react-native-math-view` inside your renderer:
+To render the math, you should use a library like `react-native-math-view`, `react-native-mathjax-svg`, or `react-native-katex` inside your renderer:
 
 ```tsx
 // Inside your switch(node.type)
@@ -253,11 +253,11 @@ case 'math_block':
 
 ## 📊 Package Size
 
-| Metric | Size |
-| :----- | :--- |
-| **Packed (tarball)** | ~75 kB |
-| **Unpacked** | ~325 kB |
-| **Total files** | 55 |
+| Metric               | Size    |
+| :------------------- | :------ |
+| **Packed (tarball)** | ~75 kB  |
+| **Unpacked**         | ~325 kB |
+| **Total files**      | 55      |
 
 > The package includes the [md4c](https://github.com/mity/md4c) C source code (~244 kB) which is compiled natively on iOS and Android. This is a one-time cost that enables the high-performance parsing.
 

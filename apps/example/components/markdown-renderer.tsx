@@ -8,7 +8,7 @@ import {
   Image,
   type LayoutChangeEvent,
 } from 'react-native';
-import MathView from 'react-native-math-view';
+import MathJax from 'react-native-mathjax-svg';
 import type { MarkdownNode } from 'react-native-nitro-markdown';
 
 interface MarkdownRendererProps {
@@ -217,33 +217,29 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       );
 
     case 'math_inline': {
-      const mathContent = getTextContent(node);
+      let mathContent = getTextContent(node);
       if (!mathContent) return null;
+      // Strip any existing $ delimiters from content
+      mathContent = mathContent.replace(/^\$+|\$+$/g, '').trim();
       return (
         <View style={styles.mathInlineContainer}>
-          <MathView
-            math={mathContent}
-            color={colors.math}
-            resizeMode="contain"
-            style={styles.mathInline}
-          />
+          <MathJax fontSize={16} color={colors.math} fontCache>
+            {mathContent}
+          </MathJax>
         </View>
       );
     }
 
     case 'math_block': {
-      const mathContent = getTextContent(node);
+      let mathContent = getTextContent(node);
       if (!mathContent) return null;
+      // Strip any existing $$ delimiters from content
+      mathContent = mathContent.replace(/^\$+|\$+$/g, '').trim();
       return (
         <View style={styles.mathBlock}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <MathView
-              math={`\\displaystyle ${mathContent}`}
-              color={colors.math}
-              resizeMode="contain"
-              style={styles.mathBlockContent}
-            />
-          </ScrollView>
+          <MathJax fontSize={20} color={colors.math} fontCache>
+            {`\\displaystyle ${mathContent}`}
+          </MathJax>
         </View>
       );
     }
@@ -805,21 +801,19 @@ const styles = StyleSheet.create({
   mathInlineContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  mathInline: {
-    minHeight: 20,
+    flexWrap: 'wrap',
   },
   mathBlock: {
     backgroundColor: colors.mathBackground,
     borderRadius: 12,
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     marginVertical: 12,
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#3d2d6a',
-  },
-  mathBlockContent: {
-    minHeight: 40,
+    minHeight: 60,
   },
 
   htmlStub: {
