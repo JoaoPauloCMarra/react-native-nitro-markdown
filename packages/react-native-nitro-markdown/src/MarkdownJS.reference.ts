@@ -1,5 +1,3 @@
-import { NitroModules } from 'react-native-nitro-modules';
-
 export interface MarkdownNode {
   type: string;
   content?: string;
@@ -26,8 +24,8 @@ export class JSMarkdownParser {
   private parseImpl(text: string, options: ParserOptions): MarkdownNode {
     // Simple regex-based parser for comparison
     // This is much slower than the C++ version but demonstrates JSI usage
-    const root: MarkdownNode = { type: 'document', children: [] };
-    const lines = text.split('\n');
+    const root: MarkdownNode = { type: "document", children: [] };
+    const lines = text.split("\n");
     let i = 0;
 
     while (i < lines.length) {
@@ -41,9 +39,9 @@ export class JSMarkdownParser {
       const headerMatch = line.match(/^(#{1,6})\s+(.+)$/);
       if (headerMatch) {
         root.children!.push({
-          type: 'heading',
+          type: "heading",
           level: headerMatch[1].length,
-          children: [{ type: 'text', content: headerMatch[2] }]
+          children: [{ type: "text", content: headerMatch[2] }],
         });
         i++;
         continue;
@@ -53,11 +51,13 @@ export class JSMarkdownParser {
       const boldMatch = line.match(/\*\*(.+?)\*\*/);
       if (boldMatch) {
         root.children!.push({
-          type: 'paragraph',
-          children: [{
-            type: 'bold',
-            children: [{ type: 'text', content: boldMatch[1] }]
-          }]
+          type: "paragraph",
+          children: [
+            {
+              type: "bold",
+              children: [{ type: "text", content: boldMatch[1] }],
+            },
+          ],
         });
         i++;
         continue;
@@ -65,8 +65,8 @@ export class JSMarkdownParser {
 
       // Default paragraph
       root.children!.push({
-        type: 'paragraph',
-        children: [{ type: 'text', content: line }]
+        type: "paragraph",
+        children: [{ type: "text", content: line }],
       });
       i++;
     }
@@ -74,14 +74,20 @@ export class JSMarkdownParser {
     return root;
   }
 
-  parse(text: string, options: ParserOptions = { gfm: true, math: true }): MarkdownNode {
+  parse(
+    text: string,
+    options: ParserOptions = { gfm: true, math: true }
+  ): MarkdownNode {
     return this.parseImpl(text, options);
   }
 }
 
 // JSI-enabled version using Nitro but with JS implementation
 export class JSINitroMarkdownParser {
-  parse(text: string, options: ParserOptions = { gfm: true, math: true }): MarkdownNode {
+  parse(
+    text: string,
+    options: ParserOptions = { gfm: true, math: true }
+  ): MarkdownNode {
     // This would use JSI to call into JavaScriptCore
     // For now, we'll simulate it
     const parser = new JSMarkdownParser();
@@ -100,7 +106,10 @@ export class HybridMarkdownParser {
     this.jsParser = new JSMarkdownParser();
   }
 
-  parse(text: string, options: ParserOptions = { gfm: true, math: true }): MarkdownNode {
+  parse(
+    text: string,
+    options: ParserOptions = { gfm: true, math: true }
+  ): MarkdownNode {
     // Use C++ parser for complex cases, JS for simple
     if (text.length > 1000 || options.gfm || options.math) {
       // Would call C++ parser via Nitro
