@@ -17,7 +17,8 @@
     },
     "plugins": [
       "expo-router",
-      "expo-build-properties"
+      "expo-build-properties",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true

@@ -13,82 +13,79 @@ export default function BenchmarkScreen() {
   const [logs, setLogs] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const runBenchmark = () => {
+  const addLog = (message: string) => {
+    setLogs((prev) => [...prev, message]);
+  };
+
+  const wait = (ms: number) =>
+    new Promise((resolve) => setTimeout(resolve, ms));
+
+  const runBenchmark = async () => {
     setLogs([]);
     setError(null);
 
-    requestAnimationFrame(async () => {
-      const results = [];
+    try {
+      // Test data info
+      addLog(
+        `📊 Testing ${(REPEATED_MARKDOWN.length / 1024).toFixed(
+          1
+        )}KB of complex markdown`
+      );
+      addLog("");
+      await wait(100);
 
-      try {
-        // Test data info
-        results.push(
-          `📊 Testing ${(REPEATED_MARKDOWN.length / 1024).toFixed(
-            1
-          )}KB of complex markdown`
-        );
-        results.push("");
+      // --- 1. BENCHMARK NITRO (C++) ---
+      parseMarkdown("warmup");
+      const startNitro = global.performance.now();
+      parseMarkdown(REPEATED_MARKDOWN);
+      const endNitro = global.performance.now();
+      const nitroTime = endNitro - startNitro;
+      addLog(`🚀 Nitro (C++): ${nitroTime.toFixed(2)}ms`);
+      await wait(100);
 
-        // --- 1. BENCHMARK NITRO (C++) ---
-        parseMarkdown("warmup");
+      // --- 2. BENCHMARK COMMONMARK.JS ---
+      const commonmarkParser = new Parser();
+      commonmarkParser.parse("warmup");
+      const startCommonMark = global.performance.now();
+      commonmarkParser.parse(REPEATED_MARKDOWN);
+      const endCommonMark = global.performance.now();
+      const commonmarkTime = endCommonMark - startCommonMark;
+      addLog(`📋 CommonMark (JS): ${commonmarkTime.toFixed(2)}ms`);
+      await wait(100);
 
-        const startNitro = global.performance.now();
-        const nitroAST = parseMarkdown(REPEATED_MARKDOWN);
-        const endNitro = global.performance.now();
-        const nitroTime = endNitro - startNitro;
+      // --- 3. BENCHMARK MARKDOWN-IT ---
+      const markdownItParser = new MarkdownIt();
+      markdownItParser.render("warmup");
+      const startMarkdownIt = global.performance.now();
+      markdownItParser.render(REPEATED_MARKDOWN);
+      const endMarkdownIt = global.performance.now();
+      const markdownItTime = endMarkdownIt - startMarkdownIt;
+      addLog(`🏗️  Markdown-It (JS): ${markdownItTime.toFixed(2)}ms`);
+      await wait(100);
 
-        results.push(`🚀 Nitro (C++): ${nitroTime.toFixed(2)}ms`);
+      // --- 4. BENCHMARK MARKED ---
+      marked.parse("warmup");
+      const startMarked = global.performance.now();
+      marked.parse(REPEATED_MARKDOWN);
+      const endMarked = global.performance.now();
+      const markedTime = endMarked - startMarked;
+      addLog(`💨 Marked (JS): ${markedTime.toFixed(2)}ms`);
+      addLog("");
+      await wait(100);
 
-        // --- 2. BENCHMARK COMMONMARK.JS (Reference Implementation) ---
-        const commonmarkParser = new Parser();
-        commonmarkParser.parse("warmup");
+      // --- CALCULATE THE WINS ---
+      const commonmarkSpeedup = (commonmarkTime / nitroTime).toFixed(1);
+      const markdownItSpeedup = (markdownItTime / nitroTime).toFixed(1);
+      const markedSpeedup = (markedTime / nitroTime).toFixed(1);
 
-        const startCommonMark = global.performance.now();
-        const commonmarkAST = commonmarkParser.parse(REPEATED_MARKDOWN);
-        const endCommonMark = global.performance.now();
-        const commonmarkTime = endCommonMark - startCommonMark;
-
-        results.push(`📋 CommonMark (JS): ${commonmarkTime.toFixed(2)}ms`);
-
-        // --- 3. BENCHMARK MARKDOWN-IT (Heavyweight) ---
-        const markdownItParser = new MarkdownIt();
-        markdownItParser.render("warmup");
-
-        const startMarkdownIt = global.performance.now();
-        const markdownItHTML = markdownItParser.render(REPEATED_MARKDOWN);
-        const endMarkdownIt = global.performance.now();
-        const markdownItTime = endMarkdownIt - startMarkdownIt;
-
-        results.push(`🏗️  Markdown-It (JS): ${markdownItTime.toFixed(2)}ms`);
-
-        // --- 4. BENCHMARK MARKED (Speedster) ---
-        marked.parse("warmup");
-
-        const startMarked = global.performance.now();
-        const markedHTML = marked.parse(REPEATED_MARKDOWN);
-        const endMarked = global.performance.now();
-        const markedTime = endMarked - startMarked;
-
-        results.push(`💨 Marked (JS): ${markedTime.toFixed(2)}ms`);
-        results.push("");
-
-        // --- CALCULATE THE WINS ---
-        const commonmarkSpeedup = (commonmarkTime / nitroTime).toFixed(1);
-        const markdownItSpeedup = (markdownItTime / nitroTime).toFixed(1);
-        const markedSpeedup = (markedTime / nitroTime).toFixed(1);
-
-        results.push("🏆 SPEED COMPARISON:");
-        results.push(`   Nitro vs CommonMark: ${commonmarkSpeedup}x faster`);
-        results.push(`   Nitro vs Markdown-It: ${markdownItSpeedup}x faster`);
-        results.push(`   Nitro vs Marked: ${markedSpeedup}x faster`);
-
-        setLogs(results);
-        console.log(results.join("\n"));
-      } catch (e) {
-        console.error("[Benchmark] Error:", e);
-        setError(e instanceof Error ? e.message : "Unknown error");
-      }
-    });
+      addLog("🏆 SPEED COMPARISON:");
+      addLog(`   Nitro vs CommonMark: ${commonmarkSpeedup}x faster`);
+      addLog(`   Nitro vs Markdown-It: ${markdownItSpeedup}x faster`);
+      addLog(`   Nitro vs Marked: ${markedSpeedup}x faster`);
+    } catch (e) {
+      console.error("[Benchmark] Error:", e);
+      setError(e instanceof Error ? e.message : "Unknown error");
+    }
   };
 
   return (
