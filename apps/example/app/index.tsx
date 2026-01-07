@@ -1,10 +1,18 @@
 import { useState } from "react";
-import { ScrollView, StyleSheet, Text, View, Pressable } from "react-native";
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  Pressable,
+  Platform,
+} from "react-native";
 import { parseMarkdown } from "react-native-nitro-markdown";
 import { COMPLEX_MARKDOWN } from "../markdown-test-data";
 import { Parser } from "commonmark";
 import MarkdownIt from "markdown-it";
 import { marked } from "marked";
+import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 
 // Generate a massive string (~237KB) to force the CPU to work
 const REPEATED_MARKDOWN = COMPLEX_MARKDOWN.repeat(50);
@@ -12,6 +20,7 @@ const REPEATED_MARKDOWN = COMPLEX_MARKDOWN.repeat(50);
 export default function BenchmarkScreen() {
   const [logs, setLogs] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const tabHeight = useBottomTabHeight();
 
   const addLog = (message: string) => {
     setLogs((prev) => [...prev, message]);
@@ -105,7 +114,10 @@ export default function BenchmarkScreen() {
         <Text style={styles.benchmarkText}>🏁 Run Ultimate Benchmark</Text>
       </Pressable>
 
-      <ScrollView style={styles.resultsScroll}>
+      <ScrollView
+        style={styles.resultsScroll}
+        contentContainerStyle={{ paddingBottom: tabHeight + 20 }}
+      >
         {error ? (
           <View style={styles.errorBox}>
             <Text style={styles.errorTitle}>Benchmark Error</Text>
@@ -144,109 +156,132 @@ export default function BenchmarkScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#09090b", // Zinc 950
   },
   header: {
-    paddingTop: 20,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingTop: 32,
+    paddingHorizontal: 24,
+    paddingBottom: 24,
     alignItems: "center",
   },
   title: {
     fontSize: 28,
-    fontWeight: "bold",
-    color: "#fff",
+    fontWeight: "800",
+    color: "#f4f4f5", // Zinc 100
     marginBottom: 8,
+    textAlign: "center",
+    letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 16,
-    color: "#888",
-    marginBottom: 4,
+    color: "#a1a1aa", // Zinc 400
+    marginBottom: 8,
+    textAlign: "center",
   },
   dataSize: {
-    fontSize: 14,
-    color: "#4ade80",
-    fontFamily: "monospace",
+    fontSize: 13,
+    color: "#22c55e", // Green 500
+    fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }),
+    backgroundColor: "rgba(34, 197, 94, 0.1)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    overflow: "hidden",
   },
   benchmarkButton: {
-    backgroundColor: "#4f46e5",
-    marginHorizontal: 20,
-    marginBottom: 20,
-    paddingVertical: 16,
-    borderRadius: 12,
+    backgroundColor: "#4f46e5", // Indigo 600
+    marginHorizontal: 24,
+    marginBottom: 24,
+    paddingVertical: 18,
+    borderRadius: 16,
     alignItems: "center",
+    shadowColor: "#4f46e5",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
   },
   benchmarkText: {
     color: "#fff",
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   resultsScroll: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
   },
   resultsContainer: {
-    paddingVertical: 20,
+    backgroundColor: "#18181b", // Zinc 900
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 40,
+    borderWidth: 1,
+    borderColor: "#27272a", // Zinc 800
   },
   resultText: {
-    fontSize: 18,
-    fontFamily: "monospace",
+    fontSize: 15,
+    fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }),
     marginBottom: 12,
-    lineHeight: 24,
+    lineHeight: 22,
+    color: "#d4d4d8", // Zinc 300
   },
   nitroResult: {
-    color: "#4ade80",
-    fontWeight: "600",
+    color: "#4ade80", // Green 400
+    fontWeight: "700",
   },
   commonmarkResult: {
-    color: "#f87171",
+    color: "#f87171", // Red 400
     fontWeight: "600",
   },
   markdownitResult: {
-    color: "#a855f7",
+    color: "#c084fc", // Purple 400
     fontWeight: "600",
   },
   markedResult: {
-    color: "#06b6d4",
+    color: "#22d3ee", // Cyan 400
     fontWeight: "600",
   },
   comparisonHeader: {
-    color: "#fbbf24",
-    fontSize: 18,
+    color: "#fbbf24", // Amber 400
+    fontSize: 16,
     fontWeight: "bold",
-    marginTop: 15,
-    marginBottom: 8,
+    marginTop: 16,
+    marginBottom: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#3f3f46", // Zinc 700
+    paddingTop: 16,
   },
   speedResult: {
-    color: "#10b981",
-    fontSize: 16,
-    fontWeight: "600",
-    marginLeft: 20,
+    color: "#10b981", // Emerald 500
+    fontSize: 15,
+    fontWeight: "700",
+    marginLeft: 0, // Reset margin since we are inside a container
   },
   instructionText: {
-    color: "#666",
+    color: "#52525b", // Zinc 600
     fontSize: 16,
     textAlign: "center",
     marginTop: 60,
     lineHeight: 24,
+    paddingHorizontal: 32,
   },
   errorBox: {
-    backgroundColor: "#2d1b1b",
-    borderRadius: 12,
+    backgroundColor: "#450a0a", // Red 950
+    borderRadius: 16,
     padding: 20,
     marginTop: 20,
     borderWidth: 1,
-    borderColor: "#7f1d1d",
+    borderColor: "#7f1d1d", // Red 900
   },
   errorTitle: {
-    color: "#fca5a5",
-    fontSize: 18,
-    fontWeight: "600",
+    color: "#fca5a5", // Red 300
+    fontSize: 16,
+    fontWeight: "700",
     marginBottom: 8,
   },
   errorMessage: {
-    color: "#fca5a5",
-    fontSize: 14,
-    fontFamily: "monospace",
+    color: "#fecaca", // Red 200
+    fontSize: 13,
+    fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }),
   },
 });

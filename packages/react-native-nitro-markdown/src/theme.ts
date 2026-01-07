@@ -1,0 +1,42 @@
+export const defaultMarkdownTheme = {
+  colors: {
+    text: "#e0e0e0",
+    textMuted: "#888",
+    heading: "#f0f0f0",
+    link: "#60a5fa",
+    code: "#fbbf24",
+    codeBackground: "#1a1a2e",
+    blockquote: "#3b82f6",
+    border: "#252525",
+    surface: "#151515",
+    surfaceLight: "#1a1a1a",
+    accent: "#4ade80",
+    tableBorder: "#334155",
+    tableHeader: "#0f172a",
+    tableHeaderText: "#94a3b8",
+    tableRowEven: "#0f172a",
+    tableRowOdd: "#1e293b",
+  },
+  spacing: {
+    xs: 4,
+    s: 8,
+    m: 12,
+    l: 16,
+    xl: 24,
+  },
+  fontSizes: {
+    xs: 12,
+    s: 14,
+    m: 16,
+    l: 18,
+    xl: 22,
+    h1: 32,
+    h2: 26,
+    h3: 22,
+    h4: 18,
+    h5: 16,
+    h6: 14,
+  },
+};
+
+export type MarkdownTheme = typeof defaultMarkdownTheme;

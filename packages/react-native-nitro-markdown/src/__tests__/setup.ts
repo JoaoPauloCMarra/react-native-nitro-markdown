@@ -1,4 +1,4 @@
-import type { MarkdownNode } from '../index';
+import type { MarkdownNode } from "../index";
 
 interface MockParserOptions {
   gfm?: boolean;
@@ -6,23 +6,26 @@ interface MockParserOptions {
 }
 
 function createTextNode(content: string): MarkdownNode {
-  return { type: 'text', content };
+  return { type: "text", content };
 }
 
 function createParagraph(children: MarkdownNode[]): MarkdownNode {
-  return { type: 'paragraph', children };
+  return { type: "paragraph", children };
 }
 
-function parseMarkdownMock(text: string, options: MockParserOptions = { gfm: true, math: true }): MarkdownNode {
-  const root: MarkdownNode = { type: 'document', children: [] };
-  const lines = text.split('\n');
+function parseMarkdownMock(
+  text: string,
+  options: MockParserOptions = { gfm: true, math: true }
+): MarkdownNode {
+  const root: MarkdownNode = { type: "document", children: [] };
+  const lines = text.split("\n");
   let i = 0;
 
   while (i < lines.length) {
     const line = lines[i];
     const trimmed = line.trim();
 
-    if (trimmed === '') {
+    if (trimmed === "") {
       i++;
       continue;
     }
@@ -33,7 +36,7 @@ function parseMarkdownMock(text: string, options: MockParserOptions = { gfm: tru
       const level = headingMatch[1].length;
       const content = headingMatch[2];
       root.children!.push({
-        type: 'heading',
+        type: "heading",
         level,
         children: parseInline(content, options),
       });
@@ -43,7 +46,7 @@ function parseMarkdownMock(text: string, options: MockParserOptions = { gfm: tru
 
     // Horizontal rule
     if (/^[-*_]{3,}$/.test(trimmed)) {
-      root.children!.push({ type: 'horizontal_rule' });
+      root.children!.push({ type: "horizontal_rule" });
       i++;
       continue;
     }
@@ -54,14 +57,14 @@ function parseMarkdownMock(text: string, options: MockParserOptions = { gfm: tru
       const language = codeBlockMatch[1] || undefined;
       const codeLines: string[] = [];
       i++;
-      while (i < lines.length && !lines[i].trim().startsWith('```')) {
+      while (i < lines.length && !lines[i].trim().startsWith("```")) {
         codeLines.push(lines[i]);
         i++;
       }
       i++; // skip closing ```
-      const codeContent = codeLines.join('\n');
+      const codeContent = codeLines.join("\n");
       root.children!.push({
-        type: 'code_block',
+        type: "code_block",
         language,
         children: [createTextNode(codeContent)],
       });
@@ -69,16 +72,18 @@ function parseMarkdownMock(text: string, options: MockParserOptions = { gfm: tru
     }
 
     // Block math
-    if (options.math && trimmed.startsWith('$$')) {
-      if (trimmed.endsWith('$$') && trimmed.length > 4) {
+    if (options.math && trimmed.startsWith("$$")) {
+      if (trimmed.endsWith("$$") && trimmed.length > 4) {
         // Single line block math
         const mathContent = trimmed.slice(2, -2);
         root.children!.push({
-          type: 'paragraph',
-          children: [{
-            type: 'math_block',
-            children: [createTextNode(mathContent)],
-          }],
+          type: "paragraph",
+          children: [
+            {
+              type: "math_block",
+              children: [createTextNode(mathContent)],
+            },
+          ],
         });
         i++;
         continue;
@@ -88,7 +93,7 @@ function parseMarkdownMock(text: string, options: MockParserOptions = { gfm: tru
       const firstLine = trimmed.slice(2);
       if (firstLine) mathLines.push(firstLine);
       i++;
-      while (i < lines.length && !lines[i].trim().endsWith('$$')) {
+      while (i < lines.length && !lines[i].trim().endsWith("$$")) {
         mathLines.push(lines[i]);
         i++;
       }
@@ -98,25 +103,27 @@ function parseMarkdownMock(text: string, options: MockParserOptions = { gfm: tru
         i++;
       }
       root.children!.push({
-        type: 'paragraph',
-        children: [{
-          type: 'math_block',
-          children: [createTextNode(mathLines.join('\n'))],
-        }],
+        type: "paragraph",
+        children: [
+          {
+            type: "math_block",
+            children: [createTextNode(mathLines.join("\n"))],
+          },
+        ],
       });
       continue;
     }
 
     // Blockquote
-    if (trimmed.startsWith('>')) {
+    if (trimmed.startsWith(">")) {
       const quoteLines: string[] = [];
-      while (i < lines.length && lines[i].trim().startsWith('>')) {
-        quoteLines.push(lines[i].trim().replace(/^>\s?/, ''));
+      while (i < lines.length && lines[i].trim().startsWith(">")) {
+        quoteLines.push(lines[i].trim().replace(/^>\s?/, ""));
         i++;
       }
       root.children!.push({
-        type: 'blockquote',
-        children: [createParagraph(parseInline(quoteLines.join(' '), options))],
+        type: "blockquote",
+        children: [createParagraph(parseInline(quoteLines.join(" "), options))],
       });
       continue;
     }
@@ -129,21 +136,21 @@ function parseMarkdownMock(text: string, options: MockParserOptions = { gfm: tru
         const taskMatch = itemLine.match(/^[-*+]\s+\[([ xX])\]\s+(.*)$/);
         if (options.gfm && taskMatch) {
           items.push({
-            type: 'task_list_item',
-            checked: taskMatch[1].toLowerCase() === 'x',
+            type: "task_list_item",
+            checked: taskMatch[1].toLowerCase() === "x",
             children: [createParagraph(parseInline(taskMatch[2], options))],
           });
         } else {
-          const content = itemLine.replace(/^[-*+]\s+/, '');
+          const content = itemLine.replace(/^[-*+]\s+/, "");
           items.push({
-            type: 'list_item',
+            type: "list_item",
             children: [createParagraph(parseInline(content, options))],
           });
         }
         i++;
       }
       root.children!.push({
-        type: 'list',
+        type: "list",
         ordered: false,
         children: items,
       });
@@ -156,15 +163,15 @@ function parseMarkdownMock(text: string, options: MockParserOptions = { gfm: tru
       const items: MarkdownNode[] = [];
       const start = parseInt(orderedMatch[1], 10);
       while (i < lines.length && /^\d+\.\s/.test(lines[i].trim())) {
-        const content = lines[i].trim().replace(/^\d+\.\s+/, '');
+        const content = lines[i].trim().replace(/^\d+\.\s+/, "");
         items.push({
-          type: 'list_item',
+          type: "list_item",
           children: [createParagraph(parseInline(content, options))],
         });
         i++;
       }
       root.children!.push({
-        type: 'list',
+        type: "list",
         ordered: true,
         start,
         children: items,
@@ -173,9 +180,9 @@ function parseMarkdownMock(text: string, options: MockParserOptions = { gfm: tru
     }
 
     // Table (GFM)
-    if (options.gfm && trimmed.includes('|')) {
+    if (options.gfm && trimmed.includes("|")) {
       const tableLines: string[] = [];
-      while (i < lines.length && lines[i].includes('|')) {
+      while (i < lines.length && lines[i].includes("|")) {
         tableLines.push(lines[i]);
         i++;
       }
@@ -190,12 +197,18 @@ function parseMarkdownMock(text: string, options: MockParserOptions = { gfm: tru
 
     // Paragraph
     const paragraphLines: string[] = [];
-    while (i < lines.length && lines[i].trim() !== '' && !isBlockStart(lines[i])) {
+    while (
+      i < lines.length &&
+      lines[i].trim() !== "" &&
+      !isBlockStart(lines[i])
+    ) {
       paragraphLines.push(lines[i]);
       i++;
     }
     if (paragraphLines.length > 0) {
-      root.children!.push(createParagraph(parseInline(paragraphLines.join(' '), options)));
+      root.children!.push(
+        createParagraph(parseInline(paragraphLines.join(" "), options))
+      );
     }
   }
 
@@ -211,18 +224,21 @@ function isBlockStart(line: string): boolean {
     /^>/.test(trimmed) ||
     /^[-*+]\s/.test(trimmed) ||
     /^\d+\.\s/.test(trimmed) ||
-    (trimmed.includes('|') && trimmed.startsWith('|'))
+    (trimmed.includes("|") && trimmed.startsWith("|"))
   );
 }
 
-function parseTable(lines: string[], options: MockParserOptions): MarkdownNode | null {
+function parseTable(
+  lines: string[],
+  options: MockParserOptions
+): MarkdownNode | null {
   if (lines.length < 2) return null;
 
   const parseRow = (line: string): string[] => {
     return line
-      .split('|')
+      .split("|")
       .slice(1, -1)
-      .map(cell => cell.trim());
+      .map((cell) => cell.trim());
   };
 
   const headerCells = parseRow(lines[0]);
@@ -230,29 +246,29 @@ function parseTable(lines: string[], options: MockParserOptions): MarkdownNode |
 
   if (!/^[\s|:-]+$/.test(separatorLine)) return null;
 
-  const alignments = parseRow(separatorLine).map(cell => {
-    const left = cell.startsWith(':');
-    const right = cell.endsWith(':');
-    if (left && right) return 'center';
-    if (right) return 'right';
-    if (left) return 'left';
+  const alignments = parseRow(separatorLine).map((cell) => {
+    const left = cell.startsWith(":");
+    const right = cell.endsWith(":");
+    if (left && right) return "center";
+    if (right) return "right";
+    if (left) return "left";
     return undefined;
   });
 
   const headerRow: MarkdownNode = {
-    type: 'table_row',
+    type: "table_row",
     children: headerCells.map((cell, idx) => ({
-      type: 'table_cell',
+      type: "table_cell",
       isHeader: true,
       align: alignments[idx],
       children: parseInline(cell, options),
     })),
   };
 
-  const bodyRows: MarkdownNode[] = lines.slice(2).map(line => ({
-    type: 'table_row',
+  const bodyRows: MarkdownNode[] = lines.slice(2).map((line) => ({
+    type: "table_row",
     children: parseRow(line).map((cell, idx) => ({
-      type: 'table_cell',
+      type: "table_cell",
       isHeader: false,
       align: alignments[idx],
       children: parseInline(cell, options),
@@ -260,10 +276,10 @@ function parseTable(lines: string[], options: MockParserOptions): MarkdownNode |
   }));
 
   return {
-    type: 'table',
+    type: "table",
     children: [
-      { type: 'table_head', children: [headerRow] },
-      { type: 'table_body', children: bodyRows },
+      { type: "table_head", children: [headerRow] },
+      { type: "table_body", children: bodyRows },
     ],
   };
 }
@@ -278,7 +294,7 @@ function parseInline(text: string, options: MockParserOptions): MarkdownNode[] {
       const mathMatch = remaining.match(/^\$([^$]+)\$/);
       if (mathMatch) {
         nodes.push({
-          type: 'math_inline',
+          type: "math_inline",
           children: [createTextNode(mathMatch[1])],
         });
         remaining = remaining.slice(mathMatch[0].length);
@@ -289,16 +305,17 @@ function parseInline(text: string, options: MockParserOptions): MarkdownNode[] {
     // Inline code
     const codeMatch = remaining.match(/^`([^`]+)`/);
     if (codeMatch) {
-      nodes.push({ type: 'code_inline', content: codeMatch[1] });
+      nodes.push({ type: "code_inline", content: codeMatch[1] });
       remaining = remaining.slice(codeMatch[0].length);
       continue;
     }
 
     // Bold
-    const boldMatch = remaining.match(/^\*\*(.+?)\*\*/) || remaining.match(/^__(.+?)__/);
+    const boldMatch =
+      remaining.match(/^\*\*(.+?)\*\*/) || remaining.match(/^__(.+?)__/);
     if (boldMatch) {
       nodes.push({
-        type: 'bold',
+        type: "bold",
         children: parseInline(boldMatch[1], options),
       });
       remaining = remaining.slice(boldMatch[0].length);
@@ -306,10 +323,11 @@ function parseInline(text: string, options: MockParserOptions): MarkdownNode[] {
     }
 
     // Italic
-    const italicMatch = remaining.match(/^\*([^*]+)\*/) || remaining.match(/^_([^_]+)_/);
+    const italicMatch =
+      remaining.match(/^\*([^*]+)\*/) || remaining.match(/^_([^_]+)_/);
     if (italicMatch) {
       nodes.push({
-        type: 'italic',
+        type: "italic",
         children: parseInline(italicMatch[1], options),
       });
       remaining = remaining.slice(italicMatch[0].length);
@@ -321,7 +339,7 @@ function parseInline(text: string, options: MockParserOptions): MarkdownNode[] {
       const strikeMatch = remaining.match(/^~~(.+?)~~/);
       if (strikeMatch) {
         nodes.push({
-          type: 'strikethrough',
+          type: "strikethrough",
           children: parseInline(strikeMatch[1], options),
         });
         remaining = remaining.slice(strikeMatch[0].length);
@@ -336,14 +354,14 @@ function parseInline(text: string, options: MockParserOptions): MarkdownNode[] {
       const titleMatch = href.match(/^([^\s]+)\s+"([^"]+)"$/);
       if (titleMatch) {
         nodes.push({
-          type: 'link',
+          type: "link",
           href: titleMatch[1],
           title: titleMatch[2],
           children: parseInline(linkText, options),
         });
       } else {
         nodes.push({
-          type: 'link',
+          type: "link",
           href,
           children: parseInline(linkText, options),
         });
@@ -359,14 +377,14 @@ function parseInline(text: string, options: MockParserOptions): MarkdownNode[] {
       const titleMatch = src.match(/^([^\s]+)\s+"([^"]+)"$/);
       if (titleMatch) {
         nodes.push({
-          type: 'image',
+          type: "image",
           href: titleMatch[1],
           title: titleMatch[2],
           alt,
         });
       } else {
         nodes.push({
-          type: 'image',
+          type: "image",
           href: src,
           alt,
         });
@@ -376,9 +394,9 @@ function parseInline(text: string, options: MockParserOptions): MarkdownNode[] {
     }
 
     // Line break (two trailing spaces)
-    if (remaining.startsWith('  \n') || remaining.startsWith('  ')) {
-      nodes.push({ type: 'line_break' });
-      remaining = remaining.slice(remaining.startsWith('  \n') ? 3 : 2);
+    if (remaining.startsWith("  \n") || remaining.startsWith("  ")) {
+      nodes.push({ type: "line_break" });
+      remaining = remaining.slice(remaining.startsWith("  \n") ? 3 : 2);
       continue;
     }
 
@@ -400,18 +418,31 @@ function parseInline(text: string, options: MockParserOptions): MarkdownNode[] {
 }
 
 const createMockAST = (text: string): MarkdownNode => {
-  const root: MarkdownNode = { type: 'document', children: [] };
+  const root: MarkdownNode = { type: "document", children: [] };
   if (text.length > 1000) {
-    root.children = [{ type: 'paragraph', children: [{ type: 'text', content: text.slice(0, 100) }] }];
+    root.children = [
+      {
+        type: "paragraph",
+        children: [{ type: "text", content: text.slice(0, 100) }],
+      },
+    ];
     return root;
   }
   return parseMarkdownMock(text);
 };
 
-const createMockASTWithOptions = (text: string, options: MockParserOptions): MarkdownNode => {
-  const root: MarkdownNode = { type: 'document', children: [] };
+const createMockASTWithOptions = (
+  text: string,
+  options: MockParserOptions
+): MarkdownNode => {
+  const root: MarkdownNode = { type: "document", children: [] };
   if (text.length > 1000) {
-    root.children = [{ type: 'paragraph', children: [{ type: 'text', content: text.slice(0, 100) }] }];
+    root.children = [
+      {
+        type: "paragraph",
+        children: [{ type: "text", content: text.slice(0, 100) }],
+      },
+    ];
     return root;
   }
   return parseMarkdownMock(text, options);
@@ -424,11 +455,35 @@ const mockParser = {
   ),
 };
 
-jest.mock('react-native-nitro-modules', () => ({
+jest.mock("react-native-nitro-modules", () => ({
   NitroModules: {
     createHybridObject: jest.fn(() => mockParser),
   },
 }));
 
-export { mockParser };
+jest.mock("react-native", () => {
+  return {
+    StyleSheet: {
+      create: (obj: any) => obj,
+      flatten: (obj: any) => obj,
+    },
+    View: "View",
+    Text: "Text",
+    Image: "Image",
+    ScrollView: "ScrollView",
+    Linking: {
+      openURL: jest.fn(),
+    },
+    Platform: {
+      OS: "ios",
+      select: (obj: any) => obj.ios,
+    },
+    Dimensions: {
+      get: jest.fn().mockReturnValue({ width: 375, height: 812 }),
+    },
+  };
+});
 
+jest.mock("react-native-mathjax-svg", () => "MathJax");
+
+export { mockParser };
