@@ -1,35 +1,41 @@
 export * from "./headless";
 
-/** Low-level renderer component for custom implementations */
 export { DefaultMarkdownRenderer } from "./default-markdown-renderer";
-
-/**
- * High-level Markdown component with optional custom renderers.
- * @example
- * ```tsx
- * <Markdown>{'# Hello World'}</Markdown>
- * ```
- */
 export { Markdown } from "./markdown";
-
-/**
- * Markdown component that supports streaming updates.
- */
 export { MarkdownStream } from "./markdown-stream";
 
-export { useMarkdownContext } from "./MarkdownContext";
+export { useMarkdownContext, MarkdownContext } from "./MarkdownContext";
 export type {
   CustomRenderer,
   CustomRenderers,
   CustomRendererProps,
   NodeRendererProps,
+  BaseCustomRendererProps,
+  EnhancedRendererProps,
+  HeadingRendererProps,
+  LinkRendererProps,
+  ImageRendererProps,
+  CodeBlockRendererProps,
+  InlineCodeRendererProps,
+  ListRendererProps,
+  TaskListItemRendererProps,
+  MarkdownContextValue,
 } from "./MarkdownContext";
 
-/** Default theme configuration */
-export { defaultMarkdownTheme } from "./theme";
-export type { MarkdownTheme } from "./theme";
+export {
+  defaultMarkdownTheme,
+  lightMarkdownTheme,
+  darkMarkdownTheme,
+  minimalMarkdownTheme,
+  mergeThemes,
+} from "./theme";
+export type {
+  MarkdownTheme,
+  PartialMarkdownTheme,
+  NodeStyleOverrides,
+  StylingStrategy,
+} from "./theme";
 
-// Individual renderers for custom compositions
 export { Heading } from "./renderers/heading";
 export { Paragraph } from "./renderers/paragraph";
 export { Link } from "./renderers/link";
@@ -41,7 +47,6 @@ export { TableRenderer } from "./renderers/table";
 export { Image } from "./renderers/image";
 export { MathInline, MathBlock } from "./renderers/math";
 
-// Streaming API
 export { createMarkdownSession } from "./MarkdownSession";
 export type { MarkdownSession } from "./MarkdownSession";
 export { useMarkdownSession, useStream } from "./use-markdown-stream";

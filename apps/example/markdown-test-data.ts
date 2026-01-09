@@ -14,6 +14,16 @@ This parser supports *all* the features you'd expect:
 - [Links](https://github.com)
 - ![Landscape](https://picsum.photos/300/200 "Random image from Picsum")
 
+**Bold text** and *italic text* and ***bold italic text***.
+
+__Alternative bold__ and _alternative italic_ and ___alternative bold italic___.
+
+~~Strikethrough text~~ and ~~**strikethrough bold**~~ and ~~*strikethrough italic*~~.
+
+Regular text with **bold in the middle** and more text.
+
+A sentence with *multiple* **formatting** ***options*** mixed ~~together~~.
+
 ## Some Lists / Tasks
 
 **Quick actions:**
@@ -51,10 +61,15 @@ This parser supports *all* the features you'd expect:
 | Math Support | LaTeX expressions | ✅ | Full featured |
 | GFM Tables | Advanced table rendering | ✅ | Complete spec |
 
+| Name | Email |
+|------|-------|
+| Alice | alice@example.com |
+| Bob | bob@example.com |
+
 ## LaTeX Mathematics
 
 ### Inline Math
-- Simple: $E = mc^2$
+- Simple: $E = mc^2$ with more text after It. Simple: $E = mc^2$ with more text after It.
 - Complex: $\\frac{d}{dx}[x^n] = nx^{n-1}$
 - Greek letters: $\\alpha + \\beta = \\gamma$
 - Subscripts: $x_1, x_2, \\dots, x_n$
@@ -133,6 +148,23 @@ std::shared_ptr<MarkdownNode> parseMarkdown(
      > With multiple paragraphs
      >
      > And even more content
+
+### Multi-line Blockquote
+
+> This blockquote spans multiple lines.
+> It continues here on the second line.
+> And even a third line for good measure.
+
+### Blockquote with Formatting
+
+> **Important:** This blockquote contains *formatted* text.
+> It also has \`inline code\` and a [link](https://example.com).
+
+### Text After Blockquote
+
+> A quote about something meaningful.
+
+Regular paragraph text that follows the blockquote.
 
 ## Horizontal Rules and Separators
 

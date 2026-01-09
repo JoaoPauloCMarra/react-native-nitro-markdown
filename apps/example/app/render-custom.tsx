@@ -8,23 +8,23 @@ import {
 } from "react-native";
 import {
   Markdown,
-  type MarkdownNode,
   TableRenderer,
+  CodeBlock,
+  lightMarkdownTheme,
+  type EnhancedRendererProps,
   type CustomRendererProps,
 } from "react-native-nitro-markdown";
 import {
   COMPLEX_MARKDOWN,
   CUSTOM_RENDER_COMPONENTS,
 } from "../markdown-test-data";
+import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 
-const CustomHeading = ({
-  node,
-  children,
-}: {
-  node: MarkdownNode;
-  children: ReactNode;
-}) => {
-  const level = node.level ?? 1;
+/**
+ * Custom heading using the pre-mapped `level` prop.
+ * The EnhancedRendererProps includes optional `level` for headings.
+ */
+const CustomHeading = ({ level = 1, children }: EnhancedRendererProps) => {
   const fontSize = 32 - level * 4;
   return (
     <View style={customStyles.headingContainer}>
@@ -34,56 +34,42 @@ const CustomHeading = ({
   );
 };
 
-const CustomBlockquote = ({ children }: { children: ReactNode }) => {
-  return (
-    <View style={customStyles.blockquote}>
-      <Text style={customStyles.blockquoteIcon}>💡</Text>
-      <View style={customStyles.blockquoteContent}>{children}</View>
-    </View>
-  );
-};
+const CustomBlockquote = ({ children }: { children: ReactNode }) => (
+  <View style={customStyles.blockquote}>
+    <Text style={customStyles.blockquoteIcon}>💡</Text>
+    <View style={customStyles.blockquoteContent}>{children}</View>
+  </View>
+);
 
-const CustomImage = ({ node }: { node: MarkdownNode }) => {
-  return (
-    <View style={customStyles.imageCard}>
-      <RNImage
-        source={{ uri: node.href }}
-        style={customStyles.image}
-        resizeMode="cover"
-      />
-      {node.title && (
-        <Text style={customStyles.imageCaption}>{node.title}</Text>
-      )}
-    </View>
-  );
-};
+/**
+ * Custom image using pre-mapped `url`, `title` props.
+ */
+const CustomImage = ({ url = "", title }: EnhancedRendererProps) => (
+  <View style={customStyles.imageCard}>
+    <RNImage
+      source={{ uri: url }}
+      style={customStyles.image}
+      resizeMode="cover"
+    />
+    {title && <Text style={customStyles.imageCaption}>{title}</Text>}
+  </View>
+);
 
-const CustomTable = (props: CustomRendererProps) => {
-  return <TableRenderer node={props.node} Renderer={props.Renderer} />;
-};
+/**
+ * Custom code block using pre-mapped `content` and `language` props.
+ * No more getTextContent(node) needed!
+ */
+const CustomCodeBlock = ({ content = "", language }: EnhancedRendererProps) => (
+  <CodeBlock
+    content={content}
+    language={language}
+    style={{ borderRadius: 16, borderWidth: 2, borderColor: "#6366F1" }}
+  />
+);
 
-const lightTheme = {
-  colors: {
-    text: "#1f2937",
-    textMuted: "#6b7280",
-    heading: "#111827",
-    link: "#2563eb",
-    code: "#ea580c",
-    codeBackground: "#f3f4f6",
-    blockquote: "#3b82f6",
-    border: "#e5e7eb",
-    surface: "#ffffff",
-    surfaceLight: "#f9fafb",
-    accent: "#10b981",
-    tableBorder: "#e5e7eb",
-    tableHeader: "#f3f4f6",
-    tableHeaderText: "#6b7280",
-    tableRowEven: "#ffffff",
-    tableRowOdd: "#f9fafb",
-  },
-};
-
-import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
+const CustomTable = (props: CustomRendererProps) => (
+  <TableRenderer node={props.node} Renderer={props.Renderer} />
+);
 
 export default function RenderCustomScreen() {
   const tabHeight = useBottomTabHeight();
@@ -101,11 +87,13 @@ export default function RenderCustomScreen() {
       >
         <Markdown
           options={{ gfm: true, math: true }}
-          theme={lightTheme}
+          theme={lightMarkdownTheme}
           renderers={{
+            // Using pre-mapped props - simpler custom renderers!
             heading: CustomHeading,
             blockquote: CustomBlockquote,
             image: CustomImage,
+            code_block: CustomCodeBlock,
             table: CustomTable,
             horizontal_rule: () => <View style={customStyles.hr} />,
           }}

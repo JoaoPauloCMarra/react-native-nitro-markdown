@@ -22,11 +22,7 @@ export const Link: FC<LinkProps> = ({ href, children, style }) => {
   );
 
   const handlePress = () => {
-    if (href) {
-      Linking.openURL(href).catch((err) =>
-        console.error("Failed to open URL:", err)
-      );
-    }
+    if (href) Linking.openURL(href);
   };
 
   return (
@@ -35,4 +31,3 @@ export const Link: FC<LinkProps> = ({ href, children, style }) => {
     </Text>
   );
 };
-

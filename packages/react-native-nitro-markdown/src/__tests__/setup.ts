@@ -464,8 +464,8 @@ jest.mock("react-native-nitro-modules", () => ({
 jest.mock("react-native", () => {
   return {
     StyleSheet: {
-      create: (obj: any) => obj,
-      flatten: (obj: any) => obj,
+      create: (obj: Record<string, unknown>) => obj,
+      flatten: (obj: Record<string, unknown>) => obj,
     },
     View: "View",
     Text: "Text",
@@ -476,7 +476,7 @@ jest.mock("react-native", () => {
     },
     Platform: {
       OS: "ios",
-      select: (obj: any) => obj.ios,
+      select: (obj: Record<string, unknown>) => obj.ios,
     },
     Dimensions: {
       get: jest.fn().mockReturnValue({ width: 375, height: 812 }),

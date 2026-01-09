@@ -100,38 +100,25 @@ export function MyComponent() {
 }
 ```
 
-### Option 2: Custom Renderers
+### Option 2: Light Theme / Theme Presets
 
-Override specific node types while keeping defaults for everything else:
+The default theme is optimized for dark mode. For light backgrounds, use the provided `lightMarkdownTheme`:
 
 ```tsx
-import {
-  Markdown,
-  Heading,
-  type CustomRenderers,
-} from "react-native-nitro-markdown";
-import MathJax from "react-native-mathjax-svg";
+import { Markdown, lightMarkdownTheme } from "react-native-nitro-markdown";
 
-const renderers: CustomRenderers = {
-  // Custom styled heading
-  heading: ({ node, children }) => (
-    <Heading level={node.level ?? 1}>
-      <Text style={{ color: "pink" }}>{children}</Text>
-    </Heading>
-  ),
-  // Custom math renderer
-  math_inline: ({ node }) => <MathJax fontSize={16}>{node.content}</MathJax>,
-  math_block: ({ node }) => <MathJax fontSize={20}>{node.content}</MathJax>,
-};
-
-<Markdown renderers={renderers} options={{ gfm: true, math: true }}>
-  {markdown}
-</Markdown>;
+<Markdown theme={lightMarkdownTheme}>{"# Light Mode Markdown"}</Markdown>;
 ```
+
+Available presets:
+
+- `defaultMarkdownTheme` / `darkMarkdownTheme` - Modern dark theme
+- `lightMarkdownTheme` - Clean light theme
+- `minimalMarkdownTheme` - Bare minimum styling for a clean slate
 
 ### Option 3: Custom Theming
 
-You can easily customize the look and feel of the default components by passing a `theme` object. This allows you to match your app's brand without writing custom renderers for everything.
+Customize the look and feel by passing a partial `theme` object:
 
 ```tsx
 import { Markdown } from "react-native-nitro-markdown";
@@ -141,38 +128,152 @@ const myTheme = {
     text: "#2D3748",
     heading: "#1A202C",
     link: "#3182CE",
-    tableBorder: "#E2E8F0",
-    tableHeader: "#F7FAFC",
   },
-  spacing: {
-    m: 16,
+  fontFamilies: {
+    regular: "Inter",
+    heading: "Inter-Bold",
+    mono: "JetBrainsMono",
   },
+  borderRadius: {
+    s: 4,
+    m: 8,
+    l: 16,
+  },
+  showCodeLanguage: true, // Toggle code language labels
 };
 
-<Markdown theme={myTheme}>{"# Custom Branded Markdown"}</Markdown>;
-
-> **Tip:** The default theme is optimized for Dark Mode. For Light Mode, pass a custom theme object or check out the [theme source](packages/react-native-nitro-markdown/src/theme.ts) to see all available tokens.
+<Markdown theme={myTheme}>{"# Custom Themed Markdown"}</Markdown>;
 ```
 
-### Option 4: Headless (Minimal Bundle)
+**Theme Properties:**
+
+- `colors` - All color tokens (text, heading, link, code, codeBackground, codeLanguage, etc.)
+- `spacing` - Spacing tokens (xs, s, m, l, xl)
+- `fontSizes` - Font sizes (xs, s, m, l, xl, h1-h6)
+- `fontFamilies` - Font families for regular, heading, and mono text
+- `borderRadius` - Border radius tokens (s, m, l)
+- `showCodeLanguage` - Show/hide code block language labels
+
+### Option 4: Style Overrides per Node Type
+
+Apply quick style overrides to specific node types without writing custom renderers:
+
+```tsx
+<Markdown
+  styles={{
+    heading: { color: "red", fontWeight: "900" },
+    code_block: { backgroundColor: "#1a1a2e", borderRadius: 16 },
+    blockquote: { borderLeftColor: "#ff6b6b" },
+  }}
+>
+  {markdown}
+</Markdown>
+```
+
+### Option 5: Minimal Styling Strategy
+
+Start with a clean slate using the `stylingStrategy` prop:
+
+```tsx
+<Markdown stylingStrategy="minimal" theme={myLightTheme}>
+  {content}
+</Markdown>
+```
+
+This zeros out all spacing and removes opinionated colors, letting you build up from scratch.
+
+### Option 6: Custom Renderers
+
+Override specific node types with full control. Custom renderers now receive **pre-mapped props** for common values:
+
+```tsx
+import {
+  Markdown,
+  CodeBlock,
+  type HeadingRendererProps,
+  type CodeBlockRendererProps,
+} from "react-native-nitro-markdown";
+
+const renderers = {
+  // Pre-mapped `level` prop - no need for node.level!
+  heading: ({ level, children }: HeadingRendererProps) => (
+    <MyHeading level={level}>{children}</MyHeading>
+  ),
+
+  // Pre-mapped `content` and `language` - no getTextContent() needed!
+  code_block: ({ content, language }: CodeBlockRendererProps) => (
+    <CodeBlock
+      content={content}
+      language={language}
+      style={{ borderWidth: 2 }}
+    />
+  ),
+};
+
+<Markdown renderers={renderers} options={{ gfm: true }}>
+  {markdown}
+</Markdown>;
+```
+
+**Pre-mapped Props by Node Type:**
+
+- `heading` → `level` (1-6)
+- `link` → `href`, `title`
+- `image` → `url`, `alt`, `title`
+- `code_block` → `content`, `language`
+- `code_inline` → `content`
+- `list` → `ordered`, `start`
+- `task_list_item` → `checked`
+
+### Option 7: Style Props on Individual Renderers
+
+All built-in renderers accept a `style` prop for fine-grained overrides:
+
+```tsx
+import { Heading, CodeBlock, InlineCode } from "react-native-nitro-markdown";
+
+// Works in custom renderers
+<Heading level={1} style={{ color: "hotpink" }}>Title</Heading>
+<CodeBlock content={code} style={{ borderRadius: 0 }} />
+<InlineCode style={{ backgroundColor: "#ff0" }}>code</InlineCode>
+```
+
+### Option 8: Auto Content Extraction for Code
+
+The `CodeBlock` and `InlineCode` components now accept a `node` prop for automatic content extraction:
+
+```tsx
+// Before: Manual extraction required
+code_block: ({ node }) => (
+  <CodeBlock content={getTextContent(node)} language={node.language} />
+);
+
+// After: Just pass the node
+code_block: ({ node }) => <CodeBlock node={node} />;
+
+// Or use the pre-mapped content prop (recommended)
+code_block: ({ content, language }) => (
+  <CodeBlock content={content} language={language} />
+);
+```
+
+### Option 9: Headless (Minimal Bundle)
 
 For maximum control, data processing, or minimal JS overhead:
 
 ```tsx
-/**
- * Only imports the parser.
- * Zero UI overhead, purely synchronous AST generation.
- */
-import { parseMarkdown } from "react-native-nitro-markdown/headless";
+import {
+  parseMarkdown,
+  getTextContent,
+} from "react-native-nitro-markdown/headless";
 
 const ast = parseMarkdown("# Hello World");
+const text = getTextContent(ast); // "Hello World"
 ```
 
-### Option 5: High-Performance Streaming (LLMs)
+### Option 10: High-Performance Streaming (LLMs)
 
-When streaming text token-by-token (e.g., from ChatGPT or Gemini), re-parsing the entire document in JavaScript for every token is too slow.
-
-**Nitro Markdown** enables **Native Streaming** via JSI. The text buffer is maintained in C++ and updates are pushed directly to the native view, bypassing React completely.
+When streaming text token-by-token (e.g., from ChatGPT or Gemini):
 
 ```tsx
 import {
@@ -181,23 +282,79 @@ import {
 } from "react-native-nitro-markdown";
 
 export function AIResponseStream() {
-  // 1. Create a native session
   const session = useMarkdownSession();
 
   useEffect(() => {
-    // 2. Append chunks directly to C++ (Zero-Latency)
-    // Example: Socket.on('data', (chunk) => session.getSession().append(chunk));
-
     session.getSession().append("Hello **Nitro**!");
-
     return () => session.clear();
   }, [session]);
 
-  // 3. Render the localized stream component
   return (
     <MarkdownStream session={session.getSession()} options={{ gfm: true }} />
   );
 }
+```
+
+---
+
+## 🎨 Using Context in Custom Renderers
+
+Access theme and context in custom renderers:
+
+```tsx
+import {
+  useMarkdownContext,
+  MarkdownContext,
+} from "react-native-nitro-markdown";
+
+const MyCustomRenderer = ({ children }) => {
+  const { theme, stylingStrategy } = useMarkdownContext();
+
+  return <View style={{ padding: theme.spacing.m }}>{children}</View>;
+};
+```
+
+---
+
+## 🛠️ Exported Utilities
+
+```tsx
+// Parser and utilities
+export {
+  parseMarkdown,
+  parseMarkdownWithOptions,
+  getTextContent,
+} from "./headless";
+
+// Theme presets
+export {
+  defaultMarkdownTheme,
+  lightMarkdownTheme,
+  darkMarkdownTheme,
+  minimalMarkdownTheme,
+  mergeThemes,
+};
+
+// Context
+export { useMarkdownContext, MarkdownContext };
+
+// Individual renderers
+export {
+  Heading,
+  Paragraph,
+  Link,
+  Blockquote,
+  HorizontalRule,
+  CodeBlock,
+  InlineCode,
+  List,
+  ListItem,
+  TaskListItem,
+  TableRenderer,
+  Image,
+  MathInline,
+  MathBlock,
+};
 ```
 
 ---
@@ -214,7 +371,8 @@ export function AIResponseStream() {
 ---
 
 ### Basic Parsing API
-The parsing is synchronous and instant. It returns a fully typed JSON AST. We recommend using the `/headless` entry point if you only need the parser.
+
+The parsing is synchronous and instant. It returns a fully typed JSON AST:
 
 ```typescript
 import { parseMarkdown } from "react-native-nitro-markdown/headless";
@@ -223,74 +381,33 @@ const ast = parseMarkdown(`
 # Hello World
 This is **bold** text and a [link](https://github.com).
 `);
-console.log(ast);
-// Output: { type: "document", children: [...] }
 ```
 
 ### Options
 
-| Option | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `gfm` | `boolean` | `false` | Enable GitHub Flavored Markdown (Tables, Strikethrough, Autolinks, TaskLists). |
-| `math` | `boolean` | `false` | Enable LaTeX Math support (`$` and `$$`). |
-
-### Parser Options (GFM & Math)
-
-Enable GitHub Flavored Markdown (Tables, TaskLists) or LaTeX Math support.
-
-```typescript
-import { parseMarkdownWithOptions } from "react-native-nitro-markdown/headless";
-
-const ast = parseMarkdownWithOptions(markdown, {
-  gfm: true, // Tables (supports complex nested content!), Strikethrough, Autolinks, TaskLists
-  math: true, // $E=mc^2$ and $$block$$
-});
-```
+| Option | Type      | Default | Description                                                                    |
+| :----- | :-------- | :------ | :----------------------------------------------------------------------------- |
+| `gfm`  | `boolean` | `false` | Enable GitHub Flavored Markdown (Tables, Strikethrough, Autolinks, TaskLists). |
+| `math` | `boolean` | `false` | Enable LaTeX Math support (`$` and `$$`).                                      |
 
 ---
 
 ## 📐 AST Structure
 
-The parser returns a `MarkdownNode` tree. The Types are fully exported for TypeScript support.
+The parser returns a `MarkdownNode` tree:
 
 ```typescript
 export interface MarkdownNode {
   type: NodeType;
-  // Content for Text/Code/Math
   content?: string;
-  // Hierarchy
   children?: MarkdownNode[];
-  // Metadata
-  level?: number; // Headings (1-6)
-  href?: string; // Links
-  checked?: boolean; // Task Lists
-  language?: string; // Code Blocks
-  // Table Props
+  level?: number;
+  href?: string;
+  checked?: boolean;
+  language?: string;
   align?: "left" | "center" | "right";
   isHeader?: boolean;
 }
-
-export type NodeType =
-  | "document"
-  | "paragraph"
-  | "text"
-  | "heading"
-  | "bold"
-  | "italic"
-  | "strikethrough"
-  | "link"
-  | "image"
-  | "code_inline"
-  | "code_block"
-  | "blockquote"
-  | "list"
-  | "list_item"
-  | "task_list_item"
-  | "table"
-  | "table_row"
-  | "table_cell"
-  | "math_inline"
-  | "math_block";
 ```
 
 ---
@@ -299,15 +416,16 @@ export type NodeType =
 
 We parse math delimiters (`$` and `$$`) natively using the `MD_FLAG_LATEXMATHSPANS` flag in `md4c`.
 
-To render the math, you should use a library like `react-native-math-view`, `react-native-mathjax-svg`, or `react-native-katex` inside your renderer:
+To render the math, use a library like `react-native-mathjax-svg`:
 
 ```tsx
-// Inside your switch(node.type)
 case 'math_inline':
   return <MathView math={node.content} style={styles.math} />;
 case 'math_block':
   return <MathView math={node.content} style={styles.mathBlock} />;
 ```
+
+---
 
 ## 📊 Package Size
 
@@ -316,8 +434,6 @@ case 'math_block':
 | **Packed (tarball)** | ~75 kB  |
 | **Unpacked**         | ~325 kB |
 | **Total files**      | 55      |
-
-> The package includes the [md4c](https://github.com/mity/md4c) C source code (~244 kB) which is compiled natively on iOS and Android. This is a one-time cost that enables the high-performance parsing.
 
 ---
 

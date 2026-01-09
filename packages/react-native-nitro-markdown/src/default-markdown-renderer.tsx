@@ -1,6 +1,6 @@
 import { type ReactNode, type FC } from "react";
 import { View, Text, StyleSheet } from "react-native";
-import type { MarkdownNode } from "./headless";
+import { type MarkdownNode, getTextContent } from "./headless";
 import { Heading } from "./renderers/heading";
 import { Paragraph } from "./renderers/paragraph";
 import { Link } from "./renderers/link";
@@ -32,11 +32,6 @@ const isInline = (type: MarkdownNode["type"]): boolean => {
     type === "math_inline" ||
     type === "html_inline"
   );
-};
-
-const getTextContent = (node: MarkdownNode): string => {
-  if (node.content) return node.content;
-  return node.children?.map(getTextContent).join("") ?? "";
 };
 
 export const DefaultMarkdownRenderer: FC<MarkdownRendererProps> = ({

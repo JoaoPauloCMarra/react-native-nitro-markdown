@@ -20,7 +20,7 @@ export const Blockquote: FC<BlockquoteProps> = ({ children, style }) => {
           backgroundColor: theme.colors.surfaceLight,
           paddingVertical: theme.spacing.m,
           paddingRight: theme.spacing.m,
-          borderRadius: 4,
+          borderRadius: theme.borderRadius.s,
         },
       }),
     [theme]
@@ -28,4 +28,3 @@ export const Blockquote: FC<BlockquoteProps> = ({ children, style }) => {
 
   return <View style={[styles.blockquote, style]}>{children}</View>;
 };
-

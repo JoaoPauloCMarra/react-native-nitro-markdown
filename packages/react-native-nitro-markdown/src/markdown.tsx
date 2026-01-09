@@ -1,4 +1,12 @@
-import { defaultMarkdownTheme, type MarkdownTheme } from "./theme";
+import {
+  defaultMarkdownTheme,
+  minimalMarkdownTheme,
+  mergeThemes,
+  type MarkdownTheme,
+  type PartialMarkdownTheme,
+  type NodeStyleOverrides,
+  type StylingStrategy,
+} from "./theme";
 import { useMemo, type ReactNode, type FC, Fragment } from "react";
 import {
   StyleSheet,
@@ -10,6 +18,7 @@ import {
 import {
   parseMarkdown,
   parseMarkdownWithOptions,
+  getTextContent,
   type MarkdownNode,
 } from "./headless";
 import type { ParserOptions } from "./Markdown.nitro";
@@ -42,12 +51,30 @@ export interface MarkdownProps {
   options?: ParserOptions;
   /**
    * Custom renderers for specific markdown node types.
+   * Each renderer receives { node, children, Renderer } plus type-specific props.
    */
   renderers?: CustomRenderers;
   /**
    * Custom theme to override default styles.
    */
-  theme?: Partial<MarkdownTheme>;
+  theme?: PartialMarkdownTheme;
+  /**
+   * Style overrides for specific node types.
+   * Applied after internal styles, allowing fine-grained customization.
+   * @example
+   * ```tsx
+   * <Markdown styles={{ heading: { color: 'red' }, code_block: { borderRadius: 0 } }}>
+   *   {content}
+   * </Markdown>
+   * ```
+   */
+  styles?: NodeStyleOverrides;
+  /**
+   * Styling strategy for the component.
+   * - "opinionated": Full styling with colors, spacing, and visual effects (default)
+   * - "minimal": Bare minimum styling for a clean slate
+   */
+  stylingStrategy?: StylingStrategy;
   /**
    * Optional style for the container view.
    */
@@ -59,6 +86,8 @@ export const Markdown: FC<MarkdownProps> = ({
   options,
   renderers = {},
   theme: userTheme,
+  styles: nodeStyles,
+  stylingStrategy = "opinionated",
   style,
 }) => {
   const ast = useMemo(() => {
@@ -73,10 +102,13 @@ export const Markdown: FC<MarkdownProps> = ({
     }
   }, [children, options]);
 
-  const theme = useMemo(
-    () => ({ ...defaultMarkdownTheme, ...userTheme }),
-    [userTheme]
-  );
+  const theme = useMemo(() => {
+    const base =
+      stylingStrategy === "minimal"
+        ? minimalMarkdownTheme
+        : defaultMarkdownTheme;
+    return mergeThemes(base, userTheme);
+  }, [userTheme, stylingStrategy]);
 
   const baseStyles = useMemo(() => createBaseStyles(theme), [theme]);
 
@@ -89,7 +121,9 @@ export const Markdown: FC<MarkdownProps> = ({
   }
 
   return (
-    <MarkdownContext.Provider value={{ renderers, theme }}>
+    <MarkdownContext.Provider
+      value={{ renderers, theme, styles: nodeStyles, stylingStrategy }}
+    >
       <View style={[baseStyles.container, style]}>
         <NodeRenderer node={ast} depth={0} inListItem={false} />
       </View>
@@ -112,18 +146,13 @@ const isInline = (type: MarkdownNode["type"]): boolean => {
   );
 };
 
-const getTextContent = (node: MarkdownNode): string => {
-  if (node.content) return node.content;
-  return node.children?.map(getTextContent).join("") ?? "";
-};
-
 const NodeRenderer: FC<NodeRendererProps> = ({
   node,
   depth,
   inListItem,
   parentIsText = false,
 }) => {
-  const { renderers, theme } = useMarkdownContext();
+  const { renderers, theme, styles: nodeStyles } = useMarkdownContext();
   const baseStyles = useMemo(() => createBaseStyles(theme), [theme]);
 
   const renderChildren = (
@@ -148,17 +177,15 @@ const NodeRenderer: FC<NodeRendererProps> = ({
               key={`inline-group-${elements.length}`}
               style={{
                 flexDirection: "row",
-                alignItems: "baseline",
+                alignItems: "center",
                 flexWrap: "wrap",
                 flexShrink: 1,
-                marginVertical: 0,
-                paddingVertical: 0,
               }}
             >
-              {currentInlineGroup.map((node, idx) => (
+              {currentInlineGroup.map((n, idx) => (
                 <NodeRenderer
-                  key={`${node.type}-${idx}`}
-                  node={node}
+                  key={`${n.type}-${idx}`}
+                  node={n}
                   depth={depth + 1}
                   inListItem={childInListItem}
                   parentIsText={false}
@@ -174,10 +201,10 @@ const NodeRenderer: FC<NodeRendererProps> = ({
 
           elements.push(
             <Wrapper key={`inline-group-${elements.length}`} {...wrapperProps}>
-              {currentInlineGroup.map((node, idx) => (
+              {currentInlineGroup.map((n, idx) => (
                 <NodeRenderer
-                  key={`${node.type}-${idx}`}
-                  node={node}
+                  key={`${n.type}-${idx}`}
+                  node={n}
                   depth={depth + 1}
                   inListItem={childInListItem}
                   parentIsText={true}
@@ -218,32 +245,67 @@ const NodeRenderer: FC<NodeRendererProps> = ({
       inListItem,
       parentIsText
     );
-    const result = customRenderer({
+
+    const baseProps = {
       node,
       children: childrenRendered,
       Renderer: NodeRenderer,
-    });
+    };
+
+    const enhancedProps = {
+      ...baseProps,
+      // Heading
+      ...(node.type === "heading" && {
+        level: (node.level ?? 1) as 1 | 2 | 3 | 4 | 5 | 6,
+      }),
+      // Link
+      ...(node.type === "link" && { href: node.href ?? "", title: node.title }),
+      // Image
+      ...(node.type === "image" && {
+        url: node.href ?? "",
+        alt: node.alt,
+        title: node.title,
+      }),
+      // Code block
+      ...(node.type === "code_block" && {
+        content: getTextContent(node),
+        language: node.language,
+      }),
+      // Inline code
+      ...(node.type === "code_inline" && { content: node.content ?? "" }),
+      // List
+      ...(node.type === "list" && {
+        ordered: node.ordered ?? false,
+        start: node.start,
+      }),
+      // Task list item
+      ...(node.type === "task_list_item" && { checked: node.checked ?? false }),
+    };
+
+    const result = customRenderer(enhancedProps);
     if (result !== undefined) return <>{result}</>;
   }
+
+  const nodeStyleOverride = nodeStyles?.[node.type];
 
   switch (node.type) {
     case "document":
       return (
-        <View style={baseStyles.document}>
+        <View style={[baseStyles.document, nodeStyleOverride]}>
           {renderChildren(node.children, false, false)}
         </View>
       );
 
     case "heading":
       return (
-        <Heading level={node.level ?? 1}>
+        <Heading level={node.level ?? 1} style={nodeStyleOverride}>
           {renderChildren(node.children, inListItem, true)}
         </Heading>
       );
 
     case "paragraph":
       return (
-        <Paragraph inListItem={inListItem}>
+        <Paragraph inListItem={inListItem} style={nodeStyleOverride}>
           {renderChildren(node.children, inListItem, false)}
         </Paragraph>
       );
@@ -252,32 +314,34 @@ const NodeRenderer: FC<NodeRendererProps> = ({
       if (parentIsText) {
         return <Text>{node.content}</Text>;
       }
-      return <Text style={baseStyles.text}>{node.content}</Text>;
+      return (
+        <Text style={[baseStyles.text, nodeStyleOverride]}>{node.content}</Text>
+      );
 
     case "bold":
       return (
-        <Text style={baseStyles.bold}>
+        <Text style={[baseStyles.bold, nodeStyleOverride]}>
           {renderChildren(node.children, inListItem, true)}
         </Text>
       );
 
     case "italic":
       return (
-        <Text style={baseStyles.italic}>
+        <Text style={[baseStyles.italic, nodeStyleOverride]}>
           {renderChildren(node.children, inListItem, true)}
         </Text>
       );
 
     case "strikethrough":
       return (
-        <Text style={baseStyles.strikethrough}>
+        <Text style={[baseStyles.strikethrough, nodeStyleOverride]}>
           {renderChildren(node.children, inListItem, true)}
         </Text>
       );
 
     case "link":
       return (
-        <Link href={node.href ?? ""}>
+        <Link href={node.href ?? ""} style={nodeStyleOverride}>
           {renderChildren(node.children, inListItem, true)}
         </Link>
       );
@@ -289,26 +353,31 @@ const NodeRenderer: FC<NodeRendererProps> = ({
           title={node.title}
           alt={node.alt}
           Renderer={NodeRenderer}
+          style={nodeStyleOverride}
         />
       );
 
     case "code_inline":
-      return <InlineCode>{node.content}</InlineCode>;
+      return <InlineCode style={nodeStyleOverride}>{node.content}</InlineCode>;
 
     case "code_block":
       return (
-        <CodeBlock language={node.language} content={getTextContent(node)} />
+        <CodeBlock
+          language={node.language}
+          content={getTextContent(node)}
+          style={nodeStyleOverride}
+        />
       );
 
     case "blockquote":
       return (
-        <Blockquote>
+        <Blockquote style={nodeStyleOverride}>
           {renderChildren(node.children, inListItem, false)}
         </Blockquote>
       );
 
     case "horizontal_rule":
-      return <HorizontalRule />;
+      return <HorizontalRule style={nodeStyleOverride} />;
 
     case "line_break":
       return <Text>{"\n"}</Text>;
@@ -320,15 +389,22 @@ const NodeRenderer: FC<NodeRendererProps> = ({
       let mathContent = getTextContent(node);
       if (!mathContent) return null;
       mathContent = mathContent.replace(/^\$+|\$+$/g, "").trim();
-      return <MathInline content={mathContent} />;
+      return <MathInline content={mathContent} style={nodeStyleOverride} />;
     }
 
     case "math_block":
-      return <MathBlock content={getTextContent(node)} />;
+      return (
+        <MathBlock content={getTextContent(node)} style={nodeStyleOverride} />
+      );
 
     case "list":
       return (
-        <List ordered={node.ordered ?? false} start={node.start} depth={depth}>
+        <List
+          ordered={node.ordered ?? false}
+          start={node.start}
+          depth={depth}
+          style={nodeStyleOverride}
+        >
           {node.children?.map((child, index) => {
             if (child.type === "task_list_item") {
               return (
@@ -365,19 +441,24 @@ const NodeRenderer: FC<NodeRendererProps> = ({
 
     case "task_list_item":
       return (
-        <TaskListItem checked={node.checked ?? false}>
+        <TaskListItem checked={node.checked ?? false} style={nodeStyleOverride}>
           {renderChildren(node.children, true, false)}
         </TaskListItem>
       );
 
     case "table":
-      return <TableRenderer node={node} Renderer={NodeRenderer} />;
+      return (
+        <TableRenderer
+          node={node}
+          Renderer={NodeRenderer}
+          style={nodeStyleOverride}
+        />
+      );
 
     case "table_head":
     case "table_body":
     case "table_row":
     case "table_cell":
-      // Handled by TableRenderer
       return null;
 
     default:
@@ -396,12 +477,13 @@ const createBaseStyles = (theme: MarkdownTheme) =>
     errorText: {
       color: "#f87171",
       fontSize: 14,
-      fontFamily: "monospace",
+      fontFamily: theme.fontFamilies.mono ?? "monospace",
     },
     text: {
       color: theme.colors.text,
       fontSize: theme.fontSizes.m,
       lineHeight: theme.fontSizes.m * 1.6,
+      fontFamily: theme.fontFamilies.regular,
     },
     bold: {
       fontWeight: "700",
