@@ -3,42 +3,47 @@ import {
   Markdown,
   Heading,
   Paragraph,
-  defaultMarkdownTheme,
+  lightMarkdownTheme,
 } from "react-native-nitro-markdown";
 import {
   COMPLEX_MARKDOWN,
   CUSTOM_RENDER_COMPONENTS,
 } from "../markdown-test-data";
-
-const retroTheme = {
-  colors: {
-    text: "#334155",
-    textMuted: "#64748b",
-    heading: "#e11d48",
-    link: "#4f46e5",
-    code: "#d97706",
-    codeBackground: "#fef3c7",
-    blockquote: "#fff1f2",
-    border: "#fecdd3",
-    surface: "#ffffff",
-    surfaceLight: "#ffffff",
-    accent: "#e11d48",
-    tableBorder: "#fecdd3",
-    tableHeader: "#fff1f2",
-    tableHeaderText: "#e11d48",
-    tableRowEven: "#ffffff",
-    tableRowOdd: "#fff0f2",
-  },
-  fontSizes: {
-    ...defaultMarkdownTheme.fontSizes,
-    m: 18,
-  },
-};
-
 import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 
+/**
+ * Demonstrates the new DX features:
+ * - Using pre-built lightMarkdownTheme
+ * - Custom fontFamilies via theme
+ * - Tag-based style overrides via `styles` prop
+ * - Using default renderers with style override
+ */
 export default function RenderDefaultStylesScreen() {
   const tabHeight = useBottomTabHeight();
+
+  // Custom theme extending the light preset
+  const retroTheme = {
+    ...lightMarkdownTheme,
+    colors: {
+      ...lightMarkdownTheme.colors,
+      heading: "#e11d48",
+      accent: "#e11d48",
+      blockquote: "#fff1f2",
+      tableBorder: "#fecdd3",
+      tableHeader: "#fff1f2",
+      tableHeaderText: "#e11d48",
+      tableRowOdd: "#fff0f2",
+    },
+    fontFamilies: {
+      regular: undefined,
+      heading: Platform.select({ ios: "Courier", android: "monospace" }),
+      mono: Platform.select({ ios: "Courier", android: "monospace" }),
+    },
+    fontSizes: {
+      ...lightMarkdownTheme.fontSizes,
+      m: 18,
+    },
+  };
 
   return (
     <View style={styles.container}>
@@ -54,19 +59,21 @@ export default function RenderDefaultStylesScreen() {
         <Markdown
           options={{ gfm: true, math: true }}
           theme={retroTheme}
+          // New: Tag-based style overrides
+          styles={{
+            paragraph: {
+              backgroundColor: "rgba(0,0,0,0.02)",
+              padding: 4,
+              borderRadius: 4,
+            },
+            blockquote: {
+              borderLeftColor: "#e11d48",
+            },
+          }}
+          // Custom renderers still work for more control
           renderers={{
-            heading: ({ node, children }) => (
-              <Heading
-                level={node.level ?? 1}
-                style={{
-                  fontFamily: Platform.select({
-                    ios: "Courier",
-                    android: "monospace",
-                  }),
-                }}
-              >
-                {children}
-              </Heading>
+            heading: ({ level = 1, children }) => (
+              <Heading level={level}>{children}</Heading>
             ),
             paragraph: ({ children }) => (
               <Paragraph
@@ -91,7 +98,7 @@ export default function RenderDefaultStylesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F3F4F6", // Light background for retro theme
+    backgroundColor: "#F3F4F6",
   },
   scrollView: {
     flex: 1,

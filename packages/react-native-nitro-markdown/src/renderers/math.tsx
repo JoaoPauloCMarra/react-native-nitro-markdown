@@ -3,6 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
+  Platform,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
@@ -27,41 +28,25 @@ try {
 
 interface MathInlineProps {
   content?: string;
+  style?: ViewStyle;
 }
-
-/**
- * Inline math renderer.
- * Uses react-native-mathjax-svg if installed, otherwise shows raw LaTeX.
- * Note: Renders as a View since SVG can't be nested in Text.
- */
 
 const createMathStyles = (theme: MarkdownTheme) =>
   StyleSheet.create({
     mathInlineContainer: {
-      flexDirection: "row",
-      alignItems: "baseline",
-      alignSelf: "baseline",
-      justifyContent: "flex-start",
-      flexShrink: 1,
       marginHorizontal: 2,
-      top: -theme.fontSizes.m,
-      marginBottom: 0,
-      paddingVertical: 0,
-    },
-    mathJaxInline: {
-      marginTop: 0,
-      marginBottom: 0,
     },
     mathInlineFallbackContainer: {
       backgroundColor: theme.colors.codeBackground,
-      paddingHorizontal: 4,
+      paddingHorizontal: theme.spacing.xs,
       paddingVertical: 2,
-      borderRadius: 4,
-      alignSelf: "baseline",
+      borderRadius: theme.borderRadius.s,
       marginHorizontal: 2,
     },
     mathInlineFallback: {
-      fontFamily: "monospace",
+      fontFamily:
+        theme.fontFamilies.mono ??
+        Platform.select({ ios: "Courier", android: "monospace" }),
       fontSize: theme.fontSizes.s,
       color: theme.colors.code,
     },
@@ -70,49 +55,45 @@ const createMathStyles = (theme: MarkdownTheme) =>
       paddingVertical: theme.spacing.l,
       paddingHorizontal: theme.spacing.l,
       backgroundColor: theme.colors.surface,
-      borderRadius: 12,
+      borderRadius: theme.borderRadius.l,
       alignItems: "center",
       borderWidth: 1,
       borderColor: theme.colors.border,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 2,
-      elevation: 1,
     },
     mathBlockFallbackContainer: {
       marginVertical: theme.spacing.m,
       paddingVertical: theme.spacing.m,
       paddingHorizontal: theme.spacing.l,
       backgroundColor: theme.colors.codeBackground,
-      borderRadius: 8,
+      borderRadius: theme.borderRadius.m,
       alignItems: "center",
       borderWidth: 1,
       borderColor: theme.colors.border,
     },
     mathBlockFallback: {
-      fontFamily: "monospace",
+      fontFamily:
+        theme.fontFamilies.mono ??
+        Platform.select({ ios: "Courier", android: "monospace" }),
       fontSize: theme.fontSizes.m,
       color: theme.colors.code,
       textAlign: "center",
     },
   });
 
-export const MathInline: FC<MathInlineProps> = ({ content }) => {
+export const MathInline: FC<MathInlineProps> = ({ content, style }) => {
   const { theme } = useMarkdownContext();
   const styles = useMemo(() => createMathStyles(theme), [theme]);
 
   if (!content) return null;
 
   if (MathJaxComponent) {
-    const fontSize = theme.fontSizes.m;
+    const fontSize = theme.fontSizes.s;
     return (
-      <View style={styles.mathInlineContainer}>
+      <View style={[styles.mathInlineContainer, style]}>
         <MathJaxComponent
           fontSize={fontSize}
           color={theme.colors.text}
           fontCache={true}
-          style={styles.mathJaxInline}
         >
           {content}
         </MathJaxComponent>
@@ -121,7 +102,7 @@ export const MathInline: FC<MathInlineProps> = ({ content }) => {
   }
 
   return (
-    <View style={styles.mathInlineFallbackContainer}>
+    <View style={[styles.mathInlineFallbackContainer, style]}>
       <Text style={styles.mathInlineFallback}>{content}</Text>
     </View>
   );
@@ -129,13 +110,10 @@ export const MathInline: FC<MathInlineProps> = ({ content }) => {
 
 interface MathBlockProps {
   content?: string;
+  style?: ViewStyle;
 }
 
-/**
- * Block math renderer.
- * Uses react-native-mathjax-svg if installed, otherwise shows raw LaTeX.
- */
-export const MathBlock: FC<MathBlockProps> = ({ content }) => {
+export const MathBlock: FC<MathBlockProps> = ({ content, style }) => {
   const { theme } = useMarkdownContext();
   const styles = useMemo(() => createMathStyles(theme), [theme]);
 
@@ -143,7 +121,7 @@ export const MathBlock: FC<MathBlockProps> = ({ content }) => {
 
   if (MathJaxComponent) {
     return (
-      <View style={styles.mathBlockContainer}>
+      <View style={[styles.mathBlockContainer, style]}>
         <MathJaxComponent
           fontSize={theme.fontSizes.l}
           color={theme.colors.text}
@@ -156,9 +134,8 @@ export const MathBlock: FC<MathBlockProps> = ({ content }) => {
   }
 
   return (
-    <View style={styles.mathBlockFallbackContainer}>
+    <View style={[styles.mathBlockFallbackContainer, style]}>
       <Text style={styles.mathBlockFallback}>{content}</Text>
     </View>
   );
 };
-

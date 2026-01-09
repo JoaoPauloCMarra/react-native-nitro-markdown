@@ -1,5 +1,17 @@
-import { useState, useMemo, type ReactNode, type FC, type ComponentType } from "react";
-import { View, Text, Image as RNImage, StyleSheet } from "react-native";
+import {
+  useState,
+  useMemo,
+  type ReactNode,
+  type FC,
+  type ComponentType,
+} from "react";
+import {
+  View,
+  Text,
+  Image as RNImage,
+  StyleSheet,
+  type ViewStyle,
+} from "react-native";
 
 import { parseMarkdownWithOptions, type MarkdownNode } from "../headless";
 import type { NodeRendererProps } from "../MarkdownContext";
@@ -25,11 +37,11 @@ interface ImageProps {
   url: string;
   title?: string;
   alt?: string;
-
   Renderer?: ComponentType<NodeRendererProps>;
+  style?: ViewStyle;
 }
 
-export const Image: FC<ImageProps> = ({ url, title, alt, Renderer }) => {
+export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const { theme } = useMarkdownContext();
@@ -44,7 +56,7 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer }) => {
         image: {
           width: "100%",
           height: 200,
-          borderRadius: 8,
+          borderRadius: theme.borderRadius.m,
           backgroundColor: theme.colors.surface,
         },
         imageHidden: {
@@ -54,7 +66,7 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer }) => {
         imageLoading: {
           width: "100%",
           height: 200,
-          borderRadius: 8,
+          borderRadius: theme.borderRadius.m,
           backgroundColor: theme.colors.surface,
           justifyContent: "center",
           alignItems: "center",
@@ -62,11 +74,12 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer }) => {
         imageLoadingText: {
           color: theme.colors.textMuted,
           fontSize: theme.fontSizes.s,
+          fontFamily: theme.fontFamilies.regular,
         },
         imageError: {
           width: "100%",
           padding: theme.spacing.l,
-          borderRadius: 8,
+          borderRadius: theme.borderRadius.m,
           backgroundColor: theme.colors.surface,
           alignItems: "center",
           marginVertical: theme.spacing.m,
@@ -74,6 +87,7 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer }) => {
         imageErrorText: {
           color: theme.colors.textMuted,
           fontSize: theme.fontSizes.s,
+          fontFamily: theme.fontFamilies.regular,
         },
         imageCaption: {
           color: theme.colors.textMuted,
@@ -81,6 +95,7 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer }) => {
           marginTop: theme.spacing.s,
           fontStyle: "italic",
           textAlign: "center",
+          fontFamily: theme.fontFamilies.regular,
         },
       }),
     [theme]
@@ -117,7 +132,7 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer }) => {
 
   if (error) {
     return (
-      <View style={styles.imageError}>
+      <View style={[styles.imageError, style]}>
         <View
           style={{
             flexDirection: "row",
@@ -138,7 +153,7 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer }) => {
   }
 
   return (
-    <View style={styles.imageContainer}>
+    <View style={[styles.imageContainer, style]}>
       {loading && (
         <View style={styles.imageLoading}>
           <Text style={styles.imageLoadingText}>Loading image...</Text>

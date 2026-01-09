@@ -1,5 +1,5 @@
 import { ReactNode, useMemo, type FC } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, type ViewStyle } from "react-native";
 import { useMarkdownContext } from "../MarkdownContext";
 
 interface ListProps {
@@ -7,6 +7,7 @@ interface ListProps {
   start?: number;
   depth: number;
   children: ReactNode;
+  style?: ViewStyle;
 }
 
 export const List: FC<ListProps> = ({
@@ -14,6 +15,7 @@ export const List: FC<ListProps> = ({
   start = 1,
   depth,
   children,
+  style,
 }) => {
   const { theme } = useMarkdownContext();
   const styles = useMemo(
@@ -30,7 +32,7 @@ export const List: FC<ListProps> = ({
     [theme]
   );
   return (
-    <View style={[styles.list, depth > 0 && styles.listNested]}>
+    <View style={[styles.list, depth > 0 && styles.listNested, style]}>
       {children}
     </View>
   );
@@ -41,6 +43,7 @@ interface ListItemProps {
   index: number;
   ordered: boolean;
   start: number;
+  style?: ViewStyle;
 }
 
 export const ListItem: FC<ListItemProps> = ({
@@ -48,6 +51,7 @@ export const ListItem: FC<ListItemProps> = ({
   index,
   ordered,
   start,
+  style,
 }) => {
   const { theme } = useMarkdownContext();
   const styles = useMemo(
@@ -65,6 +69,7 @@ export const ListItem: FC<ListItemProps> = ({
           marginRight: theme.spacing.s,
           minWidth: 20,
           textAlign: "center",
+          fontFamily: theme.fontFamilies.regular,
         },
         listItemContent: {
           flex: 1,
@@ -76,7 +81,7 @@ export const ListItem: FC<ListItemProps> = ({
   );
   const bullet = ordered ? `${start + index}.` : "•";
   return (
-    <View style={styles.listItem}>
+    <View style={[styles.listItem, style]}>
       <Text style={styles.listBullet}>{bullet}</Text>
       <View style={styles.listItemContent}>{children}</View>
     </View>
@@ -86,11 +91,13 @@ export const ListItem: FC<ListItemProps> = ({
 interface TaskListItemProps {
   children: ReactNode;
   checked: boolean;
+  style?: ViewStyle;
 }
 
 export const TaskListItem: FC<TaskListItemProps> = ({
   children,
   checked,
+  style,
 }) => {
   const { theme } = useMarkdownContext();
   const styles = useMemo(
@@ -116,10 +123,9 @@ export const TaskListItem: FC<TaskListItemProps> = ({
     [theme]
   );
   return (
-    <View style={styles.taskListItem}>
+    <View style={[styles.taskListItem, style]}>
       <Text style={styles.taskCheckbox}>{checked ? "☑" : "☐"}</Text>
       <View style={styles.taskContent}>{children}</View>
     </View>
   );
 };
-

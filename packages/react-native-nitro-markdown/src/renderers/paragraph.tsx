@@ -8,11 +8,6 @@ interface ParagraphProps {
   style?: StyleProp<ViewStyle>;
 }
 
-/**
- * Paragraph component that supports mixed content (Text and View elements).
- * Uses View with flexDirection: 'row' and flexWrap: 'wrap' to allow inline flow
- * of both text and non-text elements (like inline math).
- */
 export const Paragraph: FC<ParagraphProps> = ({
   children,
   inListItem,
@@ -50,4 +45,3 @@ export const Paragraph: FC<ParagraphProps> = ({
     </View>
   );
 };
-

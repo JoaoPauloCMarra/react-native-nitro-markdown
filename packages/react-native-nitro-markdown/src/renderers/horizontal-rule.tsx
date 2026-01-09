@@ -1,8 +1,12 @@
 import { useMemo, type FC } from "react";
-import { View, StyleSheet } from "react-native";
+import { View, StyleSheet, type ViewStyle } from "react-native";
 import { useMarkdownContext } from "../MarkdownContext";
 
-export const HorizontalRule: FC = () => {
+interface HorizontalRuleProps {
+  style?: ViewStyle;
+}
+
+export const HorizontalRule: FC<HorizontalRuleProps> = ({ style }) => {
   const { theme } = useMarkdownContext();
   const styles = useMemo(
     () =>
@@ -15,6 +19,5 @@ export const HorizontalRule: FC = () => {
       }),
     [theme]
   );
-  return <View style={styles.horizontalRule} />;
+  return <View style={[styles.horizontalRule, style]} />;
 };
-

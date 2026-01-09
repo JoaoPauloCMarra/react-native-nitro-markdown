@@ -104,3 +104,13 @@ export function parseMarkdownWithOptions(
 
 export { MarkdownParser };
 
+/**
+ * Extract text content from a markdown node recursively.
+ * Useful for getting plain text from code blocks, headings, etc.
+ * @param node - The markdown node to extract text from
+ * @returns The concatenated text content
+ */
+export const getTextContent = (node: MarkdownNode): string => {
+  if (node.content) return node.content;
+  return node.children?.map(getTextContent).join("") ?? "";
+};

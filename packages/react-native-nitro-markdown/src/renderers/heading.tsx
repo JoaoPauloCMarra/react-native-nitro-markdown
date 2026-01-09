@@ -18,6 +18,7 @@ export const Heading: FC<HeadingProps> = ({ level, children, style }) => {
           fontWeight: "700",
           marginTop: theme.spacing.xl,
           marginBottom: theme.spacing.m,
+          fontFamily: theme.fontFamilies.heading,
         },
         h1: {
           fontSize: theme.fontSizes.h1,
@@ -63,4 +64,3 @@ export const Heading: FC<HeadingProps> = ({ level, children, style }) => {
 
   return <Text style={[...headingStyles, style]}>{children}</Text>;
 };
-

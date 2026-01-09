@@ -1,11 +1,11 @@
 import {
   useMemo,
   useRef,
-  useState,
+  useReducer,
   useCallback,
-  useEffect,
   type FC,
   type ComponentType,
+  type ReactNode,
 } from "react";
 import {
   View,
@@ -14,6 +14,8 @@ import {
   ScrollView,
   type StyleProp,
   type TextStyle,
+  type ViewStyle,
+  type LayoutChangeEvent,
 } from "react-native";
 
 import type { MarkdownNode } from "../headless";
@@ -31,33 +33,28 @@ const extractTableData = (node: MarkdownNode): TableData => {
   const rows: MarkdownNode[][] = [];
   const alignments: (string | undefined)[] = [];
 
-  const head = node.children?.find((c) => c.type === "table_head");
-  const body = node.children?.find((c) => c.type === "table_body");
-
-  // Extract Headers
-  head?.children?.forEach((row) => {
-    if (row.type === "table_row") {
-      row.children?.forEach((cell) => {
-        if (cell.type === "table_cell") {
-          headers.push(cell);
-          alignments.push(cell.align);
+  for (const child of node.children ?? []) {
+    if (child.type === "table_head") {
+      for (const row of child.children ?? []) {
+        if (row.type === "table_row") {
+          for (const cell of row.children ?? []) {
+            headers.push(cell);
+            alignments.push(cell.align);
+          }
         }
-      });
-    }
-  });
-
-  // Extract Body Rows
-  body?.children?.forEach((row) => {
-    if (row.type === "table_row") {
-      const rowCells: MarkdownNode[] = [];
-      row.children?.forEach((cell) => {
-        if (cell.type === "table_cell") {
-          rowCells.push(cell);
+      }
+    } else if (child.type === "table_body") {
+      for (const row of child.children ?? []) {
+        if (row.type === "table_row") {
+          const rowCells: MarkdownNode[] = [];
+          for (const cell of row.children ?? []) {
+            rowCells.push(cell);
+          }
+          rows.push(rowCells);
         }
-      });
-      if (rowCells.length > 0) rows.push(rowCells);
+      }
     }
-  });
+  }
 
   return { headers, rows, alignments };
 };
@@ -65,11 +62,23 @@ const extractTableData = (node: MarkdownNode): TableData => {
 interface TableRendererProps {
   node: MarkdownNode;
   Renderer: ComponentType<NodeRendererProps>;
+  style?: ViewStyle;
 }
+
+type ColumnWidthsAction = {
+  type: "SET_WIDTHS";
+  payload: number[];
+};
+
+const columnWidthsReducer = (state: number[], action: ColumnWidthsAction) => {
+  if (action.type === "SET_WIDTHS") return action.payload;
+  return state;
+};
 
 export const TableRenderer: FC<TableRendererProps> = ({
   node,
   Renderer,
+  style,
 }) => {
   const { theme } = useMarkdownContext();
   const { headers, rows, alignments } = useMemo(
@@ -80,159 +89,171 @@ export const TableRenderer: FC<TableRendererProps> = ({
   const columnCount = headers.length;
   const styles = useMemo(() => createTableStyles(theme), [theme]);
 
-  const [columnWidths, setColumnWidths] = useState<number[]>([]);
+  const [columnWidths, dispatch] = useReducer(columnWidthsReducer, []);
   const measuredWidths = useRef<Map<string, number>>(new Map());
-  const hasAppliedWidths = useRef(false);
+  const measuredCells = useRef<Set<string>>(new Set());
+  const widthsCalculated = useRef(false);
 
-  const calculateAndApplyWidths = useCallback(() => {
-    if (columnCount === 0) return;
+  const onCellLayout = useCallback(
+    (cellKey: string, width: number) => {
+      measuredWidths.current.set(cellKey, width);
+      measuredCells.current.add(cellKey);
 
-    const finalWidths = new Array(columnCount).fill(0);
-    for (let col = 0; col < columnCount; col++) {
-      let maxWidth = measuredWidths.current.get(`h-${col}`) || 0;
+      const expectedCells = new Set<string>();
+      for (let col = 0; col < columnCount; col++) {
+        expectedCells.add(`header-${col}`);
+      }
       for (let row = 0; row < rows.length; row++) {
-        const cellWidth = measuredWidths.current.get(`c-${row}-${col}`) || 0;
-        if (cellWidth > maxWidth) maxWidth = cellWidth;
+        for (let col = 0; col < columnCount; col++) {
+          expectedCells.add(`cell-${row}-${col}`);
+        }
       }
-      // Apply padding and min-width
-      finalWidths[col] = Math.max(maxWidth + 32, 100);
-    }
 
-    setColumnWidths(finalWidths);
-    hasAppliedWidths.current = true;
-  }, [columnCount, rows.length]);
+      const allCellsMeasured = [...expectedCells].every((key) =>
+        measuredCells.current.has(key)
+      );
+      if (!allCellsMeasured || widthsCalculated.current) return;
 
-  useEffect(() => {
-    if (columnCount === 0) return;
+      const maxWidths: number[] = new Array(columnCount).fill(0);
 
-    const timer = setTimeout(() => {
-      if (!hasAppliedWidths.current) {
-        calculateAndApplyWidths();
+      for (let col = 0; col < columnCount; col++) {
+        const headerWidth = measuredWidths.current.get(`header-${col}`);
+        if (headerWidth && headerWidth > 0) {
+          maxWidths[col] = Math.max(maxWidths[col], headerWidth);
+        }
+
+        for (let row = 0; row < rows.length; row++) {
+          const cellWidth = measuredWidths.current.get(`cell-${row}-${col}`);
+          if (cellWidth && cellWidth > 0) {
+            maxWidths[col] = Math.max(maxWidths[col], cellWidth);
+          }
+        }
+
+        maxWidths[col] = Math.max(maxWidths[col] + 8, 60);
       }
-    }, 400);
 
-    return () => clearTimeout(timer);
-  }, [columnCount, rows.length, calculateAndApplyWidths]);
+      widthsCalculated.current = true;
+      dispatch({ type: "SET_WIDTHS", payload: maxWidths });
+    },
+    [columnCount, rows.length]
+  );
 
-  const onLayout = (key: string, width: number) => {
-    if (hasAppliedWidths.current) return;
-    measuredWidths.current.set(key, width);
-
-    const expectedCount = columnCount + rows.length * columnCount;
-    if (measuredWidths.current.size >= expectedCount) {
-      calculateAndApplyWidths();
-    }
-  };
-
-  const getAlignStyle = (index: number) => {
+  const getAlignment = (
+    index: number
+  ): "flex-start" | "center" | "flex-end" => {
     const align = alignments[index];
-    if (align === "center")
-      return { alignItems: "center", textAlign: "center" } as const;
-    if (align === "right")
-      return { alignItems: "flex-end", textAlign: "right" } as const;
-    return { alignItems: "flex-start", textAlign: "left" } as const;
+    if (align === "center") return "center";
+    if (align === "right") return "flex-end";
+    return "flex-start";
   };
 
   if (columnCount === 0) return null;
 
+  const hasWidths = columnWidths.length === columnCount;
+
   return (
-    <View style={styles.container}>
-      {!hasAppliedWidths.current && (
-        <View style={styles.measurementWrapper} pointerEvents="none">
-          <View style={styles.row}>
-            {headers.map((cell, i) => (
+    <View style={[styles.container, style]}>
+      {/* Off-screen measurement layer */}
+      <View style={styles.measurementContainer}>
+        <View style={styles.measurementRow}>
+          {headers.map((cell, colIndex) => (
+            <View
+              key={`measure-header-${colIndex}`}
+              style={styles.measurementCell}
+              onLayout={(e: LayoutChangeEvent) => {
+                onCellLayout(`header-${colIndex}`, e.nativeEvent.layout.width);
+              }}
+            >
+              <CellContent node={cell} Renderer={Renderer} styles={styles} />
+            </View>
+          ))}
+        </View>
+        {rows.map((row, rowIndex) => (
+          <View key={`measure-row-${rowIndex}`} style={styles.measurementRow}>
+            {row.map((cell, colIndex) => (
               <View
-                key={`m-h-${i}`}
-                onLayout={(e) => onLayout(`h-${i}`, e.nativeEvent.layout.width)}
-                style={styles.measuringCell}
+                key={`measure-cell-${rowIndex}-${colIndex}`}
+                style={styles.measurementCell}
+                onLayout={(e: LayoutChangeEvent) => {
+                  onCellLayout(
+                    `cell-${rowIndex}-${colIndex}`,
+                    e.nativeEvent.layout.width
+                  );
+                }}
               >
                 <CellContent node={cell} Renderer={Renderer} styles={styles} />
               </View>
             ))}
           </View>
-          {rows.map((row, ri) => (
-            <View key={`m-r-${ri}`} style={styles.row}>
-              {row.map((cell, ci) => (
-                <View
-                  key={`m-c-${ri}-${ci}`}
-                  onLayout={(e) =>
-                    onLayout(`c-${ri}-${ci}`, e.nativeEvent.layout.width)
-                  }
-                  style={styles.measuringCell}
-                >
-                  <CellContent
-                    node={cell}
-                    Renderer={Renderer}
-                    styles={styles}
-                  />
-                </View>
-              ))}
-            </View>
-          ))}
-        </View>
-      )}
+        ))}
+      </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={true}
-        bounces={false}
-        style={styles.tableScroll}
-      >
-        <View style={styles.table}>
-          {/* Header */}
-          <View style={styles.headerRow}>
-            {headers.map((cell, i) => (
-              <View
-                key={`h-${i}`}
-                style={[
-                  styles.headerCell,
-                  { width: columnWidths[i] || 120 },
-                  getAlignStyle(i),
-                  i === columnCount - 1 && styles.lastCell,
-                ]}
-              >
-                <CellContent
-                  node={cell}
-                  Renderer={Renderer}
-                  styles={styles}
-                  textStyle={styles.headerText}
-                />
-              </View>
-            ))}
-          </View>
-
-          {/* Body */}
-          {rows.map((row, ri) => (
-            <View
-              key={`r-${ri}`}
-              style={[
-                styles.bodyRow,
-                ri === rows.length - 1 && styles.lastRow,
-                ri % 2 === 1 && styles.oddRow,
-              ]}
-            >
-              {row.map((cell, ci) => (
+      {/* Actual table - only rendered once widths are calculated */}
+      {hasWidths && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator
+          style={styles.tableScroll}
+          bounces={false}
+        >
+          <View style={styles.table}>
+            <View style={styles.headerRow}>
+              {headers.map((cell, colIndex) => (
                 <View
-                  key={`c-${ri}-${ci}`}
+                  key={`header-${colIndex}`}
                   style={[
-                    styles.bodyCell,
-                    { width: columnWidths[ci] || 120 },
-                    getAlignStyle(ci),
-                    ci === columnCount - 1 && styles.lastCell,
+                    styles.headerCell,
+                    {
+                      width: columnWidths[colIndex],
+                      alignItems: getAlignment(colIndex),
+                    },
+                    colIndex === columnCount - 1 && styles.lastCell,
                   ]}
                 >
                   <CellContent
                     node={cell}
                     Renderer={Renderer}
                     styles={styles}
-                    textStyle={styles.cellText}
+                    textStyle={styles.headerText}
                   />
                 </View>
               ))}
             </View>
-          ))}
-        </View>
-      </ScrollView>
+
+            {rows.map((row, rowIndex) => (
+              <View
+                key={`row-${rowIndex}`}
+                style={[
+                  styles.bodyRow,
+                  rowIndex === rows.length - 1 && styles.lastRow,
+                  rowIndex % 2 === 1 && styles.oddRow,
+                ]}
+              >
+                {row.map((cell, colIndex) => (
+                  <View
+                    key={`cell-${rowIndex}-${colIndex}`}
+                    style={[
+                      styles.bodyCell,
+                      {
+                        width: columnWidths[colIndex],
+                        alignItems: getAlignment(colIndex),
+                      },
+                      colIndex === columnCount - 1 && styles.lastCell,
+                    ]}
+                  >
+                    <CellContent
+                      node={cell}
+                      Renderer={Renderer}
+                      styles={styles}
+                      textStyle={styles.cellText}
+                    />
+                  </View>
+                ))}
+              </View>
+            ))}
+          </View>
+        </ScrollView>
+      )}
     </View>
   );
 };
@@ -264,37 +285,39 @@ const CellContent: FC<{
 
 const createTableStyles = (theme: MarkdownTheme) => {
   const colors = theme?.colors || {};
+  const borderRadius = theme?.borderRadius || { m: 8 };
+
   return StyleSheet.create({
     container: {
-      marginVertical: 12,
+      marginVertical: theme.spacing.s,
     },
-    measurementWrapper: {
+    measurementContainer: {
       position: "absolute",
-      top: 0,
-      left: 0,
       opacity: 0,
-      zIndex: -1,
+      pointerEvents: "none",
+      left: -9999,
     },
-    measuringCell: {
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      alignSelf: "flex-start",
+    measurementRow: {
+      flexDirection: "row",
+    },
+    measurementCell: {
+      paddingVertical: 10,
+      paddingHorizontal: 12,
     },
     tableScroll: {
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: colors.tableBorder || "#374151",
+      flexGrow: 0,
     },
     table: {
+      borderRadius: borderRadius.m,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: colors.tableBorder || "#374151",
       backgroundColor: colors.surface || "#111827",
-    },
-    row: {
-      flexDirection: "row",
     },
     headerRow: {
       flexDirection: "row",
       backgroundColor: colors.tableHeader || "#1f2937",
-      borderBottomWidth: 2,
+      borderBottomWidth: 1,
       borderBottomColor: colors.tableBorder || "#374151",
     },
     bodyRow: {
@@ -309,14 +332,18 @@ const createTableStyles = (theme: MarkdownTheme) => {
       borderBottomWidth: 0,
     },
     headerCell: {
-      paddingVertical: 14,
-      paddingHorizontal: 16,
+      flexShrink: 0,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      minWidth: 60,
       borderRightWidth: 1,
       borderRightColor: colors.tableBorder || "#374151",
     },
     bodyCell: {
-      paddingVertical: 12,
-      paddingHorizontal: 16,
+      flexShrink: 0,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      minWidth: 60,
       borderRightWidth: 1,
       borderRightColor: colors.tableBorder || "#374151",
       justifyContent: "center",
@@ -327,14 +354,14 @@ const createTableStyles = (theme: MarkdownTheme) => {
     headerText: {
       color: colors.tableHeaderText || "#9ca3af",
       fontSize: 12,
-      fontWeight: "700",
-      textTransform: "uppercase",
-      letterSpacing: 1,
+      fontWeight: "600",
+      fontFamily: theme.fontFamilies?.regular,
     },
     cellText: {
       color: colors.text || "#e5e7eb",
       fontSize: 14,
       lineHeight: 20,
+      fontFamily: theme.fontFamilies?.regular,
     },
     cellContentWrapper: {
       flexDirection: "row",
