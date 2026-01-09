@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import { useMemo, type FC, type ComponentType } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
 import { useMarkdownContext } from "../MarkdownContext";
 import type { MarkdownTheme } from "../theme";
 
-let MathJaxComponent: React.ComponentType<{
+let MathJaxComponent: ComponentType<{
   fontSize?: number;
   color?: string;
   fontCache?: boolean;
@@ -98,7 +98,7 @@ const createMathStyles = (theme: MarkdownTheme) =>
     },
   });
 
-export const MathInline: React.FC<MathInlineProps> = ({ content }) => {
+export const MathInline: FC<MathInlineProps> = ({ content }) => {
   const { theme } = useMarkdownContext();
   const styles = useMemo(() => createMathStyles(theme), [theme]);
 
@@ -135,7 +135,7 @@ interface MathBlockProps {
  * Block math renderer.
  * Uses react-native-mathjax-svg if installed, otherwise shows raw LaTeX.
  */
-export const MathBlock: React.FC<MathBlockProps> = ({ content }) => {
+export const MathBlock: FC<MathBlockProps> = ({ content }) => {
   const { theme } = useMarkdownContext();
   const styles = useMemo(() => createMathStyles(theme), [theme]);
 

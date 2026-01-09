@@ -1,4 +1,4 @@
-import { createContext, useContext, ReactNode } from "react";
+import { createContext, useContext, type ReactNode, type ComponentType } from "react";
 import { defaultMarkdownTheme, type MarkdownTheme } from "./theme";
 import type { MarkdownNode } from "./headless";
 
@@ -12,7 +12,7 @@ export interface NodeRendererProps {
 export interface CustomRendererProps {
   node: MarkdownNode;
   children: ReactNode;
-  Renderer: React.ComponentType<NodeRendererProps>;
+  Renderer: ComponentType<NodeRendererProps>;
 }
 
 export type CustomRenderer = (

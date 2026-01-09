@@ -1,4 +1,4 @@
-import React, { ReactNode, useMemo } from "react";
+import { ReactNode, useMemo, type FC } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { useMarkdownContext } from "../MarkdownContext";
 
@@ -9,7 +9,7 @@ interface ListProps {
   children: ReactNode;
 }
 
-export const List: React.FC<ListProps> = ({
+export const List: FC<ListProps> = ({
   ordered,
   start = 1,
   depth,
@@ -43,7 +43,7 @@ interface ListItemProps {
   start: number;
 }
 
-export const ListItem: React.FC<ListItemProps> = ({
+export const ListItem: FC<ListItemProps> = ({
   children,
   index,
   ordered,
@@ -88,7 +88,7 @@ interface TaskListItemProps {
   checked: boolean;
 }
 
-export const TaskListItem: React.FC<TaskListItemProps> = ({
+export const TaskListItem: FC<TaskListItemProps> = ({
   children,
   checked,
 }) => {

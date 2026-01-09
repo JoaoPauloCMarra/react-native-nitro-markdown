@@ -1,4 +1,4 @@
-import React, { useState, useMemo, ReactNode } from "react";
+import { useState, useMemo, type ReactNode, type FC, type ComponentType } from "react";
 import { View, Text, Image as RNImage, StyleSheet } from "react-native";
 
 import { parseMarkdownWithOptions, type MarkdownNode } from "../headless";
@@ -7,7 +7,7 @@ import { useMarkdownContext } from "../MarkdownContext";
 
 const renderInlineContent = (
   node: MarkdownNode,
-  Renderer: React.ComponentType<NodeRendererProps>
+  Renderer: ComponentType<NodeRendererProps>
 ): ReactNode => {
   if (node.type === "paragraph" && node.children) {
     return (
@@ -26,10 +26,10 @@ interface ImageProps {
   title?: string;
   alt?: string;
 
-  Renderer?: React.ComponentType<NodeRendererProps>;
+  Renderer?: ComponentType<NodeRendererProps>;
 }
 
-export const Image: React.FC<ImageProps> = ({ url, title, alt, Renderer }) => {
+export const Image: FC<ImageProps> = ({ url, title, alt, Renderer }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const { theme } = useMarkdownContext();

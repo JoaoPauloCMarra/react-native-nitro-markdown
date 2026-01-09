@@ -1,4 +1,4 @@
-import React, { ReactNode, useMemo } from "react";
+import { ReactNode, useMemo, type FC } from "react";
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ interface CodeBlockProps {
   style?: ViewStyle;
 }
 
-export const CodeBlock: React.FC<CodeBlockProps> = ({
+export const CodeBlock: FC<CodeBlockProps> = ({
   language,
   content,
   style,
@@ -65,7 +65,7 @@ interface InlineCodeProps {
   style?: TextStyle;
 }
 
-export const InlineCode: React.FC<InlineCodeProps> = ({ children, style }) => {
+export const InlineCode: FC<InlineCodeProps> = ({ children, style }) => {
   const { theme } = useMarkdownContext();
   const styles = useMemo(
     () =>

@@ -1,4 +1,4 @@
-import React, { ReactNode } from "react";
+import { type ReactNode, type FC } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import type { MarkdownNode } from "./headless";
 import { Heading } from "./renderers/heading";
@@ -39,7 +39,7 @@ const getTextContent = (node: MarkdownNode): string => {
   return node.children?.map(getTextContent).join("") ?? "";
 };
 
-export const DefaultMarkdownRenderer: React.FC<MarkdownRendererProps> = ({
+export const DefaultMarkdownRenderer: FC<MarkdownRendererProps> = ({
   node,
   depth = 0,
   inListItem = false,

@@ -1,5 +1,5 @@
 import { defaultMarkdownTheme, type MarkdownTheme } from "./theme";
-import React, { useMemo, ReactNode } from "react";
+import { useMemo, type ReactNode, type FC, Fragment } from "react";
 import {
   StyleSheet,
   View,
@@ -39,7 +39,7 @@ export interface MarkdownProps {
   style?: StyleProp<ViewStyle>;
 }
 
-export const Markdown: React.FC<MarkdownProps> = ({
+export const Markdown: FC<MarkdownProps> = ({
   children,
   options,
   renderers = {},
@@ -102,7 +102,7 @@ const getTextContent = (node: MarkdownNode): string => {
   return node.children?.map(getTextContent).join("") ?? "";
 };
 
-const NodeRenderer: React.FC<NodeRendererProps> = ({
+const NodeRenderer: FC<NodeRendererProps> = ({
   node,
   depth,
   inListItem,
@@ -152,7 +152,7 @@ const NodeRenderer: React.FC<NodeRendererProps> = ({
             </View>
           );
         } else {
-          const Wrapper = childParentIsText ? React.Fragment : Text;
+          const Wrapper = childParentIsText ? Fragment : Text;
           const wrapperProps = childParentIsText
             ? {}
             : { style: baseStyles.text };

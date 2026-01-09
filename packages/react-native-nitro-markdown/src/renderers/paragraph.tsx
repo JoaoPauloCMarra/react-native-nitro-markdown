@@ -1,4 +1,4 @@
-import React, { ReactNode, useMemo } from "react";
+import { ReactNode, useMemo, type FC } from "react";
 import { View, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 import { useMarkdownContext } from "../MarkdownContext";
 
@@ -13,7 +13,7 @@ interface ParagraphProps {
  * Uses View with flexDirection: 'row' and flexWrap: 'wrap' to allow inline flow
  * of both text and non-text elements (like inline math).
  */
-export const Paragraph: React.FC<ParagraphProps> = ({
+export const Paragraph: FC<ParagraphProps> = ({
   children,
   inListItem,
   style,

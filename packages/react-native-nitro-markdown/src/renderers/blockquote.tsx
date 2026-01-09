@@ -1,4 +1,4 @@
-import React, { ReactNode, useMemo } from "react";
+import { ReactNode, useMemo, type FC } from "react";
 import { View, StyleSheet, type ViewStyle } from "react-native";
 import { useMarkdownContext } from "../MarkdownContext";
 
@@ -7,7 +7,7 @@ interface BlockquoteProps {
   style?: ViewStyle;
 }
 
-export const Blockquote: React.FC<BlockquoteProps> = ({ children, style }) => {
+export const Blockquote: FC<BlockquoteProps> = ({ children, style }) => {
   const { theme } = useMarkdownContext();
   const styles = useMemo(
     () =>

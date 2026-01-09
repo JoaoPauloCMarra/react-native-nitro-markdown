@@ -1,9 +1,11 @@
-import React, {
+import {
   useMemo,
   useRef,
   useState,
   useCallback,
   useEffect,
+  type FC,
+  type ComponentType,
 } from "react";
 import {
   View,
@@ -62,10 +64,10 @@ const extractTableData = (node: MarkdownNode): TableData => {
 
 interface TableRendererProps {
   node: MarkdownNode;
-  Renderer: React.ComponentType<NodeRendererProps>;
+  Renderer: ComponentType<NodeRendererProps>;
 }
 
-export const TableRenderer: React.FC<TableRendererProps> = ({
+export const TableRenderer: FC<TableRendererProps> = ({
   node,
   Renderer,
 }) => {
@@ -235,9 +237,9 @@ export const TableRenderer: React.FC<TableRendererProps> = ({
   );
 };
 
-const CellContent: React.FC<{
+const CellContent: FC<{
   node: MarkdownNode;
-  Renderer: React.ComponentType<NodeRendererProps>;
+  Renderer: ComponentType<NodeRendererProps>;
   styles: ReturnType<typeof createTableStyles>;
   textStyle?: StyleProp<TextStyle>;
 }> = ({ node, Renderer, styles, textStyle }) => {

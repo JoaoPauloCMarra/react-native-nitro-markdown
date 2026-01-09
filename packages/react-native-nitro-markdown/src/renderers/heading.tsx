@@ -1,4 +1,4 @@
-import React, { ReactNode, useMemo } from "react";
+import { ReactNode, useMemo, type FC } from "react";
 import { Text, StyleSheet, type TextStyle } from "react-native";
 import { useMarkdownContext } from "../MarkdownContext";
 
@@ -8,7 +8,7 @@ interface HeadingProps {
   style?: TextStyle;
 }
 
-export const Heading: React.FC<HeadingProps> = ({ level, children, style }) => {
+export const Heading: FC<HeadingProps> = ({ level, children, style }) => {
   const { theme } = useMarkdownContext();
   const styles = useMemo(
     () =>

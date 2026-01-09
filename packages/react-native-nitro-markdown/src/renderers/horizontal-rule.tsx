@@ -1,8 +1,8 @@
-import React, { useMemo } from "react";
+import { useMemo, type FC } from "react";
 import { View, StyleSheet } from "react-native";
 import { useMarkdownContext } from "../MarkdownContext";
 
-export const HorizontalRule: React.FC = () => {
+export const HorizontalRule: FC = () => {
   const { theme } = useMarkdownContext();
   const styles = useMemo(
     () =>

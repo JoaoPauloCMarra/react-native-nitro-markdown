@@ -1,4 +1,4 @@
-import React, { ReactNode, useMemo } from "react";
+import { ReactNode, useMemo, type FC } from "react";
 import { Text, StyleSheet, Linking, type TextStyle } from "react-native";
 import { useMarkdownContext } from "../MarkdownContext";
 
@@ -8,7 +8,7 @@ interface LinkProps {
   style?: TextStyle;
 }
 
-export const Link: React.FC<LinkProps> = ({ href, children, style }) => {
+export const Link: FC<LinkProps> = ({ href, children, style }) => {
   const { theme } = useMarkdownContext();
   const styles = useMemo(
     () =>
