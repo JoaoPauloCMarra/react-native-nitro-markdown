@@ -102,7 +102,7 @@ export function parseMarkdownWithOptions(
   return JSON.parse(jsonStr) as MarkdownNode;
 }
 
-export { MarkdownParser };
+export type { MarkdownParser };
 
 /**
  * Extract text content from a markdown node recursively.

@@ -238,7 +238,6 @@ const NodeRenderer: FC<NodeRendererProps> = ({
     return elements;
   };
 
-  // Check for custom renderer
   const customRenderer = renderers[node.type];
   if (customRenderer) {
     const childrenRendered = renderChildren(
@@ -247,14 +246,12 @@ const NodeRenderer: FC<NodeRendererProps> = ({
       parentIsText
     );
 
-    // Build enhanced props with pre-mapped values
     const baseProps = {
       node,
       children: childrenRendered,
       Renderer: NodeRenderer,
     };
 
-    // Add type-specific pre-mapped props
     const enhancedProps = {
       ...baseProps,
       // Heading
@@ -289,7 +286,6 @@ const NodeRenderer: FC<NodeRendererProps> = ({
     if (result !== undefined) return <>{result}</>;
   }
 
-  // Get node-specific style override
   const nodeStyleOverride = nodeStyles?.[node.type];
 
   switch (node.type) {

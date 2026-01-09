@@ -1,7 +1,60 @@
 import type { TextStyle, ViewStyle } from "react-native";
 import type { MarkdownNode } from "./headless";
 
-export const defaultMarkdownTheme = {
+export interface MarkdownTheme {
+  colors: {
+    text: string | undefined;
+    textMuted: string | undefined;
+    heading: string | undefined;
+    link: string | undefined;
+    code: string | undefined;
+    codeBackground: string | undefined;
+    codeLanguage: string | undefined;
+    blockquote: string | undefined;
+    border: string | undefined;
+    surface: string | undefined;
+    surfaceLight: string | undefined;
+    accent: string | undefined;
+    tableBorder: string | undefined;
+    tableHeader: string | undefined;
+    tableHeaderText: string | undefined;
+    tableRowEven: string | undefined;
+    tableRowOdd: string | undefined;
+  };
+  spacing: {
+    xs: number;
+    s: number;
+    m: number;
+    l: number;
+    xl: number;
+  };
+  fontSizes: {
+    xs: number;
+    s: number;
+    m: number;
+    l: number;
+    xl: number;
+    h1: number;
+    h2: number;
+    h3: number;
+    h4: number;
+    h5: number;
+    h6: number;
+  };
+  fontFamilies: {
+    regular: string | undefined;
+    heading: string | undefined;
+    mono: string | undefined;
+  };
+  borderRadius: {
+    s: number;
+    m: number;
+    l: number;
+  };
+  showCodeLanguage: boolean;
+}
+
+export const defaultMarkdownTheme: MarkdownTheme = {
   colors: {
     text: "#e0e0e0",
     textMuted: "#888",
@@ -42,9 +95,9 @@ export const defaultMarkdownTheme = {
     h6: 14,
   },
   fontFamilies: {
-    regular: undefined as string | undefined,
-    heading: undefined as string | undefined,
-    mono: undefined as string | undefined,
+    regular: undefined,
+    heading: undefined,
+    mono: undefined,
   },
   borderRadius: {
     s: 4,
@@ -54,15 +107,10 @@ export const defaultMarkdownTheme = {
   showCodeLanguage: true,
 };
 
-export type MarkdownTheme = typeof defaultMarkdownTheme;
-
 export type PartialMarkdownTheme = {
-  colors?: Partial<MarkdownTheme["colors"]>;
-  spacing?: Partial<MarkdownTheme["spacing"]>;
-  fontSizes?: Partial<MarkdownTheme["fontSizes"]>;
-  fontFamilies?: Partial<MarkdownTheme["fontFamilies"]>;
-  borderRadius?: Partial<MarkdownTheme["borderRadius"]>;
-  showCodeLanguage?: boolean;
+  [K in keyof MarkdownTheme]?: K extends "showCodeLanguage"
+    ? MarkdownTheme[K]
+    : Partial<MarkdownTheme[K]>;
 };
 
 export type NodeStyleOverrides = Partial<
@@ -73,11 +121,11 @@ export type StylingStrategy = "opinionated" | "minimal";
 
 export const minimalMarkdownTheme: MarkdownTheme = {
   colors: {
-    text: "inherit" as unknown as string,
-    textMuted: "inherit" as unknown as string,
-    heading: "inherit" as unknown as string,
+    text: undefined,
+    textMuted: undefined,
+    heading: undefined,
     link: "#0066cc",
-    code: "inherit" as unknown as string,
+    code: undefined,
     codeBackground: "transparent",
     codeLanguage: "#888888",
     blockquote: "#cccccc",
@@ -87,7 +135,7 @@ export const minimalMarkdownTheme: MarkdownTheme = {
     accent: "#0066cc",
     tableBorder: "#cccccc",
     tableHeader: "transparent",
-    tableHeaderText: "inherit" as unknown as string,
+    tableHeaderText: undefined,
     tableRowEven: "transparent",
     tableRowOdd: "transparent",
   },

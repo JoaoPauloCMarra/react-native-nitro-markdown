@@ -153,7 +153,6 @@ export const TableRenderer: FC<TableRendererProps> = ({
 
   return (
     <View style={[styles.container, style]}>
-      {/* Off-screen measurement layer */}
       <View style={styles.measurementContainer}>
         <View style={styles.measurementRow}>
           {headers.map((cell, colIndex) => (
@@ -188,7 +187,6 @@ export const TableRenderer: FC<TableRendererProps> = ({
         ))}
       </View>
 
-      {/* Actual table - only rendered once widths are calculated */}
       {hasWidths && (
         <ScrollView
           horizontal
