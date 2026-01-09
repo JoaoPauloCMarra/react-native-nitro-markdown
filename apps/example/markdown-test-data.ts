@@ -191,3 +191,25 @@ The goal is to ensure that performance remains consistent regardless of content 
 - Special symbols and emoji combinations
 
 This comprehensive test suite validates that the parser maintains high performance and accuracy across all supported markdown features and edge cases.`;
+
+export const CUSTOM_RENDER_COMPONENTS = `# Custom Renderer Examples
+
+> **Tip:** Use the bottom tabs to switch between rendering modes!
+>
+> - **Default:** Standard markdown rendering
+> - **Styles:** Custom accents and retro typography
+> - **Custom:** Completely replaced components (Cards, Alerts, etc.)
+
+## Custom Components Demo
+
+This image will look like a standard image in **Default**, but like a "Card" with shadow in **Custom**:
+
+![Demo Image](https://picsum.photos/800/400 "A beautiful landscape to demonstrate custom image rendering")
+
+This blockquote will look like a gray bar in **Default**, but like an "Alert Info" box in **Custom**:
+
+> **Did you know?**
+>
+> The Custom renderer replaces the standard \`View\` with a specialized component that includes an icon and different layout logic!
+
+---`;

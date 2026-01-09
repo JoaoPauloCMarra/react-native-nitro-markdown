@@ -1,5 +1,5 @@
 {
-  "cxxNamespace": ["NitroMarkdown"],
+  "cxxNamespace": ["Markdown"],
   "ios": {
     "iosModuleName": "NitroMarkdown"
   },
@@ -10,7 +10,10 @@
   "autolinking": {
     "MarkdownParser": {
       "cpp": "HybridMarkdownParser"
+    },
+    "MarkdownSession": {
+      "swift": "HybridMarkdownSession",
+      "kotlin": "HybridMarkdownSession"
     }
   }
 }
-

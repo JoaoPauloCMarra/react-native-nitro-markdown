@@ -12,19 +12,20 @@ Pod::Spec.new do |s|
 
   s.platforms    = { :ios => "13.0" }
   s.source       = { :git => "https://github.com/JoaoPauloCMarra/react-native-nitro-markdown.git", :tag => "#{s.version}" }
+  s.module_name  = "NitroMarkdown"
 
-  # All source files including md4c and our C++ implementation
   s.source_files = [
     "ios/**/*.{h,m,mm,swift}",
     "cpp/**/*.{h,hpp,c,cpp}"
   ]
 
-  # Ensure md4c.c is compiled as C, not C++
   s.pod_target_xcconfig = {
     "CLANG_CXX_LANGUAGE_STANDARD" => "c++20",
     "CLANG_CXX_LIBRARY" => "libc++",
     "GCC_PREPROCESSOR_DEFINITIONS" => "$(inherited) MD4C_USE_UTF8=1",
     "HEADER_SEARCH_PATHS" => [
+      "\"$(inherited)\"",
+      "\"$(PODS_ROOT)/Headers/Private/Yoga\"",
       "\"$(PODS_TARGET_SRCROOT)/cpp/md4c\"",
       "\"$(PODS_TARGET_SRCROOT)/cpp/core\"",
       "\"$(PODS_TARGET_SRCROOT)/cpp/bindings\"",
@@ -33,10 +34,9 @@ Pod::Spec.new do |s|
     ].join(" ")
   }
 
-  # React Native dependency
   s.dependency "React-Core"
-  
-  # Add Nitro autolinking
+  s.dependency "React-Fabric"
+
   load 'nitrogen/generated/ios/NitroMarkdown+autolinking.rb'
   add_nitrogen_files(s)
 end

@@ -2,7 +2,7 @@
 #include <sstream>
 #include <iomanip>
 
-namespace margelo::nitro::NitroMarkdown {
+namespace margelo::nitro::Markdown {
 
 std::string HybridMarkdownParser::parse(const std::string& text) {
     InternalParserOptions opts;
@@ -109,4 +109,4 @@ std::string HybridMarkdownParser::nodeToJson(const std::shared_ptr<InternalMarkd
     return json.str();
 }
 
-} // namespace margelo::nitro::NitroMarkdown
+} // namespace margelo::nitro::Markdown

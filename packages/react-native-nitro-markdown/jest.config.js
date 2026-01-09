@@ -1,14 +1,14 @@
 module.exports = {
-  preset: 'ts-jest',
-  testEnvironment: 'node',
-  roots: ['<rootDir>/src'],
-  testMatch: ['**/__tests__/**/*.test.ts'],
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
+  preset: "ts-jest",
+  testEnvironment: "node",
+  roots: ["<rootDir>/src"],
+  testMatch: ["**/__tests__/**/*.test.ts"],
+  moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json"],
   testTimeout: 10000,
   collectCoverageFrom: [
-    'src/**/*.ts',
-    '!src/**/*.nitro.ts',
-    '!src/**/__tests__/**',
+    "src/**/*.ts",
+    "!src/**/*.nitro.ts",
+    "!src/**/__tests__/**",
   ],
   coverageThreshold: {
     global: {
@@ -18,9 +18,11 @@ module.exports = {
       statements: 100,
     },
   },
-  setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
+  setupFilesAfterEnv: ["<rootDir>/src/__tests__/setup.ts"],
   transform: {
-    '^.+\\.tsx?$': ['ts-jest', { tsconfig: 'tsconfig.test.json' }],
+    "^.+\\.tsx?$": ["ts-jest", { tsconfig: "tsconfig.test.json" }],
   },
+  transformIgnorePatterns: [
+    "node_modules/(?!(react-native|@react-native|react-native-nitro-modules)/)",
+  ],
 };
-

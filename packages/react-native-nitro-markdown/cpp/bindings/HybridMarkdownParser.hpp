@@ -4,7 +4,7 @@
 #include "../core/MD4CParser.hpp"
 #include <memory>
 
-namespace margelo::nitro::NitroMarkdown {
+namespace margelo::nitro::Markdown {
 
 using InternalMarkdownNode = ::NitroMarkdown::MarkdownNode;
 using InternalParserOptions = ::NitroMarkdown::ParserOptions;
@@ -25,4 +25,4 @@ private:
     std::string nodeToJson(const std::shared_ptr<InternalMarkdownNode>& node);
 };
 
-} // namespace margelo::nitro::NitroMarkdown
+} // namespace margelo::nitro::Markdown

@@ -4,9 +4,9 @@
     "outDir": "./lib/typescript",
     "rootDir": "./src",
     "lib": ["ES2020"],
-    "types": ["react-native"]
+    "jsx": "react-native",
+    "types": ["react", "react-native"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "lib", "nitrogen", "src/__tests__"]
 }
-

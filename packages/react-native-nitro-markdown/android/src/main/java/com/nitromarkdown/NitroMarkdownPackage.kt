@@ -4,6 +4,7 @@ import com.facebook.react.TurboReactPackage
 import com.facebook.react.bridge.NativeModule
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.module.model.ReactModuleInfoProvider
+import com.facebook.react.uimanager.ViewManager
 
 class NitroMarkdownPackage : TurboReactPackage() {
     companion object {
@@ -19,5 +20,8 @@ class NitroMarkdownPackage : TurboReactPackage() {
     override fun getReactModuleInfoProvider(): ReactModuleInfoProvider {
         return ReactModuleInfoProvider { emptyMap() }
     }
-}
 
+    override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> {
+        return emptyList()
+    }
+}

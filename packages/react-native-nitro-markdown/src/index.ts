@@ -1,65 +1,28 @@
-import { NitroModules } from 'react-native-nitro-modules';
-import type { MarkdownParser, ParserOptions } from './Markdown.nitro';
+export * from "./headless";
 
-export type { ParserOptions } from './Markdown.nitro';
+export { DefaultMarkdownRenderer } from "./default-markdown-renderer";
+export { Markdown } from "./markdown";
+export { MarkdownStream } from "./markdown-stream";
+export { useMarkdownContext } from "./MarkdownContext";
+export type {
+  CustomRenderer,
+  CustomRenderers,
+  CustomRendererProps,
+  NodeRendererProps,
+} from "./MarkdownContext";
+export { defaultMarkdownTheme } from "./theme";
+export type { MarkdownTheme } from "./theme";
 
-export interface MarkdownNode {
-  type:
-    | 'document'
-    | 'heading'
-    | 'paragraph'
-    | 'text'
-    | 'bold'
-    | 'italic'
-    | 'strikethrough'
-    | 'link'
-    | 'image'
-    | 'code_inline'
-    | 'code_block'
-    | 'blockquote'
-    | 'horizontal_rule'
-    | 'line_break'
-    | 'soft_break'
-    | 'table'
-    | 'table_head'
-    | 'table_body'
-    | 'table_row'
-    | 'table_cell'
-    | 'list'
-    | 'list_item'
-    | 'task_list_item'
-    | 'math_inline'
-    | 'math_block'
-    | 'html_block'
-    | 'html_inline';
-  content?: string;
-  level?: number;
-  href?: string;
-  title?: string;
-  alt?: string;
-  language?: string;
-  ordered?: boolean;
-  start?: number;
-  checked?: boolean;
-  isHeader?: boolean;
-  align?: string;
-  children?: MarkdownNode[];
-}
-
-export const MarkdownParserModule =
-  NitroModules.createHybridObject<MarkdownParser>('MarkdownParser');
-
-export function parseMarkdown(text: string): MarkdownNode {
-  const jsonStr = MarkdownParserModule.parse(text);
-  return JSON.parse(jsonStr) as MarkdownNode;
-}
-
-export function parseMarkdownWithOptions(
-  text: string,
-  options: ParserOptions
-): MarkdownNode {
-  const jsonStr = MarkdownParserModule.parseWithOptions(text, options);
-  return JSON.parse(jsonStr) as MarkdownNode;
-}
-
-export { MarkdownParser };
+export { Heading } from "./renderers/heading";
+export { Paragraph } from "./renderers/paragraph";
+export { Link } from "./renderers/link";
+export { Blockquote } from "./renderers/blockquote";
+export { HorizontalRule } from "./renderers/horizontal-rule";
+export { CodeBlock, InlineCode } from "./renderers/code";
+export { List, ListItem, TaskListItem } from "./renderers/list";
+export { TableRenderer } from "./renderers/table";
+export { Image } from "./renderers/image";
+export { MathInline, MathBlock } from "./renderers/math";
+export { createMarkdownSession } from "./MarkdownSession";
+export type { MarkdownSession } from "./MarkdownSession";
+export { useMarkdownSession, useStream } from "./use-markdown-stream";
