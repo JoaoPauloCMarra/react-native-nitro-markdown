@@ -95,8 +95,6 @@ export default function RootLayout() {
             header: () => null,
           }}
         />
-          }}
-        />
       </Tabs>
     </View>
   );
