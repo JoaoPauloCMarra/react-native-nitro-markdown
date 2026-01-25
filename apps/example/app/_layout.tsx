@@ -44,18 +44,20 @@ export default function RootLayout() {
           },
         }}
       >
-        {!!ENABLE_SANDBOX_TAB ? (
-          <Tabs.Screen
-            name="render-sandbox"
-            options={{
-              title: "Sandbox",
-              tabBarLabel: "Sandbox",
-              tabBarIcon: ({ color, size }) => (
-                <Ionicons name="play-circle" size={24} color={color} />
-              ),
-            }}
-          />
-        ) : null}
+        <Tabs.Screen
+          name="render-sandbox"
+          options={
+            ENABLE_SANDBOX_TAB
+              ? {
+                  title: "Sandbox",
+                  tabBarLabel: "Sandbox",
+                  tabBarIcon: ({ color, size }) => (
+                    <Ionicons name="play-circle" size={24} color={color} />
+                  ),
+                }
+              : { href: null, tabBarStyle: { display: "none" } }
+          }
+        />
         <Tabs.Screen
           name="index"
           options={{
@@ -119,4 +121,4 @@ const styles = StyleSheet.create({
   },
 });
 
-const ENABLE_SANDBOX_TAB = true;
+const ENABLE_SANDBOX_TAB = false;

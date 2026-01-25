@@ -35,6 +35,5 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    // paddingBottom is dynamic now
   },
 });
