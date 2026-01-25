@@ -1,18 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  ScrollView,
-  Platform,
-} from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
   useMarkdownSession,
   MarkdownStream,
   defaultMarkdownTheme,
-  type MarkdownSession,
 } from "react-native-nitro-markdown";
 import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 
@@ -149,7 +141,9 @@ export default function TokenStreamScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Token Stream</Text>
-          <Text style={styles.subtitle}>Direct Raw vs Markdown Render</Text>
+          <Text style={styles.subtitle}>
+            Direct Raw vs Markdown Render ({TOKEN_DELAY_MS}ms delay)
+          </Text>
         </View>
         <View style={styles.controlsRow}>
           <Pressable
@@ -165,8 +159,8 @@ export default function TokenStreamScreen() {
               {isStreamMode
                 ? "Pause"
                 : streamIndexRef.current > 0
-                ? "Resume"
-                : "Start"}
+                  ? "Resume"
+                  : "Start"}
             </Text>
           </Pressable>
           <Pressable style={styles.btnIcon} onPress={clearStream}>
