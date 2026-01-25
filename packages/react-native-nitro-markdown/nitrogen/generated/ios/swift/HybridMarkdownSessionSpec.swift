@@ -33,14 +33,14 @@ open class HybridMarkdownSessionSpec_base {
   public init() { }
   public func getCxxWrapper() -> HybridMarkdownSessionSpec_cxx {
   #if DEBUG
-    guard self is HybridMarkdownSessionSpec else {
+    guard self is any HybridMarkdownSessionSpec else {
       fatalError("`self` is not a `HybridMarkdownSessionSpec`! Did you accidentally inherit from `HybridMarkdownSessionSpec_base` instead of `HybridMarkdownSessionSpec`?")
     }
   #endif
     if let cxxWrapper = self.cxxWrapper {
       return cxxWrapper
     } else {
-      let cxxWrapper = HybridMarkdownSessionSpec_cxx(self as! HybridMarkdownSessionSpec)
+      let cxxWrapper = HybridMarkdownSessionSpec_cxx(self as! any HybridMarkdownSessionSpec)
       self.cxxWrapper = cxxWrapper
       return cxxWrapper
     }

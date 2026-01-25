@@ -1,5 +1,7 @@
 import {
   useState,
+  useEffect,
+  useLayoutEffect,
   useMemo,
   type ReactNode,
   type FC,
@@ -19,7 +21,7 @@ import { useMarkdownContext } from "../MarkdownContext";
 
 const renderInlineContent = (
   node: MarkdownNode,
-  Renderer: ComponentType<NodeRendererProps>
+  Renderer: ComponentType<NodeRendererProps>,
 ): ReactNode => {
   if (node.type === "paragraph" && node.children) {
     return (
@@ -44,6 +46,7 @@ interface ImageProps {
 export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [aspectRatio, setAspectRatio] = useState<number | undefined>(undefined);
   const { theme } = useMarkdownContext();
 
   const styles = useMemo(
@@ -55,7 +58,9 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
         },
         image: {
           width: "100%",
-          height: 200,
+          // If we have an aspect ratio, use it. Otherwise, use minHeight as fallback.
+          aspectRatio: aspectRatio,
+          minHeight: aspectRatio ? undefined : 200,
           borderRadius: theme.borderRadius.m,
           backgroundColor: theme.colors.surface,
         },
@@ -65,7 +70,9 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
         },
         imageLoading: {
           width: "100%",
-          height: 200,
+          // Match the image size if possible
+          aspectRatio: aspectRatio,
+          height: aspectRatio ? undefined : 200,
           borderRadius: theme.borderRadius.m,
           backgroundColor: theme.colors.surface,
           justifyContent: "center",
@@ -98,8 +105,30 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
           fontFamily: theme.fontFamilies.regular,
         },
       }),
-    [theme]
+    [theme, aspectRatio],
   );
+
+  useLayoutEffect(() => {
+    // Fast path for consistent aspect ratios if checking picsum
+    const picsumMatch = url.match(/picsum\.photos\/.*\/(\d+)\/(\d+)/);
+    if (picsumMatch) {
+      const w = parseInt(picsumMatch[1], 10);
+      const h = parseInt(picsumMatch[2], 10);
+      if (!isNaN(w) && !isNaN(h) && h !== 0) {
+        setAspectRatio(w / h);
+      }
+    }
+
+    RNImage.getSize(
+      url,
+      (width, height) => {
+        if (width > 0 && height > 0) {
+          setAspectRatio(width / height);
+        }
+      },
+      () => {},
+    );
+  }, [url]);
 
   const altContent = useMemo(() => {
     if (!alt || !Renderer) return null;
@@ -154,14 +183,14 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
 
   return (
     <View style={[styles.imageContainer, style]}>
-      {loading && (
+      {loading && !aspectRatio && (
         <View style={styles.imageLoading}>
           <Text style={styles.imageLoadingText}>Loading image...</Text>
         </View>
       )}
       <RNImage
         source={{ uri: url }}
-        style={[styles.image, loading && styles.imageHidden]}
+        style={[styles.image, loading && !aspectRatio && styles.imageHidden]}
         resizeMode="contain"
         onLoad={() => setLoading(false)}
         onError={() => {

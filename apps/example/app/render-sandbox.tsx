@@ -1,10 +1,21 @@
 import { ScrollView, StyleSheet, View } from "react-native";
-import { Markdown } from "react-native-nitro-markdown";
-import { COMPLEX_MARKDOWN } from "../markdown-test-data";
+import { Markdown, MarkdownNode } from "react-native-nitro-markdown";
 import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 
 export default function RenderScreen() {
   const tabHeight = useBottomTabHeight();
+
+  const onParsingInProgress = () => {
+    console.log("Parsing in progress");
+  };
+
+  const onParseComplete = (result: {
+    raw: string;
+    ast: MarkdownNode;
+    text: string;
+  }) => {
+    console.log("Parsing complete", result.text);
+  };
 
   return (
     <View style={styles.container}>
@@ -17,8 +28,12 @@ export default function RenderScreen() {
         bounces={false}
         showsVerticalScrollIndicator={false}
       >
-        <Markdown options={{ gfm: true, math: true }}>
-          {COMPLEX_MARKDOWN}
+        <Markdown
+          options={{ gfm: true, math: true }}
+          onParseComplete={onParseComplete}
+          onParsingInProgress={onParsingInProgress}
+        >
+          {MARKDOWN}
         </Markdown>
       </ScrollView>
     </View>
@@ -37,3 +52,9 @@ const styles = StyleSheet.create({
     padding: 20,
   },
 });
+
+const MARKDOWN = `# Markdown
+
+Add some markdown to test the rendering.
+
+`;

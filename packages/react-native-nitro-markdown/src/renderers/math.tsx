@@ -35,6 +35,8 @@ const createMathStyles = (theme: MarkdownTheme) =>
   StyleSheet.create({
     mathInlineContainer: {
       marginHorizontal: 2,
+      // Ensure the inline view has layout alignment
+      justifyContent: "center",
     },
     mathInlineFallbackContainer: {
       backgroundColor: theme.colors.codeBackground,
@@ -59,6 +61,8 @@ const createMathStyles = (theme: MarkdownTheme) =>
       alignItems: "center",
       borderWidth: 1,
       borderColor: theme.colors.border,
+      // Ensure we don't collapse if MathJax fails to report size immediately
+      minHeight: 48,
     },
     mathBlockFallbackContainer: {
       marginVertical: theme.spacing.m,
@@ -93,7 +97,8 @@ export const MathInline: FC<MathInlineProps> = ({ content, style }) => {
         <MathJaxComponent
           fontSize={fontSize}
           color={theme.colors.text}
-          fontCache={true}
+          fontCache={false}
+          style={{ backgroundColor: "transparent" }}
         >
           {content}
         </MathJaxComponent>
@@ -125,7 +130,8 @@ export const MathBlock: FC<MathBlockProps> = ({ content, style }) => {
         <MathJaxComponent
           fontSize={theme.fontSizes.l}
           color={theme.colors.text}
-          fontCache={true}
+          fontCache={false}
+          style={{ backgroundColor: "transparent" }}
         >
           {`\\displaystyle ${content}`}
         </MathJaxComponent>

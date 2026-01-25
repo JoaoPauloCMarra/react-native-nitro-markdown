@@ -10,13 +10,7 @@ interface ListProps {
   style?: ViewStyle;
 }
 
-export const List: FC<ListProps> = ({
-  ordered,
-  start = 1,
-  depth,
-  children,
-  style,
-}) => {
+export const List: FC<ListProps> = ({ depth, children, style }) => {
   const { theme } = useMarkdownContext();
   const styles = useMemo(
     () =>
@@ -25,11 +19,11 @@ export const List: FC<ListProps> = ({
           marginBottom: theme.spacing.m,
         },
         listNested: {
-          marginLeft: theme.spacing.l,
+          marginLeft: theme.spacing.s,
           marginBottom: 0,
         },
       }),
-    [theme]
+    [theme],
   );
   return (
     <View style={[styles.list, depth > 0 && styles.listNested, style]}>
@@ -77,7 +71,7 @@ export const ListItem: FC<ListItemProps> = ({
           minWidth: 0,
         },
       }),
-    [theme]
+    [theme],
   );
   const bullet = ordered ? `${start + index}.` : "•";
   return (
@@ -120,7 +114,7 @@ export const TaskListItem: FC<TaskListItemProps> = ({
           minWidth: 0,
         },
       }),
-    [theme]
+    [theme],
   );
   return (
     <View style={[styles.taskListItem, style]}>

@@ -76,8 +76,8 @@ cd ios && pod install
 If you are using Expo, you must run a **Prebuild** (Development Build) because this package contains native C++ code.
 
 ```bash
-npx expo install react-native-nitro-markdown react-native-nitro-modules
-npx expo prebuild
+bunx expo install react-native-nitro-markdown react-native-nitro-modules
+bunx expo prebuild
 ```
 
 ---
@@ -265,10 +265,12 @@ For maximum control, data processing, or minimal JS overhead:
 import {
   parseMarkdown,
   getTextContent,
+  getFlattenedText,
 } from "react-native-nitro-markdown/headless";
 
 const ast = parseMarkdown("# Hello World");
 const text = getTextContent(ast); // "Hello World"
+const fullText = getFlattenedText(ast); // "Hello World\n\n" (Normalized with line breaks)
 ```
 
 ### Option 10: High-Performance Streaming (LLMs)
@@ -293,6 +295,21 @@ export function AIResponseStream() {
     <MarkdownStream session={session.getSession()} options={{ gfm: true }} />
   );
 }
+```
+
+### Option 11: Extracting Plain Text
+
+You can extract the plain text representation (with proper line breaks) using the `onParseComplete` callback. This is useful for "Copy All" buttons or TTS.
+
+```tsx
+<Markdown
+  onParseComplete={(result) => {
+    console.log(result.text); // "Hello World\n\nThis is bold text."
+    console.log(result.ast); // Full AST
+  }}
+>
+  {markdown}
+</Markdown>
 ```
 
 ---
@@ -324,6 +341,7 @@ export {
   parseMarkdown,
   parseMarkdownWithOptions,
   getTextContent,
+  getFlattenedText,
 } from "./headless";
 
 // Theme presets

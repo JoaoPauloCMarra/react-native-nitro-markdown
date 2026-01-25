@@ -7,6 +7,9 @@
 
 namespace NitroMarkdown {
 
+typedef unsigned MD_OFFSET;
+typedef MD_OFFSET OFF;
+
 enum class NodeType {
     Document,
     Heading,
@@ -99,9 +102,11 @@ struct MarkdownNode {
     std::optional<bool> checked;
     std::optional<bool> isHeader;
     std::optional<TextAlign> align;
+    OFF beg;
+    OFF end;
     std::vector<std::shared_ptr<MarkdownNode>> children;
 
-    explicit MarkdownNode(NodeType t) : type(t) {}
+    explicit MarkdownNode(NodeType t) : type(t), beg(0), end(0) {}
 
     void addChild(std::shared_ptr<MarkdownNode> child) {
         if (child) {

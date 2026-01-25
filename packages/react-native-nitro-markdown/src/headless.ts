@@ -96,7 +96,7 @@ export function parseMarkdown(text: string): MarkdownNode {
  */
 export function parseMarkdownWithOptions(
   text: string,
-  options: ParserOptions
+  options: ParserOptions,
 ): MarkdownNode {
   const jsonStr = MarkdownParserModule.parseWithOptions(text, options);
   return JSON.parse(jsonStr) as MarkdownNode;
@@ -113,4 +113,59 @@ export type { MarkdownParser };
 export const getTextContent = (node: MarkdownNode): string => {
   if (node.content) return node.content;
   return node.children?.map(getTextContent).join("") ?? "";
+};
+
+/**
+ * recursively extracts plain text from the AST, normalizing spacing.
+ */
+export const getFlattenedText = (node: MarkdownNode): string => {
+  if (
+    node.type === "text" ||
+    node.type === "code_inline" ||
+    node.type === "math_inline" ||
+    node.type === "html_inline"
+  ) {
+    return node.content ?? "";
+  }
+
+  if (
+    node.type === "code_block" ||
+    node.type === "math_block" ||
+    node.type === "html_block"
+  ) {
+    return (node.content ?? "").trim() + "\n\n";
+  }
+
+  if (node.type === "line_break") return "\n";
+  if (node.type === "soft_break") return " ";
+  if (node.type === "horizontal_rule") return "---\n\n";
+
+  if (node.type === "image") {
+    return node.alt || node.title || "";
+  }
+
+  const childrenText = node.children?.map(getFlattenedText).join("") ?? "";
+
+  switch (node.type) {
+    case "paragraph":
+    case "heading":
+    case "blockquote":
+      return childrenText.trim() + "\n\n";
+
+    case "list_item":
+    case "task_list_item":
+      return childrenText.trim() + "\n";
+
+    case "list":
+      return childrenText + "\n";
+
+    case "table_row":
+      return childrenText + "\n";
+
+    case "table_cell":
+      return childrenText + " | ";
+
+    default:
+      return childrenText;
+  }
 };
