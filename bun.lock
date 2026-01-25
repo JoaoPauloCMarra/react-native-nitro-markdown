@@ -5,7 +5,7 @@
     "": {
       "name": "react-native-nitro-markdown-monorepo",
       "dependencies": {
-        "react-native-nitro-modules": "^0.32.1",
+        "react-native-nitro-modules": "^0.33.2",
       },
       "devDependencies": {
         "@types/commonmark": "^0.27.10",
@@ -67,7 +67,7 @@
     },
     "packages/react-native-nitro-markdown": {
       "name": "react-native-nitro-markdown",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "devDependencies": {
         "@types/react": "^19.2.7",
         "@types/react-native": "^0.73.0",
@@ -92,7 +92,7 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
-    "react-native-nitro-modules": "0.32.1",
+    "react-native-nitro-modules": "0.33.2",
   },
   "packages": {
     "@0no-co/graphql.web": ["@0no-co/graphql.web@1.2.0", "", { "peerDependencies": { "graphql": "^14.0.0 || ^15.0.0 || ^16.0.0" }, "optionalPeers": ["graphql"] }, "sha512-/1iHy9TTr63gE1YcR5idjx8UREz1s0kFhydf3bBLCXyqjhkIc6igAzTOx3zPifCwFR87tsh/4Pa9cNts6d2otw=="],
@@ -1387,7 +1387,7 @@
 
     "react-native-nitro-markdown": ["react-native-nitro-markdown@workspace:packages/react-native-nitro-markdown"],
 
-    "react-native-nitro-modules": ["react-native-nitro-modules@0.32.1", "", { "peerDependencies": { "react": "*", "react-native": "*" } }, "sha512-V+Vy76e4fxRxgVGu5Uh3cBPvuFQW8fM1OUKk1mqEA/JawjhX+hxHtBhpfuvNjV0BnV/uXCIg8/eK+rTpB6tqFg=="],
+    "react-native-nitro-modules": ["react-native-nitro-modules@0.33.2", "", { "peerDependencies": { "react": "*", "react-native": "*" } }, "sha512-ZlfOe6abODeHv/eZf8PxeSkrxIUhEKha6jaAAA9oXy7I6VPr7Ff4dUsAq3cyF3kX0L6qt2Dh9nzD2NdSsDwGpA=="],
 
     "react-native-safe-area-context": ["react-native-safe-area-context@5.6.2", "", { "peerDependencies": { "react": "*", "react-native": "*" } }, "sha512-4XGqMNj5qjUTYywJqpdWZ9IG8jgkS3h06sfVjfw5yZQZfWnRFXczi0GnYyFyCc2EBps/qFmoCH8fez//WumdVg=="],
 
