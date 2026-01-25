@@ -26,7 +26,6 @@ export const Paragraph: FC<ParagraphProps> = ({
         paragraphInListItem: {
           marginBottom: 0,
           marginTop: 0,
-          flexShrink: 1,
         },
       }),
     [theme],
