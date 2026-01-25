@@ -12,6 +12,9 @@ public:
     std::stack<std::shared_ptr<MarkdownNode>> nodeStack;
     std::string currentText;
     const char* inputText = nullptr;
+    size_t inputTextSize = 0;
+    OFF currentTextBeg = 0;
+    OFF lastTextEnd = 0;
     
     void reset() {
         root = std::make_shared<MarkdownNode>(NodeType::Document);
@@ -19,28 +22,34 @@ public:
         nodeStack.push(root);
         currentText.clear();
         currentText.reserve(256);
+        currentTextBeg = 0;
+        lastTextEnd = 0;
     }
     
     void flushText() {
         if (!currentText.empty() && !nodeStack.empty()) {
             auto textNode = std::make_shared<MarkdownNode>(NodeType::Text);
             textNode->content = std::move(currentText);
+            textNode->beg = currentTextBeg;
+            textNode->end = lastTextEnd;
             nodeStack.top()->addChild(std::move(textNode));
             currentText.clear();
         }
     }
     
-    void pushNode(std::shared_ptr<MarkdownNode> node) {
+    void pushNode(std::shared_ptr<MarkdownNode> node, OFF beg = 0) {
         flushText();
         if (node && !nodeStack.empty()) {
+            node->beg = beg;
             nodeStack.top()->addChild(node);
             nodeStack.push(std::move(node));
         }
     }
     
-    void popNode() {
+    void popNode(OFF end = 0) {
         flushText();
         if (nodeStack.size() > 1) {
+            nodeStack.top()->end = end;
             nodeStack.pop();
         }
     }
@@ -68,7 +77,7 @@ public:
         return result;
     }
     
-    static int enterBlock(MD_BLOCKTYPE type, void* detail, void* userdata) {
+    static int enterBlock(MD_BLOCKTYPE type, void* detail, MD_OFFSET off, void* userdata) {
         auto* impl = static_cast<Impl*>(userdata);
         
         switch (type) {
@@ -76,14 +85,14 @@ public:
                 break;
                 
             case MD_BLOCK_QUOTE: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Blockquote));
+                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Blockquote), off);
                 break;
             }
                 
             case MD_BLOCK_UL: {
                 auto node = std::make_shared<MarkdownNode>(NodeType::List);
                 node->ordered = false;
-                impl->pushNode(node);
+                impl->pushNode(node, off);
                 break;
             }
                 
@@ -92,7 +101,7 @@ public:
                 auto node = std::make_shared<MarkdownNode>(NodeType::List);
                 node->ordered = true;
                 node->start = d->start;
-                impl->pushNode(node);
+                impl->pushNode(node, off);
                 break;
             }
                 
@@ -101,17 +110,15 @@ public:
                 if (d->is_task) {
                     auto node = std::make_shared<MarkdownNode>(NodeType::TaskListItem);
                     node->checked = (d->task_mark == 'x' || d->task_mark == 'X');
-                    impl->pushNode(node);
+                    impl->pushNode(node, off);
                 } else {
-                    impl->pushNode(std::make_shared<MarkdownNode>(NodeType::ListItem));
+                    impl->pushNode(std::make_shared<MarkdownNode>(NodeType::ListItem), off);
                 }
                 break;
             }
                 
             case MD_BLOCK_HR: {
-                impl->flushText();
-                impl->nodeStack.top()->addChild(
-                    std::make_shared<MarkdownNode>(NodeType::HorizontalRule));
+                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::HorizontalRule), off);
                 break;
             }
                 
@@ -119,7 +126,7 @@ public:
                 auto* d = static_cast<MD_BLOCK_H_DETAIL*>(detail);
                 auto node = std::make_shared<MarkdownNode>(NodeType::Heading);
                 node->level = d->level;
-                impl->pushNode(node);
+                impl->pushNode(node, off);
                 break;
             }
                 
@@ -129,37 +136,37 @@ public:
                 if (d->lang.text && d->lang.size > 0) {
                     node->language = std::string(d->lang.text, d->lang.size);
                 }
-                impl->pushNode(node);
+                impl->pushNode(node, off);
                 break;
             }
                 
             case MD_BLOCK_HTML: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::HtmlBlock));
+                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::HtmlBlock), off);
                 break;
             }
                 
             case MD_BLOCK_P: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Paragraph));
+                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Paragraph), off);
                 break;
             }
                 
             case MD_BLOCK_TABLE: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Table));
+                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Table), off);
                 break;
             }
                 
             case MD_BLOCK_THEAD: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::TableHead));
+                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::TableHead), off);
                 break;
             }
                 
             case MD_BLOCK_TBODY: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::TableBody));
+                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::TableBody), off);
                 break;
             }
                 
             case MD_BLOCK_TR: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::TableRow));
+                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::TableRow), off);
                 break;
             }
                 
@@ -173,7 +180,7 @@ public:
                     case MD_ALIGN_RIGHT: node->align = TextAlign::Right; break;
                     default: node->align = TextAlign::Default; break;
                 }
-                impl->pushNode(node);
+                impl->pushNode(node, off);
                 break;
             }
                 
@@ -187,7 +194,7 @@ public:
                     case MD_ALIGN_RIGHT: node->align = TextAlign::Right; break;
                     default: node->align = TextAlign::Default; break;
                 }
-                impl->pushNode(node);
+                impl->pushNode(node, off);
                 break;
             }
         }
@@ -195,38 +202,41 @@ public:
         return 0;
     }
     
-    static int leaveBlock(MD_BLOCKTYPE type, void* detail, void* userdata) {
+    static int leaveBlock(MD_BLOCKTYPE type, void* detail, MD_OFFSET off, void* userdata) {
         (void)detail;
         auto* impl = static_cast<Impl*>(userdata);
         
         switch (type) {
             case MD_BLOCK_DOC:
+                impl->root->end = off;
+                break;
             case MD_BLOCK_HR:
+                impl->popNode(off);
                 break;
             default:
-                impl->popNode();
+                impl->popNode(off);
                 break;
         }
         
         return 0;
     }
     
-    static int enterSpan(MD_SPANTYPE type, void* detail, void* userdata) {
+    static int enterSpan(MD_SPANTYPE type, void* detail, MD_OFFSET off, void* userdata) {
         auto* impl = static_cast<Impl*>(userdata);
         
         switch (type) {
             case MD_SPAN_EM: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Italic));
+                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Italic), off);
                 break;
             }
                 
             case MD_SPAN_STRONG: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Bold));
+                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Bold), off);
                 break;
             }
                 
             case MD_SPAN_DEL: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Strikethrough));
+                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Strikethrough), off);
                 break;
             }
                 
@@ -239,7 +249,7 @@ public:
                 if (d->title.text && d->title.size > 0) {
                     node->title = std::string(d->title.text, d->title.size);
                 }
-                impl->pushNode(node);
+                impl->pushNode(node, off);
                 break;
             }
                 
@@ -252,33 +262,33 @@ public:
                 if (d->title.text && d->title.size > 0) {
                     node->title = std::string(d->title.text, d->title.size);
                 }
-                impl->pushNode(node);
+                impl->pushNode(node, off);
                 break;
             }
                 
             case MD_SPAN_CODE: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::CodeInline));
+                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::CodeInline), off);
                 break;
             }
                 
             case MD_SPAN_LATEXMATH: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::MathInline));
+                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::MathInline), off);
                 break;
             }
                 
             case MD_SPAN_LATEXMATH_DISPLAY: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::MathBlock));
+                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::MathBlock), off);
                 break;
             }
                 
             case MD_SPAN_U: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Italic));
+                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Italic), off);
                 break;
             }
                 
             case MD_SPAN_WIKILINK: {
                 auto node = std::make_shared<MarkdownNode>(NodeType::Link);
-                impl->pushNode(node);
+                impl->pushNode(node, off);
                 break;
             }
         }
@@ -286,7 +296,7 @@ public:
         return 0;
     }
     
-    static int leaveSpan(MD_SPANTYPE type, void* detail, void* userdata) {
+    static int leaveSpan(MD_SPANTYPE type, void* detail, MD_OFFSET off, void* userdata) {
         (void)detail;
         auto* impl = static_cast<Impl*>(userdata);
 
@@ -309,7 +319,7 @@ public:
             }
         }
 
-        impl->popNode();
+        impl->popNode(off);
         return 0;
     }
     
@@ -320,6 +330,7 @@ public:
 
         switch (type) {
             case MD_TEXT_NULLCHAR:
+                if (impl->currentText.empty()) impl->currentTextBeg = impl->lastTextEnd;
                 impl->currentText += '\0';
                 break;
                 
@@ -345,15 +356,37 @@ public:
                 break;
                 
             case MD_TEXT_ENTITY:
-                impl->currentText.append(text, size);
+                if (text && size > 0) {
+                    MD_OFFSET off = impl->lastTextEnd;
+                    ptrdiff_t diff = text - impl->inputText;
+                    if (diff >= 0 && static_cast<size_t>(diff) <= impl->inputTextSize) {
+                        off = static_cast<MD_OFFSET>(diff);
+                    }
+                    if (impl->currentText.empty()) impl->currentTextBeg = off;
+                    impl->currentText.append(text, size);
+                    impl->lastTextEnd = off + size;
+                }
                 break;
                 
             case MD_TEXT_NORMAL:
             case MD_TEXT_CODE:
             case MD_TEXT_LATEXMATH:
-            default:
-                impl->currentText.append(text, size);
+            default: {
+                if (text && size > 0) {
+                    MD_OFFSET off = impl->lastTextEnd;
+                    ptrdiff_t diff = text - impl->inputText;
+                    if (diff >= 0 && static_cast<size_t>(diff) <= impl->inputTextSize) {
+                        off = static_cast<MD_OFFSET>(diff);
+                    }
+                    
+                    if (impl->currentText.empty()) {
+                        impl->currentTextBeg = off;
+                    }
+                    impl->currentText.append(text, size);
+                    impl->lastTextEnd = off + size;
+                }
                 break;
+            }
         }
         
         return 0;
@@ -367,6 +400,7 @@ MD4CParser::~MD4CParser() = default;
 std::shared_ptr<MarkdownNode> MD4CParser::parse(const std::string& markdown, const ParserOptions& options) {
     impl_->reset();
     impl_->inputText = markdown.c_str();
+    impl_->inputTextSize = markdown.size();
     
     unsigned int flags = MD_FLAG_NOHTML;
     

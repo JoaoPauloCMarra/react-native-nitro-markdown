@@ -44,6 +44,18 @@ export default function RootLayout() {
           },
         }}
       >
+        {!!ENABLE_SANDBOX_TAB ? (
+          <Tabs.Screen
+            name="render-sandbox"
+            options={{
+              title: "Sandbox",
+              tabBarLabel: "Sandbox",
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="play-circle" size={24} color={color} />
+              ),
+            }}
+          />
+        ) : null}
         <Tabs.Screen
           name="index"
           options={{
@@ -106,3 +118,5 @@ const styles = StyleSheet.create({
     backgroundColor: "#0a0a0a",
   },
 });
+
+const ENABLE_SANDBOX_TAB = true;

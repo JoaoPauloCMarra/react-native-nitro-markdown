@@ -18,6 +18,7 @@ import {
 import {
   parseMarkdown,
   parseMarkdownWithOptions,
+  getFlattenedText,
   getTextContent,
   type MarkdownNode,
 } from "./headless";
@@ -49,6 +50,18 @@ export interface MarkdownProps {
    * Parser options to enable GFM or Math support.
    */
   options?: ParserOptions;
+  /**
+   * Callback fired when parsing begins.
+   */
+  onParsingInProgress?: () => void;
+  /**
+   * Callback fired when parsing completes.
+   */
+  onParseComplete?: (result: {
+    raw: string;
+    ast: MarkdownNode;
+    text: string;
+  }) => void;
   /**
    * Custom renderers for specific markdown node types.
    * Each renderer receives { node, children, Renderer } plus type-specific props.
@@ -89,18 +102,36 @@ export const Markdown: FC<MarkdownProps> = ({
   styles: nodeStyles,
   stylingStrategy = "opinionated",
   style,
+  onParsingInProgress,
+  onParseComplete,
 }) => {
   const ast = useMemo(() => {
     try {
-      if (options) {
-        return parseMarkdownWithOptions(children, options);
+      if (onParsingInProgress) {
+        onParsingInProgress();
       }
-      return parseMarkdown(children);
+
+      let result: MarkdownNode;
+      if (options) {
+        result = parseMarkdownWithOptions(children, options);
+      } else {
+        result = parseMarkdown(children);
+      }
+
+      if (onParseComplete) {
+        onParseComplete({
+          raw: children,
+          ast: result,
+          text: getFlattenedText(result),
+        });
+      }
+
+      return result;
     } catch (error) {
       console.error("Failed to parse markdown:", error);
       return null;
     }
-  }, [children, options]);
+  }, [children, options, onParsingInProgress, onParseComplete]);
 
   const theme = useMemo(() => {
     const base =
@@ -158,7 +189,7 @@ const NodeRenderer: FC<NodeRendererProps> = ({
   const renderChildren = (
     children?: MarkdownNode[],
     childInListItem = false,
-    childParentIsText = false
+    childParentIsText = false,
   ): ReactNode => {
     if (!children || children.length === 0) return null;
 
@@ -168,7 +199,7 @@ const NodeRenderer: FC<NodeRendererProps> = ({
     const flushInlineGroup = () => {
       if (currentInlineGroup.length > 0) {
         const hasMath = currentInlineGroup.some(
-          (child) => child.type === "math_inline"
+          (child) => child.type === "math_inline",
         );
 
         if (hasMath && !childParentIsText) {
@@ -191,7 +222,7 @@ const NodeRenderer: FC<NodeRendererProps> = ({
                   parentIsText={false}
                 />
               ))}
-            </View>
+            </View>,
           );
         } else {
           const Wrapper = childParentIsText ? Fragment : Text;
@@ -210,7 +241,7 @@ const NodeRenderer: FC<NodeRendererProps> = ({
                   parentIsText={true}
                 />
               ))}
-            </Wrapper>
+            </Wrapper>,
           );
         }
         currentInlineGroup = [];
@@ -229,7 +260,7 @@ const NodeRenderer: FC<NodeRendererProps> = ({
             depth={depth + 1}
             inListItem={childInListItem}
             parentIsText={childParentIsText}
-          />
+          />,
         );
       }
     });
@@ -243,7 +274,7 @@ const NodeRenderer: FC<NodeRendererProps> = ({
     const childrenRendered = renderChildren(
       node.children,
       inListItem,
-      parentIsText
+      parentIsText,
     );
 
     const baseProps = {
@@ -254,31 +285,24 @@ const NodeRenderer: FC<NodeRendererProps> = ({
 
     const enhancedProps = {
       ...baseProps,
-      // Heading
       ...(node.type === "heading" && {
         level: (node.level ?? 1) as 1 | 2 | 3 | 4 | 5 | 6,
       }),
-      // Link
       ...(node.type === "link" && { href: node.href ?? "", title: node.title }),
-      // Image
       ...(node.type === "image" && {
         url: node.href ?? "",
         alt: node.alt,
         title: node.title,
       }),
-      // Code block
       ...(node.type === "code_block" && {
         content: getTextContent(node),
         language: node.language,
       }),
-      // Inline code
       ...(node.type === "code_inline" && { content: node.content ?? "" }),
-      // List
       ...(node.type === "list" && {
         ordered: node.ordered ?? false,
         start: node.start,
       }),
-      // Task list item
       ...(node.type === "task_list_item" && { checked: node.checked ?? false }),
     };
 

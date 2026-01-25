@@ -20,7 +20,6 @@ export const Paragraph: FC<ParagraphProps> = ({
         paragraph: {
           flexDirection: "row",
           flexWrap: "wrap",
-          alignItems: "baseline",
           marginBottom: theme.spacing.l,
           gap: 0,
         },
@@ -30,7 +29,7 @@ export const Paragraph: FC<ParagraphProps> = ({
           flexShrink: 1,
         },
       }),
-    [theme]
+    [theme],
   );
 
   return (

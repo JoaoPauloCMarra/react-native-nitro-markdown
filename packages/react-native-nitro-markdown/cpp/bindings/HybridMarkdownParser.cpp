@@ -48,6 +48,8 @@ std::string HybridMarkdownParser::nodeToJson(const std::shared_ptr<InternalMarkd
     std::ostringstream json;
     json << "{";
     json << "\"type\":\"" << ::NitroMarkdown::nodeTypeToString(node->type) << "\"";
+    json << ",\"beg\":" << node->beg;
+    json << ",\"end\":" << node->end;
 
     if (node->content.has_value()) {
         json << ",\"content\":\"" << escapeJson(node->content.value()) << "\"";

@@ -360,11 +360,11 @@ typedef struct MD_PARSER {
      * Any rendering callback may abort further parsing of the document by
      * returning non-zero.
      */
-    int (*enter_block)(MD_BLOCKTYPE /*type*/, void* /*detail*/, void* /*userdata*/);
-    int (*leave_block)(MD_BLOCKTYPE /*type*/, void* /*detail*/, void* /*userdata*/);
+    int (*enter_block)(MD_BLOCKTYPE /*type*/, void* /*detail*/, MD_OFFSET /*off*/, void* /*userdata*/);
+    int (*leave_block)(MD_BLOCKTYPE /*type*/, void* /*detail*/, MD_OFFSET /*off*/, void* /*userdata*/);
 
-    int (*enter_span)(MD_SPANTYPE /*type*/, void* /*detail*/, void* /*userdata*/);
-    int (*leave_span)(MD_SPANTYPE /*type*/, void* /*detail*/, void* /*userdata*/);
+    int (*enter_span)(MD_SPANTYPE /*type*/, void* /*detail*/, MD_OFFSET /*off*/, void* /*userdata*/);
+    int (*leave_span)(MD_SPANTYPE /*type*/, void* /*detail*/, MD_OFFSET /*off*/, void* /*userdata*/);
 
     int (*text)(MD_TEXTTYPE /*type*/, const MD_CHAR* /*text*/, MD_SIZE /*size*/, void* /*userdata*/);
 
@@ -378,6 +378,9 @@ typedef struct MD_PARSER {
     void (*debug_log)(const char* /*msg*/, void* /*userdata*/);
 
     /* Reserved. Set to NULL.
+     *
+     * Note: used to be syntax callback, now reused for something else or just kept for ABI?
+     * We don't care about ABI much here since it's static linking for RN.
      */
     void (*syntax)(void);
 } MD_PARSER;

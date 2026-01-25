@@ -83,11 +83,54 @@ public:
         testUnicodeHandling();
         testResourceCleanup();
         testConcurrentOptions();
+        testOffsets();
 
         TestRunner::printSummary();
     }
 
 private:
+    static void testOffsets() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+        
+        // Basic text
+        std::string text1 = "Hello";
+        auto result1 = parser.parse(text1, options);
+        
+        // Document: 0-5
+        TestRunner::assertEqual("0", std::to_string(result1->beg), "Document beg");
+        TestRunner::assertEqual("5", std::to_string(result1->end), "Document end");
+        
+        if (!result1->children.empty()) {
+            auto para1 = result1->children[0];
+            TestRunner::assertEqual("0", std::to_string(para1->beg), "Para beg");
+            TestRunner::assertEqual("5", std::to_string(para1->end), "Para end");
+            
+            if (!para1->children.empty()) {
+                auto txt1 = para1->children[0];
+                TestRunner::assertEqual("text", nodeTypeToString(txt1->type), "Text node type");
+                TestRunner::assertEqual("0", std::to_string(txt1->beg), "Text beg");
+                TestRunner::assertEqual("5", std::to_string(txt1->end), "Text end");
+            }
+        }
+        
+        // Bold
+        // "Hello **bold**"
+        // 01234567890123
+        // Hello (text): 0-6 (Hello+space)
+        // **bold**: 6-14 (8 chars)
+        std::string text2 = "Hello **bold**";
+        auto result2 = parser.parse(text2, options);
+        if (!result2->children.empty()) {
+            auto para2 = result2->children[0];
+            if (para2->children.size() >= 2) {
+                auto bold2 = para2->children[1];
+                TestRunner::assertEqual("bold", nodeTypeToString(bold2->type), "Bold node type");
+                TestRunner::assertEqual("6", std::to_string(bold2->beg), "Bold beg");
+                TestRunner::assertEqual("14", std::to_string(bold2->end), "Bold end");
+            }
+        }
+    }
     static void testEmptyInput() {
         MD4CParser parser;
         ParserOptions options{true, true};
