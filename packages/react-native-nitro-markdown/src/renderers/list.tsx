@@ -67,7 +67,6 @@ export const ListItem: FC<ListItemProps> = ({
         },
         listItemContent: {
           flex: 1,
-          flexShrink: 1,
           minWidth: 0,
         },
       }),
@@ -110,7 +109,6 @@ export const TaskListItem: FC<TaskListItemProps> = ({
         },
         taskContent: {
           flex: 1,
-          flexShrink: 1,
           minWidth: 0,
         },
       }),
