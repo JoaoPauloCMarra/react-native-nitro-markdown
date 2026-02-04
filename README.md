@@ -189,8 +189,14 @@ Defaults live in `defaultMarkdownTheme` and are intentionally neutral so you can
 - `spacing` - Spacing tokens (xs, s, m, l, xl)
 - `fontSizes` - Font sizes (xs, s, m, l, xl, h1-h6)
 - `fontFamilies` - Font families for regular, heading, and mono text
+- `headingWeight` - Optional weight for headings (useful for Android custom fonts)
 - `borderRadius` - Border radius tokens (s, m, l)
 - `showCodeLanguage` - Show/hide code block language labels
+
+**Android custom fonts note:**
+If you use a custom heading font on Android and don’t load a bold variant, set
+`headingWeight: "normal"` (or use the `styles` prop) to avoid fallback to a
+system serif font.
 
 ### Option 5: Minimal Styling Strategy
 
