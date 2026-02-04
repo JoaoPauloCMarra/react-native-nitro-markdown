@@ -12,6 +12,7 @@ import {
   StyleSheet,
   View,
   Text,
+  Platform,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
@@ -68,7 +69,7 @@ export interface MarkdownProps {
    */
   renderers?: CustomRenderers;
   /**
-   * Custom theme to override default styles.
+   * Custom theme tokens to override default styles.
    */
   theme?: PartialMarkdownTheme;
   /**
@@ -84,7 +85,7 @@ export interface MarkdownProps {
   styles?: NodeStyleOverrides;
   /**
    * Styling strategy for the component.
-   * - "opinionated": Full styling with colors, spacing, and visual effects (default)
+   * - "opinionated": Balanced defaults with spacing and neutral colors (default)
    * - "minimal": Bare minimum styling for a clean slate
    */
   stylingStrategy?: StylingStrategy;
@@ -502,20 +503,25 @@ const createBaseStyles = (theme: MarkdownTheme) =>
       color: "#f87171",
       fontSize: 14,
       fontFamily: theme.fontFamilies.mono ?? "monospace",
+      ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
     text: {
       color: theme.colors.text,
       fontSize: theme.fontSizes.m,
       lineHeight: theme.fontSizes.m * 1.6,
       fontFamily: theme.fontFamilies.regular,
+      ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
     bold: {
       fontWeight: "700",
+      ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
     italic: {
       fontStyle: "italic",
+      ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
     strikethrough: {
       textDecorationLine: "line-through",
+      ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
   });

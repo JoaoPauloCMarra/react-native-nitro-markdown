@@ -1,0 +1,17 @@
+export const EXAMPLE_COLORS = {
+  background: "#f7f3ee",
+  surface: "#ffffff",
+  surfaceMuted: "#f1f5f9",
+  border: "#e2e8f0",
+  text: "#0f172a",
+  textMuted: "#64748b",
+  accent: "#2563eb",
+  accentSoft: "#dbeafe",
+  accentDeep: "#1d4ed8",
+  info: "#0ea5e9",
+  infoSoft: "#f0f9ff",
+  warning: "#f59e0b",
+  danger: "#ef4444",
+  dangerSoft: "#fef2f2",
+  dangerBorder: "#fecaca",
+} as const;

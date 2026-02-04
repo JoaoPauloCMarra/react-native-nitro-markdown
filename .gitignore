@@ -112,3 +112,6 @@ tmp/
 temp/
 *.tmp
 *.temp
+
+*.md
+!README.md

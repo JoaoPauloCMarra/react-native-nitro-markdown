@@ -40,13 +40,10 @@
     "react-native-builder-bob": "^0.40.17",
     "rimraf": "^6.0.1",
     "ts-jest": "^29.2.5",
-    "turbo": "^2.7.6",
+    "turbo": "^2.8.3",
     "typescript": "^5.6.3"
   },
   "overrides": {
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "react-native": "0.81.5",
     "react-native-nitro-modules": "0.33.2"
   },
   "dependencies": {

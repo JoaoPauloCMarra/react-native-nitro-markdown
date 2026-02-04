@@ -12,6 +12,7 @@ import {
   Text,
   Image as RNImage,
   StyleSheet,
+  Platform,
   type ViewStyle,
 } from "react-native";
 
@@ -82,6 +83,7 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
           color: theme.colors.textMuted,
           fontSize: theme.fontSizes.s,
           fontFamily: theme.fontFamilies.regular,
+          ...(Platform.OS === "android" && { includeFontPadding: false }),
         },
         imageError: {
           width: "100%",
@@ -95,6 +97,7 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
           color: theme.colors.textMuted,
           fontSize: theme.fontSizes.s,
           fontFamily: theme.fontFamilies.regular,
+          ...(Platform.OS === "android" && { includeFontPadding: false }),
         },
         imageCaption: {
           color: theme.colors.textMuted,
@@ -103,6 +106,7 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
           fontStyle: "italic",
           textAlign: "center",
           fontFamily: theme.fontFamilies.regular,
+          ...(Platform.OS === "android" && { includeFontPadding: false }),
         },
       }),
     [theme, aspectRatio],

@@ -47,6 +47,8 @@ export const CodeBlock: FC<CodeBlockProps> = ({
           marginBottom: theme.spacing.s,
           textTransform: "uppercase",
           letterSpacing: 0.5,
+          fontFamily: theme.fontFamilies.mono,
+          ...(Platform.OS === "android" && { includeFontPadding: false }),
         },
         codeBlockText: {
           fontFamily:
@@ -55,6 +57,7 @@ export const CodeBlock: FC<CodeBlockProps> = ({
           fontSize: theme.fontSizes.s,
           color: theme.colors.text,
           lineHeight: theme.fontSizes.s * 1.5,
+          ...(Platform.OS === "android" && { includeFontPadding: false }),
         },
       }),
     [theme]

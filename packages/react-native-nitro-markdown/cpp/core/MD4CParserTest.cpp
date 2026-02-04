@@ -1,9 +1,12 @@
+#define NITRO_MARKDOWN_TESTING
 #include "MD4CParser.hpp"
 #include "MarkdownTypes.hpp"
+#include "../md4c/md4c.h"
 #include <iostream>
 #include <cassert>
 #include <string>
 #include <algorithm>
+#include <limits>
 
 namespace NitroMarkdown {
 
@@ -83,6 +86,9 @@ public:
         testUnicodeHandling();
         testResourceCleanup();
         testConcurrentOptions();
+        testNullCharOffsets();
+        testLinkAttributes();
+        testOversizedInputClamp();
         testOffsets();
 
         TestRunner::printSummary();
@@ -129,6 +135,71 @@ private:
                 TestRunner::assertEqual("6", std::to_string(bold2->beg), "Bold beg");
                 TestRunner::assertEqual("14", std::to_string(bold2->end), "Bold end");
             }
+        }
+    }
+
+    static void testNullCharOffsets() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+
+        std::string text;
+        text.push_back('A');
+        text.push_back('\0');
+        text.push_back('B');
+
+        auto result = parser.parse(text, options);
+        TestRunner::assertEqual("3", std::to_string(result->end), "Null char doc end");
+
+        if (!result->children.empty()) {
+            auto para = result->children[0];
+            TestRunner::assertEqual("0", std::to_string(para->beg), "Null char para beg");
+            TestRunner::assertEqual("3", std::to_string(para->end), "Null char para end");
+
+            if (!para->children.empty()) {
+                auto txt = para->children[0];
+                TestRunner::assertEqual("text", nodeTypeToString(txt->type), "Null char text node");
+                TestRunner::assertEqual("0", std::to_string(txt->beg), "Null char text beg");
+                TestRunner::assertEqual("3", std::to_string(txt->end), "Null char text end");
+                TestRunner::assertEqual("3", std::to_string(txt->content.value_or("").size()), "Null char text size");
+            }
+        }
+    }
+
+    static void testLinkAttributes() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+
+        auto result = parser.parse("[link](https://example.com \"hi&amp;bye\")", options);
+        TestRunner::assertNotNull(result.get(), "Link attributes result not null");
+
+        if (!result->children.empty()) {
+            auto para = result->children[0];
+            if (!para->children.empty()) {
+                auto link = para->children[0];
+                TestRunner::assertEqual("link", nodeTypeToString(link->type), "Link node");
+                TestRunner::assertEqual("https://example.com", link->href.value_or(""), "Link href");
+                TestRunner::assertEqual("hi&amp;bye", link->title.value_or(""), "Link title");
+            }
+        }
+    }
+
+    static void testOversizedInputClamp() {
+        size_t maxSize = static_cast<size_t>(std::numeric_limits<MD_SIZE>::max());
+        TestRunner::assertEqual(
+            std::to_string(maxSize),
+            std::to_string(MD4CParser::clampInputSizeForTest(maxSize)),
+            "Clamp size at max"
+        );
+
+        if (maxSize < std::numeric_limits<size_t>::max()) {
+            size_t over = maxSize + 1;
+            TestRunner::assertEqual(
+                std::to_string(maxSize),
+                std::to_string(MD4CParser::clampInputSizeForTest(over)),
+                "Clamp oversized input"
+            );
+        } else {
+            TestRunner::assertTrue(true, "Clamp oversized input skipped");
         }
     }
     static void testEmptyInput() {

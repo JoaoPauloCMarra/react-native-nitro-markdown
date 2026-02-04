@@ -3,8 +3,19 @@
 
 #include <stack>
 #include <cstring>
+#include <limits>
 
 namespace NitroMarkdown {
+
+namespace {
+size_t clampInputSize(size_t inputSize) {
+    size_t maxSize = static_cast<size_t>(std::numeric_limits<MD_SIZE>::max());
+    if (inputSize > maxSize) {
+        return maxSize;
+    }
+    return inputSize;
+}
+} // namespace
 
 class MD4CParser::Impl {
 public:
@@ -55,25 +66,42 @@ public:
     }
     
     std::string getAttributeText(const MD_ATTRIBUTE* attr) {
-        if (!attr || attr->size == 0) return "";
+        if (!attr || attr->size == 0 || !attr->text) return "";
+        if (!attr->substr_types || !attr->substr_offsets) {
+            return std::string(attr->text, attr->size);
+        }
 
         std::string result;
         result.reserve(attr->size);
-        
-        for (unsigned i = 0; i < attr->size; i++) {
+
+        for (unsigned i = 0; ; i++) {
+            size_t start = static_cast<size_t>(attr->substr_offsets[i]);
+            size_t end = static_cast<size_t>(attr->substr_offsets[i + 1]);
+
+            if (end > attr->size) {
+                end = static_cast<size_t>(attr->size);
+            }
+            if (start > end) {
+                break;
+            }
+
             if (attr->substr_types[i] == MD_TEXT_NORMAL ||
                 attr->substr_types[i] == MD_TEXT_ENTITY ||
                 attr->substr_types[i] == MD_TEXT_NULLCHAR) {
-                result.append(attr->substr_offsets[i], 
-                    i + 1 < attr->size ? attr->substr_offsets[i + 1] - attr->substr_offsets[i] 
-                                       : attr->size - attr->substr_offsets[i]);
+                if (end > start) {
+                    result.append(attr->text + start, end - start);
+                }
+            }
+
+            if (end >= attr->size) {
+                break;
             }
         }
-        
-        if (result.empty() && attr->text && attr->size > 0) {
+
+        if (result.empty() && attr->size > 0) {
             result.assign(attr->text, attr->size);
         }
-        
+
         return result;
     }
     
@@ -133,8 +161,8 @@ public:
             case MD_BLOCK_CODE: {
                 auto* d = static_cast<MD_BLOCK_CODE_DETAIL*>(detail);
                 auto node = std::make_shared<MarkdownNode>(NodeType::CodeBlock);
-                if (d->lang.text && d->lang.size > 0) {
-                    node->language = std::string(d->lang.text, d->lang.size);
+                if (d->lang.size > 0) {
+                    node->language = impl->getAttributeText(&d->lang);
                 }
                 impl->pushNode(node, off);
                 break;
@@ -243,11 +271,11 @@ public:
             case MD_SPAN_A: {
                 auto* d = static_cast<MD_SPAN_A_DETAIL*>(detail);
                 auto node = std::make_shared<MarkdownNode>(NodeType::Link);
-                if (d->href.text && d->href.size > 0) {
-                    node->href = std::string(d->href.text, d->href.size);
+                if (d->href.size > 0) {
+                    node->href = impl->getAttributeText(&d->href);
                 }
-                if (d->title.text && d->title.size > 0) {
-                    node->title = std::string(d->title.text, d->title.size);
+                if (d->title.size > 0) {
+                    node->title = impl->getAttributeText(&d->title);
                 }
                 impl->pushNode(node, off);
                 break;
@@ -256,11 +284,11 @@ public:
             case MD_SPAN_IMG: {
                 auto* d = static_cast<MD_SPAN_IMG_DETAIL*>(detail);
                 auto node = std::make_shared<MarkdownNode>(NodeType::Image);
-                if (d->src.text && d->src.size > 0) {
-                    node->href = std::string(d->src.text, d->src.size);
+                if (d->src.size > 0) {
+                    node->href = impl->getAttributeText(&d->src);
                 }
-                if (d->title.text && d->title.size > 0) {
-                    node->title = std::string(d->title.text, d->title.size);
+                if (d->title.size > 0) {
+                    node->title = impl->getAttributeText(&d->title);
                 }
                 impl->pushNode(node, off);
                 break;
@@ -329,10 +357,17 @@ public:
         if (!text || size == 0) return 0;
 
         switch (type) {
-            case MD_TEXT_NULLCHAR:
-                if (impl->currentText.empty()) impl->currentTextBeg = impl->lastTextEnd;
+            case MD_TEXT_NULLCHAR: {
+                MD_OFFSET off = impl->lastTextEnd;
+                ptrdiff_t diff = text - impl->inputText;
+                if (diff >= 0 && static_cast<size_t>(diff) <= impl->inputTextSize) {
+                    off = static_cast<MD_OFFSET>(diff);
+                }
+                if (impl->currentText.empty()) impl->currentTextBeg = off;
                 impl->currentText += '\0';
+                impl->lastTextEnd = off + 1;
                 break;
+            }
                 
             case MD_TEXT_BR:
                 impl->flushText();
@@ -400,7 +435,8 @@ MD4CParser::~MD4CParser() = default;
 std::shared_ptr<MarkdownNode> MD4CParser::parse(const std::string& markdown, const ParserOptions& options) {
     impl_->reset();
     impl_->inputText = markdown.c_str();
-    impl_->inputTextSize = markdown.size();
+    size_t inputSize = clampInputSize(markdown.size());
+    impl_->inputTextSize = inputSize;
     
     unsigned int flags = MD_FLAG_NOHTML;
     
@@ -427,8 +463,8 @@ std::shared_ptr<MarkdownNode> MD4CParser::parse(const std::string& markdown, con
         nullptr
     };
 
-    md_parse(markdown.c_str(), 
-             static_cast<MD_SIZE>(markdown.size()), 
+    md_parse(markdown.c_str(),
+             static_cast<MD_SIZE>(inputSize),
              &parser, 
              impl_.get());
 
@@ -437,4 +473,3 @@ std::shared_ptr<MarkdownNode> MD4CParser::parse(const std::string& markdown, con
 }
 
 } // namespace NitroMarkdown
-
