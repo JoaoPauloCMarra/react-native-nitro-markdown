@@ -68,7 +68,7 @@ export interface MarkdownProps {
    */
   renderers?: CustomRenderers;
   /**
-   * Custom theme to override default styles.
+   * Custom theme tokens to override default styles.
    */
   theme?: PartialMarkdownTheme;
   /**
@@ -84,7 +84,7 @@ export interface MarkdownProps {
   styles?: NodeStyleOverrides;
   /**
    * Styling strategy for the component.
-   * - "opinionated": Full styling with colors, spacing, and visual effects (default)
+   * - "opinionated": Balanced defaults with spacing and neutral colors (default)
    * - "minimal": Bare minimum styling for a clean slate
    */
   stylingStrategy?: StylingStrategy;

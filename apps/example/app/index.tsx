@@ -13,6 +13,7 @@ import { Parser } from "commonmark";
 import MarkdownIt from "markdown-it";
 import { marked } from "marked";
 import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
+import { EXAMPLE_COLORS } from "../theme";
 
 // Generate a massive string (~237KB) to force the CPU to work
 const REPEATED_MARKDOWN = COMPLEX_MARKDOWN.repeat(50);
@@ -154,7 +155,7 @@ export default function BenchmarkScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#09090b", // Zinc 950
+    backgroundColor: EXAMPLE_COLORS.background,
   },
   header: {
     paddingTop: 32,
@@ -165,42 +166,42 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: "800",
-    color: "#f4f4f5", // Zinc 100
+    color: EXAMPLE_COLORS.text,
     marginBottom: 8,
     textAlign: "center",
     letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 16,
-    color: "#a1a1aa", // Zinc 400
+    color: EXAMPLE_COLORS.textMuted,
     marginBottom: 8,
     textAlign: "center",
   },
   dataSize: {
     fontSize: 13,
-    color: "#22c55e", // Green 500
+    color: EXAMPLE_COLORS.accentDeep,
     fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }),
-    backgroundColor: "rgba(34, 197, 94, 0.1)",
+    backgroundColor: EXAMPLE_COLORS.accentSoft,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     overflow: "hidden",
   },
   benchmarkButton: {
-    backgroundColor: "#4f46e5", // Indigo 600
+    backgroundColor: EXAMPLE_COLORS.accent,
     marginHorizontal: 24,
     marginBottom: 24,
     paddingVertical: 18,
     borderRadius: 16,
     alignItems: "center",
-    shadowColor: "#4f46e5",
+    shadowColor: EXAMPLE_COLORS.accentDeep,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
     elevation: 6,
   },
   benchmarkText: {
-    color: "#fff",
+    color: EXAMPLE_COLORS.surface,
     fontSize: 18,
     fontWeight: "700",
   },
@@ -209,54 +210,54 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   resultsContainer: {
-    backgroundColor: "#18181b", // Zinc 900
+    backgroundColor: EXAMPLE_COLORS.surface,
     borderRadius: 16,
     padding: 20,
     marginBottom: 40,
     borderWidth: 1,
-    borderColor: "#27272a", // Zinc 800
+    borderColor: EXAMPLE_COLORS.border,
   },
   resultText: {
     fontSize: 15,
     fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }),
     marginBottom: 12,
     lineHeight: 22,
-    color: "#d4d4d8", // Zinc 300
+    color: EXAMPLE_COLORS.textMuted,
   },
   nitroResult: {
-    color: "#4ade80", // Green 400
+    color: EXAMPLE_COLORS.accent,
     fontWeight: "700",
   },
   commonmarkResult: {
-    color: "#f87171", // Red 400
+    color: EXAMPLE_COLORS.danger,
     fontWeight: "600",
   },
   markdownitResult: {
-    color: "#c084fc", // Purple 400
+    color: EXAMPLE_COLORS.info,
     fontWeight: "600",
   },
   markedResult: {
-    color: "#22d3ee", // Cyan 400
+    color: EXAMPLE_COLORS.warning,
     fontWeight: "600",
   },
   comparisonHeader: {
-    color: "#fbbf24", // Amber 400
+    color: EXAMPLE_COLORS.text,
     fontSize: 16,
     fontWeight: "bold",
     marginTop: 16,
     marginBottom: 12,
     borderTopWidth: 1,
-    borderTopColor: "#3f3f46", // Zinc 700
+    borderTopColor: EXAMPLE_COLORS.border,
     paddingTop: 16,
   },
   speedResult: {
-    color: "#10b981", // Emerald 500
+    color: EXAMPLE_COLORS.accentDeep,
     fontSize: 15,
     fontWeight: "700",
     marginLeft: 0, // Reset margin since we are inside a container
   },
   instructionText: {
-    color: "#52525b", // Zinc 600
+    color: EXAMPLE_COLORS.textMuted,
     fontSize: 16,
     textAlign: "center",
     marginTop: 60,
@@ -264,21 +265,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   errorBox: {
-    backgroundColor: "#450a0a", // Red 950
+    backgroundColor: EXAMPLE_COLORS.dangerSoft,
     borderRadius: 16,
     padding: 20,
     marginTop: 20,
     borderWidth: 1,
-    borderColor: "#7f1d1d", // Red 900
+    borderColor: EXAMPLE_COLORS.dangerBorder,
   },
   errorTitle: {
-    color: "#fca5a5", // Red 300
+    color: EXAMPLE_COLORS.danger,
     fontSize: 16,
     fontWeight: "700",
     marginBottom: 8,
   },
   errorMessage: {
-    color: "#fecaca", // Red 200
+    color: EXAMPLE_COLORS.textMuted,
     fontSize: 13,
     fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }),
   },

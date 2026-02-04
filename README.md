@@ -86,7 +86,7 @@ bunx expo prebuild
 
 ### Option 1: Batteries Included (Simplest)
 
-Use the `Markdown` component with built-in premium dark-mode styling:
+Use the `Markdown` component with clean, neutral styling that stays out of the way:
 
 ```tsx
 import { Markdown } from "react-native-nitro-markdown";
@@ -100,91 +100,27 @@ export function MyComponent() {
 }
 ```
 
-### Option 2: Light Theme / Theme Presets
+If you're rendering on a dark surface, override `theme.colors.text` (or use the `styles` prop) to match your app's palette.
 
-The default theme is optimized for dark mode. For light backgrounds, use the provided `lightMarkdownTheme`:
-
-```tsx
-import { Markdown, lightMarkdownTheme } from "react-native-nitro-markdown";
-
-<Markdown theme={lightMarkdownTheme}>{"# Light Mode Markdown"}</Markdown>;
-```
-
-Available presets:
-
-- `defaultMarkdownTheme` / `darkMarkdownTheme` - Modern dark theme
-- `lightMarkdownTheme` - Clean light theme
-- `minimalMarkdownTheme` - Bare minimum styling for a clean slate
-
-### Option 3: Custom Theming
-
-Customize the look and feel by passing a partial `theme` object:
-
-```tsx
-import { Markdown } from "react-native-nitro-markdown";
-
-const myTheme = {
-  colors: {
-    text: "#2D3748",
-    heading: "#1A202C",
-    link: "#3182CE",
-  },
-  fontFamilies: {
-    regular: "Inter",
-    heading: "Inter-Bold",
-    mono: "JetBrainsMono",
-  },
-  borderRadius: {
-    s: 4,
-    m: 8,
-    l: 16,
-  },
-  showCodeLanguage: true, // Toggle code language labels
-};
-
-<Markdown theme={myTheme}>{"# Custom Themed Markdown"}</Markdown>;
-```
-
-**Theme Properties:**
-
-- `colors` - All color tokens (text, heading, link, code, codeBackground, codeLanguage, etc.)
-- `spacing` - Spacing tokens (xs, s, m, l, xl)
-- `fontSizes` - Font sizes (xs, s, m, l, xl, h1-h6)
-- `fontFamilies` - Font families for regular, heading, and mono text
-- `borderRadius` - Border radius tokens (s, m, l)
-- `showCodeLanguage` - Show/hide code block language labels
-
-### Option 4: Style Overrides per Node Type
+### Option 2: Style Overrides per Node Type
 
 Apply quick style overrides to specific node types without writing custom renderers:
 
 ```tsx
 <Markdown
   styles={{
-    heading: { color: "red", fontWeight: "900" },
-    code_block: { backgroundColor: "#1a1a2e", borderRadius: 16 },
-    blockquote: { borderLeftColor: "#ff6b6b" },
+    heading: { color: "#0ea5e9", fontWeight: "900" },
+    code_block: { backgroundColor: "#e2e8f0", borderRadius: 16 },
+    blockquote: { borderLeftColor: "#0ea5e9" },
   }}
 >
   {markdown}
 </Markdown>
 ```
 
-### Option 5: Minimal Styling Strategy
+### Option 3: Custom Renderers
 
-Start with a clean slate using the `stylingStrategy` prop:
-
-```tsx
-<Markdown stylingStrategy="minimal" theme={myLightTheme}>
-  {content}
-</Markdown>
-```
-
-This zeros out all spacing and removes opinionated colors, letting you build up from scratch.
-
-### Option 6: Custom Renderers
-
-Override specific node types with full control. Custom renderers now receive **pre-mapped props** for common values:
+Override specific node types with full control. Custom renderers receive **pre-mapped props** for common values:
 
 ```tsx
 import {
@@ -225,7 +161,50 @@ const renderers = {
 - `list` → `ordered`, `start`
 - `task_list_item` → `checked`
 
-### Option 7: Style Props on Individual Renderers
+### Option 4: Token Overrides (Theme)
+
+Customize the look and feel by passing a partial `theme` object:
+
+```tsx
+import { Markdown } from "react-native-nitro-markdown";
+
+const myTheme = {
+  colors: {
+    text: "#0f172a",
+    heading: "#0f172a",
+    link: "#0ea5e9",
+    codeBackground: "#e2e8f0",
+  },
+  showCodeLanguage: false,
+};
+
+<Markdown theme={myTheme}>{"# Custom Themed Markdown"}</Markdown>;
+```
+
+Defaults live in `defaultMarkdownTheme` and are intentionally neutral so you can layer your own palette on top.
+
+**Theme Properties:**
+
+- `colors` - All color tokens (text, heading, link, code, codeBackground, codeLanguage, etc.)
+- `spacing` - Spacing tokens (xs, s, m, l, xl)
+- `fontSizes` - Font sizes (xs, s, m, l, xl, h1-h6)
+- `fontFamilies` - Font families for regular, heading, and mono text
+- `borderRadius` - Border radius tokens (s, m, l)
+- `showCodeLanguage` - Show/hide code block language labels
+
+### Option 5: Minimal Styling Strategy
+
+Start with a clean slate using the `stylingStrategy` prop:
+
+```tsx
+<Markdown stylingStrategy="minimal" theme={myLightTheme}>
+  {content}
+</Markdown>
+```
+
+This zeros out all spacing and removes opinionated colors, letting you build up from scratch.
+
+### Option 6: Style Props on Individual Renderers
 
 All built-in renderers accept a `style` prop for fine-grained overrides:
 
@@ -238,7 +217,7 @@ import { Heading, CodeBlock, InlineCode } from "react-native-nitro-markdown";
 <InlineCode style={{ backgroundColor: "#ff0" }}>code</InlineCode>
 ```
 
-### Option 8: Auto Content Extraction for Code
+### Option 7: Auto Content Extraction for Code
 
 The `CodeBlock` and `InlineCode` components now accept a `node` prop for automatic content extraction:
 
@@ -257,7 +236,7 @@ code_block: ({ content, language }) => (
 );
 ```
 
-### Option 9: Headless (Minimal Bundle)
+### Option 8: Headless (Minimal Bundle)
 
 For maximum control, data processing, or minimal JS overhead:
 
@@ -273,7 +252,7 @@ const text = getTextContent(ast); // "Hello World"
 const fullText = getFlattenedText(ast); // "Hello World\n\n" (Normalized with line breaks)
 ```
 
-### Option 10: High-Performance Streaming (LLMs)
+### Option 9: High-Performance Streaming (LLMs)
 
 When streaming text token-by-token (e.g., from ChatGPT or Gemini):
 
@@ -297,7 +276,7 @@ export function AIResponseStream() {
 }
 ```
 
-### Option 11: Extracting Plain Text
+### Option 10: Extracting Plain Text
 
 You can extract the plain text representation (with proper line breaks) using the `onParseComplete` callback. This is useful for "Copy All" buttons or TTS.
 
@@ -344,11 +323,9 @@ export {
   getFlattenedText,
 } from "./headless";
 
-// Theme presets
+// Theme tokens
 export {
   defaultMarkdownTheme,
-  lightMarkdownTheme,
-  darkMarkdownTheme,
   minimalMarkdownTheme,
   mergeThemes,
 };

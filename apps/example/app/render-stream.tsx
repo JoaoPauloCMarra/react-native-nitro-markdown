@@ -1,12 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  useMarkdownSession,
-  MarkdownStream,
-  defaultMarkdownTheme,
-} from "react-native-nitro-markdown";
+import { useMarkdownSession, MarkdownStream } from "react-native-nitro-markdown";
 import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
+import { EXAMPLE_COLORS } from "../theme";
 
 const TOKEN_DELAY_MS = 100;
 const DEMO_TEXT = `
@@ -153,7 +150,9 @@ export default function TokenStreamScreen() {
             <Ionicons
               name={isStreamMode ? "pause" : "flash"}
               size={16}
-              color={isStreamMode ? "#facc15" : "#fff"}
+              color={
+                isStreamMode ? EXAMPLE_COLORS.accent : EXAMPLE_COLORS.text
+              }
             />
             <Text style={styles.btnText}>
               {isStreamMode
@@ -164,7 +163,7 @@ export default function TokenStreamScreen() {
             </Text>
           </Pressable>
           <Pressable style={styles.btnIcon} onPress={clearStream}>
-            <Ionicons name="trash" size={18} color="#ef4444" />
+            <Ionicons name="trash" size={18} color={EXAMPLE_COLORS.danger} />
           </Pressable>
         </View>
       </View>
@@ -202,22 +201,17 @@ export default function TokenStreamScreen() {
           >
             {rawText.length === 0 ? (
               <View style={styles.placeholder}>
-                <Ionicons name="code-slash-outline" size={32} color="#3f3f46" />
+                <Ionicons
+                  name="code-slash-outline"
+                  size={32}
+                  color={EXAMPLE_COLORS.textMuted}
+                />
                 <Text style={styles.placeholderText}>
                   Waiting for tokens...
                 </Text>
               </View>
             ) : (
-              <MarkdownStream
-                session={session.getSession()}
-                theme={{
-                  ...defaultMarkdownTheme,
-                  colors: {
-                    ...defaultMarkdownTheme.colors,
-                    text: "#fff",
-                  },
-                }}
-              />
+              <MarkdownStream session={session.getSession()} />
             )}
           </ScrollView>
         </View>
@@ -227,7 +221,7 @@ export default function TokenStreamScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#060606" },
+  container: { flex: 1, backgroundColor: EXAMPLE_COLORS.background },
   header: {
     paddingHorizontal: 20,
     paddingTop: 60,
@@ -236,49 +230,49 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     borderBottomWidth: 1,
-    borderBottomColor: "#1f1f1f",
-    backgroundColor: "rgba(6,6,6,0.9)",
+    borderBottomColor: EXAMPLE_COLORS.border,
+    backgroundColor: EXAMPLE_COLORS.surface,
   },
   title: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#fff",
+    color: EXAMPLE_COLORS.text,
     letterSpacing: -0.5,
   },
-  subtitle: { fontSize: 12, color: "#71717a", marginTop: 2 },
+  subtitle: { fontSize: 12, color: EXAMPLE_COLORS.textMuted, marginTop: 2 },
 
   controlsRow: { flexDirection: "row", gap: 8 },
   btn: {
     paddingHorizontal: 16,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#18181b",
+    backgroundColor: EXAMPLE_COLORS.surface,
     borderWidth: 1,
-    borderColor: "#27272a",
+    borderColor: EXAMPLE_COLORS.border,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
   },
   btnActive: {
-    borderColor: "#facc15",
-    backgroundColor: "rgba(250, 204, 21, 0.1)",
+    borderColor: EXAMPLE_COLORS.accent,
+    backgroundColor: EXAMPLE_COLORS.accentSoft,
   },
   btnIcon: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#18181b",
+    backgroundColor: EXAMPLE_COLORS.surface,
     borderWidth: 1,
-    borderColor: "#27272a",
+    borderColor: EXAMPLE_COLORS.border,
     alignItems: "center",
     justifyContent: "center",
   },
-  btnText: { color: "#fff", fontSize: 13, fontWeight: "600" },
+  btnText: { color: EXAMPLE_COLORS.text, fontSize: 13, fontWeight: "600" },
 
   scrollContainer: { paddingHorizontal: 16, paddingTop: 16, gap: 16 },
   sectionTitle: {
-    color: "#71717a",
+    color: EXAMPLE_COLORS.textMuted,
     fontSize: 11,
     fontWeight: "700",
     textTransform: "uppercase",
@@ -289,21 +283,21 @@ const styles = StyleSheet.create({
 
   card: {
     height: 200,
-    backgroundColor: "#111",
+    backgroundColor: EXAMPLE_COLORS.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#1f1f1f",
+    borderColor: EXAMPLE_COLORS.border,
     overflow: "hidden",
   },
   markdownCard: {
-    backgroundColor: "#0a0a0a",
+    backgroundColor: EXAMPLE_COLORS.surface,
     height: 400,
   },
   cardScroll: { flex: 1 },
   scrollContent: { padding: 16 },
 
   rawText: {
-    color: "#a1a1aa",
+    color: EXAMPLE_COLORS.textMuted,
     fontFamily: "Menlo",
     fontSize: 12,
     lineHeight: 18,
@@ -317,7 +311,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   placeholderText: {
-    color: "#3f3f46",
+    color: EXAMPLE_COLORS.textMuted,
     fontSize: 13,
     fontWeight: "500",
   },

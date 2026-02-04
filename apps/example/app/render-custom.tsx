@@ -10,15 +10,16 @@ import {
   Markdown,
   TableRenderer,
   CodeBlock,
-  lightMarkdownTheme,
   type EnhancedRendererProps,
   type CustomRendererProps,
+  type NodeStyleOverrides,
 } from "react-native-nitro-markdown";
 import {
   COMPLEX_MARKDOWN,
   CUSTOM_RENDER_COMPONENTS,
 } from "../markdown-test-data";
 import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
+import { EXAMPLE_COLORS } from "../theme";
 
 /**
  * Custom heading using the pre-mapped `level` prop.
@@ -36,7 +37,7 @@ const CustomHeading = ({ level = 1, children }: EnhancedRendererProps) => {
 
 const CustomBlockquote = ({ children }: { children: ReactNode }) => (
   <View style={customStyles.blockquote}>
-    <Text style={customStyles.blockquoteIcon}>💡</Text>
+    <Text style={customStyles.blockquoteIcon}>Note</Text>
     <View style={customStyles.blockquoteContent}>{children}</View>
   </View>
 );
@@ -63,13 +64,34 @@ const CustomCodeBlock = ({ content = "", language }: EnhancedRendererProps) => (
   <CodeBlock
     content={content}
     language={language}
-    style={{ borderRadius: 16, borderWidth: 2, borderColor: "#6366F1" }}
+    style={{
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: EXAMPLE_COLORS.accent,
+      backgroundColor: EXAMPLE_COLORS.surfaceMuted,
+    }}
   />
 );
 
 const CustomTable = (props: CustomRendererProps) => (
   <TableRenderer node={props.node} Renderer={props.Renderer} />
 );
+
+const CUSTOM_STYLE_OVERRIDES: NodeStyleOverrides = {
+  text: {
+    color: EXAMPLE_COLORS.text,
+    lineHeight: 24,
+  },
+  link: {
+    color: EXAMPLE_COLORS.accentDeep,
+  },
+  code_inline: {
+    backgroundColor: EXAMPLE_COLORS.surfaceMuted,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+};
 
 export default function RenderCustomScreen() {
   const tabHeight = useBottomTabHeight();
@@ -87,7 +109,7 @@ export default function RenderCustomScreen() {
       >
         <Markdown
           options={{ gfm: true, math: true }}
-          theme={lightMarkdownTheme}
+          styles={CUSTOM_STYLE_OVERRIDES}
           renderers={{
             // Using pre-mapped props - simpler custom renderers!
             heading: CustomHeading,
@@ -108,7 +130,7 @@ export default function RenderCustomScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: EXAMPLE_COLORS.background,
   },
   scrollView: {
     flex: 1,
@@ -129,26 +151,30 @@ const customStyles = StyleSheet.create({
   headingBar: {
     width: 6,
     height: "100%",
-    backgroundColor: "#6366F1",
+    backgroundColor: EXAMPLE_COLORS.accent,
     marginRight: 12,
     borderRadius: 3,
   },
   headingText: {
     fontWeight: "800",
-    color: "#1F2937",
+    color: EXAMPLE_COLORS.text,
     letterSpacing: -0.5,
   },
   blockquote: {
     flexDirection: "row",
-    backgroundColor: "#EFF6FF",
-    borderRadius: 12,
+    backgroundColor: EXAMPLE_COLORS.accentSoft,
+    borderRadius: 14,
     padding: 16,
     marginVertical: 16,
     borderWidth: 1,
-    borderColor: "#DBEAFE",
+    borderColor: EXAMPLE_COLORS.accent,
   },
   blockquoteIcon: {
-    fontSize: 24,
+    fontSize: 11,
+    fontWeight: "700",
+    color: EXAMPLE_COLORS.accentDeep,
+    textTransform: "uppercase",
+    letterSpacing: 1,
     marginRight: 12,
   },
   blockquoteContent: {
@@ -156,15 +182,17 @@ const customStyles = StyleSheet.create({
     justifyContent: "center",
   },
   imageCard: {
-    backgroundColor: "white",
+    backgroundColor: EXAMPLE_COLORS.surface,
     borderRadius: 16,
     overflow: "hidden",
     marginVertical: 20,
-    shadowColor: "#000",
+    shadowColor: EXAMPLE_COLORS.text,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
     elevation: 5,
+    borderWidth: 1,
+    borderColor: EXAMPLE_COLORS.border,
   },
   image: {
     width: "100%",
@@ -173,14 +201,14 @@ const customStyles = StyleSheet.create({
   imageCaption: {
     padding: 12,
     fontSize: 14,
-    color: "#6B7280",
+    color: EXAMPLE_COLORS.textMuted,
     textAlign: "center",
     fontStyle: "italic",
-    backgroundColor: "white",
+    backgroundColor: EXAMPLE_COLORS.surface,
   },
   hr: {
     height: 2,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: EXAMPLE_COLORS.border,
     marginVertical: 24,
     borderRadius: 1,
   },

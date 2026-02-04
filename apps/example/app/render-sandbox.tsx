@@ -2,6 +2,7 @@ import { ScrollView, StyleSheet, View } from "react-native";
 import { useRef } from "react";
 import { Markdown, MarkdownNode } from "react-native-nitro-markdown";
 import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
+import { EXAMPLE_COLORS } from "../theme";
 
 export default function RenderScreen() {
   const tabHeight = useBottomTabHeight();
@@ -65,17 +66,19 @@ export default function RenderScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#09090b", // Zinc 950
+    backgroundColor: EXAMPLE_COLORS.background,
   },
   scrollView: {
     flex: 1,
   },
   card: {
     borderRadius: 12,
-    backgroundColor: "#1e1e2d", // Zinc 800
+    backgroundColor: EXAMPLE_COLORS.surface,
     padding: 20,
     height: 50,
     width: "100%",
+    borderWidth: 1,
+    borderColor: EXAMPLE_COLORS.border,
   },
 });
 

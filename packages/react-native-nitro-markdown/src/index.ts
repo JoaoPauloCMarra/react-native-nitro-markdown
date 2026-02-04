@@ -1,6 +1,5 @@
 export * from "./headless";
 
-export { DefaultMarkdownRenderer } from "./default-markdown-renderer";
 export { Markdown } from "./markdown";
 export { MarkdownStream } from "./markdown-stream";
 
@@ -24,8 +23,6 @@ export type {
 
 export {
   defaultMarkdownTheme,
-  lightMarkdownTheme,
-  darkMarkdownTheme,
   minimalMarkdownTheme,
   mergeThemes,
 } from "./theme";

@@ -3,23 +3,24 @@ import { Tabs } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { StyleSheet, View, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { EXAMPLE_COLORS } from "../theme";
 
 export default function RootLayout() {
   const tabBarHeight = useBottomTabHeight();
 
   return (
     <View style={styles.container}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <Tabs
         screenOptions={{
           headerStyle: {
-            backgroundColor: "#09090b", // Zinc 950
+            backgroundColor: EXAMPLE_COLORS.surface,
             borderBottomWidth: 1,
-            borderBottomColor: "#27272a", // Zinc 800
+            borderBottomColor: EXAMPLE_COLORS.border,
             shadowOpacity: 0,
             elevation: 0,
           },
-          headerTintColor: "#f4f4f5", // Zinc 100
+          headerTintColor: EXAMPLE_COLORS.text,
           headerTitleStyle: {
             fontSize: 18,
             fontWeight: "700",
@@ -29,14 +30,14 @@ export default function RootLayout() {
             }),
           },
           tabBarStyle: {
-            backgroundColor: "#09090b", // Zinc 950
-            borderTopColor: "#27272a", // Zinc 800
+            backgroundColor: EXAMPLE_COLORS.surface,
+            borderTopColor: EXAMPLE_COLORS.border,
             height: tabBarHeight,
             paddingTop: 8,
             paddingBottom: Platform.select({ ios: 30, android: 10 }),
           },
-          tabBarActiveTintColor: "#22c55e", // Green 500 (Nitro Green)
-          tabBarInactiveTintColor: "#71717a", // Zinc 500
+          tabBarActiveTintColor: EXAMPLE_COLORS.accent,
+          tabBarInactiveTintColor: EXAMPLE_COLORS.textMuted,
           tabBarLabelStyle: {
             fontSize: 11,
             fontWeight: "600",
@@ -81,8 +82,8 @@ export default function RootLayout() {
         <Tabs.Screen
           name="render-default-styles"
           options={{
-            title: "Themed Markdown",
-            tabBarLabel: "Themes",
+            title: "Style Overrides",
+            tabBarLabel: "Styles",
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="color-palette-outline" size={24} color={color} />
             ),
@@ -117,7 +118,7 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0a0a0a",
+    backgroundColor: EXAMPLE_COLORS.background,
   },
 });
 
