@@ -1,4 +1,4 @@
-import type { TextStyle, ViewStyle } from "react-native";
+import { Platform, type TextStyle, type ViewStyle } from "react-native";
 import type { MarkdownNode } from "./headless";
 
 export interface MarkdownTheme {
@@ -95,14 +95,26 @@ export const defaultMarkdownTheme: MarkdownTheme = {
     h6: 14,
   },
   fontFamilies: {
-    regular: undefined,
-    heading: undefined,
-    mono: undefined,
+    regular: Platform.select({
+      ios: "Avenir Next",
+      android: "sans-serif",
+      default: undefined,
+    }),
+    heading: Platform.select({
+      ios: "Avenir Next",
+      android: "sans-serif-medium",
+      default: undefined,
+    }),
+    mono: Platform.select({
+      ios: "Menlo",
+      android: "monospace",
+      default: "monospace",
+    }),
   },
   borderRadius: {
-    s: 4,
-    m: 8,
-    l: 12,
+    s: 6,
+    m: 10,
+    l: 14,
   },
   showCodeLanguage: false,
 };

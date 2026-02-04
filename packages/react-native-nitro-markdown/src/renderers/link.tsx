@@ -1,5 +1,11 @@
 import { ReactNode, useMemo, type FC } from "react";
-import { Text, StyleSheet, Linking, type TextStyle } from "react-native";
+import {
+  Text,
+  StyleSheet,
+  Linking,
+  Platform,
+  type TextStyle,
+} from "react-native";
 import { useMarkdownContext } from "../MarkdownContext";
 
 interface LinkProps {
@@ -16,6 +22,9 @@ export const Link: FC<LinkProps> = ({ href, children, style }) => {
         link: {
           color: theme.colors.link,
           textDecorationLine: "underline",
+          textDecorationColor: theme.colors.link,
+          fontFamily: theme.fontFamilies.regular,
+          ...(Platform.OS === "android" && { includeFontPadding: false }),
         },
       }),
     [theme]

@@ -86,7 +86,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {
-    "@types/react": "^19.2.7",
+    "@types/react": "^19.2.11",
     "@types/react-native": "^0.73.0",
     "react-native-builder-bob": "^0.40.17",
     "react-native-nitro-modules": "*",

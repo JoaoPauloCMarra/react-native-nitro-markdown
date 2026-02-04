@@ -5,7 +5,8 @@ import { useMarkdownSession, MarkdownStream } from "react-native-nitro-markdown"
 import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 import { EXAMPLE_COLORS } from "../theme";
 
-const TOKEN_DELAY_MS = 100;
+const TOKEN_DELAY_MS = 18;
+const UI_UPDATE_INTERVAL_MS = 60;
 const DEMO_TEXT = `
 ### 🚀 High-Performance Markdown
 
@@ -69,6 +70,7 @@ export default function TokenStreamScreen() {
   const tabHeight = useBottomTabHeight();
 
   const [isStreamMode, setIsStreamMode] = useState(false);
+  const [streamIndex, setStreamIndex] = useState(0);
 
   const session = useMarkdownSession();
   const streamIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -101,12 +103,14 @@ export default function TokenStreamScreen() {
       const chunk = chunks[streamIndexRef.current];
       if (chunk) session.getSession().append(chunk);
       streamIndexRef.current++;
+      setStreamIndex(streamIndexRef.current);
     }, TOKEN_DELAY_MS);
   }, [session, stopStream, isStreamMode]);
 
   const clearStream = useCallback(() => {
     stopStream();
     streamIndexRef.current = 0;
+    setStreamIndex(0);
     session.clear();
   }, [stopStream, session]);
 
@@ -121,14 +125,31 @@ export default function TokenStreamScreen() {
 
   const [tick, setTick] = useState(0);
   useEffect(() => {
-    return session.getSession().addListener(() => {
+    const pendingRef = { current: false };
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const flush = () => {
+      timer = null;
+      if (!pendingRef.current) return;
+      pendingRef.current = false;
       setTick((t) => t + 1);
-      // Auto-scroll both views if streaming
       if (isStreamMode) {
         rawScrollViewRef.current?.scrollToEnd({ animated: false });
         markdownScrollViewRef.current?.scrollToEnd({ animated: false });
       }
+    };
+
+    const unsubscribe = session.getSession().addListener(() => {
+      pendingRef.current = true;
+      if (!timer) {
+        timer = setTimeout(flush, UI_UPDATE_INTERVAL_MS);
+      }
     });
+
+    return () => {
+      unsubscribe();
+      if (timer) clearTimeout(timer);
+    };
   }, [session, isStreamMode]);
 
   const rawText = session.getSession().getAllText();
@@ -155,11 +176,7 @@ export default function TokenStreamScreen() {
               }
             />
             <Text style={styles.btnText}>
-              {isStreamMode
-                ? "Pause"
-                : streamIndexRef.current > 0
-                  ? "Resume"
-                  : "Start"}
+              {isStreamMode ? "Pause" : streamIndex > 0 ? "Resume" : "Start"}
             </Text>
           </Pressable>
           <Pressable style={styles.btnIcon} onPress={clearStream}>
@@ -211,7 +228,12 @@ export default function TokenStreamScreen() {
                 </Text>
               </View>
             ) : (
-              <MarkdownStream session={session.getSession()} />
+              <MarkdownStream
+                session={session.getSession()}
+                updateIntervalMs={UI_UPDATE_INTERVAL_MS}
+                updateStrategy="raf"
+                useTransitionUpdates
+              />
             )}
           </ScrollView>
         </View>

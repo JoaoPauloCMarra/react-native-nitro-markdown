@@ -1,5 +1,5 @@
 import { ReactNode, useMemo, type FC } from "react";
-import { View, Text, StyleSheet, type ViewStyle } from "react-native";
+import { View, Text, StyleSheet, Platform, type ViewStyle } from "react-native";
 import { useMarkdownContext } from "../MarkdownContext";
 
 interface ListProps {
@@ -61,9 +61,10 @@ export const ListItem: FC<ListItemProps> = ({
           fontSize: theme.fontSizes.m,
           lineHeight: theme.fontSizes.m * 1.6,
           marginRight: theme.spacing.s,
-          minWidth: 20,
+          minWidth: 22,
           textAlign: "center",
           fontFamily: theme.fontFamilies.regular,
+          ...(Platform.OS === "android" && { includeFontPadding: false }),
         },
         listItemContent: {
           flex: 1,
@@ -102,10 +103,26 @@ export const TaskListItem: FC<TaskListItemProps> = ({
           marginBottom: theme.spacing.s,
         },
         taskCheckbox: {
-          fontSize: theme.fontSizes.l,
-          lineHeight: theme.fontSizes.m * 1.6,
+          width: 18,
+          height: 18,
+          borderRadius: 4,
+          borderWidth: 2,
+          borderColor: theme.colors.accent,
+          alignItems: "center",
+          justifyContent: "center",
           marginRight: theme.spacing.s,
-          color: theme.colors.accent,
+          marginTop: 2,
+        },
+        taskCheckboxChecked: {
+          backgroundColor: theme.colors.accent,
+        },
+        taskCheckboxText: {
+          color: theme.colors.surface,
+          fontSize: 12,
+          lineHeight: 12,
+          fontWeight: "700",
+          fontFamily: theme.fontFamilies.regular,
+          ...(Platform.OS === "android" && { includeFontPadding: false }),
         },
         taskContent: {
           flex: 1,
@@ -116,7 +133,14 @@ export const TaskListItem: FC<TaskListItemProps> = ({
   );
   return (
     <View style={[styles.taskListItem, style]}>
-      <Text style={styles.taskCheckbox}>{checked ? "☑" : "☐"}</Text>
+      <View
+        style={[
+          styles.taskCheckbox,
+          checked && styles.taskCheckboxChecked,
+        ]}
+      >
+        {checked && <Text style={styles.taskCheckboxText}>✓</Text>}
+      </View>
       <View style={styles.taskContent}>{children}</View>
     </View>
   );

@@ -51,6 +51,7 @@ const createMathStyles = (theme: MarkdownTheme) =>
         Platform.select({ ios: "Courier", android: "monospace" }),
       fontSize: theme.fontSizes.s,
       color: theme.colors.code,
+      ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
     mathBlockContainer: {
       marginVertical: theme.spacing.m,
@@ -81,6 +82,7 @@ const createMathStyles = (theme: MarkdownTheme) =>
       fontSize: theme.fontSizes.m,
       color: theme.colors.code,
       textAlign: "center",
+      ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
   });
 

@@ -12,7 +12,7 @@ This parser supports *all* the features you'd expect:
 - ~~Strikethrough text~~ (GFM)
 - \`Inline code\` snippets
 - [Links](https://github.com)
-- ![Landscape](https://picsum.photos/300/200 "Random image from Picsum")
+- ![Landscape](https://fastly.picsum.photos/id/1/300/200.jpg?hmac=-NJkMeYPrdetftjjcJ9lbfAZcXVJhZy4rqGvbP0P8Hg "Person Typing")
 
 **Bold text** and *italic text* and ***bold italic text***.
 
@@ -39,8 +39,8 @@ A sentence with *multiple* **formatting** ***options*** mixed ~~together~~.
 - Review the [shared document](https://docs.example.com/pitch) before Thursday
 
 #### Images
-![Landscape](https://picsum.photos/300/200 "Random image from Picsum")
-![City](https://picsum.photos/seed/markdown/300/150 "City skyline")
+![Landscape](https://fastly.picsum.photos/id/1/300/200.jpg?hmac=-NJkMeYPrdetftjjcJ9lbfAZcXVJhZy4rqGvbP0P8Hg "Person Typing")
+![City](https://fastly.picsum.photos/id/691/300/150.jpg?hmac=ddUFtdPD2lBq38o0nYpoRwVpWRthoKAampnZogO8IFg "Coffee Bedroom")
 
 
 ## Advanced GFM Features

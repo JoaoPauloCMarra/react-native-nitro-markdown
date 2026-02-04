@@ -12,6 +12,7 @@ import {
   StyleSheet,
   View,
   Text,
+  Platform,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
@@ -502,20 +503,25 @@ const createBaseStyles = (theme: MarkdownTheme) =>
       color: "#f87171",
       fontSize: 14,
       fontFamily: theme.fontFamilies.mono ?? "monospace",
+      ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
     text: {
       color: theme.colors.text,
       fontSize: theme.fontSizes.m,
       lineHeight: theme.fontSizes.m * 1.6,
       fontFamily: theme.fontFamilies.regular,
+      ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
     bold: {
       fontWeight: "700",
+      ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
     italic: {
       fontStyle: "italic",
+      ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
     strikethrough: {
       textDecorationLine: "line-through",
+      ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
   });

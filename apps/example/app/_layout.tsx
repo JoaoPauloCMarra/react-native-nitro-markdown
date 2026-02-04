@@ -25,7 +25,7 @@ export default function RootLayout() {
             fontSize: 18,
             fontWeight: "700",
             fontFamily: Platform.select({
-              ios: "System",
+              ios: "Avenir Next",
               android: "sans-serif-medium",
             }),
           },
@@ -42,6 +42,10 @@ export default function RootLayout() {
             fontSize: 11,
             fontWeight: "600",
             marginTop: 4,
+            fontFamily: Platform.select({
+              ios: "Avenir Next",
+              android: "sans-serif",
+            }),
           },
         }}
       >

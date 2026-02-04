@@ -254,7 +254,7 @@ const fullText = getFlattenedText(ast); // "Hello World\n\n" (Normalized with li
 
 ### Option 9: High-Performance Streaming (LLMs)
 
-When streaming text token-by-token (e.g., from ChatGPT or Gemini):
+When streaming text token-by-token (e.g., from ChatGPT or Gemini), you should batch UI updates to avoid re-rendering on every token:
 
 ```tsx
 import {
@@ -271,10 +271,29 @@ export function AIResponseStream() {
   }, [session]);
 
   return (
-    <MarkdownStream session={session.getSession()} options={{ gfm: true }} />
+    <MarkdownStream
+      session={session.getSession()}
+      options={{ gfm: true }}
+      updateIntervalMs={60}
+      updateStrategy="raf"
+      useTransitionUpdates
+    />
   );
 }
 ```
+
+**Recommended defaults for token streaming:**
+- `updateStrategy="raf"` for smooth, frame-aligned updates
+- `updateIntervalMs={50–100}` when using `updateStrategy="interval"`
+- Avoid per-token UI updates by batching token appends
+
+**Streaming props:**
+
+| Prop | Type | Default | Description |
+| :-- | :-- | :-- | :-- |
+| `updateIntervalMs` | `number` | `50` | Throttle UI updates when using interval strategy |
+| `updateStrategy` | `"interval" \| "raf"` | `"interval"` | Interval batching or frame-aligned updates |
+| `useTransitionUpdates` | `boolean` | `false` | Use React transitions to keep input responsive |
 
 ### Option 10: Extracting Plain Text
 

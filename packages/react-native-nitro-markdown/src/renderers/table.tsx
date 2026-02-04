@@ -12,6 +12,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  Platform,
   type StyleProp,
   type TextStyle,
   type ViewStyle,
@@ -354,12 +355,14 @@ const createTableStyles = (theme: MarkdownTheme) => {
       fontSize: 12,
       fontWeight: "600",
       fontFamily: theme.fontFamilies?.regular,
+      ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
     cellText: {
       color: colors.text || "#e5e7eb",
       fontSize: 14,
       lineHeight: 20,
       fontFamily: theme.fontFamilies?.regular,
+      ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
     cellContentWrapper: {
       flexDirection: "row",

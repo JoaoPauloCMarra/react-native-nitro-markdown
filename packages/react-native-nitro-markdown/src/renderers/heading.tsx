@@ -1,5 +1,5 @@
 import { ReactNode, useMemo, type FC } from "react";
-import { Text, StyleSheet, type TextStyle } from "react-native";
+import { Text, StyleSheet, Platform, type TextStyle } from "react-native";
 import { useMarkdownContext } from "../MarkdownContext";
 
 interface HeadingProps {
@@ -19,6 +19,8 @@ export const Heading: FC<HeadingProps> = ({ level, children, style }) => {
           marginTop: theme.spacing.xl,
           marginBottom: theme.spacing.m,
           fontFamily: theme.fontFamilies.heading,
+          letterSpacing: -0.2,
+          ...(Platform.OS === "android" && { includeFontPadding: false }),
         },
         h1: {
           fontSize: theme.fontSizes.h1,
@@ -26,14 +28,17 @@ export const Heading: FC<HeadingProps> = ({ level, children, style }) => {
           borderBottomWidth: 1,
           borderBottomColor: theme.colors.border,
           paddingBottom: theme.spacing.s,
+          letterSpacing: -0.6,
         },
         h2: {
           fontSize: theme.fontSizes.h2,
           lineHeight: theme.fontSizes.h2 * 1.3,
+          letterSpacing: -0.4,
         },
         h3: {
           fontSize: theme.fontSizes.h3,
           lineHeight: theme.fontSizes.h3 * 1.3,
+          letterSpacing: -0.2,
         },
         h4: {
           fontSize: theme.fontSizes.h4,
