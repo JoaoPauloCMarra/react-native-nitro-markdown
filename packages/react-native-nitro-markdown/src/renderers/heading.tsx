@@ -8,14 +8,31 @@ interface HeadingProps {
   style?: TextStyle;
 }
 
+const ANDROID_SYSTEM_FONTS = new Set([
+  "sans-serif",
+  "sans-serif-medium",
+  "sans-serif-light",
+  "sans-serif-condensed",
+  "sans-serif-thin",
+  "serif",
+  "monospace",
+]);
+
 export const Heading: FC<HeadingProps> = ({ level, children, style }) => {
   const { theme } = useMarkdownContext();
+  const headingWeight =
+    theme.headingWeight ??
+    (Platform.OS === "android" &&
+    theme.fontFamilies.heading &&
+    !ANDROID_SYSTEM_FONTS.has(theme.fontFamilies.heading)
+      ? "normal"
+      : "700");
   const styles = useMemo(
     () =>
       StyleSheet.create({
         heading: {
           color: theme.colors.heading,
-          fontWeight: "700",
+          fontWeight: headingWeight,
           marginTop: theme.spacing.xl,
           marginBottom: theme.spacing.m,
           fontFamily: theme.fontFamilies.heading,

@@ -46,6 +46,7 @@ export interface MarkdownTheme {
     heading: string | undefined;
     mono: string | undefined;
   };
+  headingWeight?: TextStyle["fontWeight"];
   borderRadius: {
     s: number;
     m: number;
@@ -111,6 +112,7 @@ export const defaultMarkdownTheme: MarkdownTheme = {
       default: "monospace",
     }),
   },
+  headingWeight: undefined,
   borderRadius: {
     s: 6,
     m: 10,
@@ -120,9 +122,11 @@ export const defaultMarkdownTheme: MarkdownTheme = {
 };
 
 export type PartialMarkdownTheme = {
-  [K in keyof MarkdownTheme]?: K extends "showCodeLanguage"
+  [K in keyof MarkdownTheme]?: K extends "showCodeLanguage" | "headingWeight"
     ? MarkdownTheme[K]
-    : Partial<MarkdownTheme[K]>;
+    : MarkdownTheme[K] extends object
+      ? Partial<MarkdownTheme[K]>
+      : MarkdownTheme[K];
 };
 
 export type NodeStyleOverrides = Partial<
@@ -176,6 +180,7 @@ export const minimalMarkdownTheme: MarkdownTheme = {
     heading: undefined,
     mono: undefined,
   },
+  headingWeight: undefined,
   borderRadius: {
     s: 0,
     m: 0,
@@ -195,6 +200,7 @@ export const mergeThemes = (
     fontSizes: { ...base.fontSizes, ...partial.fontSizes },
     fontFamilies: { ...base.fontFamilies, ...partial.fontFamilies },
     borderRadius: { ...base.borderRadius, ...partial.borderRadius },
+    headingWeight: partial.headingWeight ?? base.headingWeight,
     showCodeLanguage: partial.showCodeLanguage ?? base.showCodeLanguage,
   };
 };
