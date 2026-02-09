@@ -115,3 +115,5 @@ temp/
 
 *.md
 !README.md
+!CONTRIBUTING.md
+!CHANGELOG.md
