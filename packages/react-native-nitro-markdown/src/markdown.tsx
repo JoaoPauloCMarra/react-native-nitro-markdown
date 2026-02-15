@@ -28,6 +28,7 @@ import {
   MarkdownContext,
   useMarkdownContext,
   type CustomRenderers,
+  type MarkdownDirection,
   type NodeRendererProps,
 } from "./MarkdownContext";
 
@@ -90,6 +91,15 @@ export interface MarkdownProps {
    */
   stylingStrategy?: StylingStrategy;
   /**
+   * Text direction for RTL language support.
+   * When set, applies `writingDirection` to all text elements.
+   * @example
+   * ```tsx
+   * <Markdown direction="rtl">{arabicContent}</Markdown>
+   * ```
+   */
+  direction?: MarkdownDirection;
+  /**
    * Optional style for the container view.
    */
   style?: StyleProp<ViewStyle>;
@@ -102,6 +112,7 @@ export const Markdown: FC<MarkdownProps> = ({
   theme: userTheme,
   styles: nodeStyles,
   stylingStrategy = "opinionated",
+  direction,
   style,
   onParsingInProgress,
   onParseComplete,
@@ -142,7 +153,7 @@ export const Markdown: FC<MarkdownProps> = ({
     return mergeThemes(base, userTheme);
   }, [userTheme, stylingStrategy]);
 
-  const baseStyles = useMemo(() => createBaseStyles(theme), [theme]);
+  const baseStyles = useMemo(() => createBaseStyles(theme, direction), [theme, direction]);
 
   if (!ast) {
     return (
@@ -154,7 +165,7 @@ export const Markdown: FC<MarkdownProps> = ({
 
   return (
     <MarkdownContext.Provider
-      value={{ renderers, theme, styles: nodeStyles, stylingStrategy }}
+      value={{ renderers, theme, styles: nodeStyles, stylingStrategy, direction }}
     >
       <View style={[baseStyles.container, style]}>
         <NodeRenderer node={ast} depth={0} inListItem={false} />
@@ -184,8 +195,8 @@ const NodeRenderer: FC<NodeRendererProps> = ({
   inListItem,
   parentIsText = false,
 }) => {
-  const { renderers, theme, styles: nodeStyles } = useMarkdownContext();
-  const baseStyles = useMemo(() => createBaseStyles(theme), [theme]);
+  const { renderers, theme, styles: nodeStyles, direction } = useMarkdownContext();
+  const baseStyles = useMemo(() => createBaseStyles(theme, direction), [theme, direction]);
 
   const renderChildren = (
     children?: MarkdownNode[],
@@ -491,7 +502,7 @@ const NodeRenderer: FC<NodeRendererProps> = ({
   }
 };
 
-const createBaseStyles = (theme: MarkdownTheme) =>
+const createBaseStyles = (theme: MarkdownTheme, direction?: MarkdownDirection) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -511,6 +522,7 @@ const createBaseStyles = (theme: MarkdownTheme) =>
       lineHeight: theme.fontSizes.m * 1.6,
       fontFamily: theme.fontFamilies.regular,
       ...(Platform.OS === "android" && { includeFontPadding: false }),
+      ...(direction && { writingDirection: direction }),
     },
     bold: {
       fontWeight: "700",

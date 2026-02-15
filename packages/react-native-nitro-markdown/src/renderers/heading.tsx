@@ -19,7 +19,7 @@ const ANDROID_SYSTEM_FONTS = new Set([
 ]);
 
 export const Heading: FC<HeadingProps> = ({ level, children, style }) => {
-  const { theme } = useMarkdownContext();
+  const { theme, direction } = useMarkdownContext();
   const headingWeight =
     theme.headingWeight ??
     (Platform.OS === "android" &&
@@ -84,5 +84,5 @@ export const Heading: FC<HeadingProps> = ({ level, children, style }) => {
     level === 6 && styles.h6,
   ];
 
-  return <Text style={[...headingStyles, style]}>{children}</Text>;
+  return <Text style={[...headingStyles, direction && { writingDirection: direction }, style]}>{children}</Text>;
 };

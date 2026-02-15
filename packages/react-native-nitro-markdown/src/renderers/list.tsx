@@ -19,7 +19,7 @@ export const List: FC<ListProps> = ({ depth, children, style }) => {
           marginBottom: theme.spacing.m,
         },
         listNested: {
-          marginLeft: theme.spacing.s,
+          marginStart: theme.spacing.s,
           marginBottom: 0,
         },
       }),
@@ -47,7 +47,7 @@ export const ListItem: FC<ListItemProps> = ({
   start,
   style,
 }) => {
-  const { theme } = useMarkdownContext();
+  const { theme, direction } = useMarkdownContext();
   const styles = useMemo(
     () =>
       StyleSheet.create({
@@ -60,11 +60,12 @@ export const ListItem: FC<ListItemProps> = ({
           color: theme.colors.accent,
           fontSize: theme.fontSizes.m,
           lineHeight: theme.fontSizes.m * 1.6,
-          marginRight: theme.spacing.s,
+          marginEnd: theme.spacing.s,
           minWidth: 22,
           textAlign: "center",
           fontFamily: theme.fontFamilies.regular,
           ...(Platform.OS === "android" && { includeFontPadding: false }),
+          ...(direction && { writingDirection: direction }),
         },
         listItemContent: {
           flex: 1,
@@ -110,7 +111,7 @@ export const TaskListItem: FC<TaskListItemProps> = ({
           borderColor: theme.colors.accent,
           alignItems: "center",
           justifyContent: "center",
-          marginRight: theme.spacing.s,
+          marginEnd: theme.spacing.s,
           marginTop: 2,
         },
         taskCheckboxChecked: {
