@@ -13,13 +13,13 @@ export const Blockquote: FC<BlockquoteProps> = ({ children, style }) => {
     () =>
       StyleSheet.create({
         blockquote: {
-          borderLeftWidth: 4,
-          borderLeftColor: theme.colors.blockquote,
-          paddingLeft: theme.spacing.l,
+          borderStartWidth: 4,
+          borderStartColor: theme.colors.blockquote,
+          paddingStart: theme.spacing.l,
           marginVertical: theme.spacing.m,
           backgroundColor: theme.colors.surfaceLight,
           paddingVertical: theme.spacing.m,
-          paddingRight: theme.spacing.m,
+          paddingEnd: theme.spacing.m,
           borderRadius: theme.borderRadius.s,
         },
       }),

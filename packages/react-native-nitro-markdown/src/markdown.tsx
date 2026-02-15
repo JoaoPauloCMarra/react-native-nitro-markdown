@@ -9,6 +9,7 @@ import {
 } from "./theme";
 import { useMemo, type ReactNode, type FC, Fragment } from "react";
 import {
+  I18nManager,
   StyleSheet,
   View,
   Text,
@@ -28,6 +29,7 @@ import {
   MarkdownContext,
   useMarkdownContext,
   type CustomRenderers,
+  type MarkdownDirection,
   type NodeRendererProps,
 } from "./MarkdownContext";
 
@@ -90,6 +92,20 @@ export interface MarkdownProps {
    */
   stylingStrategy?: StylingStrategy;
   /**
+   * Text direction for RTL language support.
+   * Applies `writingDirection` to all text elements.
+   * Defaults to the app's current layout direction via `I18nManager.isRTL`.
+   * @example
+   * ```tsx
+   * // Automatic — reads from I18nManager (default)
+   * <Markdown>{content}</Markdown>
+   *
+   * // Explicit override
+   * <Markdown direction="rtl">{arabicContent}</Markdown>
+   * ```
+   */
+  direction?: MarkdownDirection;
+  /**
    * Optional style for the container view.
    */
   style?: StyleProp<ViewStyle>;
@@ -102,6 +118,7 @@ export const Markdown: FC<MarkdownProps> = ({
   theme: userTheme,
   styles: nodeStyles,
   stylingStrategy = "opinionated",
+  direction,
   style,
   onParsingInProgress,
   onParseComplete,
@@ -142,7 +159,8 @@ export const Markdown: FC<MarkdownProps> = ({
     return mergeThemes(base, userTheme);
   }, [userTheme, stylingStrategy]);
 
-  const baseStyles = useMemo(() => createBaseStyles(theme), [theme]);
+  const resolvedDirection = direction ?? (I18nManager.isRTL ? "rtl" : "ltr");
+  const baseStyles = useMemo(() => createBaseStyles(theme, resolvedDirection), [theme, resolvedDirection]);
 
   if (!ast) {
     return (
@@ -154,7 +172,7 @@ export const Markdown: FC<MarkdownProps> = ({
 
   return (
     <MarkdownContext.Provider
-      value={{ renderers, theme, styles: nodeStyles, stylingStrategy }}
+      value={{ renderers, theme, styles: nodeStyles, stylingStrategy, direction: resolvedDirection }}
     >
       <View style={[baseStyles.container, style]}>
         <NodeRenderer node={ast} depth={0} inListItem={false} />
@@ -184,8 +202,8 @@ const NodeRenderer: FC<NodeRendererProps> = ({
   inListItem,
   parentIsText = false,
 }) => {
-  const { renderers, theme, styles: nodeStyles } = useMarkdownContext();
-  const baseStyles = useMemo(() => createBaseStyles(theme), [theme]);
+  const { renderers, theme, styles: nodeStyles, direction } = useMarkdownContext();
+  const baseStyles = useMemo(() => createBaseStyles(theme, direction), [theme, direction]);
 
   const renderChildren = (
     children?: MarkdownNode[],
@@ -491,7 +509,7 @@ const NodeRenderer: FC<NodeRendererProps> = ({
   }
 };
 
-const createBaseStyles = (theme: MarkdownTheme) =>
+const createBaseStyles = (theme: MarkdownTheme, direction?: MarkdownDirection) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -511,6 +529,7 @@ const createBaseStyles = (theme: MarkdownTheme) =>
       lineHeight: theme.fontSizes.m * 1.6,
       fontFamily: theme.fontFamilies.regular,
       ...(Platform.OS === "android" && { includeFontPadding: false }),
+      ...(direction && { writingDirection: direction }),
     },
     bold: {
       fontWeight: "700",

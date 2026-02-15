@@ -1,6 +1,7 @@
 export * from "./headless";
 
 export { Markdown } from "./markdown";
+export type { MarkdownProps } from "./markdown";
 export { MarkdownStream } from "./markdown-stream";
 
 export { useMarkdownContext, MarkdownContext } from "./MarkdownContext";
@@ -19,6 +20,7 @@ export type {
   ListRendererProps,
   TaskListItemRendererProps,
   MarkdownContextValue,
+  MarkdownDirection,
 } from "./MarkdownContext";
 
 export {

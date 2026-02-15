@@ -81,11 +81,14 @@ export type CustomRenderers = Partial<
   Record<MarkdownNode["type"], CustomRenderer>
 >;
 
+export type MarkdownDirection = "ltr" | "rtl";
+
 export interface MarkdownContextValue {
   renderers: CustomRenderers;
   theme: MarkdownTheme;
   styles?: NodeStyleOverrides;
   stylingStrategy: StylingStrategy;
+  direction?: MarkdownDirection;
 }
 
 export const MarkdownContext = createContext<MarkdownContextValue>({
@@ -93,6 +96,7 @@ export const MarkdownContext = createContext<MarkdownContextValue>({
   theme: defaultMarkdownTheme,
   styles: undefined,
   stylingStrategy: "opinionated",
+  direction: undefined,
 });
 
 export const useMarkdownContext = () => useContext(MarkdownContext);
