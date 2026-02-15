@@ -9,6 +9,7 @@ import {
 } from "./theme";
 import { useMemo, type ReactNode, type FC, Fragment } from "react";
 import {
+  I18nManager,
   StyleSheet,
   View,
   Text,
@@ -92,9 +93,14 @@ export interface MarkdownProps {
   stylingStrategy?: StylingStrategy;
   /**
    * Text direction for RTL language support.
-   * When set, applies `writingDirection` to all text elements.
+   * Applies `writingDirection` to all text elements.
+   * Defaults to the app's current layout direction via `I18nManager.isRTL`.
    * @example
    * ```tsx
+   * // Automatic — reads from I18nManager (default)
+   * <Markdown>{content}</Markdown>
+   *
+   * // Explicit override
    * <Markdown direction="rtl">{arabicContent}</Markdown>
    * ```
    */
@@ -153,7 +159,8 @@ export const Markdown: FC<MarkdownProps> = ({
     return mergeThemes(base, userTheme);
   }, [userTheme, stylingStrategy]);
 
-  const baseStyles = useMemo(() => createBaseStyles(theme, direction), [theme, direction]);
+  const resolvedDirection = direction ?? (I18nManager.isRTL ? "rtl" : "ltr");
+  const baseStyles = useMemo(() => createBaseStyles(theme, resolvedDirection), [theme, resolvedDirection]);
 
   if (!ast) {
     return (
@@ -165,7 +172,7 @@ export const Markdown: FC<MarkdownProps> = ({
 
   return (
     <MarkdownContext.Provider
-      value={{ renderers, theme, styles: nodeStyles, stylingStrategy, direction }}
+      value={{ renderers, theme, styles: nodeStyles, stylingStrategy, direction: resolvedDirection }}
     >
       <View style={[baseStyles.container, style]}>
         <NodeRenderer node={ast} depth={0} inListItem={false} />
