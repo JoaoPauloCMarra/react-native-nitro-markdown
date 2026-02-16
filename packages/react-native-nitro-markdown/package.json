@@ -1,6 +1,6 @@
 {
   "name": "react-native-nitro-markdown",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "High-performance Markdown parser for React Native using Nitro Modules and md4c",
   "main": "lib/commonjs/index.js",
   "module": "lib/module/index.js",
@@ -54,6 +54,7 @@
     "build": "bob build",
     "clean": "rimraf lib nitrogen/generated",
     "codegen": "nitrogen --logLevel=\"debug\"",
+    "lint": "eslint src --max-warnings=0 --ignore-pattern 'src/**/__tests__/**' --ignore-pattern 'src/**/*.nitro.ts'",
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:coverage": "jest --coverage",
@@ -86,9 +87,9 @@
     "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {
-    "@types/react": "^19.2.11",
+    "@types/react": "^19.2.14",
     "@types/react-native": "^0.73.0",
-    "react-native-builder-bob": "^0.40.17",
+    "react-native-builder-bob": "^0.40.18",
     "react-native-nitro-modules": "*",
     "typescript": "^5.9.3"
   },

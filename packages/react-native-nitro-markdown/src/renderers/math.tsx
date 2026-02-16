@@ -26,10 +26,10 @@ try {
   // ignored
 }
 
-interface MathInlineProps {
+type MathInlineProps = {
   content?: string;
   style?: ViewStyle;
-}
+};
 
 const createMathStyles = (theme: MarkdownTheme) =>
   StyleSheet.create({
@@ -115,10 +115,10 @@ export const MathInline: FC<MathInlineProps> = ({ content, style }) => {
   );
 };
 
-interface MathBlockProps {
+type MathBlockProps = {
   content?: string;
   style?: ViewStyle;
-}
+};
 
 export const MathBlock: FC<MathBlockProps> = ({ content, style }) => {
   const { theme } = useMarkdownContext();

@@ -1,4 +1,4 @@
-import { ReactNode, useMemo, type FC } from "react";
+import { useMemo, type FC, type ReactNode } from "react";
 import {
   Text,
   StyleSheet,
@@ -7,15 +7,19 @@ import {
   type TextStyle,
 } from "react-native";
 import { useMarkdownContext } from "../MarkdownContext";
+import {
+  getAllowedExternalHref,
+  normalizeLinkHref,
+} from "../utils/link-security";
 
-interface LinkProps {
+type LinkProps = {
   href: string;
   children: ReactNode;
   style?: TextStyle;
-}
+};
 
 export const Link: FC<LinkProps> = ({ href, children, style }) => {
-  const { theme } = useMarkdownContext();
+  const { theme, onLinkPress } = useMarkdownContext();
   const styles = useMemo(
     () =>
       StyleSheet.create({
@@ -27,11 +31,25 @@ export const Link: FC<LinkProps> = ({ href, children, style }) => {
           ...(Platform.OS === "android" && { includeFontPadding: false }),
         },
       }),
-    [theme]
+    [theme],
   );
 
-  const handlePress = () => {
-    if (href) Linking.openURL(href);
+  const handlePress = async () => {
+    const normalizedHref = normalizeLinkHref(href);
+    if (!normalizedHref) return;
+
+    try {
+      const shouldOpen = (await onLinkPress?.(normalizedHref)) !== false;
+      if (!shouldOpen) return;
+
+      const allowedExternalHref = getAllowedExternalHref(normalizedHref);
+      if (!allowedExternalHref) return;
+
+      const canOpen = await Linking.canOpenURL(allowedExternalHref);
+      if (!canOpen) return;
+
+      await Linking.openURL(allowedExternalHref);
+    } catch {}
   };
 
   return (

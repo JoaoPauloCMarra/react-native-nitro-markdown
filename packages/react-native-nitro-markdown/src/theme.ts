@@ -1,7 +1,7 @@
 import { Platform, type TextStyle, type ViewStyle } from "react-native";
 import type { MarkdownNode } from "./headless";
 
-export interface MarkdownTheme {
+export type MarkdownTheme = {
   colors: {
     text: string | undefined;
     textMuted: string | undefined;
@@ -53,7 +53,7 @@ export interface MarkdownTheme {
     l: number;
   };
   showCodeLanguage: boolean;
-}
+};
 
 export const defaultMarkdownTheme: MarkdownTheme = {
   colors: {
@@ -191,7 +191,7 @@ export const minimalMarkdownTheme: MarkdownTheme = {
 
 export const mergeThemes = (
   base: MarkdownTheme,
-  partial?: PartialMarkdownTheme
+  partial?: PartialMarkdownTheme,
 ): MarkdownTheme => {
   if (!partial) return base;
   return {

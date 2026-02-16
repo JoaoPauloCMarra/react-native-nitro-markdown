@@ -18,6 +18,7 @@ export type {
   InlineCodeRendererProps,
   ListRendererProps,
   TaskListItemRendererProps,
+  LinkPressHandler,
   MarkdownContextValue,
 } from "./MarkdownContext";
 

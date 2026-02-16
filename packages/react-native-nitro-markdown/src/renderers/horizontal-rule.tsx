@@ -2,9 +2,9 @@ import { useMemo, type FC } from "react";
 import { View, StyleSheet, type ViewStyle } from "react-native";
 import { useMarkdownContext } from "../MarkdownContext";
 
-interface HorizontalRuleProps {
+type HorizontalRuleProps = {
   style?: ViewStyle;
-}
+};
 
 export const HorizontalRule: FC<HorizontalRuleProps> = ({ style }) => {
   const { theme } = useMarkdownContext();
@@ -17,7 +17,7 @@ export const HorizontalRule: FC<HorizontalRuleProps> = ({ style }) => {
           marginVertical: theme.spacing.xl,
         },
       }),
-    [theme]
+    [theme],
   );
   return <View style={[styles.horizontalRule, style]} />;
 };

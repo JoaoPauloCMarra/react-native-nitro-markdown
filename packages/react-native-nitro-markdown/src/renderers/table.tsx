@@ -1,11 +1,11 @@
 import {
+  useEffect,
   useMemo,
   useRef,
   useReducer,
   useCallback,
   type FC,
   type ComponentType,
-  type ReactNode,
 } from "react";
 import {
   View,
@@ -18,10 +18,9 @@ import {
   type ViewStyle,
   type LayoutChangeEvent,
 } from "react-native";
-
-import type { MarkdownNode } from "../headless";
 import { useMarkdownContext, type NodeRendererProps } from "../MarkdownContext";
-import { MarkdownTheme } from "../theme";
+import type { MarkdownNode } from "../headless";
+import type { MarkdownTheme } from "../theme";
 
 type TableData = {
   headers: MarkdownNode[];
@@ -60,11 +59,11 @@ const extractTableData = (node: MarkdownNode): TableData => {
   return { headers, rows, alignments };
 };
 
-interface TableRendererProps {
+type TableRendererProps = {
   node: MarkdownNode;
   Renderer: ComponentType<NodeRendererProps>;
   style?: ViewStyle;
-}
+};
 
 type ColumnWidthsAction = {
   type: "SET_WIDTHS";
@@ -84,7 +83,7 @@ export const TableRenderer: FC<TableRendererProps> = ({
   const { theme } = useMarkdownContext();
   const { headers, rows, alignments } = useMemo(
     () => extractTableData(node),
-    [node]
+    [node],
   );
 
   const columnCount = headers.length;
@@ -95,25 +94,44 @@ export const TableRenderer: FC<TableRendererProps> = ({
   const measuredCells = useRef<Set<string>>(new Set());
   const widthsCalculated = useRef(false);
 
+  const expectedCellKeys = useMemo(() => {
+    const keys: string[] = [];
+
+    headers.forEach((_, colIndex) => {
+      keys.push(`header-${colIndex}`);
+    });
+
+    rows.forEach((row, rowIndex) => {
+      row.forEach((_, colIndex) => {
+        keys.push(`cell-${rowIndex}-${colIndex}`);
+      });
+    });
+
+    return keys;
+  }, [headers, rows]);
+
+  useEffect(() => {
+    measuredWidths.current.clear();
+    measuredCells.current.clear();
+    widthsCalculated.current = false;
+    dispatch({ type: "SET_WIDTHS", payload: [] });
+  }, [expectedCellKeys]);
+
   const onCellLayout = useCallback(
     (cellKey: string, width: number) => {
+      if (widthsCalculated.current) return;
+
       measuredWidths.current.set(cellKey, width);
-      measuredCells.current.add(cellKey);
-
-      const expectedCells = new Set<string>();
-      for (let col = 0; col < columnCount; col++) {
-        expectedCells.add(`header-${col}`);
-      }
-      for (let row = 0; row < rows.length; row++) {
-        for (let col = 0; col < columnCount; col++) {
-          expectedCells.add(`cell-${row}-${col}`);
-        }
+      if (!measuredCells.current.has(cellKey)) {
+        measuredCells.current.add(cellKey);
       }
 
-      const allCellsMeasured = [...expectedCells].every((key) =>
-        measuredCells.current.has(key)
+      if (measuredCells.current.size < expectedCellKeys.length) return;
+
+      const allCellsMeasured = expectedCellKeys.every((key) =>
+        measuredCells.current.has(key),
       );
-      if (!allCellsMeasured || widthsCalculated.current) return;
+      if (!allCellsMeasured) return;
 
       const maxWidths: number[] = new Array(columnCount).fill(0);
 
@@ -124,6 +142,7 @@ export const TableRenderer: FC<TableRendererProps> = ({
         }
 
         for (let row = 0; row < rows.length; row++) {
+          if (col >= rows[row].length) continue;
           const cellWidth = measuredWidths.current.get(`cell-${row}-${col}`);
           if (cellWidth && cellWidth > 0) {
             maxWidths[col] = Math.max(maxWidths[col], cellWidth);
@@ -136,11 +155,11 @@ export const TableRenderer: FC<TableRendererProps> = ({
       widthsCalculated.current = true;
       dispatch({ type: "SET_WIDTHS", payload: maxWidths });
     },
-    [columnCount, rows.length]
+    [columnCount, expectedCellKeys, rows],
   );
 
   const getAlignment = (
-    index: number
+    index: number,
   ): "flex-start" | "center" | "flex-end" => {
     const align = alignments[index];
     if (align === "center") return "center";
@@ -154,30 +173,17 @@ export const TableRenderer: FC<TableRendererProps> = ({
 
   return (
     <View style={[styles.container, style]}>
-      <View style={styles.measurementContainer}>
-        <View style={styles.measurementRow}>
-          {headers.map((cell, colIndex) => (
-            <View
-              key={`measure-header-${colIndex}`}
-              style={styles.measurementCell}
-              onLayout={(e: LayoutChangeEvent) => {
-                onCellLayout(`header-${colIndex}`, e.nativeEvent.layout.width);
-              }}
-            >
-              <CellContent node={cell} Renderer={Renderer} styles={styles} />
-            </View>
-          ))}
-        </View>
-        {rows.map((row, rowIndex) => (
-          <View key={`measure-row-${rowIndex}`} style={styles.measurementRow}>
-            {row.map((cell, colIndex) => (
+      {!hasWidths && (
+        <View style={styles.measurementContainer}>
+          <View style={styles.measurementRow}>
+            {headers.map((cell, colIndex) => (
               <View
-                key={`measure-cell-${rowIndex}-${colIndex}`}
+                key={`measure-header-${colIndex}`}
                 style={styles.measurementCell}
                 onLayout={(e: LayoutChangeEvent) => {
                   onCellLayout(
-                    `cell-${rowIndex}-${colIndex}`,
-                    e.nativeEvent.layout.width
+                    `header-${colIndex}`,
+                    e.nativeEvent.layout.width,
                   );
                 }}
               >
@@ -185,10 +191,32 @@ export const TableRenderer: FC<TableRendererProps> = ({
               </View>
             ))}
           </View>
-        ))}
-      </View>
+          {rows.map((row, rowIndex) => (
+            <View key={`measure-row-${rowIndex}`} style={styles.measurementRow}>
+              {row.map((cell, colIndex) => (
+                <View
+                  key={`measure-cell-${rowIndex}-${colIndex}`}
+                  style={styles.measurementCell}
+                  onLayout={(e: LayoutChangeEvent) => {
+                    onCellLayout(
+                      `cell-${rowIndex}-${colIndex}`,
+                      e.nativeEvent.layout.width,
+                    );
+                  }}
+                >
+                  <CellContent
+                    node={cell}
+                    Renderer={Renderer}
+                    styles={styles}
+                  />
+                </View>
+              ))}
+            </View>
+          ))}
+        </View>
+      )}
 
-      {hasWidths && (
+      {hasWidths ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator
@@ -252,7 +280,7 @@ export const TableRenderer: FC<TableRendererProps> = ({
             ))}
           </View>
         </ScrollView>
-      )}
+      ) : null}
     </View>
   );
 };

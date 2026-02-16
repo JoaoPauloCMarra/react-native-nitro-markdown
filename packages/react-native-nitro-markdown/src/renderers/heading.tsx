@@ -1,12 +1,12 @@
-import { ReactNode, useMemo, type FC } from "react";
+import { useMemo, type FC, type ReactNode } from "react";
 import { Text, StyleSheet, Platform, type TextStyle } from "react-native";
 import { useMarkdownContext } from "../MarkdownContext";
 
-interface HeadingProps {
+type HeadingProps = {
   level: number;
   children: ReactNode;
   style?: TextStyle;
-}
+};
 
 const ANDROID_SYSTEM_FONTS = new Set([
   "sans-serif",
@@ -71,7 +71,7 @@ export const Heading: FC<HeadingProps> = ({ level, children, style }) => {
           color: theme.colors.textMuted,
         },
       }),
-    [theme]
+    [headingWeight, theme],
   );
 
   const headingStyles = [
