@@ -14,4 +14,3 @@
   },
   "exclude": ["node_modules", "lib", "dist"]
 }
-

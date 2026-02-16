@@ -7,20 +7,18 @@
  * Nitro's C++ implementation and JavaScript parsers in Node.js
  */
 
-const { performance } = require('perf_hooks');
-
 // Simple JS markdown parser (very basic)
 class SimpleJSParser {
   parse(text) {
     // Basic parsing - just split into paragraphs
-    const lines = text.split('\n');
-    const result = { type: 'document', children: [] };
+    const lines = text.split("\n");
+    const result = { type: "document", children: [] };
 
     for (const line of lines) {
       if (line.trim()) {
         result.children.push({
-          type: 'paragraph',
-          children: [{ type: 'text', content: line.trim() }]
+          type: "paragraph",
+          children: [{ type: "text", content: line.trim() }],
         });
       }
     }
@@ -96,7 +94,9 @@ const largeTestData = testMarkdown.repeat(20); // ~50KB
 const hugeTestData = testMarkdown.repeat(100); // ~250KB
 
 function benchmarkParser(name, parser, data, iterations = 10) {
-  console.log(`\n🔬 Benchmarking ${name} with ${(data.length / 1024).toFixed(1)}KB data...`);
+  console.log(
+    `\n🔬 Benchmarking ${name} with ${(data.length / 1024).toFixed(1)}KB data...`,
+  );
 
   // Warmup
   for (let i = 0; i < 3; i++) {
@@ -111,7 +111,7 @@ function benchmarkParser(name, parser, data, iterations = 10) {
     times.push(end - start);
 
     // Basic validation
-    if (!result || result.type !== 'document') {
+    if (!result || result.type !== "document") {
       throw new Error(`Invalid result from ${name}`);
     }
   }
@@ -119,7 +119,7 @@ function benchmarkParser(name, parser, data, iterations = 10) {
   const avgTime = times.reduce((a, b) => a + b, 0) / times.length;
   const minTime = Math.min(...times);
   const maxTime = Math.max(...times);
-  const throughput = (data.length / 1024) / (avgTime / 1000); // KB/s
+  const throughput = data.length / 1024 / (avgTime / 1000); // KB/s
 
   console.log(`  ⚡ Average: ${avgTime.toFixed(2)}ms`);
   console.log(`  📈 Range: ${minTime.toFixed(2)}ms - ${maxTime.toFixed(2)}ms`);
@@ -129,25 +129,23 @@ function benchmarkParser(name, parser, data, iterations = 10) {
 }
 
 async function runBenchmarks() {
-  console.log('🚀 Node.js Markdown Parser Performance Comparison');
-  console.log('================================================');
-  console.log('Comparing parsing performance across different data sizes\n');
+  console.log("🚀 Node.js Markdown Parser Performance Comparison");
+  console.log("================================================");
+  console.log("Comparing parsing performance across different data sizes\n");
 
-  const parsers = [
-    { name: 'Simple JS Parser', parser: new SimpleJSParser() }
-  ];
+  const parsers = [{ name: "Simple JS Parser", parser: new SimpleJSParser() }];
 
   const testCases = [
-    { name: 'Small (3KB)', data: testMarkdown },
-    { name: 'Medium (50KB)', data: largeTestData },
-    { name: 'Large (250KB)', data: hugeTestData }
+    { name: "Small (3KB)", data: testMarkdown },
+    { name: "Medium (50KB)", data: largeTestData },
+    { name: "Large (250KB)", data: hugeTestData },
   ];
 
   const results = {};
 
   for (const testCase of testCases) {
     console.log(`\n📊 Testing ${testCase.name}:`);
-    console.log('='.repeat(40));
+    console.log("=".repeat(40));
 
     for (const { name, parser } of parsers) {
       try {
@@ -160,27 +158,31 @@ async function runBenchmarks() {
     }
   }
 
-  console.log('\n📋 Performance Summary:');
-  console.log('======================');
+  console.log("\n📋 Performance Summary:");
+  console.log("======================");
 
-  console.log('| Test Case | JS Parser | Notes |');
-  console.log('|-----------|-----------|-------|');
-  testCases.forEach(testCase => {
-    const jsTime = results['Simple JS Parser']?.[testCase.name]?.avgTime;
-    console.log(`| ${testCase.name} | ${jsTime?.toFixed(2) || 'N/A'}ms | Basic regex parsing |`);
+  console.log("| Test Case | JS Parser | Notes |");
+  console.log("|-----------|-----------|-------|");
+  testCases.forEach((testCase) => {
+    const jsTime = results["Simple JS Parser"]?.[testCase.name]?.avgTime;
+    console.log(
+      `| ${testCase.name} | ${jsTime?.toFixed(2) || "N/A"}ms | Basic regex parsing |`,
+    );
   });
 
-  console.log('\n💡 Note: This demonstrates JS baseline performance.');
-  console.log('   For Nitro C++ benchmarks, run the React Native example app.');
-  console.log('   Expected Nitro performance: 10-50x faster than JS implementations.');
+  console.log("\n💡 Note: This demonstrates JS baseline performance.");
+  console.log("   For Nitro C++ benchmarks, run the React Native example app.");
+  console.log(
+    "   Expected Nitro performance: 10-50x faster than JS implementations.",
+  );
 
-  console.log('\n🔍 Why Nitro is Faster:');
-  console.log('========================');
-  console.log('• Direct C++ execution via JSI (no JS bridge)');
-  console.log('• Optimized md4c parser (battle-tested C library)');
-  console.log('• Zero garbage collection overhead during parsing');
-  console.log('• Native memory management and allocation');
-  console.log('• SIMD optimizations in modern C++ compilers');
+  console.log("\n🔍 Why Nitro is Faster:");
+  console.log("========================");
+  console.log("• Direct C++ execution via JSI (no JS bridge)");
+  console.log("• Optimized md4c parser (battle-tested C library)");
+  console.log("• Zero garbage collection overhead during parsing");
+  console.log("• Native memory management and allocation");
+  console.log("• SIMD optimizations in modern C++ compilers");
 }
 
 if (require.main === module) {

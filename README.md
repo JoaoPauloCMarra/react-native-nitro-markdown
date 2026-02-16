@@ -5,54 +5,37 @@
 
 # react-native-nitro-markdown
 
-Fast, native Markdown parsing and rendering for React Native. Built on md4c (C++) and Nitro Modules (JSI), it turns Markdown into a typed AST synchronously and renders it with a batteries-included React Native renderer.
+Native Markdown parsing and rendering for React Native.
 
----
+`react-native-nitro-markdown` uses `md4c` (C++) through Nitro Modules (JSI) to parse Markdown synchronously into a typed AST, then render it with customizable React Native components.
 
-## Why this package exists
+## Why use it
 
-JavaScript Markdown parsers do a lot of work on the JS thread and often trigger GC pauses on large documents. This package moves parsing to native C++ and uses JSI to return the AST without going through the RN bridge.
-
-**How it works:**
-
-Markdown string -> md4c C++ parser -> JSON AST -> React Native renderers
-
----
-
-## Features
-
-- Native C++ parser with JSI access (fast, synchronous parsing)
-- Full renderer included (Markdown component)
-- Headless API for custom renderers or processing
+- Native parser (`md4c`) for lower JS thread overhead on large documents
+- End-to-end solution: parser + renderer + streaming session API
+- Headless API for custom rendering and text processing
 - GFM support (tables, strikethrough, task lists, autolinks)
-- LaTeX math parsing (inline and block)
-- Streaming support for token-by-token updates
-- Theming and per-node style overrides
-- Built-in renderers exposed for reuse
-
----
+- Optional math rendering with `react-native-mathjax-svg`
 
 ## Requirements
 
-- React Native >= 0.75
-- react-native-nitro-modules
+- React Native `>=0.75.0`
+- `react-native-nitro-modules`
 
-Optional (for math rendering):
+Optional for math rendering:
 
-- react-native-mathjax-svg
-- react-native-svg
-
----
+- `react-native-mathjax-svg >=0.9.0`
+- `react-native-svg >=13.0.0`
 
 ## Installation
 
-Install the package and Nitro Modules:
+### React Native
 
 ```bash
 bun add react-native-nitro-markdown react-native-nitro-modules
 ```
 
-Optional math dependencies:
+Optional math support:
 
 ```bash
 bun add react-native-mathjax-svg react-native-svg
@@ -64,168 +47,135 @@ iOS pods:
 cd ios && pod install
 ```
 
-Expo (requires a development build):
+### Expo (development build)
 
 ```bash
 bunx expo install react-native-nitro-markdown react-native-nitro-modules
 bunx expo prebuild
 ```
 
----
+Optional math support:
+
+```bash
+bunx expo install react-native-mathjax-svg react-native-svg
+```
 
 ## Quick Start
 
 ```tsx
 import { Markdown } from "react-native-nitro-markdown";
 
-export function MyComponent() {
+export function Example() {
   return (
     <Markdown options={{ gfm: true }}>
-      {"# Hello World\nThis is **bold** text."}
+      {"# Hello\nThis is **native** markdown."}
     </Markdown>
   );
 }
 ```
 
----
+## Package Exports
 
-## Feature Guide
+### Main Entry (`react-native-nitro-markdown`)
 
-Start here (pick the approach that matches your use case):
+- Parser and headless helpers:
+  - `parseMarkdown`
+  - `parseMarkdownWithOptions`
+  - `getTextContent`
+  - `getFlattenedText`
+  - `MarkdownParserModule`
+- Components:
+  - `Markdown`
+  - `MarkdownStream`
+- Hooks and sessions:
+  - `useMarkdownSession`
+  - `useStream`
+  - `createMarkdownSession`
+- Context:
+  - `MarkdownContext`
+  - `useMarkdownContext`
+- Theme:
+  - `defaultMarkdownTheme`
+  - `minimalMarkdownTheme`
+  - `mergeThemes`
+- Built-in renderers:
+  - `Heading`, `Paragraph`, `Link`, `Blockquote`, `HorizontalRule`
+  - `CodeBlock`, `InlineCode`
+  - `List`, `ListItem`, `TaskListItem`
+  - `TableRenderer`, `Image`, `MathInline`, `MathBlock`
+- Types:
+  - `MarkdownNode`, `ParserOptions`, `MarkdownParser`
+  - `CustomRenderers`, `CustomRenderer`, `CustomRendererProps`
+  - `NodeRendererProps`, `BaseCustomRendererProps`, `EnhancedRendererProps`
+  - `HeadingRendererProps`, `LinkRendererProps`, `ImageRendererProps`
+  - `CodeBlockRendererProps`, `InlineCodeRendererProps`
+  - `ListRendererProps`, `TaskListItemRendererProps`
+  - `LinkPressHandler`, `MarkdownContextValue`
+  - `MarkdownTheme`, `PartialMarkdownTheme`, `NodeStyleOverrides`, `StylingStrategy`
+  - `MarkdownSession`
 
-- `Markdown` for static or preloaded content
-- `MarkdownStream` + `useMarkdownSession` for streaming tokens
-- `headless` API for custom rendering or data processing
+### Headless Entry (`react-native-nitro-markdown/headless`)
 
-### 1) Parsing options (GFM and Math)
+Exports only parser-related API (`parseMarkdown`, `parseMarkdownWithOptions`, `getTextContent`, `getFlattenedText`, types). Use this when you do not need built-in UI rendering.
 
-Parsing options are passed using the `options` prop.
+## Component API
 
-```tsx
-<Markdown options={{ gfm: true, math: true }}>{content}</Markdown>
-```
-
-- `gfm` enables GitHub Flavored Markdown features supported by md4c.
-- `math` enables `$...$` and `$$...$$` parsing into math nodes.
-
-### 2) Styling and themes
-
-You can override tokens using the `theme` prop. Only provide the tokens you want to change.
+## `Markdown`
 
 ```tsx
 import { Markdown } from "react-native-nitro-markdown";
-
-const theme = {
-  colors: {
-    text: "#0f172a",
-    heading: "#0f172a",
-    link: "#2563eb",
-    codeBackground: "#f1f5f9",
-  },
-  showCodeLanguage: true,
-};
-
-<Markdown theme={theme}>{content}</Markdown>;
 ```
 
-If you use a custom heading font on Android and do not load a bold variant, set `headingWeight: "normal"` to avoid font fallback.
+| Prop                  | Type                   | Default                                          | Description                                                                               |
+| --------------------- | ---------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------- | -------------------- |
+| `children`            | `string`               | required                                         | Markdown input string.                                                                    |
+| `options`             | `ParserOptions`        | `undefined`                                      | Parser flags (`gfm`, `math`).                                                             |
+| `renderers`           | `CustomRenderers`      | `{}`                                             | Per-node custom renderers.                                                                |
+| `theme`               | `PartialMarkdownTheme` | `defaultMarkdownTheme` or `minimalMarkdownTheme` | Theme token overrides.                                                                    |
+| `styles`              | `NodeStyleOverrides`   | `undefined`                                      | Per-node style overrides.                                                                 |
+| `stylingStrategy`     | `"opinionated"         | "minimal"`                                       | `"opinionated"`                                                                           | Base styling preset. |
+| `style`               | `StyleProp<ViewStyle>` | `undefined`                                      | Container style for the root `View`.                                                      |
+| `onParsingInProgress` | `() => void`           | `undefined`                                      | Called when parse inputs change.                                                          |
+| `onParseComplete`     | `(result) => void`     | `undefined`                                      | Called with `{ raw, ast, text }` after successful parse.                                  |
+| `onLinkPress`         | `LinkPressHandler`     | `undefined`                                      | Intercepts link press before default open behavior. Return `false` to block default open. |
 
-### 3) Per-node style overrides
+Notes:
 
-Override the styles for specific node types with `styles`.
+- Parse failures are caught and rendered as a fallback message (`Error parsing markdown`).
+- `text` in `onParseComplete` is produced by `getFlattenedText(ast)`.
+
+## `MarkdownStream`
 
 ```tsx
-<Markdown
-  styles={{
-    heading: { color: "#0ea5e9", fontWeight: "900" },
-    code_block: { backgroundColor: "#e2e8f0", borderRadius: 16 },
-    blockquote: { borderLeftColor: "#0ea5e9" },
-  }}
->
-  {content}
-</Markdown>
+import { MarkdownStream } from "react-native-nitro-markdown";
 ```
 
-### 4) Custom renderers
+`MarkdownStreamProps` extends `MarkdownProps` except `children`.
 
-Provide a custom renderer for any node type. You get pre-mapped props for common values.
+| Prop                   | Type              | Default  | Description                                        |
+| ---------------------- | ----------------- | -------- | -------------------------------------------------- | --------------------------------------------------------- |
+| `session`              | `MarkdownSession` | required | Session object that supplies streamed text chunks. |
+| `updateIntervalMs`     | `number`          | `50`     | Flush interval when `updateStrategy="interval"`.   |
+| `updateStrategy`       | `"interval"       | "raf"`   | `"interval"`                                       | Update cadence (`setTimeout` vs `requestAnimationFrame`). |
+| `useTransitionUpdates` | `boolean`         | `false`  | Applies `startTransition` to streamed UI updates.  |
 
-```tsx
-import {
-  Markdown,
-  CodeBlock,
-  type HeadingRendererProps,
-  type CodeBlockRendererProps,
-} from "react-native-nitro-markdown";
-
-const renderers = {
-  heading: ({ level, children }: HeadingRendererProps) => (
-    <MyHeading level={level}>{children}</MyHeading>
-  ),
-  code_block: ({ content, language }: CodeBlockRendererProps) => (
-    <CodeBlock content={content} language={language} />
-  ),
-};
-
-<Markdown renderers={renderers}>{content}</Markdown>;
-```
-
-Custom renderer behavior:
-
-- Return `undefined` to fall back to the built-in renderer.
-- Return `null` to render nothing for that node.
-- The `Renderer` prop lets you render nested children the same way the default renderer does.
-
-Pre-mapped props by node type:
-
-| Node type | Extra props |
-| --- | --- |
-| `heading` | `level` |
-| `link` | `href`, `title` |
-| `image` | `url`, `alt`, `title` |
-| `code_block` | `content`, `language` |
-| `code_inline` | `content` |
-| `list` | `ordered`, `start` |
-| `task_list_item` | `checked` |
-
-### 5) Built-in renderers
-
-All built-in renderers are exported so you can reuse them in custom renderers.
-
-```tsx
-import { Heading, CodeBlock, InlineCode } from "react-native-nitro-markdown";
-```
-
-Available renderers:
-
-- `Heading`
-- `Paragraph`
-- `Link`
-- `Blockquote`
-- `HorizontalRule`
-- `CodeBlock`
-- `InlineCode`
-- `List`
-- `ListItem`
-- `TaskListItem`
-- `TableRenderer`
-- `Image`
-- `MathInline`
-- `MathBlock`
-
-### 6) Streaming (LLM tokens)
-
-Use `MarkdownStream` plus `useMarkdownSession` to stream updates efficiently.
+### Streaming Example
 
 ```tsx
 import { useEffect } from "react";
-import { MarkdownStream, useMarkdownSession } from "react-native-nitro-markdown";
+import {
+  MarkdownStream,
+  useMarkdownSession,
+} from "react-native-nitro-markdown";
 
-export function AIResponseStream() {
+export function StreamingExample() {
   const session = useMarkdownSession();
 
   useEffect(() => {
-    session.getSession().append("Hello **Nitro**!");
+    const s = session.getSession();
+    s.append("# Streaming\n");
+    s.append("This text arrives in chunks.");
+
     return () => session.clear();
   }, [session]);
 
@@ -240,15 +190,51 @@ export function AIResponseStream() {
 }
 ```
 
-Recommended streaming defaults:
+## Hooks and Session API
 
-- `updateStrategy="raf"` for frame-aligned updates
-- `updateIntervalMs` between `50` and `100` when using interval strategy
-- Avoid per-token UI updates by batching appends
+## `createMarkdownSession()`
 
-### 7) Headless parsing
+Creates and returns a native `MarkdownSession` instance.
 
-Use the headless entry when you only need the AST or want to build your own renderer.
+```tsx
+import { createMarkdownSession } from "react-native-nitro-markdown";
+
+const session = createMarkdownSession();
+session.append("hello");
+```
+
+## `useMarkdownSession()`
+
+Creates and owns one `MarkdownSession` for a component lifecycle.
+
+Returns:
+
+| Field            | Type                         | Description                                                   |
+| ---------------- | ---------------------------- | ------------------------------------------------------------- |
+| `getSession`     | `() => MarkdownSession`      | Returns the stable native session instance.                   |
+| `isStreaming`    | `boolean`                    | Stateful flag for app-level streaming UI.                     |
+| `setIsStreaming` | `(value: boolean) => void`   | Setter for `isStreaming`.                                     |
+| `stop`           | `() => void`                 | Sets `isStreaming` to `false`.                                |
+| `clear`          | `() => void`                 | Clears session content and resets `highlightPosition` to `0`. |
+| `setHighlight`   | `(position: number) => void` | Sets `session.highlightPosition`.                             |
+
+## `useStream(timestamps?)`
+
+Builds on `useMarkdownSession` and adds timeline sync helpers.
+
+- `timestamps` type: `Record<number, number>` where key = word/token index, value = timestamp in ms.
+- `sync(currentTimeMs)` computes highlight position from timestamp map.
+- Uses optimized lookup for monotonic timelines and handles non-monotonic maps safely.
+
+Additional returned fields:
+
+| Field          | Type                              | Description                               |
+| -------------- | --------------------------------- | ----------------------------------------- |
+| `isPlaying`    | `boolean`                         | Playback state for timed streaming.       |
+| `setIsPlaying` | `(value: boolean) => void`        | Setter for `isPlaying`.                   |
+| `sync`         | `(currentTimeMs: number) => void` | Applies timeline-based highlight updates. |
+
+## Headless API
 
 ```tsx
 import {
@@ -257,262 +243,234 @@ import {
   getTextContent,
   getFlattenedText,
 } from "react-native-nitro-markdown/headless";
-
-const ast = parseMarkdown("# Hello World");
-const text = getTextContent(ast);
-const normalized = getFlattenedText(ast);
 ```
 
-### 8) Plain text extraction
+| Function                   | Signature                                                | Description                                                        |
+| -------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
+| `parseMarkdown`            | `(text: string) => MarkdownNode`                         | Parses markdown using default parser settings.                     |
+| `parseMarkdownWithOptions` | `(text: string, options: ParserOptions) => MarkdownNode` | Parses markdown with `gfm` and/or `math` flags.                    |
+| `getTextContent`           | `(node: MarkdownNode) => string`                         | Concatenates text recursively without layout normalization.        |
+| `getFlattenedText`         | `(node: MarkdownNode) => string`                         | Returns normalized plain text with paragraph and block separators. |
 
-If you are already using the `Markdown` component, you can get the plain text during parse.
+### Parser Options
 
-```tsx
-<Markdown
-  onParseComplete={(result) => {
-    console.log(result.text);
-  }}
->
-  {content}
-</Markdown>
+```ts
+type ParserOptions = {
+  gfm?: boolean;
+  math?: boolean;
+};
 ```
 
-### 9) Tables, images, and math
+## Custom Renderer API
 
-- Tables are rendered with a horizontal scroll view and measured column widths.
-- Images use React Native `Image` and try to preserve the real aspect ratio.
-- Math nodes render with `react-native-mathjax-svg` if installed; otherwise they fall back to a code-style look.
+## `renderers` prop contract
 
----
+`CustomRenderers` is:
 
-## Common Recipes
+```ts
+type CustomRenderers = Partial<Record<MarkdownNode["type"], CustomRenderer>>;
+```
 
-### Open links with custom behavior
+`CustomRenderer` receives `EnhancedRendererProps` and returns:
+
+- React node to override default rendering
+- `undefined` to fallback to built-in renderer
+- `null` to render nothing
+
+`EnhancedRendererProps` always includes:
+
+- `node`: current `MarkdownNode`
+- `children`: pre-rendered node children
+- `Renderer`: recursive renderer component for nested custom rendering
+
+And conditionally includes mapped fields by node type:
+
+| Node type        | Extra mapped fields   |
+| ---------------- | --------------------- |
+| `heading`        | `level`               |
+| `link`           | `href`, `title`       |
+| `image`          | `url`, `alt`, `title` |
+| `code_block`     | `content`, `language` |
+| `code_inline`    | `content`             |
+| `list`           | `ordered`, `start`    |
+| `task_list_item` | `checked`             |
+
+### Example: Custom heading + code block
 
 ```tsx
-import { Markdown, type LinkRendererProps } from "react-native-nitro-markdown";
-import { Text, Linking } from "react-native";
+import {
+  Markdown,
+  type HeadingRendererProps,
+  type CodeBlockRendererProps,
+} from "react-native-nitro-markdown";
 
 const renderers = {
-  link: ({ href, children }: LinkRendererProps) => (
-    <Text
-      style={{ textDecorationLine: "underline" }}
-      onPress={async () => {
-        if (href && (await Linking.canOpenURL(href))) {
-          Linking.openURL(href);
-        }
-      }}
-    >
-      {children}
-    </Text>
+  heading: ({ level, children }: HeadingRendererProps) => (
+    <MyHeading level={level}>{children}</MyHeading>
+  ),
+  code_block: ({ language, content }: CodeBlockRendererProps) => (
+    <MyCode language={language} content={content} />
   ),
 };
 
 <Markdown renderers={renderers}>{content}</Markdown>;
 ```
 
-### Custom image renderer (placeholder + fixed height)
+## Link Handling Behavior
+
+Default link renderer behavior:
+
+1. Trims incoming href.
+2. Calls `onLinkPress(href)` if provided.
+3. Stops if handler returns `false`.
+4. Allows only protocol-based links with these schemes:
+   - `http:`
+   - `https:`
+   - `mailto:`
+   - `tel:`
+   - `sms:`
+5. Uses `Linking.canOpenURL` before `Linking.openURL`.
+
+Relative URLs and anchors are ignored by default open behavior, but you can handle them in `onLinkPress`.
+
+## Theme API
+
+## `MarkdownTheme`
 
 ```tsx
-import { Markdown, type ImageRendererProps } from "react-native-nitro-markdown";
-import { View, Image, Text } from "react-native";
-
-const renderers = {
-  image: ({ url, title, alt }: ImageRendererProps) => (
-    <View>
-      <Image source={{ uri: url }} style={{ height: 220, borderRadius: 12 }} />
-      {(title || alt) && (
-        <Text style={{ marginTop: 6, opacity: 0.6 }}>{title || alt}</Text>
-      )}
-    </View>
-  ),
-};
+import type {
+  MarkdownTheme,
+  PartialMarkdownTheme,
+} from "react-native-nitro-markdown";
 ```
 
-### Render HTML nodes as code (opt-in)
+`MarkdownTheme` fields:
+
+- `colors`
+  - `text`, `textMuted`, `heading`, `link`, `code`, `codeBackground`, `codeLanguage`
+  - `blockquote`, `border`, `surface`, `surfaceLight`, `accent`
+  - `tableBorder`, `tableHeader`, `tableHeaderText`, `tableRowEven`, `tableRowOdd`
+- `spacing`: `xs`, `s`, `m`, `l`, `xl`
+- `fontSizes`: `xs`, `s`, `m`, `l`, `xl`, `h1`, `h2`, `h3`, `h4`, `h5`, `h6`
+- `fontFamilies`: `regular`, `heading`, `mono`
+- `headingWeight?`
+- `borderRadius`: `s`, `m`, `l`
+- `showCodeLanguage`
+
+Helpers:
+
+- `defaultMarkdownTheme`
+- `minimalMarkdownTheme`
+- `mergeThemes(base, partial)`
+
+`NodeStyleOverrides` lets you override per-node styles:
+
+```ts
+type NodeStyleOverrides = Partial<
+  Record<MarkdownNode["type"], ViewStyle | TextStyle>
+>;
+```
+
+## Built-in Renderer Components
+
+Use these when composing custom renderer maps.
+
+| Component        | Key props                                        |
+| ---------------- | ------------------------------------------------ |
+| `Heading`        | `level`, `children`, `style`                     |
+| `Paragraph`      | `children`, `inListItem`, `style`                |
+| `Link`           | `href`, `children`, `style`                      |
+| `Blockquote`     | `children`, `style`                              |
+| `HorizontalRule` | `style`                                          |
+| `CodeBlock`      | `language`, `content`, `node`, `style`           |
+| `InlineCode`     | `content`, `node`, `children`, `style`           |
+| `List`           | `ordered`, `start`, `depth`, `children`, `style` |
+| `ListItem`       | `children`, `index`, `ordered`, `start`, `style` |
+| `TaskListItem`   | `children`, `checked`, `style`                   |
+| `TableRenderer`  | `node`, `Renderer`, `style`                      |
+| `Image`          | `url`, `title`, `alt`, `Renderer`, `style`       |
+| `MathInline`     | `content`, `style`                               |
+| `MathBlock`      | `content`, `style`                               |
+
+## Supported AST Node Types
+
+`document`, `heading`, `paragraph`, `text`, `bold`, `italic`, `strikethrough`, `link`, `image`, `code_inline`, `code_block`, `blockquote`, `horizontal_rule`, `line_break`, `soft_break`, `table`, `table_head`, `table_body`, `table_row`, `table_cell`, `list`, `list_item`, `task_list_item`, `math_inline`, `math_block`, `html_block`, `html_inline`
+
+Notes:
+
+- `html_inline` and `html_block` are parsed but not rendered by default.
+- Table internals (`table_head`, `table_body`, `table_row`, `table_cell`) are renderer internals; override `table` for custom table UI.
+
+## Recipes
+
+### Intercept links with `onLinkPress`
 
 ```tsx
-import { Markdown, CodeBlock, InlineCode } from "react-native-nitro-markdown";
+import { Markdown } from "react-native-nitro-markdown";
 
-const renderers = {
-  html_block: ({ node }) => <CodeBlock content={node.content ?? \"\"} />,
-  html_inline: ({ node }) => <InlineCode content={node.content ?? \"\"} />,
-};
+<Markdown
+  onLinkPress={(href) => {
+    if (href.startsWith("/")) {
+      router.push(href);
+      return false;
+    }
+  }}
+>
+  {content}
+</Markdown>;
 ```
 
-### Minimal styling + custom palette
+### Use headless mode to build search index
+
+```tsx
+import {
+  parseMarkdown,
+  getFlattenedText,
+} from "react-native-nitro-markdown/headless";
+
+const ast = parseMarkdown(content);
+const searchableText = getFlattenedText(ast);
+```
+
+### Minimal styling baseline
 
 ```tsx
 import { Markdown } from "react-native-nitro-markdown";
 
 <Markdown
   stylingStrategy="minimal"
-  theme={{ colors: { text: "#e2e8f0", link: "#38bdf8" } }}
+  theme={{
+    colors: {
+      text: "#0f172a",
+      link: "#1d4ed8",
+    },
+  }}
 >
   {content}
 </Markdown>;
 ```
 
-### Build a search index (headless)
+## Performance Guidance
 
-```tsx
-import { parseMarkdown, getFlattenedText } from "react-native-nitro-markdown/headless";
-
-const ast = parseMarkdown(content);
-const plainText = getFlattenedText(ast);
-```
-
----
-
-## API Reference
-
-### Markdown component
-
-```tsx
-import { Markdown } from "react-native-nitro-markdown";
-```
-
-Props:
-
-| Prop | Type | Default | Description |
-| --- | --- | --- | --- |
-| `children` | `string` | required | Markdown string to parse and render |
-| `options` | `{ gfm?: boolean; math?: boolean }` | `undefined` | Parser options |
-| `renderers` | `CustomRenderers` | `{}` | Custom renderers by node type |
-| `theme` | `PartialMarkdownTheme` | `defaultMarkdownTheme` | Theme token overrides |
-| `styles` | `NodeStyleOverrides` | `undefined` | Per-node style overrides |
-| `stylingStrategy` | `"opinionated" \| "minimal"` | `"opinionated"` | Styling baseline |
-| `style` | `StyleProp<ViewStyle>` | `undefined` | Container style |
-| `onParsingInProgress` | `() => void` | `undefined` | Called when parsing starts |
-| `onParseComplete` | `(result) => void` | `undefined` | Called with `{ raw, ast, text }` |
-
-### MarkdownStream
-
-```tsx
-import { MarkdownStream } from "react-native-nitro-markdown";
-```
-
-Props (in addition to all `Markdown` props except `children`):
-
-| Prop | Type | Default | Description |
-| --- | --- | --- | --- |
-| `session` | `MarkdownSession` | required | Active session for streaming text |
-| `updateIntervalMs` | `number` | `50` | Throttle interval for updates |
-| `updateStrategy` | `"interval" \| "raf"` | `"interval"` | Update strategy |
-| `useTransitionUpdates` | `boolean` | `false` | Use React transitions |
-
-### Hooks and sessions
-
-```tsx
-import { useMarkdownSession, createMarkdownSession, useStream } from "react-native-nitro-markdown";
-```
-
-- `useMarkdownSession()` returns a managed session and helpers: `getSession`, `setIsStreaming`, `stop`, `clear`, `setHighlight`.
-- `createMarkdownSession()` creates a session without React hooks.
-- `useStream(timestamps)` adds a simple sync helper for time-based streaming.
-
-### Headless API
-
-```tsx
-import { parseMarkdown, parseMarkdownWithOptions, getTextContent, getFlattenedText } from "react-native-nitro-markdown/headless";
-```
-
-### Theme utilities
-
-```tsx
-import {
-  defaultMarkdownTheme,
-  minimalMarkdownTheme,
-  mergeThemes,
-} from "react-native-nitro-markdown";
-```
-
-### Types
-
-```tsx
-import type {
-  CustomRenderers,
-  NodeStyleOverrides,
-  MarkdownTheme,
-  PartialMarkdownTheme,
-} from "react-native-nitro-markdown";
-```
-
----
-
-## Supported Node Types
-
-You can customize any of these node types with `renderers` or `styles`.
-
-`document`, `heading`, `paragraph`, `text`, `bold`, `italic`, `strikethrough`, `link`, `image`, `code_inline`, `code_block`, `blockquote`, `horizontal_rule`, `line_break`, `soft_break`, `table`, `table_head`, `table_body`, `table_row`, `table_cell`, `list`, `list_item`, `task_list_item`, `math_inline`, `math_block`, `html_block`, `html_inline`
-
-Note: `html_inline` and `html_block` are parsed but not rendered by default.
-
----
-
-## AST Shape
-
-The headless API returns a typed AST. This is the core shape used by the renderer.
-
-```ts
-export interface MarkdownNode {
-  type:
-    | "document"
-    | "heading"
-    | "paragraph"
-    | "text"
-    | "bold"
-    | "italic"
-    | "strikethrough"
-    | "link"
-    | "image"
-    | "code_inline"
-    | "code_block"
-    | "blockquote"
-    | "horizontal_rule"
-    | "line_break"
-    | "soft_break"
-    | "table"
-    | "table_head"
-    | "table_body"
-    | "table_row"
-    | "table_cell"
-    | "list"
-    | "list_item"
-    | "task_list_item"
-    | "math_inline"
-    | "math_block"
-    | "html_block"
-    | "html_inline";
-  content?: string;
-  children?: MarkdownNode[];
-  level?: number;
-  href?: string;
-  title?: string;
-  alt?: string;
-  language?: string;
-  ordered?: boolean;
-  start?: number;
-  checked?: boolean;
-  align?: string;
-  isHeader?: boolean;
-}
-```
-
----
+- For streaming text, prefer `updateStrategy="raf"`.
+- If you use interval strategy, `updateIntervalMs` between `50` and `100` is a good baseline.
+- Batch `session.append(...)` calls instead of appending one character at a time.
+- Use the headless API if you do not need built-in renderers.
 
 ## Troubleshooting
 
-- Math renders as plain text: install `react-native-mathjax-svg` and `react-native-svg`.
-- iOS build errors: run `pod install` after installing dependencies.
-- Expo: you must use a development build (`expo prebuild` + `expo run`), not Expo Go.
-- Android heading font looks wrong: set `headingWeight: "normal"` when your font has no bold variant.
-
----
+- Math appears as plain code-style fallback:
+  - Install `react-native-mathjax-svg` and `react-native-svg`.
+- iOS native build issues after install:
+  - Run `pod install` in your iOS project.
+- Expo app does not load native module:
+  - Use a development build (`expo prebuild` + `expo run`), not Expo Go.
+- Android heading font weight looks wrong:
+  - Set `theme.headingWeight` explicitly (for custom fonts without bold variants, use `"normal"`).
 
 ## Contributing
 
-See `CONTRIBUTING.md` for the workflow and development commands.
+See `/Users/jota/Workspace/Projects/RN-Packages/react-native-nitro-markdown/CONTRIBUTING.md`.
 
 ## License
 

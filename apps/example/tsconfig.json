@@ -5,9 +5,10 @@
     "skipLibCheck": true,
     "types": ["react", "react-native", "node"],
     "paths": {
-      "react-native-nitro-markdown": ["../../packages/react-native-nitro-markdown/src"]
+      "react-native-nitro-markdown": [
+        "../../packages/react-native-nitro-markdown/src"
+      ]
     }
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
 }
-

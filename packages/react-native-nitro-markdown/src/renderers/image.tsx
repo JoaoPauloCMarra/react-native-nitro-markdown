@@ -1,6 +1,5 @@
 import {
   useState,
-  useEffect,
   useLayoutEffect,
   useMemo,
   type ReactNode,
@@ -15,10 +14,9 @@ import {
   Platform,
   type ViewStyle,
 } from "react-native";
-
 import { parseMarkdownWithOptions, type MarkdownNode } from "../headless";
-import type { NodeRendererProps } from "../MarkdownContext";
 import { useMarkdownContext } from "../MarkdownContext";
+import type { NodeRendererProps } from "../MarkdownContext";
 
 const renderInlineContent = (
   node: MarkdownNode,
@@ -36,13 +34,13 @@ const renderInlineContent = (
   return null;
 };
 
-interface ImageProps {
+type ImageProps = {
   url: string;
   title?: string;
   alt?: string;
   Renderer?: ComponentType<NodeRendererProps>;
   style?: ViewStyle;
-}
+};
 
 export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
   const [loading, setLoading] = useState(true);
@@ -187,22 +185,26 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
 
   return (
     <View style={[styles.imageContainer, style]}>
-      {loading && !aspectRatio && (
+      {loading && !aspectRatio ? (
         <View style={styles.imageLoading}>
           <Text style={styles.imageLoadingText}>Loading image...</Text>
         </View>
-      )}
+      ) : null}
       <RNImage
         source={{ uri: url }}
         style={[styles.image, loading && !aspectRatio && styles.imageHidden]}
         resizeMode="contain"
-        onLoad={() => setLoading(false)}
+        onLoad={() => {
+          setLoading(false);
+        }}
         onError={() => {
           setLoading(false);
           setError(true);
         }}
       />
-      {title && !loading && <Text style={styles.imageCaption}>{title}</Text>}
+      {title && !loading ? (
+        <Text style={styles.imageCaption}>{title}</Text>
+      ) : null}
     </View>
   );
 };

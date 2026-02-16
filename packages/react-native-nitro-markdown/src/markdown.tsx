@@ -1,13 +1,11 @@
 import {
-  defaultMarkdownTheme,
-  minimalMarkdownTheme,
-  mergeThemes,
-  type MarkdownTheme,
-  type PartialMarkdownTheme,
-  type NodeStyleOverrides,
-  type StylingStrategy,
-} from "./theme";
-import { useMemo, type ReactNode, type FC, Fragment } from "react";
+  useEffect,
+  useMemo,
+  type FC,
+  Fragment,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import {
   StyleSheet,
   View,
@@ -28,21 +26,32 @@ import {
   MarkdownContext,
   useMarkdownContext,
   type CustomRenderers,
+  type LinkPressHandler,
   type NodeRendererProps,
 } from "./MarkdownContext";
-
-import { Heading } from "./renderers/heading";
-import { Paragraph } from "./renderers/paragraph";
-import { Link } from "./renderers/link";
 import { Blockquote } from "./renderers/blockquote";
-import { HorizontalRule } from "./renderers/horizontal-rule";
 import { CodeBlock, InlineCode } from "./renderers/code";
-import { List, ListItem, TaskListItem } from "./renderers/list";
-import { TableRenderer } from "./renderers/table";
+import { Heading } from "./renderers/heading";
+import { HorizontalRule } from "./renderers/horizontal-rule";
 import { Image } from "./renderers/image";
+import { Link } from "./renderers/link";
+import { List, ListItem, TaskListItem } from "./renderers/list";
 import { MathInline, MathBlock } from "./renderers/math";
+import { Paragraph } from "./renderers/paragraph";
+import { TableRenderer } from "./renderers/table";
+import {
+  defaultMarkdownTheme,
+  minimalMarkdownTheme,
+  mergeThemes,
+  type MarkdownTheme,
+  type PartialMarkdownTheme,
+  type NodeStyleOverrides,
+  type StylingStrategy,
+} from "./theme";
 
-export interface MarkdownProps {
+const baseStylesCache = new WeakMap<MarkdownTheme, BaseStyles>();
+
+export type MarkdownProps = {
   /**
    * The markdown string to parse and render.
    */
@@ -93,7 +102,12 @@ export interface MarkdownProps {
    * Optional style for the container view.
    */
   style?: StyleProp<ViewStyle>;
-}
+  /**
+   * Optional link press handler.
+   * Return false to prevent the default openURL behavior.
+   */
+  onLinkPress?: LinkPressHandler;
+};
 
 export const Markdown: FC<MarkdownProps> = ({
   children,
@@ -105,34 +119,42 @@ export const Markdown: FC<MarkdownProps> = ({
   style,
   onParsingInProgress,
   onParseComplete,
+  onLinkPress,
 }) => {
-  const ast = useMemo(() => {
+  const parseResult = useMemo(() => {
     try {
-      if (onParsingInProgress) {
-        onParsingInProgress();
-      }
-
-      let result: MarkdownNode;
+      let ast: MarkdownNode;
       if (options) {
-        result = parseMarkdownWithOptions(children, options);
+        ast = parseMarkdownWithOptions(children, options);
       } else {
-        result = parseMarkdown(children);
+        ast = parseMarkdown(children);
       }
 
-      if (onParseComplete) {
-        onParseComplete({
-          raw: children,
-          ast: result,
-          text: getFlattenedText(result),
-        });
-      }
-
-      return result;
-    } catch (error) {
-      console.error("Failed to parse markdown:", error);
-      return null;
+      return {
+        ast,
+        text: getFlattenedText(ast),
+      };
+    } catch {
+      return {
+        ast: null,
+        text: "",
+      };
     }
-  }, [children, options, onParsingInProgress, onParseComplete]);
+  }, [children, options]);
+
+  useEffect(() => {
+    onParsingInProgress?.();
+  }, [children, options, onParsingInProgress]);
+
+  useEffect(() => {
+    if (!parseResult.ast) return;
+
+    onParseComplete?.({
+      raw: children,
+      ast: parseResult.ast,
+      text: parseResult.text,
+    });
+  }, [children, onParseComplete, parseResult.ast, parseResult.text]);
 
   const theme = useMemo(() => {
     const base =
@@ -142,9 +164,9 @@ export const Markdown: FC<MarkdownProps> = ({
     return mergeThemes(base, userTheme);
   }, [userTheme, stylingStrategy]);
 
-  const baseStyles = useMemo(() => createBaseStyles(theme), [theme]);
+  const baseStyles = getBaseStyles(theme);
 
-  if (!ast) {
+  if (!parseResult.ast) {
     return (
       <View style={[baseStyles.container, style]}>
         <Text style={baseStyles.errorText}>Error parsing markdown</Text>
@@ -154,10 +176,16 @@ export const Markdown: FC<MarkdownProps> = ({
 
   return (
     <MarkdownContext.Provider
-      value={{ renderers, theme, styles: nodeStyles, stylingStrategy }}
+      value={{
+        renderers,
+        theme,
+        styles: nodeStyles,
+        stylingStrategy,
+        onLinkPress,
+      }}
     >
       <View style={[baseStyles.container, style]}>
-        <NodeRenderer node={ast} depth={0} inListItem={false} />
+        <NodeRenderer node={parseResult.ast} depth={0} inListItem={false} />
       </View>
     </MarkdownContext.Provider>
   );
@@ -185,7 +213,7 @@ const NodeRenderer: FC<NodeRendererProps> = ({
   parentIsText = false,
 }) => {
   const { renderers, theme, styles: nodeStyles } = useMarkdownContext();
-  const baseStyles = useMemo(() => createBaseStyles(theme), [theme]);
+  const baseStyles = getBaseStyles(theme);
 
   const renderChildren = (
     children?: MarkdownNode[],
@@ -308,7 +336,9 @@ const NodeRenderer: FC<NodeRendererProps> = ({
     };
 
     const result = customRenderer(enhancedProps);
-    if (result !== undefined) return <>{result}</>;
+    if (result !== undefined) {
+      return result as ReactElement | null;
+    }
   }
 
   const nodeStyleOverride = nodeStyles?.[node.type];
@@ -489,6 +519,17 @@ const NodeRenderer: FC<NodeRendererProps> = ({
     default:
       return null;
   }
+};
+
+type BaseStyles = ReturnType<typeof createBaseStyles>;
+
+const getBaseStyles = (theme: MarkdownTheme): BaseStyles => {
+  const cached = baseStylesCache.get(theme);
+  if (cached) return cached;
+
+  const created = createBaseStyles(theme);
+  baseStylesCache.set(theme, created);
+  return created;
 };
 
 const createBaseStyles = (theme: MarkdownTheme) =>

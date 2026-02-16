@@ -1,14 +1,8 @@
-import {
-  useState,
-  useEffect,
-  useRef,
-  startTransition,
-  type FC,
-} from "react";
+import { useState, useEffect, useRef, startTransition, type FC } from "react";
 import { Markdown, type MarkdownProps } from "./markdown";
 import type { MarkdownSession } from "./specs/MarkdownSession.nitro";
 
-export interface MarkdownStreamProps extends Omit<MarkdownProps, "children"> {
+export type MarkdownStreamProps = {
   /**
    * The active MarkdownSession to stream content from.
    */
@@ -29,7 +23,7 @@ export interface MarkdownStreamProps extends Omit<MarkdownProps, "children"> {
    * Useful when you want to prioritize user interactions over stream renders.
    */
   useTransitionUpdates?: boolean;
-}
+} & Omit<MarkdownProps, "children">;
 
 /**
  * A component that renders streaming Markdown from a MarkdownSession.
@@ -68,7 +62,9 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
       lastEmittedRef.current = latest;
 
       if (useTransitionUpdates) {
-        startTransition(() => setText(latest));
+        startTransition(() => {
+          setText(latest);
+        });
       } else {
         setText(latest);
       }

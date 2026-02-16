@@ -1,8 +1,4 @@
-import {
-  parseMarkdown,
-  parseMarkdownWithOptions,
-  MarkdownNode,
-} from "../index";
+import { parseMarkdown, parseMarkdownWithOptions } from "../index";
 
 describe("safety and error handling", () => {
   beforeEach(() => {

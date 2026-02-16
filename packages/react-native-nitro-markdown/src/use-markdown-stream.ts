@@ -1,5 +1,10 @@
 import { useRef, useCallback, useState, useEffect } from "react";
 import { createMarkdownSession } from "./MarkdownSession";
+import {
+  createTimestampTimeline,
+  resolveHighlightPosition,
+  type TimestampTimeline,
+} from "./utils/stream-timeline";
 
 export type MarkdownSession = ReturnType<typeof createMarkdownSession>;
 
@@ -46,32 +51,33 @@ export function useMarkdownSession() {
 
 export function useStream(timestamps?: Record<number, number>) {
   const engine = useMarkdownSession();
+  const { setHighlight } = engine;
   const [isPlaying, setIsPlaying] = useState(false);
+  const timelineRef = useRef<TimestampTimeline>({
+    entries: [],
+    monotonic: true,
+  });
+  const lastHighlightRef = useRef<number>(-1);
 
-  const sortedKeys = useRef<number[]>([]);
   useEffect(() => {
-    if (timestamps) {
-      sortedKeys.current = Object.keys(timestamps)
-        .map(Number)
-        .sort((a, b) => a - b);
-    }
+    timelineRef.current = createTimestampTimeline(timestamps);
+    lastHighlightRef.current = -1;
   }, [timestamps]);
 
   const sync = useCallback(
     (currentTimeMs: number) => {
       if (!timestamps) return;
 
-      let wordIdx = 0;
-      for (const idx of sortedKeys.current) {
-        if (currentTimeMs >= timestamps[idx]) {
-          wordIdx = idx + 1;
-        } else {
-          break;
-        }
-      }
-      engine.setHighlight(wordIdx);
+      const nextHighlight = resolveHighlightPosition(
+        timelineRef.current,
+        currentTimeMs,
+      );
+      if (nextHighlight === lastHighlightRef.current) return;
+
+      lastHighlightRef.current = nextHighlight;
+      setHighlight(nextHighlight);
     },
-    [timestamps, engine]
+    [setHighlight, timestamps],
   );
 
   return {

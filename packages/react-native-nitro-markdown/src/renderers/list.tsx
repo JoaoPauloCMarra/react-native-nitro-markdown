@@ -1,14 +1,14 @@
-import { ReactNode, useMemo, type FC } from "react";
+import { useMemo, type FC, type ReactNode } from "react";
 import { View, Text, StyleSheet, Platform, type ViewStyle } from "react-native";
 import { useMarkdownContext } from "../MarkdownContext";
 
-interface ListProps {
+type ListProps = {
   ordered: boolean;
   start?: number;
   depth: number;
   children: ReactNode;
   style?: ViewStyle;
-}
+};
 
 export const List: FC<ListProps> = ({ depth, children, style }) => {
   const { theme } = useMarkdownContext();
@@ -32,13 +32,13 @@ export const List: FC<ListProps> = ({ depth, children, style }) => {
   );
 };
 
-interface ListItemProps {
+type ListItemProps = {
   children: ReactNode;
   index: number;
   ordered: boolean;
   start: number;
   style?: ViewStyle;
-}
+};
 
 export const ListItem: FC<ListItemProps> = ({
   children,
@@ -82,11 +82,11 @@ export const ListItem: FC<ListItemProps> = ({
   );
 };
 
-interface TaskListItemProps {
+type TaskListItemProps = {
   children: ReactNode;
   checked: boolean;
   style?: ViewStyle;
-}
+};
 
 export const TaskListItem: FC<TaskListItemProps> = ({
   children,
@@ -134,12 +134,9 @@ export const TaskListItem: FC<TaskListItemProps> = ({
   return (
     <View style={[styles.taskListItem, style]}>
       <View
-        style={[
-          styles.taskCheckbox,
-          checked && styles.taskCheckboxChecked,
-        ]}
+        style={[styles.taskCheckbox, checked && styles.taskCheckboxChecked]}
       >
-        {checked && <Text style={styles.taskCheckboxText}>✓</Text>}
+        {checked ? <Text style={styles.taskCheckboxText}>✓</Text> : null}
       </View>
       <View style={styles.taskContent}>{children}</View>
     </View>

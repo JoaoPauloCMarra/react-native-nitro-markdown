@@ -1,12 +1,12 @@
-import { ReactNode, useMemo, type FC } from "react";
+import { useMemo, type FC, type ReactNode } from "react";
 import { View, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 import { useMarkdownContext } from "../MarkdownContext";
 
-interface ParagraphProps {
+type ParagraphProps = {
   children: ReactNode;
   inListItem?: boolean;
   style?: StyleProp<ViewStyle>;
-}
+};
 
 export const Paragraph: FC<ParagraphProps> = ({
   children,

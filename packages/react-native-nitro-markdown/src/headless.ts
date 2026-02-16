@@ -19,7 +19,7 @@ export type { ParserOptions } from "./Markdown.nitro";
  * Represents a node in the Markdown AST (Abstract Syntax Tree).
  * Each node has a type and optional properties depending on the node type.
  */
-export interface MarkdownNode {
+export type MarkdownNode = {
   /** The type of markdown element this node represents. Used to decide how to render the node. */
   type:
     | "document"
@@ -73,7 +73,7 @@ export interface MarkdownNode {
   align?: string;
   /** Nested child nodes for hierarchical elements like paragraphs, lists, and tables. */
   children?: MarkdownNode[];
-}
+};
 
 export const MarkdownParserModule =
   NitroModules.createHybridObject<MarkdownParser>("MarkdownParser");

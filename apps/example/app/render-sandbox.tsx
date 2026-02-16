@@ -1,27 +1,10 @@
 import { ScrollView, StyleSheet, View } from "react-native";
-import { useRef } from "react";
-import { Markdown, MarkdownNode } from "react-native-nitro-markdown";
+import { Markdown } from "react-native-nitro-markdown";
 import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 import { EXAMPLE_COLORS } from "../theme";
 
 export default function RenderScreen() {
   const tabHeight = useBottomTabHeight();
-  const startTime = useRef<number>(0);
-
-  const onParsingInProgress = () => {
-    startTime.current = performance.now();
-    console.log("Parsing started...");
-  };
-
-  const onParseComplete = (result: {
-    raw: string;
-    ast: MarkdownNode;
-    text: string;
-  }) => {
-    const end = performance.now();
-    const duration = (end - startTime.current).toFixed(2);
-    console.log(`Parsing complete in ${duration}ms`, result.text.trim());
-  };
 
   return (
     <View style={styles.container}>
@@ -34,29 +17,11 @@ export default function RenderScreen() {
         bounces={false}
         showsVerticalScrollIndicator={false}
       >
-        <Markdown
-          options={{ gfm: true, math: true }}
-          onParseComplete={onParseComplete}
-          onParsingInProgress={onParsingInProgress}
-        >
-          {MARKDOWN1}
-        </Markdown>
+        <Markdown options={{ gfm: true, math: true }}>{MARKDOWN1}</Markdown>
         <View style={styles.card} />
-        <Markdown
-          options={{ gfm: true, math: true }}
-          onParseComplete={onParseComplete}
-          onParsingInProgress={onParsingInProgress}
-        >
-          {MARKDOWN2}
-        </Markdown>
+        <Markdown options={{ gfm: true, math: true }}>{MARKDOWN2}</Markdown>
         <View style={styles.card} />
-        <Markdown
-          options={{ gfm: true, math: true }}
-          onParseComplete={onParseComplete}
-          onParsingInProgress={onParsingInProgress}
-        >
-          {MARKDOWN3}
-        </Markdown>
+        <Markdown options={{ gfm: true, math: true }}>{MARKDOWN3}</Markdown>
         <View style={styles.card} />
       </ScrollView>
     </View>

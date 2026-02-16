@@ -38,11 +38,11 @@
     "@types/commonmark": "^0.27.10",
     "@types/markdown-it": "^14.1.2",
     "@types/marked": "^6.0.0",
-    "@types/react": "~19.1.10",
+    "@types/react": "~19.1.17",
     "babel-preset-expo": "~54.0.10",
     "commonmark": "^0.31.2",
-    "markdown-it": "^14.1.0",
-    "marked": "^17.0.1",
+    "markdown-it": "^14.1.1",
+    "marked": "^17.0.2",
     "typescript": "^5.9.3"
   }
 }

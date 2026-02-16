@@ -1,13 +1,10 @@
 import { ScrollView, StyleSheet, View } from "react-native";
-import {
-  Markdown,
-  type NodeStyleOverrides,
-} from "react-native-nitro-markdown";
+import { Markdown, type NodeStyleOverrides } from "react-native-nitro-markdown";
+import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 import {
   COMPLEX_MARKDOWN,
   CUSTOM_RENDER_COMPONENTS,
 } from "../markdown-test-data";
-import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 import { EXAMPLE_COLORS } from "../theme";
 
 /**
@@ -30,7 +27,10 @@ export default function RenderDefaultStylesScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.card}>
-          <Markdown options={{ gfm: true, math: true }} styles={STYLE_OVERRIDES}>
+          <Markdown
+            options={{ gfm: true, math: true }}
+            styles={STYLE_OVERRIDES}
+          >
             {`${CUSTOM_RENDER_COMPONENTS}\n\n${COMPLEX_MARKDOWN}`}
           </Markdown>
         </View>

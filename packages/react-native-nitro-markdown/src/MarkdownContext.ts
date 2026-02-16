@@ -4,28 +4,28 @@ import {
   type ReactNode,
   type ComponentType,
 } from "react";
+import type { MarkdownNode } from "./headless";
 import {
   defaultMarkdownTheme,
   type MarkdownTheme,
   type NodeStyleOverrides,
   type StylingStrategy,
 } from "./theme";
-import type { MarkdownNode } from "./headless";
 
-export interface NodeRendererProps {
+export type NodeRendererProps = {
   node: MarkdownNode;
   depth: number;
   inListItem: boolean;
   parentIsText?: boolean;
-}
+};
 
-export interface BaseCustomRendererProps {
+export type BaseCustomRendererProps = {
   node: MarkdownNode;
   children: ReactNode;
   Renderer: ComponentType<NodeRendererProps>;
-}
+};
 
-export interface EnhancedRendererProps extends BaseCustomRendererProps {
+export type EnhancedRendererProps = {
   level?: 1 | 2 | 3 | 4 | 5 | 6;
   href?: string;
   title?: string;
@@ -36,63 +36,69 @@ export interface EnhancedRendererProps extends BaseCustomRendererProps {
   ordered?: boolean;
   start?: number;
   checked?: boolean;
-}
+} & BaseCustomRendererProps;
 
-export interface HeadingRendererProps extends BaseCustomRendererProps {
+export type HeadingRendererProps = {
   level: 1 | 2 | 3 | 4 | 5 | 6;
-}
+} & BaseCustomRendererProps;
 
-export interface LinkRendererProps extends BaseCustomRendererProps {
+export type LinkRendererProps = {
   href: string;
   title?: string;
-}
+} & BaseCustomRendererProps;
 
-export interface ImageRendererProps extends BaseCustomRendererProps {
+export type ImageRendererProps = {
   url: string;
   alt?: string;
   title?: string;
-}
+} & BaseCustomRendererProps;
 
-export interface CodeBlockRendererProps extends BaseCustomRendererProps {
+export type CodeBlockRendererProps = {
   content: string;
   language?: string;
-}
+} & BaseCustomRendererProps;
 
-export interface InlineCodeRendererProps extends BaseCustomRendererProps {
+export type InlineCodeRendererProps = {
   content: string;
-}
+} & BaseCustomRendererProps;
 
-export interface ListRendererProps extends BaseCustomRendererProps {
+export type ListRendererProps = {
   ordered: boolean;
   start?: number;
-}
+} & BaseCustomRendererProps;
 
-export interface TaskListItemRendererProps extends BaseCustomRendererProps {
+export type TaskListItemRendererProps = {
   checked: boolean;
-}
+} & BaseCustomRendererProps;
 
-export interface CustomRendererProps extends EnhancedRendererProps {}
+export type CustomRendererProps = {} & EnhancedRendererProps;
+
+export type LinkPressHandler = (
+  href: string,
+) => void | boolean | Promise<void | boolean>;
 
 export type CustomRenderer = (
-  props: EnhancedRendererProps
+  props: EnhancedRendererProps,
 ) => ReactNode | undefined;
 
 export type CustomRenderers = Partial<
   Record<MarkdownNode["type"], CustomRenderer>
 >;
 
-export interface MarkdownContextValue {
+export type MarkdownContextValue = {
   renderers: CustomRenderers;
   theme: MarkdownTheme;
   styles?: NodeStyleOverrides;
   stylingStrategy: StylingStrategy;
-}
+  onLinkPress?: LinkPressHandler;
+};
 
 export const MarkdownContext = createContext<MarkdownContextValue>({
   renderers: {},
   theme: defaultMarkdownTheme,
   styles: undefined,
   stylingStrategy: "opinionated",
+  onLinkPress: undefined,
 });
 
 export const useMarkdownContext = () => useContext(MarkdownContext);

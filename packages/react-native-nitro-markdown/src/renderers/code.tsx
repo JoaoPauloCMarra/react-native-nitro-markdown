@@ -1,4 +1,4 @@
-import { ReactNode, useMemo, type FC } from "react";
+import { useMemo, type FC, type ReactNode } from "react";
 import {
   View,
   Text,
@@ -8,16 +8,16 @@ import {
   type ViewStyle,
   type TextStyle,
 } from "react-native";
+import { getTextContent } from "../headless";
 import { useMarkdownContext } from "../MarkdownContext";
 import type { MarkdownNode } from "../headless";
-import { getTextContent } from "../headless";
 
-interface CodeBlockProps {
+type CodeBlockProps = {
   language?: string;
   content?: string;
   node?: MarkdownNode;
   style?: ViewStyle;
-}
+};
 
 export const CodeBlock: FC<CodeBlockProps> = ({
   language,
@@ -60,14 +60,16 @@ export const CodeBlock: FC<CodeBlockProps> = ({
           ...(Platform.OS === "android" && { includeFontPadding: false }),
         },
       }),
-    [theme]
+    [theme],
   );
 
   const showLanguage = theme.showCodeLanguage && language;
 
   return (
     <View style={[styles.codeBlock, style]}>
-      {showLanguage && <Text style={styles.codeLanguage}>{language}</Text>}
+      {showLanguage ? (
+        <Text style={styles.codeLanguage}>{language}</Text>
+      ) : null}
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <Text style={styles.codeBlockText}>{displayContent}</Text>
       </ScrollView>
@@ -75,12 +77,12 @@ export const CodeBlock: FC<CodeBlockProps> = ({
   );
 };
 
-interface InlineCodeProps {
+type InlineCodeProps = {
   content?: string;
   node?: MarkdownNode;
   children?: ReactNode;
   style?: TextStyle;
-}
+};
 
 export const InlineCode: FC<InlineCodeProps> = ({
   content,
@@ -109,7 +111,7 @@ export const InlineCode: FC<InlineCodeProps> = ({
           ...(Platform.OS === "android" && { includeFontPadding: false }),
         },
       }),
-    [theme]
+    [theme],
   );
   return <Text style={[styles.codeInline, style]}>{displayContent}</Text>;
 };

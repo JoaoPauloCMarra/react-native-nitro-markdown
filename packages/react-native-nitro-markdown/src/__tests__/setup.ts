@@ -15,7 +15,7 @@ function createParagraph(children: MarkdownNode[]): MarkdownNode {
 
 function parseMarkdownMock(
   text: string,
-  options: MockParserOptions = { gfm: true, math: true }
+  options: MockParserOptions = { gfm: true, math: true },
 ): MarkdownNode {
   const root: MarkdownNode = { type: "document", children: [] };
   const lines = text.split("\n");
@@ -207,7 +207,7 @@ function parseMarkdownMock(
     }
     if (paragraphLines.length > 0) {
       root.children!.push(
-        createParagraph(parseInline(paragraphLines.join(" "), options))
+        createParagraph(parseInline(paragraphLines.join(" "), options)),
       );
     }
   }
@@ -230,7 +230,7 @@ function isBlockStart(line: string): boolean {
 
 function parseTable(
   lines: string[],
-  options: MockParserOptions
+  options: MockParserOptions,
 ): MarkdownNode | null {
   if (lines.length < 2) return null;
 
@@ -433,7 +433,7 @@ const createMockAST = (text: string): MarkdownNode => {
 
 const createMockASTWithOptions = (
   text: string,
-  options: MockParserOptions
+  options: MockParserOptions,
 ): MarkdownNode => {
   const root: MarkdownNode = { type: "document", children: [] };
   if (text.length > 1000) {
@@ -451,7 +451,7 @@ const createMockASTWithOptions = (
 const mockParser = {
   parse: jest.fn((text: string) => JSON.stringify(createMockAST(text))),
   parseWithOptions: jest.fn((text: string, options: MockParserOptions) =>
-    JSON.stringify(createMockASTWithOptions(text, options))
+    JSON.stringify(createMockASTWithOptions(text, options)),
   ),
 };
 
