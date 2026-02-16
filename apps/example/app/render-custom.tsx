@@ -14,11 +14,11 @@ import {
   type CustomRendererProps,
   type NodeStyleOverrides,
 } from "react-native-nitro-markdown";
+import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 import {
   COMPLEX_MARKDOWN,
   CUSTOM_RENDER_COMPONENTS,
 } from "../markdown-test-data";
-import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 import { EXAMPLE_COLORS } from "../theme";
 
 /**
@@ -52,7 +52,7 @@ const CustomImage = ({ url = "", title }: EnhancedRendererProps) => (
       style={customStyles.image}
       resizeMode="cover"
     />
-    {title && <Text style={customStyles.imageCaption}>{title}</Text>}
+    {title ? <Text style={customStyles.imageCaption}>{title}</Text> : null}
   </View>
 );
 
@@ -186,11 +186,7 @@ const customStyles = StyleSheet.create({
     borderRadius: 16,
     overflow: "hidden",
     marginVertical: 20,
-    shadowColor: EXAMPLE_COLORS.text,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 5,
+    boxShadow: `0px 4px 10px ${EXAMPLE_COLORS.text}14`,
     borderWidth: 1,
     borderColor: EXAMPLE_COLORS.border,
   },

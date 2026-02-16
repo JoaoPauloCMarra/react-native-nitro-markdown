@@ -7,12 +7,12 @@ import {
   Pressable,
   Platform,
 } from "react-native";
-import { parseMarkdown } from "react-native-nitro-markdown";
-import { COMPLEX_MARKDOWN } from "../markdown-test-data";
 import { Parser } from "commonmark";
 import MarkdownIt from "markdown-it";
 import { marked } from "marked";
+import { parseMarkdown } from "react-native-nitro-markdown";
 import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
+import { COMPLEX_MARKDOWN } from "../markdown-test-data";
 import { EXAMPLE_COLORS } from "../theme";
 
 // Generate a massive string (~237KB) to force the CPU to work
@@ -38,8 +38,8 @@ export default function BenchmarkScreen() {
       // Test data info
       addLog(
         `📊 Testing ${(REPEATED_MARKDOWN.length / 1024).toFixed(
-          1
-        )}KB of complex markdown`
+          1,
+        )}KB of complex markdown`,
       );
       addLog("");
       await wait(100);
@@ -74,9 +74,9 @@ export default function BenchmarkScreen() {
       await wait(100);
 
       // --- 4. BENCHMARK MARKED ---
-      marked.parse("warmup");
+      await marked.parse("warmup");
       const startMarked = global.performance.now();
-      marked.parse(REPEATED_MARKDOWN);
+      await marked.parse(REPEATED_MARKDOWN);
       const endMarked = global.performance.now();
       const markedTime = endMarked - startMarked;
       addLog(`💨 Marked (JS): ${markedTime.toFixed(2)}ms`);
@@ -93,7 +93,6 @@ export default function BenchmarkScreen() {
       addLog(`   vs Markdown-It: ${markdownItSpeedup}x faster`);
       addLog(`   vs Marked: ${markedSpeedup}x faster`);
     } catch (e) {
-      console.error("[Benchmark] Error:", e);
       setError(e instanceof Error ? e.message : "Unknown error");
     }
   };
@@ -143,8 +142,8 @@ export default function BenchmarkScreen() {
           </View>
         ) : (
           <Text style={styles.instructionText}>
-            Tap "Run Benchmark" to compare Nitro against the top 3 JavaScript
-            markdown libraries!
+            Tap &quot;Run Benchmark&quot; to compare Nitro against the top 3
+            JavaScript markdown libraries!
           </Text>
         )}
       </ScrollView>
@@ -194,11 +193,7 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     borderRadius: 16,
     alignItems: "center",
-    shadowColor: EXAMPLE_COLORS.accentDeep,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
+    boxShadow: `0px 4px 10px ${EXAMPLE_COLORS.accentDeep}4d`,
   },
   benchmarkText: {
     color: EXAMPLE_COLORS.surface,

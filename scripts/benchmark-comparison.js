@@ -10,10 +10,9 @@
  * This script demonstrates JS parser performance in Node.js.
  */
 
-const { performance } = require('perf_hooks');
-const { Parser: CommonMarkParser } = require('commonmark');
-const MarkdownIt = require('markdown-it');
-const { marked } = require('marked');
+const { Parser: CommonMarkParser } = require("commonmark");
+const MarkdownIt = require("markdown-it");
+const { marked } = require("marked");
 
 // Complex markdown test data (same as used in the app)
 const COMPLEX_MARKDOWN = `# 🚀 Nitro Markdown Comprehensive Demo
@@ -202,97 +201,117 @@ function benchmarkParser(name, parseFn, warmupFn, iterations = 10) {
 }
 
 function runComparison() {
-  console.log('🚀 JavaScript Markdown Parser Performance Comparison');
-  console.log('====================================================');
-  console.log(`📊 Test payload: ${(REPEATED_MARKDOWN.length / 1024).toFixed(1)} KB of complex markdown\n`);
+  console.log("🚀 JavaScript Markdown Parser Performance Comparison");
+  console.log("====================================================");
+  console.log(
+    `📊 Test payload: ${(REPEATED_MARKDOWN.length / 1024).toFixed(1)} KB of complex markdown\n`,
+  );
 
   // Initialize parsers
   const commonmarkParser = new CommonMarkParser();
   const markdownItParser = new MarkdownIt();
 
   // Benchmark each parser
-  console.log('Running benchmarks (10 iterations each)...\n');
+  console.log("Running benchmarks (10 iterations each)...\n");
 
   const commonmarkResult = benchmarkParser(
-    'CommonMark.js',
+    "CommonMark.js",
     () => commonmarkParser.parse(REPEATED_MARKDOWN),
-    () => commonmarkParser.parse('warmup')
+    () => commonmarkParser.parse("warmup"),
   );
 
   const markdownItResult = benchmarkParser(
-    'Markdown-It',
+    "Markdown-It",
     () => markdownItParser.render(REPEATED_MARKDOWN),
-    () => markdownItParser.render('warmup')
+    () => markdownItParser.render("warmup"),
   );
 
   const markedResult = benchmarkParser(
-    'Marked',
+    "Marked",
     () => marked.parse(REPEATED_MARKDOWN),
-    () => marked.parse('warmup')
+    () => marked.parse("warmup"),
   );
 
   // Display results
-  console.log('📋 BENCHMARK RESULTS:');
-  console.log('=====================\n');
+  console.log("📋 BENCHMARK RESULTS:");
+  console.log("=====================\n");
 
   console.log(`📋 CommonMark.js (Reference Implementation)`);
   console.log(`   Average: ${commonmarkResult.avgTime.toFixed(2)}ms`);
-  console.log(`   Min: ${commonmarkResult.minTime.toFixed(2)}ms | Max: ${commonmarkResult.maxTime.toFixed(2)}ms\n`);
+  console.log(
+    `   Min: ${commonmarkResult.minTime.toFixed(2)}ms | Max: ${commonmarkResult.maxTime.toFixed(2)}ms\n`,
+  );
 
   console.log(`🏗️  Markdown-It (Feature-rich)`);
   console.log(`   Average: ${markdownItResult.avgTime.toFixed(2)}ms`);
-  console.log(`   Min: ${markdownItResult.minTime.toFixed(2)}ms | Max: ${markdownItResult.maxTime.toFixed(2)}ms\n`);
+  console.log(
+    `   Min: ${markdownItResult.minTime.toFixed(2)}ms | Max: ${markdownItResult.maxTime.toFixed(2)}ms\n`,
+  );
 
   console.log(`💨 Marked (Popular & Fast)`);
   console.log(`   Average: ${markedResult.avgTime.toFixed(2)}ms`);
-  console.log(`   Min: ${markedResult.minTime.toFixed(2)}ms | Max: ${markedResult.maxTime.toFixed(2)}ms\n`);
+  console.log(
+    `   Min: ${markedResult.minTime.toFixed(2)}ms | Max: ${markedResult.maxTime.toFixed(2)}ms\n`,
+  );
 
   // Find fastest JS parser
   const jsResults = [
-    { name: 'CommonMark.js', time: commonmarkResult.avgTime },
-    { name: 'Markdown-It', time: markdownItResult.avgTime },
-    { name: 'Marked', time: markedResult.avgTime },
+    { name: "CommonMark.js", time: commonmarkResult.avgTime },
+    { name: "Markdown-It", time: markdownItResult.avgTime },
+    { name: "Marked", time: markedResult.avgTime },
   ];
   jsResults.sort((a, b) => a.time - b.time);
   const fastestJS = jsResults[0];
   const slowestJS = jsResults[jsResults.length - 1];
 
-  console.log('🏆 JAVASCRIPT PARSER RANKING:');
-  console.log('=============================\n');
+  console.log("🏆 JAVASCRIPT PARSER RANKING:");
+  console.log("=============================\n");
   jsResults.forEach((r, i) => {
-    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
+    const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : "🥉";
     console.log(`${medal} ${r.name}: ${r.time.toFixed(2)}ms`);
   });
 
-  console.log('\n📈 COMPARISON WITH NITRO (C++):');
-  console.log('================================\n');
-  console.log('The Nitro C++ implementation using md4c typically achieves:');
-  console.log('• 10-50x faster than pure JavaScript parsers');
-  console.log('• Sub-millisecond parsing for most documents');
-  console.log('• Consistent performance regardless of JS thread load\n');
+  console.log("\n📈 COMPARISON WITH NITRO (C++):");
+  console.log("================================\n");
+  console.log("The Nitro C++ implementation using md4c typically achieves:");
+  console.log("• 10-50x faster than pure JavaScript parsers");
+  console.log("• Sub-millisecond parsing for most documents");
+  console.log("• Consistent performance regardless of JS thread load\n");
 
-  console.log('Run the React Native example app to see real Nitro benchmarks!');
-  console.log('The app compares Nitro directly against these JS parsers.\n');
+  console.log("Run the React Native example app to see real Nitro benchmarks!");
+  console.log("The app compares Nitro directly against these JS parsers.\n");
 
   // Summary table
-  console.log('📊 SUMMARY TABLE:');
-  console.log('=================\n');
-  console.log('| Parser        | Avg Time  | Relative Speed |');
-  console.log('|---------------|-----------|----------------|');
+  console.log("📊 SUMMARY TABLE:");
+  console.log("=================\n");
+  console.log("| Parser        | Avg Time  | Relative Speed |");
+  console.log("|---------------|-----------|----------------|");
   jsResults.forEach((r) => {
     const relative = (r.time / fastestJS.time).toFixed(2);
-    console.log(`| ${r.name.padEnd(13)} | ${r.time.toFixed(2).padStart(7)}ms | ${relative}x ${r.name === fastestJS.name ? '(fastest)' : '         '} |`);
+    console.log(
+      `| ${r.name.padEnd(13)} | ${r.time.toFixed(2).padStart(7)}ms | ${relative}x ${r.name === fastestJS.name ? "(fastest)" : "         "} |`,
+    );
   });
-  console.log('| Nitro (C++)   |   ~1-5ms* | ~10-50x faster |');
-  console.log('\n* Actual Nitro times measured in React Native app\n');
+  console.log("| Nitro (C++)   |   ~1-5ms* | ~10-50x faster |");
+  console.log("\n* Actual Nitro times measured in React Native app\n");
 
-  console.log('💡 KEY INSIGHTS:');
-  console.log('================\n');
-  console.log(`• Fastest JS parser: ${fastestJS.name} (${fastestJS.time.toFixed(2)}ms)`);
-  console.log(`• Slowest JS parser: ${slowestJS.name} (${slowestJS.time.toFixed(2)}ms)`);
-  console.log(`• JS speed spread: ${(slowestJS.time / fastestJS.time).toFixed(1)}x difference`);
-  console.log('• Nitro advantage: Direct C++ execution via JSI, no JS overhead');
-  console.log('• md4c: Highly optimized C parser with zero-copy architecture\n');
+  console.log("💡 KEY INSIGHTS:");
+  console.log("================\n");
+  console.log(
+    `• Fastest JS parser: ${fastestJS.name} (${fastestJS.time.toFixed(2)}ms)`,
+  );
+  console.log(
+    `• Slowest JS parser: ${slowestJS.name} (${slowestJS.time.toFixed(2)}ms)`,
+  );
+  console.log(
+    `• JS speed spread: ${(slowestJS.time / fastestJS.time).toFixed(1)}x difference`,
+  );
+  console.log(
+    "• Nitro advantage: Direct C++ execution via JSI, no JS overhead",
+  );
+  console.log(
+    "• md4c: Highly optimized C parser with zero-copy architecture\n",
+  );
 }
 
 if (require.main === module) {

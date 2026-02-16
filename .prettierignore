@@ -1,0 +1,11 @@
+node_modules
+.turbo
+dist
+build
+lib
+coverage
+android/
+ios/
+packages/*/nitrogen/generated
+packages/*/lib
+bun.lock

@@ -24,4 +24,21 @@ module.exports = [
       "react-native/no-unused-styles": "off",
     },
   },
+  {
+    files: ["scripts/**/*.js", "packages/*/scripts/**/*.js"],
+    languageOptions: {
+      sourceType: "script",
+      globals: {
+        Buffer: "readonly",
+        __dirname: "readonly",
+        console: "readonly",
+        module: "readonly",
+        process: "readonly",
+        require: "readonly",
+      },
+    },
+    rules: {
+      "no-console": "off",
+    },
+  },
 ];

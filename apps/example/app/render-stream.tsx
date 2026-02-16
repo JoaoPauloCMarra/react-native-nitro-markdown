@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useMarkdownSession, MarkdownStream } from "react-native-nitro-markdown";
+import {
+  useMarkdownSession,
+  MarkdownStream,
+} from "react-native-nitro-markdown";
 import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 import { EXAMPLE_COLORS } from "../theme";
 
@@ -123,7 +126,7 @@ export default function TokenStreamScreen() {
   const rawScrollViewRef = useRef<ScrollView>(null);
   const markdownScrollViewRef = useRef<ScrollView>(null);
 
-  const [tick, setTick] = useState(0);
+  const [, setTick] = useState(0);
   useEffect(() => {
     const pendingRef = { current: false };
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -171,9 +174,7 @@ export default function TokenStreamScreen() {
             <Ionicons
               name={isStreamMode ? "pause" : "flash"}
               size={16}
-              color={
-                isStreamMode ? EXAMPLE_COLORS.accent : EXAMPLE_COLORS.text
-              }
+              color={isStreamMode ? EXAMPLE_COLORS.accent : EXAMPLE_COLORS.text}
             />
             <Text style={styles.btnText}>
               {isStreamMode ? "Pause" : streamIndex > 0 ? "Resume" : "Start"}

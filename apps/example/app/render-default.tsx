@@ -1,7 +1,7 @@
 import { ScrollView, StyleSheet, View } from "react-native";
 import { Markdown } from "react-native-nitro-markdown";
-import { COMPLEX_MARKDOWN } from "../markdown-test-data";
 import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
+import { COMPLEX_MARKDOWN } from "../markdown-test-data";
 import { EXAMPLE_COLORS } from "../theme";
 
 export default function RenderScreen() {

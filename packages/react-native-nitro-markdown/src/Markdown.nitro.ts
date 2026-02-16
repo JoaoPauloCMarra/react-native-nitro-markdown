@@ -5,8 +5,10 @@ export interface ParserOptions {
   math?: boolean;
 }
 
-export interface MarkdownParser
-  extends HybridObject<{ ios: "c++"; android: "c++" }> {
+export interface MarkdownParser extends HybridObject<{
+  ios: "c++";
+  android: "c++";
+}> {
   parse(text: string): string;
   parseWithOptions(text: string, options: ParserOptions): string;
 }

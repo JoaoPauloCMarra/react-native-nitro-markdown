@@ -1,8 +1,8 @@
-import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
+import { StyleSheet, View, Platform } from "react-native";
 import { Tabs } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { StyleSheet, View, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 import { EXAMPLE_COLORS } from "../theme";
 
 export default function RootLayout() {
@@ -17,8 +17,7 @@ export default function RootLayout() {
             backgroundColor: EXAMPLE_COLORS.surface,
             borderBottomWidth: 1,
             borderBottomColor: EXAMPLE_COLORS.border,
-            shadowOpacity: 0,
-            elevation: 0,
+            boxShadow: "none",
           },
           headerTintColor: EXAMPLE_COLORS.text,
           headerTitleStyle: {
@@ -56,7 +55,7 @@ export default function RootLayout() {
               ? {
                   title: "Sandbox",
                   tabBarLabel: "Sandbox",
-                  tabBarIcon: ({ color, size }) => (
+                  tabBarIcon: ({ color, size: _size }) => (
                     <Ionicons name="play-circle" size={24} color={color} />
                   ),
                 }
@@ -68,7 +67,7 @@ export default function RootLayout() {
           options={{
             title: "Benchmark",
             tabBarLabel: "Bench",
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ color, size: _size }) => (
               <Ionicons name="speedometer-outline" size={24} color={color} />
             ),
           }}
@@ -78,7 +77,7 @@ export default function RootLayout() {
           options={{
             title: "Standard Markdown",
             tabBarLabel: "Default",
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ color, size: _size }) => (
               <Ionicons name="document-text-outline" size={24} color={color} />
             ),
           }}
@@ -88,7 +87,7 @@ export default function RootLayout() {
           options={{
             title: "Style Overrides",
             tabBarLabel: "Styles",
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ color, size: _size }) => (
               <Ionicons name="color-palette-outline" size={24} color={color} />
             ),
           }}
@@ -98,7 +97,7 @@ export default function RootLayout() {
           options={{
             title: "Custom Components",
             tabBarLabel: "Custom",
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ color, size: _size }) => (
               <Ionicons name="layers-outline" size={24} color={color} />
             ),
           }}
@@ -108,7 +107,7 @@ export default function RootLayout() {
           options={{
             title: "Token Stream",
             tabBarLabel: "Stream",
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ color, size: _size }) => (
               <Ionicons name="flash-outline" size={24} color={color} />
             ),
             header: () => null,

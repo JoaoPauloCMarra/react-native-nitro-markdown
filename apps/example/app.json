@@ -15,11 +15,7 @@
     "android": {
       "package": "com.nitromarkdown.example"
     },
-    "plugins": [
-      "expo-router",
-      "expo-build-properties",
-      "expo-asset"
-    ],
+    "plugins": ["expo-router", "expo-build-properties", "expo-asset"],
     "experiments": {
       "typedRoutes": true
     }

@@ -4,7 +4,9 @@ import {
   type TimestampTimeline,
 } from "../utils/stream-timeline";
 
-const timeline = (entries: TimestampTimeline["entries"]): TimestampTimeline => ({
+const timeline = (
+  entries: TimestampTimeline["entries"],
+): TimestampTimeline => ({
   entries,
   monotonic: true,
 });
@@ -83,4 +85,3 @@ describe("stream timeline utilities", () => {
     });
   });
 });
-
