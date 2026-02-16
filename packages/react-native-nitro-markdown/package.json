@@ -1,6 +1,6 @@
 {
   "name": "react-native-nitro-markdown",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "High-performance Markdown parser for React Native using Nitro Modules and md4c",
   "main": "lib/commonjs/index.js",
   "module": "lib/module/index.js",
