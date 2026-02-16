@@ -223,7 +223,7 @@ export const TableRenderer: FC<TableRendererProps> = ({
           style={styles.tableScroll}
           bounces={false}
         >
-          <View style={styles.table}>
+          <View style={[styles.table, { backgroundColor: style?.backgroundColor ?? theme.colors.surface ?? "#111827" }]}>
             <View style={styles.headerRow}>
               {headers.map((cell, colIndex) => (
                 <View
@@ -253,7 +253,7 @@ export const TableRenderer: FC<TableRendererProps> = ({
                 style={[
                   styles.bodyRow,
                   rowIndex === rows.length - 1 && styles.lastRow,
-                  rowIndex % 2 === 1 && styles.oddRow,
+                  rowIndex % 2 === 0 ? styles.evenRow : styles.oddRow,
                 ]}
               >
                 {row.map((cell, colIndex) => (
@@ -339,7 +339,6 @@ const createTableStyles = (theme: MarkdownTheme) => {
       overflow: "hidden",
       borderWidth: 1,
       borderColor: colors.tableBorder || "#374151",
-      backgroundColor: colors.surface || "#111827",
     },
     headerRow: {
       flexDirection: "row",
@@ -351,6 +350,9 @@ const createTableStyles = (theme: MarkdownTheme) => {
       flexDirection: "row",
       borderBottomWidth: 1,
       borderBottomColor: colors.tableBorder || "#374151",
+    },
+    evenRow: {
+      backgroundColor: colors.tableRowEven || "transparent",
     },
     oddRow: {
       backgroundColor: colors.tableRowOdd || "rgba(255,255,255,0.02)",
