@@ -51,6 +51,13 @@ import {
 
 const baseStylesCache = new WeakMap<MarkdownTheme, BaseStyles>();
 
+/**
+ * A function that receives a parsed MarkdownNode AST and returns
+ * a (possibly modified) AST. May mutate in-place or return a new tree.
+ * Wrap in useCallback to avoid unnecessary re-parses.
+ */
+export type AstTransform = (ast: MarkdownNode) => MarkdownNode;
+
 export type MarkdownProps = {
   /**
    * The markdown string to parse and render.
@@ -60,6 +67,14 @@ export type MarkdownProps = {
    * Parser options to enable GFM or Math support.
    */
   options?: ParserOptions;
+  /**
+   * Optional transform function applied to the parsed AST before rendering.
+   * Receives the parsed MarkdownNode tree and must return a MarkdownNode tree.
+   * The returned tree is what gets rendered and what onParseComplete receives.
+   *
+   * **Important:** Wrap in `useCallback` to avoid re-parsing on every render.
+   */
+  astTransform?: AstTransform;
   /**
    * Callback fired when parsing begins.
    */
@@ -112,6 +127,7 @@ export type MarkdownProps = {
 export const Markdown: FC<MarkdownProps> = ({
   children,
   options,
+  astTransform,
   renderers = {},
   theme: userTheme,
   styles: nodeStyles,
@@ -130,6 +146,10 @@ export const Markdown: FC<MarkdownProps> = ({
         ast = parseMarkdown(children);
       }
 
+      if (astTransform) {
+        ast = astTransform(ast);
+      }
+
       return {
         ast,
         text: getFlattenedText(ast),
@@ -140,7 +160,7 @@ export const Markdown: FC<MarkdownProps> = ({
         text: "",
       };
     }
-  }, [children, options]);
+  }, [children, options, astTransform]);
 
   useEffect(() => {
     onParsingInProgress?.();
