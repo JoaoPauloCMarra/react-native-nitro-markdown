@@ -50,10 +50,12 @@ namespace margelo::nitro::Markdown {
 
     public:
       // Methods
-      virtual void append(const std::string& chunk) = 0;
+      virtual double append(const std::string& chunk) = 0;
       virtual void clear() = 0;
       virtual std::string getAllText() = 0;
-      virtual std::function<void()> addListener(const std::function<void()>& listener) = 0;
+      virtual double getLength() = 0;
+      virtual std::string getTextRange(double from, double to) = 0;
+      virtual std::function<void()> addListener(const std::function<void(double /* from */, double /* to */)>& listener) = 0;
 
     protected:
       // Hybrid Setup

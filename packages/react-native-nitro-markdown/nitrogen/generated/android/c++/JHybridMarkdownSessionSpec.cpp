@@ -13,6 +13,7 @@
 #include <functional>
 #include "JFunc_void.hpp"
 #include <NitroModules/JNICallable.hpp>
+#include "JFunc_void_double_double.hpp"
 
 namespace margelo::nitro::Markdown {
 
@@ -61,9 +62,10 @@ namespace margelo::nitro::Markdown {
   }
 
   // Methods
-  void JHybridMarkdownSessionSpec::append(const std::string& chunk) {
-    static const auto method = javaClassStatic()->getMethod<void(jni::alias_ref<jni::JString> /* chunk */)>("append");
-    method(_javaPart, jni::make_jstring(chunk));
+  double JHybridMarkdownSessionSpec::append(const std::string& chunk) {
+    static const auto method = javaClassStatic()->getMethod<double(jni::alias_ref<jni::JString> /* chunk */)>("append");
+    auto __result = method(_javaPart, jni::make_jstring(chunk));
+    return __result;
   }
   void JHybridMarkdownSessionSpec::clear() {
     static const auto method = javaClassStatic()->getMethod<void()>("clear");
@@ -74,9 +76,19 @@ namespace margelo::nitro::Markdown {
     auto __result = method(_javaPart);
     return __result->toStdString();
   }
-  std::function<void()> JHybridMarkdownSessionSpec::addListener(const std::function<void()>& listener) {
-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JFunc_void::javaobject>(jni::alias_ref<JFunc_void::javaobject> /* listener */)>("addListener_cxx");
-    auto __result = method(_javaPart, JFunc_void_cxx::fromCpp(listener));
+  double JHybridMarkdownSessionSpec::getLength() {
+    static const auto method = javaClassStatic()->getMethod<double()>("getLength");
+    auto __result = method(_javaPart);
+    return __result;
+  }
+  std::string JHybridMarkdownSessionSpec::getTextRange(double from, double to) {
+    static const auto method = javaClassStatic()->getMethod<jni::local_ref<jni::JString>(double /* from */, double /* to */)>("getTextRange");
+    auto __result = method(_javaPart, from, to);
+    return __result->toStdString();
+  }
+  std::function<void()> JHybridMarkdownSessionSpec::addListener(const std::function<void(double /* from */, double /* to */)>& listener) {
+    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JFunc_void::javaobject>(jni::alias_ref<JFunc_void_double_double::javaobject> /* listener */)>("addListener_cxx");
+    auto __result = method(_javaPart, JFunc_void_double_double_cxx::fromCpp(listener));
     return [&]() -> std::function<void()> {
       if (__result->isInstanceOf(JFunc_void_cxx::javaClassStatic())) [[likely]] {
         auto downcast = jni::static_ref_cast<JFunc_void_cxx::javaobject>(__result);

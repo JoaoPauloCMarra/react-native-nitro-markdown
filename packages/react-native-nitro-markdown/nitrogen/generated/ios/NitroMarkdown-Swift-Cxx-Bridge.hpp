@@ -51,6 +51,28 @@ namespace margelo::nitro::Markdown::bridge::swift {
     return Func_void_Wrapper(std::move(value));
   }
   
+  // pragma MARK: std::function<void(double /* from */, double /* to */)>
+  /**
+   * Specialized version of `std::function<void(double, double)>`.
+   */
+  using Func_void_double_double = std::function<void(double /* from */, double /* to */)>;
+  /**
+   * Wrapper class for a `std::function<void(double / * from * /, double / * to * /)>`, this can be used from Swift.
+   */
+  class Func_void_double_double_Wrapper final {
+  public:
+    explicit Func_void_double_double_Wrapper(std::function<void(double /* from */, double /* to */)>&& func): _function(std::make_unique<std::function<void(double /* from */, double /* to */)>>(std::move(func))) {}
+    inline void call(double from, double to) const noexcept {
+      _function->operator()(from, to);
+    }
+  private:
+    std::unique_ptr<std::function<void(double /* from */, double /* to */)>> _function;
+  } SWIFT_NONCOPYABLE;
+  Func_void_double_double create_Func_void_double_double(void* NON_NULL swiftClosureWrapper) noexcept;
+  inline Func_void_double_double_Wrapper wrap_Func_void_double_double(Func_void_double_double value) noexcept {
+    return Func_void_double_double_Wrapper(std::move(value));
+  }
+  
   // pragma MARK: std::shared_ptr<HybridMarkdownSessionSpec>
   /**
    * Specialized version of `std::shared_ptr<HybridMarkdownSessionSpec>`.
@@ -62,6 +84,15 @@ namespace margelo::nitro::Markdown::bridge::swift {
   // pragma MARK: std::weak_ptr<HybridMarkdownSessionSpec>
   using std__weak_ptr_HybridMarkdownSessionSpec_ = std::weak_ptr<HybridMarkdownSessionSpec>;
   inline std__weak_ptr_HybridMarkdownSessionSpec_ weakify_std__shared_ptr_HybridMarkdownSessionSpec_(const std::shared_ptr<HybridMarkdownSessionSpec>& strong) noexcept { return strong; }
+  
+  // pragma MARK: Result<double>
+  using Result_double_ = Result<double>;
+  inline Result_double_ create_Result_double_(double value) noexcept {
+    return Result<double>::withValue(std::move(value));
+  }
+  inline Result_double_ create_Result_double_(const std::exception_ptr& error) noexcept {
+    return Result<double>::withError(error);
+  }
   
   // pragma MARK: Result<void>
   using Result_void_ = Result<void>;

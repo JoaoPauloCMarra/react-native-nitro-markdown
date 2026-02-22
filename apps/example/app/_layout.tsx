@@ -1,45 +1,47 @@
-import { StyleSheet, View, Platform } from "react-native";
+import { StyleSheet, Platform } from "react-native";
 import { Tabs } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 import { EXAMPLE_COLORS } from "../theme";
 
-export default function RootLayout() {
+function RootTabs() {
   const tabBarHeight = useBottomTabHeight();
+  const insets = useSafeAreaInsets();
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView edges={["top"]} style={styles.container}>
       <StatusBar style="dark" />
       <Tabs
         screenOptions={{
-          headerStyle: {
-            backgroundColor: EXAMPLE_COLORS.surface,
-            borderBottomWidth: 1,
-            borderBottomColor: EXAMPLE_COLORS.border,
-            boxShadow: "none",
-          },
-          headerTintColor: EXAMPLE_COLORS.text,
-          headerTitleStyle: {
-            fontSize: 18,
-            fontWeight: "700",
-            fontFamily: Platform.select({
-              ios: "Avenir Next",
-              android: "sans-serif-medium",
-            }),
-          },
+          headerShown: false,
           tabBarStyle: {
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            borderRadius: 0,
+            borderTopLeftRadius: 22,
+            borderTopRightRadius: 22,
+            borderTopWidth: 0,
             backgroundColor: EXAMPLE_COLORS.surface,
-            borderTopColor: EXAMPLE_COLORS.border,
             height: tabBarHeight,
             paddingTop: 8,
-            paddingBottom: Platform.select({ ios: 30, android: 10 }),
+            paddingBottom: insets.bottom + 8,
+            boxShadow: `0px 8px 20px ${EXAMPLE_COLORS.text}24`,
+            borderWidth: 1,
+            borderColor: EXAMPLE_COLORS.border,
           },
           tabBarActiveTintColor: EXAMPLE_COLORS.accent,
           tabBarInactiveTintColor: EXAMPLE_COLORS.textMuted,
           tabBarLabelStyle: {
             fontSize: 11,
-            fontWeight: "600",
+            fontWeight: "700",
             marginTop: 4,
             fontFamily: Platform.select({
               ios: "Avenir Next",
@@ -48,20 +50,6 @@ export default function RootLayout() {
           },
         }}
       >
-        <Tabs.Screen
-          name="render-sandbox"
-          options={
-            ENABLE_SANDBOX_TAB
-              ? {
-                  title: "Sandbox",
-                  tabBarLabel: "Sandbox",
-                  tabBarIcon: ({ color, size: _size }) => (
-                    <Ionicons name="play-circle" size={24} color={color} />
-                  ),
-                }
-              : { href: null, tabBarStyle: { display: "none" } }
-          }
-        />
         <Tabs.Screen
           name="index"
           options={{
@@ -114,7 +102,15 @@ export default function RootLayout() {
           }}
         />
       </Tabs>
-    </View>
+    </SafeAreaView>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <SafeAreaProvider>
+      <RootTabs />
+    </SafeAreaProvider>
   );
 }
 
@@ -124,5 +120,3 @@ const styles = StyleSheet.create({
     backgroundColor: EXAMPLE_COLORS.background,
   },
 });
-
-const ENABLE_SANDBOX_TAB = false;

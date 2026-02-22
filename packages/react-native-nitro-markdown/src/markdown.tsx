@@ -1,4 +1,6 @@
 import {
+  memo,
+  useCallback,
   useEffect,
   useMemo,
   type FC,
@@ -10,7 +12,10 @@ import {
   StyleSheet,
   View,
   Text,
+  FlatList,
   Platform,
+  type ListRenderItemInfo,
+  type FlatListProps,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
@@ -50,6 +55,188 @@ import {
 } from "./theme";
 
 const baseStylesCache = new WeakMap<MarkdownTheme, BaseStyles>();
+const parseAstCache = new Map<string, MarkdownNode>();
+const MAX_PARSE_CACHE_ENTRIES = 32;
+const MAX_CACHEABLE_TEXT_LENGTH = 24_000;
+
+export type AstTransform = (ast: MarkdownNode) => MarkdownNode;
+export type MarkdownVirtualizationOptions = Pick<
+  FlatListProps<MarkdownNode>,
+  | "initialNumToRender"
+  | "maxToRenderPerBatch"
+  | "windowSize"
+  | "updateCellsBatchingPeriod"
+  | "removeClippedSubviews"
+>;
+
+export type MarkdownPlugin = {
+  /**
+   * Optional plugin name used for diagnostics and debugging.
+   */
+  name?: string;
+  /**
+   * Optional plugin version metadata for diagnostics.
+   */
+  version?: string | number;
+  /**
+   * Optional text preprocessor executed before native parsing.
+   * Should return a full markdown string.
+   */
+  beforeParse?: (markdown: string) => string;
+  /**
+   * Optional AST postprocessor executed after native parsing.
+   */
+  afterParse?: AstTransform;
+};
+
+const isMarkdownNode = (value: unknown): value is MarkdownNode => {
+  if (typeof value !== "object" || value === null) return false;
+  return typeof Reflect.get(value, "type") === "string";
+};
+
+const warnInDev = (message: string, error?: unknown): void => {
+  if (typeof __DEV__ === "undefined" || !__DEV__) return;
+
+  const runtimeConsole = Reflect.get(globalThis, "console");
+  if (
+    typeof runtimeConsole === "object" &&
+    runtimeConsole !== null &&
+    "warn" in runtimeConsole &&
+    typeof runtimeConsole.warn === "function"
+  ) {
+    runtimeConsole.warn(message, error);
+  }
+};
+
+const cloneMarkdownNode = (node: MarkdownNode): MarkdownNode => {
+  return {
+    ...node,
+    children: node.children?.map(cloneMarkdownNode),
+  };
+};
+
+const getParserOptionsKey = (options?: ParserOptions): string => {
+  if (!options) return "gfm:default|math:default";
+
+  const gfm = options.gfm === undefined ? "default" : options.gfm ? "1" : "0";
+  const math =
+    options.math === undefined ? "default" : options.math ? "1" : "0";
+  return `gfm:${gfm}|math:${math}`;
+};
+
+const normalizeParserOptions = (
+  options?: ParserOptions,
+): ParserOptions | undefined => {
+  if (!options) return undefined;
+
+  const gfm = options.gfm;
+  const math = options.math;
+
+  if (gfm === undefined && math === undefined) {
+    return undefined;
+  }
+
+  return {
+    gfm,
+    math,
+  };
+};
+
+const parseWithNativeParser = (
+  text: string,
+  options?: ParserOptions,
+): MarkdownNode => {
+  if (options) {
+    return parseMarkdownWithOptions(text, options);
+  }
+  return parseMarkdown(text);
+};
+
+const getCachedParsedAst = (
+  text: string,
+  options?: ParserOptions,
+): MarkdownNode => {
+  if (text.length > MAX_CACHEABLE_TEXT_LENGTH) {
+    return parseWithNativeParser(text, options);
+  }
+
+  const cacheKey = `${getParserOptionsKey(options)}|${text}`;
+  const cachedNode = parseAstCache.get(cacheKey);
+  if (cachedNode) {
+    parseAstCache.delete(cacheKey);
+    parseAstCache.set(cacheKey, cachedNode);
+    return cloneMarkdownNode(cachedNode);
+  }
+
+  const parsedNode = parseWithNativeParser(text, options);
+  parseAstCache.set(cacheKey, parsedNode);
+  if (parseAstCache.size > MAX_PARSE_CACHE_ENTRIES) {
+    const oldestCacheKey = parseAstCache.keys().next().value;
+    if (typeof oldestCacheKey === "string") {
+      parseAstCache.delete(oldestCacheKey);
+    }
+  }
+
+  return cloneMarkdownNode(parsedNode);
+};
+
+const applyBeforeParsePlugins = (
+  markdown: string,
+  plugins?: MarkdownPlugin[],
+): string => {
+  if (!plugins || plugins.length === 0) {
+    return markdown;
+  }
+
+  let nextMarkdown = markdown;
+  for (const plugin of plugins) {
+    if (!plugin.beforeParse) continue;
+
+    try {
+      const transformed = plugin.beforeParse(nextMarkdown);
+      if (typeof transformed === "string") {
+        nextMarkdown = transformed;
+      }
+    } catch (error) {
+      const pluginLabel = plugin.name ? ` (${plugin.name})` : "";
+      warnInDev(
+        `[react-native-nitro-markdown] plugin beforeParse${pluginLabel} threw; using previous markdown.`,
+        error,
+      );
+    }
+  }
+
+  return nextMarkdown;
+};
+
+const applyAfterParsePlugins = (
+  ast: MarkdownNode,
+  plugins?: MarkdownPlugin[],
+): MarkdownNode => {
+  if (!plugins || plugins.length === 0) {
+    return ast;
+  }
+
+  let nextAst = ast;
+  for (const plugin of plugins) {
+    if (!plugin.afterParse) continue;
+
+    try {
+      const transformed = plugin.afterParse(nextAst);
+      if (isMarkdownNode(transformed)) {
+        nextAst = transformed;
+      }
+    } catch (error) {
+      const pluginLabel = plugin.name ? ` (${plugin.name})` : "";
+      warnInDev(
+        `[react-native-nitro-markdown] plugin afterParse${pluginLabel} threw; using previous AST.`,
+        error,
+      );
+    }
+  }
+
+  return nextAst;
+};
 
 export type MarkdownProps = {
   /**
@@ -60,6 +247,20 @@ export type MarkdownProps = {
    * Parser options to enable GFM or Math support.
    */
   options?: ParserOptions;
+  /**
+   * Optional parser plugins for preprocessing and AST postprocessing.
+   */
+  plugins?: MarkdownPlugin[];
+  /**
+   * Optional pre-parsed AST.
+   * When provided, native parse is skipped and this tree is rendered instead.
+   */
+  sourceAst?: MarkdownNode;
+  /**
+   * Optional transform applied after parsing and before rendering.
+   * The transformed AST is also returned in `onParseComplete`.
+   */
+  astTransform?: AstTransform;
   /**
    * Callback fired when parsing begins.
    */
@@ -107,11 +308,31 @@ export type MarkdownProps = {
    * Return false to prevent the default openURL behavior.
    */
   onLinkPress?: LinkPressHandler;
+  /**
+   * Enables top-level block virtualization for very large markdown documents.
+   * Best used when Markdown is the primary scroll container on screen.
+   * - `true`: always virtualize when block threshold is met
+   * - `"auto"`: virtualize only when threshold is met (recommended for large docs)
+   * - `false`: disable virtualization (default)
+   */
+  virtualize?: boolean | "auto";
+  /**
+   * Minimum number of top-level blocks before virtualization is activated.
+   * Helps avoid FlatList overhead on small documents.
+   */
+  virtualizationMinBlocks?: number;
+  /**
+   * Optional FlatList tuning for virtualization.
+   */
+  virtualization?: MarkdownVirtualizationOptions;
 };
 
 export const Markdown: FC<MarkdownProps> = ({
   children,
   options,
+  plugins,
+  sourceAst,
+  astTransform,
   renderers = {},
   theme: userTheme,
   styles: nodeStyles,
@@ -120,41 +341,77 @@ export const Markdown: FC<MarkdownProps> = ({
   onParsingInProgress,
   onParseComplete,
   onLinkPress,
+  virtualize = false,
+  virtualizationMinBlocks = 40,
+  virtualization,
 }) => {
+  const parserOptionGfm = options?.gfm;
+  const parserOptionMath = options?.math;
+
   const parseResult = useMemo(() => {
     try {
-      let ast: MarkdownNode;
-      if (options) {
-        ast = parseMarkdownWithOptions(children, options);
-      } else {
-        ast = parseMarkdown(children);
+      const markdownToParse = applyBeforeParsePlugins(children, plugins);
+      const parserOptions = normalizeParserOptions({
+        gfm: parserOptionGfm,
+        math: parserOptionMath,
+      });
+      let parsedAst = sourceAst
+        ? cloneMarkdownNode(sourceAst)
+        : getCachedParsedAst(markdownToParse, parserOptions);
+      parsedAst = applyAfterParsePlugins(parsedAst, plugins);
+
+      let ast = parsedAst;
+      if (astTransform) {
+        try {
+          const nextAst = astTransform(parsedAst);
+          if (isMarkdownNode(nextAst)) {
+            ast = nextAst;
+          }
+        } catch (error) {
+          warnInDev(
+            "[react-native-nitro-markdown] astTransform threw; falling back to parsed AST.",
+            error,
+          );
+          ast = parsedAst;
+        }
       }
 
       return {
         ast,
-        text: getFlattenedText(ast),
       };
     } catch {
       return {
         ast: null,
-        text: "",
       };
     }
-  }, [children, options]);
+  }, [
+    children,
+    parserOptionGfm,
+    parserOptionMath,
+    plugins,
+    sourceAst,
+    astTransform,
+  ]);
 
   useEffect(() => {
     onParsingInProgress?.();
-  }, [children, options, onParsingInProgress]);
+  }, [
+    children,
+    parserOptionGfm,
+    parserOptionMath,
+    plugins,
+    onParsingInProgress,
+  ]);
 
   useEffect(() => {
-    if (!parseResult.ast) return;
+    if (!parseResult.ast || !onParseComplete) return;
 
-    onParseComplete?.({
+    onParseComplete({
       raw: children,
       ast: parseResult.ast,
-      text: parseResult.text,
+      text: getFlattenedText(parseResult.ast),
     });
-  }, [children, onParseComplete, parseResult.ast, parseResult.text]);
+  }, [children, onParseComplete, parseResult.ast]);
 
   const theme = useMemo(() => {
     const base =
@@ -165,6 +422,41 @@ export const Markdown: FC<MarkdownProps> = ({
   }, [userTheme, stylingStrategy]);
 
   const baseStyles = getBaseStyles(theme);
+  const contextValue = useMemo(
+    () => ({
+      renderers,
+      theme,
+      styles: nodeStyles,
+      stylingStrategy,
+      onLinkPress,
+    }),
+    [renderers, theme, nodeStyles, stylingStrategy, onLinkPress],
+  );
+
+  const topLevelBlocks =
+    parseResult.ast?.type === "document"
+      ? (parseResult.ast.children ?? [])
+      : parseResult.ast
+        ? [parseResult.ast]
+        : [];
+  const shouldVirtualizeBySetting =
+    virtualize === true ||
+    (virtualize === "auto" && topLevelBlocks.length >= virtualizationMinBlocks);
+  const shouldVirtualize =
+    parseResult.ast !== null && shouldVirtualizeBySetting;
+
+  const keyExtractor = useCallback((node: MarkdownNode, index: number) => {
+    const beg = typeof node.beg === "number" ? node.beg : index;
+    const end = typeof node.end === "number" ? node.end : index;
+    return `${node.type}:${beg}:${end}:${index}`;
+  }, []);
+
+  const renderVirtualizedItem = useCallback(
+    ({ item }: ListRenderItemInfo<MarkdownNode>): ReactElement => (
+      <NodeRenderer node={item} depth={0} inListItem={false} />
+    ),
+    [],
+  );
 
   if (!parseResult.ast) {
     return (
@@ -175,17 +467,28 @@ export const Markdown: FC<MarkdownProps> = ({
   }
 
   return (
-    <MarkdownContext.Provider
-      value={{
-        renderers,
-        theme,
-        styles: nodeStyles,
-        stylingStrategy,
-        onLinkPress,
-      }}
-    >
+    <MarkdownContext.Provider value={contextValue}>
       <View style={[baseStyles.container, style]}>
-        <NodeRenderer node={parseResult.ast} depth={0} inListItem={false} />
+        {shouldVirtualize ? (
+          <FlatList
+            data={topLevelBlocks}
+            renderItem={renderVirtualizedItem}
+            keyExtractor={keyExtractor}
+            style={baseStyles.virtualizedList}
+            initialNumToRender={virtualization?.initialNumToRender ?? 12}
+            maxToRenderPerBatch={virtualization?.maxToRenderPerBatch ?? 12}
+            windowSize={virtualization?.windowSize ?? 10}
+            updateCellsBatchingPeriod={
+              virtualization?.updateCellsBatchingPeriod ?? 16
+            }
+            removeClippedSubviews={
+              virtualization?.removeClippedSubviews ?? true
+            }
+            showsVerticalScrollIndicator={false}
+          />
+        ) : (
+          <NodeRenderer node={parseResult.ast} depth={0} inListItem={false} />
+        )}
       </View>
     </MarkdownContext.Provider>
   );
@@ -206,7 +509,7 @@ const isInline = (type: MarkdownNode["type"]): boolean => {
   );
 };
 
-const NodeRenderer: FC<NodeRendererProps> = ({
+const NodeRendererComponent: FC<NodeRendererProps> = ({
   node,
   depth,
   inListItem,
@@ -521,6 +824,15 @@ const NodeRenderer: FC<NodeRendererProps> = ({
   }
 };
 
+const NodeRenderer = memo(NodeRendererComponent, (previousProps, nextProps) => {
+  return (
+    previousProps.node === nextProps.node &&
+    previousProps.depth === nextProps.depth &&
+    previousProps.inListItem === nextProps.inListItem &&
+    previousProps.parentIsText === nextProps.parentIsText
+  );
+}) as FC<NodeRendererProps>;
+
 type BaseStyles = ReturnType<typeof createBaseStyles>;
 
 const getBaseStyles = (theme: MarkdownTheme): BaseStyles => {
@@ -535,6 +847,9 @@ const getBaseStyles = (theme: MarkdownTheme): BaseStyles => {
 const createBaseStyles = (theme: MarkdownTheme) =>
   StyleSheet.create({
     container: {
+      flex: 1,
+    },
+    virtualizedList: {
       flex: 1,
     },
     document: {

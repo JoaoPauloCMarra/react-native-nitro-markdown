@@ -134,13 +134,14 @@ open class HybridMarkdownSessionSpec_cxx {
 
   // Methods
   @inline(__always)
-  public final func append(chunk: std.string) -> bridge.Result_void_ {
+  public final func append(chunk: std.string) -> bridge.Result_double_ {
     do {
-      try self.__implementation.append(chunk: String(chunk))
-      return bridge.create_Result_void_()
+      let __result = try self.__implementation.append(chunk: String(chunk))
+      let __resultCpp = __result
+      return bridge.create_Result_double_(__resultCpp)
     } catch (let __error) {
       let __exceptionPtr = __error.toCpp()
-      return bridge.create_Result_void_(__exceptionPtr)
+      return bridge.create_Result_double_(__exceptionPtr)
     }
   }
   
@@ -168,12 +169,36 @@ open class HybridMarkdownSessionSpec_cxx {
   }
   
   @inline(__always)
-  public final func addListener(listener: bridge.Func_void) -> bridge.Result_std__function_void____ {
+  public final func getLength() -> bridge.Result_double_ {
     do {
-      let __result = try self.__implementation.addListener(listener: { () -> () -> Void in
-        let __wrappedFunction = bridge.wrap_Func_void(listener)
-        return { () -> Void in
-          __wrappedFunction.call()
+      let __result = try self.__implementation.getLength()
+      let __resultCpp = __result
+      return bridge.create_Result_double_(__resultCpp)
+    } catch (let __error) {
+      let __exceptionPtr = __error.toCpp()
+      return bridge.create_Result_double_(__exceptionPtr)
+    }
+  }
+  
+  @inline(__always)
+  public final func getTextRange(from: Double, to: Double) -> bridge.Result_std__string_ {
+    do {
+      let __result = try self.__implementation.getTextRange(from: from, to: to)
+      let __resultCpp = std.string(__result)
+      return bridge.create_Result_std__string_(__resultCpp)
+    } catch (let __error) {
+      let __exceptionPtr = __error.toCpp()
+      return bridge.create_Result_std__string_(__exceptionPtr)
+    }
+  }
+  
+  @inline(__always)
+  public final func addListener(listener: bridge.Func_void_double_double) -> bridge.Result_std__function_void____ {
+    do {
+      let __result = try self.__implementation.addListener(listener: { () -> (Double, Double) -> Void in
+        let __wrappedFunction = bridge.wrap_Func_void_double_double(listener)
+        return { (__from: Double, __to: Double) -> Void in
+          __wrappedFunction.call(__from, __to)
         }
       }())
       let __resultCpp = { () -> bridge.Func_void in

@@ -1,5 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ScrollView,
+  Platform,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
   useMarkdownSession,
@@ -8,8 +15,9 @@ import {
 import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 import { EXAMPLE_COLORS } from "../theme";
 
-const TOKEN_DELAY_MS = 18;
+const TOKEN_DELAY_MS = 150;
 const UI_UPDATE_INTERVAL_MS = 60;
+const CHARS_PER_TICK = 12;
 const DEMO_TEXT = `
 ### 🚀 High-Performance Markdown
 
@@ -73,11 +81,13 @@ export default function TokenStreamScreen() {
   const tabHeight = useBottomTabHeight();
 
   const [isStreamMode, setIsStreamMode] = useState(false);
-  const [streamIndex, setStreamIndex] = useState(0);
+  const [streamOffset, setStreamOffset] = useState(0);
+  const [rawText, setRawText] = useState("");
 
   const session = useMarkdownSession();
   const streamIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const streamIndexRef = useRef(0);
+  const streamOffsetRef = useRef(0);
+  const rawTextRef = useRef(rawText);
 
   const stopStream = useCallback(() => {
     if (streamIntervalRef.current) {
@@ -85,35 +95,45 @@ export default function TokenStreamScreen() {
       streamIntervalRef.current = null;
     }
     setIsStreamMode(false);
-  }, []);
+    setStreamOffset(streamOffsetRef.current);
+    const snapshotText = session.getSession().getAllText();
+    rawTextRef.current = snapshotText;
+    setRawText(snapshotText);
+  }, [session]);
 
   const startStream = useCallback(() => {
     // Reset if starting fresh
-    if (!isStreamMode && streamIndexRef.current === 0) {
+    if (!isStreamMode && streamOffsetRef.current === 0) {
       session.clear();
     }
 
     setIsStreamMode(true);
 
-    const chunks = DEMO_TEXT.split(/(\s+|(?=[#\-*`]))/);
+    if (streamIntervalRef.current) {
+      clearInterval(streamIntervalRef.current);
+    }
 
     streamIntervalRef.current = setInterval(() => {
-      if (streamIndexRef.current >= chunks.length) {
+      const chunk = DEMO_TEXT.slice(
+        streamOffsetRef.current,
+        streamOffsetRef.current + CHARS_PER_TICK,
+      );
+      if (chunk.length === 0) {
         stopStream();
         return;
       }
 
-      const chunk = chunks[streamIndexRef.current];
-      if (chunk) session.getSession().append(chunk);
-      streamIndexRef.current++;
-      setStreamIndex(streamIndexRef.current);
+      session.getSession().append(chunk);
+      streamOffsetRef.current += chunk.length;
     }, TOKEN_DELAY_MS);
   }, [session, stopStream, isStreamMode]);
 
   const clearStream = useCallback(() => {
     stopStream();
-    streamIndexRef.current = 0;
-    setStreamIndex(0);
+    streamOffsetRef.current = 0;
+    setStreamOffset(0);
+    setRawText("");
+    rawTextRef.current = "";
     session.clear();
   }, [stopStream, session]);
 
@@ -125,8 +145,30 @@ export default function TokenStreamScreen() {
 
   const rawScrollViewRef = useRef<ScrollView>(null);
   const markdownScrollViewRef = useRef<ScrollView>(null);
+  const autoScrollFrameRef = useRef<number | null>(null);
 
-  const [, setTick] = useState(0);
+  const scheduleAutoScroll = useCallback(() => {
+    if (autoScrollFrameRef.current !== null) return;
+
+    autoScrollFrameRef.current = requestAnimationFrame(() => {
+      autoScrollFrameRef.current = null;
+      rawScrollViewRef.current?.scrollToEnd({ animated: false });
+      markdownScrollViewRef.current?.scrollToEnd({ animated: false });
+    });
+  }, []);
+
+  useEffect(() => {
+    rawTextRef.current = rawText;
+  }, [rawText]);
+
+  useEffect(() => {
+    return () => {
+      if (autoScrollFrameRef.current !== null) {
+        cancelAnimationFrame(autoScrollFrameRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     const pendingRef = { current: false };
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -135,10 +177,16 @@ export default function TokenStreamScreen() {
       timer = null;
       if (!pendingRef.current) return;
       pendingRef.current = false;
-      setTick((t) => t + 1);
+
+      const nextText = session.getSession().getAllText();
+      if (nextText !== rawTextRef.current) {
+        rawTextRef.current = nextText;
+        setRawText(nextText);
+      }
+      setStreamOffset(streamOffsetRef.current);
+
       if (isStreamMode) {
-        rawScrollViewRef.current?.scrollToEnd({ animated: false });
-        markdownScrollViewRef.current?.scrollToEnd({ animated: false });
+        scheduleAutoScroll();
       }
     };
 
@@ -153,14 +201,12 @@ export default function TokenStreamScreen() {
       unsubscribe();
       if (timer) clearTimeout(timer);
     };
-  }, [session, isStreamMode]);
-
-  const rawText = session.getSession().getAllText();
+  }, [session, isStreamMode, scheduleAutoScroll]);
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View>
+        <View style={styles.headerCopy}>
           <Text style={styles.title}>Token Stream</Text>
           <Text style={styles.subtitle}>
             Direct Raw vs Markdown Render ({TOKEN_DELAY_MS}ms delay)
@@ -177,7 +223,7 @@ export default function TokenStreamScreen() {
               color={isStreamMode ? EXAMPLE_COLORS.accent : EXAMPLE_COLORS.text}
             />
             <Text style={styles.btnText}>
-              {isStreamMode ? "Pause" : streamIndex > 0 ? "Resume" : "Start"}
+              {isStreamMode ? "Pause" : streamOffset > 0 ? "Resume" : "Start"}
             </Text>
           </Pressable>
           <Pressable style={styles.btnIcon} onPress={clearStream}>
@@ -191,14 +237,22 @@ export default function TokenStreamScreen() {
           styles.scrollContainer,
           { paddingBottom: tabHeight + 20 },
         ]}
+        bounces={false}
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.hero}>
+          <Text style={styles.heroTitle}>Streaming Performance Lab</Text>
+          <Text style={styles.heroSubtitle}>
+            Compare raw token input with rendered markdown in real time.
+          </Text>
+        </View>
         <Text style={styles.sectionTitle}>Raw Token Data</Text>
         <View style={styles.card}>
           <ScrollView
             ref={rawScrollViewRef}
             style={styles.cardScroll}
             nestedScrollEnabled
+            bounces={false}
             contentContainerStyle={styles.scrollContent}
           >
             {rawText.length === 0 ? (
@@ -215,6 +269,7 @@ export default function TokenStreamScreen() {
             ref={markdownScrollViewRef}
             style={styles.cardScroll}
             nestedScrollEnabled
+            bounces={false}
             contentContainerStyle={styles.scrollContent}
           >
             {rawText.length === 0 ? (
@@ -247,14 +302,15 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: EXAMPLE_COLORS.background },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: 56,
     paddingBottom: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderBottomWidth: 1,
-    borderBottomColor: EXAMPLE_COLORS.border,
+    flexDirection: "column",
+    alignItems: "flex-start",
     backgroundColor: EXAMPLE_COLORS.surface,
+    boxShadow: `0px 1px 8px ${EXAMPLE_COLORS.text}14`,
+  },
+  headerCopy: {
+    width: "100%",
   },
   title: {
     fontSize: 20,
@@ -263,9 +319,37 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   subtitle: { fontSize: 12, color: EXAMPLE_COLORS.textMuted, marginTop: 2 },
+  hero: {
+    backgroundColor: EXAMPLE_COLORS.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: EXAMPLE_COLORS.border,
+    padding: 14,
+    marginBottom: 6,
+    boxShadow: `0px 8px 16px ${EXAMPLE_COLORS.text}12`,
+  },
+  heroTitle: {
+    color: EXAMPLE_COLORS.text,
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+  },
+  heroSubtitle: {
+    color: EXAMPLE_COLORS.textMuted,
+    fontSize: 13,
+    marginTop: 4,
+    lineHeight: 18,
+  },
 
-  controlsRow: { flexDirection: "row", gap: 8 },
+  controlsRow: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+    width: "100%",
+    marginTop: 12,
+  },
   btn: {
+    flex: 1,
     paddingHorizontal: 16,
     height: 36,
     borderRadius: 18,
@@ -311,6 +395,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: EXAMPLE_COLORS.border,
     overflow: "hidden",
+    boxShadow: `0px 8px 16px ${EXAMPLE_COLORS.text}12`,
   },
   markdownCard: {
     backgroundColor: EXAMPLE_COLORS.surface,
@@ -321,7 +406,7 @@ const styles = StyleSheet.create({
 
   rawText: {
     color: EXAMPLE_COLORS.textMuted,
-    fontFamily: "Menlo",
+    fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }),
     fontSize: 12,
     lineHeight: 18,
   },

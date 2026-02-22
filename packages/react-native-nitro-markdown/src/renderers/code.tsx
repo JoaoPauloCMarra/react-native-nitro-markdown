@@ -70,7 +70,11 @@ export const CodeBlock: FC<CodeBlockProps> = ({
       {showLanguage ? (
         <Text style={styles.codeLanguage}>{language}</Text>
       ) : null}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        bounces={false}
+      >
         <Text style={styles.codeBlockText}>{displayContent}</Text>
       </ScrollView>
     </View>

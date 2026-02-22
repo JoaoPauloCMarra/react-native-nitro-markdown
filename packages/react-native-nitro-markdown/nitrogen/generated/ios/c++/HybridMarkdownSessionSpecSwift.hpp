@@ -72,11 +72,13 @@ namespace margelo::nitro::Markdown {
 
   public:
     // Methods
-    inline void append(const std::string& chunk) override {
+    inline double append(const std::string& chunk) override {
       auto __result = _swiftPart.append(chunk);
       if (__result.hasError()) [[unlikely]] {
         std::rethrow_exception(__result.error());
       }
+      auto __value = std::move(__result.value());
+      return __value;
     }
     inline void clear() override {
       auto __result = _swiftPart.clear();
@@ -92,7 +94,23 @@ namespace margelo::nitro::Markdown {
       auto __value = std::move(__result.value());
       return __value;
     }
-    inline std::function<void()> addListener(const std::function<void()>& listener) override {
+    inline double getLength() override {
+      auto __result = _swiftPart.getLength();
+      if (__result.hasError()) [[unlikely]] {
+        std::rethrow_exception(__result.error());
+      }
+      auto __value = std::move(__result.value());
+      return __value;
+    }
+    inline std::string getTextRange(double from, double to) override {
+      auto __result = _swiftPart.getTextRange(std::forward<decltype(from)>(from), std::forward<decltype(to)>(to));
+      if (__result.hasError()) [[unlikely]] {
+        std::rethrow_exception(__result.error());
+      }
+      auto __value = std::move(__result.value());
+      return __value;
+    }
+    inline std::function<void()> addListener(const std::function<void(double /* from */, double /* to */)>& listener) override {
       auto __result = _swiftPart.addListener(listener);
       if (__result.hasError()) [[unlikely]] {
         std::rethrow_exception(__result.error());

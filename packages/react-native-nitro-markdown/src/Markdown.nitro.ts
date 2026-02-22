@@ -11,4 +11,6 @@ export interface MarkdownParser extends HybridObject<{
 }> {
   parse(text: string): string;
   parseWithOptions(text: string, options: ParserOptions): string;
+  extractPlainText(text: string): string;
+  extractPlainTextWithOptions(text: string, options: ParserOptions): string;
 }

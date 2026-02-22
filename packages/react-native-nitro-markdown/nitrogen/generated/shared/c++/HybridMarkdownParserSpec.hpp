@@ -52,6 +52,8 @@ namespace margelo::nitro::Markdown {
       // Methods
       virtual std::string parse(const std::string& text) = 0;
       virtual std::string parseWithOptions(const std::string& text, const ParserOptions& options) = 0;
+      virtual std::string extractPlainText(const std::string& text) = 0;
+      virtual std::string extractPlainTextWithOptions(const std::string& text, const ParserOptions& options) = 0;
 
     protected:
       // Hybrid Setup

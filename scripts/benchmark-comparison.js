@@ -271,15 +271,18 @@ function runComparison() {
     console.log(`${medal} ${r.name}: ${r.time.toFixed(2)}ms`);
   });
 
-  console.log("\n📈 COMPARISON WITH NITRO (C++):");
-  console.log("================================\n");
-  console.log("The Nitro C++ implementation using md4c typically achieves:");
-  console.log("• 10-50x faster than pure JavaScript parsers");
-  console.log("• Sub-millisecond parsing for most documents");
-  console.log("• Consistent performance regardless of JS thread load\n");
+  console.log("\n📈 NITRO COMPARISON STATUS:");
+  console.log("===========================\n");
+  console.log(
+    "This script measures only JavaScript parsers in Node.js. Nitro is measured in the React Native app.",
+  );
+  console.log(
+    "Use `NITRO_BENCH_MS=<value> bun run benchmark` to include a Nitro reference row from app measurements.\n",
+  );
 
-  console.log("Run the React Native example app to see real Nitro benchmarks!");
-  console.log("The app compares Nitro directly against these JS parsers.\n");
+  const nitroBenchmarkMs = Number(process.env.NITRO_BENCH_MS);
+  const hasNitroBenchmark =
+    Number.isFinite(nitroBenchmarkMs) && nitroBenchmarkMs > 0;
 
   // Summary table
   console.log("📊 SUMMARY TABLE:");
@@ -292,8 +295,15 @@ function runComparison() {
       `| ${r.name.padEnd(13)} | ${r.time.toFixed(2).padStart(7)}ms | ${relative}x ${r.name === fastestJS.name ? "(fastest)" : "         "} |`,
     );
   });
-  console.log("| Nitro (C++)   |   ~1-5ms* | ~10-50x faster |");
-  console.log("\n* Actual Nitro times measured in React Native app\n");
+  if (hasNitroBenchmark) {
+    const nitroRelative = (nitroBenchmarkMs / fastestJS.time).toFixed(2);
+    console.log(
+      `| Nitro (C++)   | ${nitroBenchmarkMs.toFixed(2).padStart(7)}ms | ${nitroRelative}x ${nitroBenchmarkMs <= fastestJS.time ? "(faster)" : "(slower)"} |`,
+    );
+  }
+  console.log(
+    "\nNitro benchmark values should be taken from `apps/example/app/index.tsx` runtime measurements.\n",
+  );
 
   console.log("💡 KEY INSIGHTS:");
   console.log("================\n");
@@ -306,9 +316,13 @@ function runComparison() {
   console.log(
     `• JS speed spread: ${(slowestJS.time / fastestJS.time).toFixed(1)}x difference`,
   );
-  console.log(
-    "• Nitro advantage: Direct C++ execution via JSI, no JS overhead",
-  );
+  if (hasNitroBenchmark) {
+    console.log(
+      `• Nitro (app input): ${nitroBenchmarkMs.toFixed(2)}ms (${(nitroBenchmarkMs / fastestJS.time).toFixed(2)}x vs fastest JS baseline)`,
+    );
+  } else {
+    console.log("• Nitro value not included in this run (set NITRO_BENCH_MS)");
+  }
   console.log(
     "• md4c: Highly optimized C parser with zero-copy architecture\n",
   );
