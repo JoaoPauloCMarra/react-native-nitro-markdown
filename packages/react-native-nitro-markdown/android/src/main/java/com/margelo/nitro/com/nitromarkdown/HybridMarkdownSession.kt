@@ -2,7 +2,7 @@ package com.margelo.nitro.com.nitromarkdown
 
 class HybridMarkdownSession : HybridMarkdownSessionSpec() {
     private var buffer = StringBuilder()
-    private val listeners = mutableMapOf<Long, () -> Unit>()
+    private val listeners = mutableMapOf<Long, (Double, Double) -> Unit>()
     private var nextListenerId = 0L
     private val lock = Any()
 
@@ -17,11 +17,16 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
     override val memorySize: Long
         get() = buffer.length.toLong()
 
-    override fun append(chunk: String) {
+    override fun append(chunk: String): Double {
+        val from: Int
+        val to: Int
         synchronized(lock) {
+            from = buffer.length
             buffer.append(chunk)
+            to = buffer.length
         }
-        notifyListeners()
+        notifyListeners(from.toDouble(), to.toDouble())
+        return to.toDouble()
     }
 
     override fun clear() {
@@ -29,7 +34,7 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
             buffer.clear()
             highlightPosition = 0.0
         }
-        notifyListeners()
+        notifyListeners(0.0, 0.0)
     }
 
     override fun getAllText(): String {
@@ -38,7 +43,21 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
         }
     }
 
-    override fun addListener(listener: () -> Unit): () -> Unit {
+    override fun getLength(): Double {
+        synchronized(lock) {
+            return buffer.length.toDouble()
+        }
+    }
+
+    override fun getTextRange(from: Double, to: Double): String {
+        synchronized(lock) {
+            val start = from.toInt().coerceIn(0, buffer.length)
+            val end = to.toInt().coerceIn(start, buffer.length)
+            return buffer.substring(start, end)
+        }
+    }
+
+    override fun addListener(listener: (Double, Double) -> Unit): () -> Unit {
         val id: Long
         synchronized(lock) {
             id = nextListenerId++
@@ -51,11 +70,11 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
         }
     }
 
-    private fun notifyListeners() {
-        val currentListeners: Collection<() -> Unit>
+    private fun notifyListeners(from: Double, to: Double) {
+        val currentListeners: Collection<(Double, Double) -> Unit>
         synchronized(lock) {
             currentListeners = listeners.values.toList()
         }
-        currentListeners.forEach { it() }
+        currentListeners.forEach { it(from, to) }
     }
 }

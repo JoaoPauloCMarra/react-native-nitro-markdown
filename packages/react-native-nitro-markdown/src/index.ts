@@ -1,7 +1,14 @@
 export * from "./headless";
 
 export { Markdown } from "./markdown";
+export type {
+  MarkdownProps,
+  AstTransform,
+  MarkdownPlugin,
+  MarkdownVirtualizationOptions,
+} from "./markdown";
 export { MarkdownStream } from "./markdown-stream";
+export type { MarkdownStreamProps } from "./markdown-stream";
 
 export { useMarkdownContext, MarkdownContext } from "./MarkdownContext";
 export type {

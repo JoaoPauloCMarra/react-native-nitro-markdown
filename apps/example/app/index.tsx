@@ -15,7 +15,7 @@ import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 import { COMPLEX_MARKDOWN } from "../markdown-test-data";
 import { EXAMPLE_COLORS } from "../theme";
 
-// Generate a massive string (~237KB) to force the CPU to work
+// Generate a massive string (~300KB) to force the CPU to work
 const REPEATED_MARKDOWN = COMPLEX_MARKDOWN.repeat(50);
 
 export default function BenchmarkScreen() {
@@ -29,6 +29,14 @@ export default function BenchmarkScreen() {
 
   const wait = (ms: number) =>
     new Promise((resolve) => setTimeout(resolve, ms));
+
+  const runNitroBenchmark = (): number => {
+    parseMarkdown("warmup");
+    const startNitro = global.performance.now();
+    parseMarkdown(REPEATED_MARKDOWN);
+    const endNitro = global.performance.now();
+    return endNitro - startNitro;
+  };
 
   const runBenchmark = async () => {
     setLogs([]);
@@ -45,11 +53,7 @@ export default function BenchmarkScreen() {
       await wait(100);
 
       // --- 1. BENCHMARK NITRO (C++) ---
-      parseMarkdown("warmup");
-      const startNitro = global.performance.now();
-      parseMarkdown(REPEATED_MARKDOWN);
-      const endNitro = global.performance.now();
-      const nitroTime = endNitro - startNitro;
+      const nitroTime = runNitroBenchmark();
       addLog(`🚀 Nitro (C++): ${nitroTime.toFixed(2)}ms`);
       await wait(100);
 
@@ -100,12 +104,14 @@ export default function BenchmarkScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Benchmark Showdown</Text>
-        <Text style={styles.subtitle}>Nitro vs Top 3 JS Libraries</Text>
-        <Text style={styles.dataSize}>
-          Testing: {(REPEATED_MARKDOWN.length / 1024).toFixed(1)} KB of complex
-          markdown
-        </Text>
+        <View style={styles.hero}>
+          <Text style={styles.title}>Benchmark Showdown</Text>
+          <Text style={styles.subtitle}>Nitro vs Top 3 JS Libraries</Text>
+          <Text style={styles.dataSize}>
+            Testing: {(REPEATED_MARKDOWN.length / 1024).toFixed(1)} KB of
+            complex markdown
+          </Text>
+        </View>
       </View>
 
       <Pressable style={styles.benchmarkButton} onPress={runBenchmark}>
@@ -115,6 +121,7 @@ export default function BenchmarkScreen() {
       <ScrollView
         style={styles.resultsScroll}
         contentContainerStyle={{ paddingBottom: tabHeight + 20 }}
+        bounces={false}
       >
         {error ? (
           <View style={styles.errorBox}>
@@ -158,9 +165,18 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingTop: 32,
-    paddingHorizontal: 24,
-    paddingBottom: 24,
+    paddingHorizontal: 20,
+    paddingBottom: 18,
+  },
+  hero: {
     alignItems: "center",
+    backgroundColor: EXAMPLE_COLORS.surface,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: EXAMPLE_COLORS.border,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    boxShadow: `0px 10px 20px ${EXAMPLE_COLORS.text}14`,
   },
   title: {
     fontSize: 28,
@@ -188,12 +204,12 @@ const styles = StyleSheet.create({
   },
   benchmarkButton: {
     backgroundColor: EXAMPLE_COLORS.accent,
-    marginHorizontal: 24,
-    marginBottom: 24,
+    marginHorizontal: 20,
+    marginBottom: 18,
     paddingVertical: 18,
     borderRadius: 16,
     alignItems: "center",
-    boxShadow: `0px 4px 10px ${EXAMPLE_COLORS.accentDeep}4d`,
+    boxShadow: `0px 8px 16px ${EXAMPLE_COLORS.accentDeep}52`,
   },
   benchmarkText: {
     color: EXAMPLE_COLORS.surface,
@@ -202,7 +218,7 @@ const styles = StyleSheet.create({
   },
   resultsScroll: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
   },
   resultsContainer: {
     backgroundColor: EXAMPLE_COLORS.surface,

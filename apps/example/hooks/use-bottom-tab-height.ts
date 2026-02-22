@@ -1,7 +1,9 @@
 import { Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const TAB_BAR_HEIGHT = Platform.select({ ios: 90, android: 70 }) ?? 70;
+const TAB_BAR_BASE_HEIGHT = Platform.select({ ios: 40, android: 50 }) ?? 45;
 
 export const useBottomTabHeight = () => {
-  return TAB_BAR_HEIGHT;
+  const insets = useSafeAreaInsets();
+  return TAB_BAR_BASE_HEIGHT + insets.bottom + 10;
 };

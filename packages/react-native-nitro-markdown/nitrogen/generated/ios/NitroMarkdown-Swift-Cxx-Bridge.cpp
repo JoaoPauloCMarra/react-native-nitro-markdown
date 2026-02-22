@@ -22,6 +22,14 @@ namespace margelo::nitro::Markdown::bridge::swift {
     };
   }
   
+  // pragma MARK: std::function<void(double /* from */, double /* to */)>
+  Func_void_double_double create_Func_void_double_double(void* NON_NULL swiftClosureWrapper) noexcept {
+    auto swiftClosure = NitroMarkdown::Func_void_double_double::fromUnsafe(swiftClosureWrapper);
+    return [swiftClosure = std::move(swiftClosure)](double from, double to) mutable -> void {
+      swiftClosure.call(from, to);
+    };
+  }
+  
   // pragma MARK: std::shared_ptr<HybridMarkdownSessionSpec>
   std::shared_ptr<HybridMarkdownSessionSpec> create_std__shared_ptr_HybridMarkdownSessionSpec_(void* NON_NULL swiftUnsafePointer) noexcept {
     NitroMarkdown::HybridMarkdownSessionSpec_cxx swiftPart = NitroMarkdown::HybridMarkdownSessionSpec_cxx::fromUnsafe(swiftUnsafePointer);

@@ -71,6 +71,10 @@ export type MarkdownNode = {
   isHeader?: boolean;
   /** Text alignment for table cells: 'left', 'center', or 'right'. */
   align?: string;
+  /** Source start offset in original markdown text (when provided by native parser). */
+  beg?: number;
+  /** Source end offset in original markdown text (when provided by native parser). */
+  end?: number;
   /** Nested child nodes for hierarchical elements like paragraphs, lists, and tables. */
   children?: MarkdownNode[];
 };
@@ -84,8 +88,12 @@ export const MarkdownParserModule =
  * @returns The root node of the parsed AST
  */
 export function parseMarkdown(text: string): MarkdownNode {
-  const jsonStr = MarkdownParserModule.parse(text);
-  return JSON.parse(jsonStr) as MarkdownNode;
+  if (typeof MarkdownParserModule.parse === "function") {
+    const jsonStr = MarkdownParserModule.parse(text);
+    return JSON.parse(jsonStr) as MarkdownNode;
+  }
+
+  return { type: "document", children: [] };
 }
 
 /**
@@ -98,8 +106,38 @@ export function parseMarkdownWithOptions(
   text: string,
   options: ParserOptions,
 ): MarkdownNode {
-  const jsonStr = MarkdownParserModule.parseWithOptions(text, options);
-  return JSON.parse(jsonStr) as MarkdownNode;
+  if (typeof MarkdownParserModule.parseWithOptions === "function") {
+    const jsonStr = MarkdownParserModule.parseWithOptions(text, options);
+    return JSON.parse(jsonStr) as MarkdownNode;
+  }
+
+  return { type: "document", children: [] };
+}
+
+/**
+ * Parse markdown and return flattened plain text directly from native parser.
+ * Useful for search/indexing flows that don't need full AST rendering.
+ */
+export function extractPlainText(text: string): string {
+  if (typeof MarkdownParserModule.extractPlainText === "function") {
+    return MarkdownParserModule.extractPlainText(text);
+  }
+
+  return getFlattenedText(parseMarkdown(text));
+}
+
+/**
+ * Parse markdown with options and return flattened plain text from native parser.
+ */
+export function extractPlainTextWithOptions(
+  text: string,
+  options: ParserOptions,
+): string {
+  if (typeof MarkdownParserModule.extractPlainTextWithOptions === "function") {
+    return MarkdownParserModule.extractPlainTextWithOptions(text, options);
+  }
+
+  return getFlattenedText(parseMarkdownWithOptions(text, options));
 }
 
 export type { MarkdownParser };

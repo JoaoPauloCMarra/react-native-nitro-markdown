@@ -1,9 +1,9 @@
 import type { MarkdownNode } from "../index";
 
-interface MockParserOptions {
+type MockParserOptions = {
   gfm?: boolean;
   math?: boolean;
-}
+};
 
 function createTextNode(content: string): MarkdownNode {
   return { type: "text", content };
@@ -453,6 +453,10 @@ const mockParser = {
   parseWithOptions: jest.fn((text: string, options: MockParserOptions) =>
     JSON.stringify(createMockASTWithOptions(text, options)),
   ),
+  extractPlainText: jest.fn((text: string) => text),
+  extractPlainTextWithOptions: jest.fn(
+    (text: string, _options: MockParserOptions) => text,
+  ),
 };
 
 jest.mock("react-native-nitro-modules", () => ({
@@ -471,6 +475,7 @@ jest.mock("react-native", () => {
     Text: "Text",
     Image: "Image",
     ScrollView: "ScrollView",
+    FlatList: "FlatList",
     Linking: {
       openURL: jest.fn(),
     },
@@ -485,5 +490,7 @@ jest.mock("react-native", () => {
 });
 
 jest.mock("react-native-mathjax-svg", () => "MathJax");
+
+Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
 export { mockParser };

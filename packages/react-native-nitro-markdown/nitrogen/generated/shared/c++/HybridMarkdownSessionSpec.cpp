@@ -19,6 +19,8 @@ namespace margelo::nitro::Markdown {
       prototype.registerHybridMethod("append", &HybridMarkdownSessionSpec::append);
       prototype.registerHybridMethod("clear", &HybridMarkdownSessionSpec::clear);
       prototype.registerHybridMethod("getAllText", &HybridMarkdownSessionSpec::getAllText);
+      prototype.registerHybridMethod("getLength", &HybridMarkdownSessionSpec::getLength);
+      prototype.registerHybridMethod("getTextRange", &HybridMarkdownSessionSpec::getTextRange);
       prototype.registerHybridMethod("addListener", &HybridMarkdownSessionSpec::addListener);
     });
   }

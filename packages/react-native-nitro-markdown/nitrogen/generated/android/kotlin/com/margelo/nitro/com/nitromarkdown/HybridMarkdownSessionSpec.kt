@@ -51,7 +51,7 @@ abstract class HybridMarkdownSessionSpec: HybridObject() {
   // Methods
   @DoNotStrip
   @Keep
-  abstract fun append(chunk: String): Unit
+  abstract fun append(chunk: String): Double
   
   @DoNotStrip
   @Keep
@@ -61,11 +61,19 @@ abstract class HybridMarkdownSessionSpec: HybridObject() {
   @Keep
   abstract fun getAllText(): String
   
-  abstract fun addListener(listener: () -> Unit): () -> Unit
+  @DoNotStrip
+  @Keep
+  abstract fun getLength(): Double
   
   @DoNotStrip
   @Keep
-  private fun addListener_cxx(listener: Func_void): Func_void {
+  abstract fun getTextRange(from: Double, to: Double): String
+  
+  abstract fun addListener(listener: (from: Double, to: Double) -> Unit): () -> Unit
+  
+  @DoNotStrip
+  @Keep
+  private fun addListener_cxx(listener: Func_void_double_double): Func_void {
     val __result = addListener(listener)
     return Func_void_java(__result)
   }

@@ -18,8 +18,8 @@ import {
   type ViewStyle,
   type LayoutChangeEvent,
 } from "react-native";
+import { getTextContent, type MarkdownNode } from "../headless";
 import { useMarkdownContext, type NodeRendererProps } from "../MarkdownContext";
-import type { MarkdownNode } from "../headless";
 import type { MarkdownTheme } from "../theme";
 
 type TableData = {
@@ -66,13 +66,84 @@ type TableRendererProps = {
 };
 
 type ColumnWidthsAction = {
-  type: "SET_WIDTHS";
+  type: "RESET_WIDTHS" | "SET_MONOTONIC_WIDTHS";
   payload: number[];
 };
 
+const MIN_COLUMN_WIDTH = 60;
+const COLUMN_MEASUREMENT_PADDING = 8;
+const APPROX_CHAR_WIDTH = 7;
+const MAX_ESTIMATED_CHARS = 120;
+const ESTIMATED_WIDTH_STEP = 24;
+const MEASUREMENT_STABILIZE_MS = 140;
+const IS_ACT_TEST_ENVIRONMENT =
+  Reflect.get(globalThis, "IS_REACT_ACT_ENVIRONMENT") === true;
+const SHOULD_DEBOUNCE_MEASUREMENT = !IS_ACT_TEST_ENVIRONMENT;
+
 const columnWidthsReducer = (state: number[], action: ColumnWidthsAction) => {
-  if (action.type === "SET_WIDTHS") return action.payload;
+  if (action.type === "RESET_WIDTHS") {
+    if (
+      state.length === action.payload.length &&
+      state.every((width, index) => width === action.payload[index])
+    ) {
+      return state;
+    }
+    return action.payload;
+  }
+
+  if (action.type === "SET_MONOTONIC_WIDTHS") {
+    if (state.length !== action.payload.length) {
+      return action.payload;
+    }
+
+    const merged = action.payload.map((width, index) =>
+      Math.max(width, state[index] ?? width),
+    );
+
+    if (state.every((width, index) => width === merged[index])) {
+      return state;
+    }
+    return merged;
+  }
+
   return state;
+};
+
+const estimateColumnWidths = (
+  headers: MarkdownNode[],
+  rows: MarkdownNode[][],
+  columnCount: number,
+) => {
+  const widths = new Array<number>(columnCount).fill(MIN_COLUMN_WIDTH);
+
+  for (let col = 0; col < columnCount; col++) {
+    const headerChars = Math.min(
+      getTextContent(headers[col] ?? { type: "text", content: "" }).trim()
+        .length,
+      MAX_ESTIMATED_CHARS,
+    );
+    let maxChars = headerChars;
+
+    for (let row = 0; row < rows.length; row++) {
+      const cell = rows[row][col];
+      if (!cell) continue;
+      const cellChars = Math.min(
+        getTextContent(cell).trim().length,
+        MAX_ESTIMATED_CHARS,
+      );
+      if (cellChars > maxChars) {
+        maxChars = cellChars;
+      }
+    }
+
+    const estimatedWidth =
+      maxChars * APPROX_CHAR_WIDTH + COLUMN_MEASUREMENT_PADDING;
+    const steppedEstimatedWidth =
+      Math.ceil(estimatedWidth / ESTIMATED_WIDTH_STEP) * ESTIMATED_WIDTH_STEP;
+    widths[col] = Math.max(MIN_COLUMN_WIDTH, steppedEstimatedWidth);
+  }
+
+  return widths;
 };
 
 export const TableRenderer: FC<TableRendererProps> = ({
@@ -88,11 +159,27 @@ export const TableRenderer: FC<TableRendererProps> = ({
 
   const columnCount = headers.length;
   const styles = useMemo(() => createTableStyles(theme), [theme]);
+  const estimatedColumnWidths = useMemo(
+    () => estimateColumnWidths(headers, rows, columnCount),
+    [headers, rows, columnCount],
+  );
 
-  const [columnWidths, dispatch] = useReducer(columnWidthsReducer, []);
+  const [columnWidths, dispatch] = useReducer(
+    columnWidthsReducer,
+    estimatedColumnWidths,
+  );
   const measuredWidths = useRef<Map<string, number>>(new Map());
   const measuredCells = useRef<Set<string>>(new Set());
   const widthsCalculated = useRef(false);
+  const columnWidthsRef = useRef(columnWidths);
+  const lastCellKeySignatureRef = useRef("");
+  const measurementTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const [needsMeasurement, setNeedsMeasurement] = useReducer(
+    (_previous: boolean, nextValue: boolean) => nextValue,
+    false,
+  );
 
   const expectedCellKeys = useMemo(() => {
     const keys: string[] = [];
@@ -110,16 +197,62 @@ export const TableRenderer: FC<TableRendererProps> = ({
     return keys;
   }, [headers, rows]);
 
+  const expectedCellKeySignature = useMemo(
+    () => expectedCellKeys.join("|"),
+    [expectedCellKeys],
+  );
+
   useEffect(() => {
-    measuredWidths.current.clear();
-    measuredCells.current.clear();
-    widthsCalculated.current = false;
-    dispatch({ type: "SET_WIDTHS", payload: [] });
-  }, [expectedCellKeys]);
+    columnWidthsRef.current = columnWidths;
+  }, [columnWidths]);
+
+  useEffect(() => {
+    const structureChanged =
+      lastCellKeySignatureRef.current !== expectedCellKeySignature;
+    lastCellKeySignatureRef.current = expectedCellKeySignature;
+
+    if (measurementTimerRef.current) {
+      clearTimeout(measurementTimerRef.current);
+      measurementTimerRef.current = null;
+    }
+
+    if (structureChanged) {
+      measuredWidths.current.clear();
+      measuredCells.current.clear();
+      widthsCalculated.current = false;
+      setNeedsMeasurement(false);
+      dispatch({ type: "RESET_WIDTHS", payload: estimatedColumnWidths });
+    } else {
+      dispatch({
+        type: "SET_MONOTONIC_WIDTHS",
+        payload: estimatedColumnWidths,
+      });
+      if (widthsCalculated.current) {
+        return;
+      }
+    }
+
+    if (!SHOULD_DEBOUNCE_MEASUREMENT) {
+      setNeedsMeasurement(true);
+      return;
+    }
+
+    measurementTimerRef.current = setTimeout(() => {
+      measurementTimerRef.current = null;
+      setNeedsMeasurement(true);
+    }, MEASUREMENT_STABILIZE_MS);
+
+    return () => {
+      if (measurementTimerRef.current) {
+        clearTimeout(measurementTimerRef.current);
+        measurementTimerRef.current = null;
+      }
+    };
+  }, [estimatedColumnWidths, expectedCellKeySignature]);
 
   const onCellLayout = useCallback(
     (cellKey: string, width: number) => {
-      if (widthsCalculated.current) return;
+      if (width <= 0 || widthsCalculated.current || !needsMeasurement) return;
 
       measuredWidths.current.set(cellKey, width);
       if (!measuredCells.current.has(cellKey)) {
@@ -133,7 +266,7 @@ export const TableRenderer: FC<TableRendererProps> = ({
       );
       if (!allCellsMeasured) return;
 
-      const maxWidths: number[] = new Array(columnCount).fill(0);
+      const maxWidths: number[] = [...columnWidthsRef.current];
 
       for (let col = 0; col < columnCount; col++) {
         const headerWidth = measuredWidths.current.get(`header-${col}`);
@@ -149,13 +282,17 @@ export const TableRenderer: FC<TableRendererProps> = ({
           }
         }
 
-        maxWidths[col] = Math.max(maxWidths[col] + 8, 60);
+        maxWidths[col] = Math.max(
+          maxWidths[col] + COLUMN_MEASUREMENT_PADDING,
+          MIN_COLUMN_WIDTH,
+        );
       }
 
       widthsCalculated.current = true;
-      dispatch({ type: "SET_WIDTHS", payload: maxWidths });
+      setNeedsMeasurement(false);
+      dispatch({ type: "RESET_WIDTHS", payload: maxWidths });
     },
-    [columnCount, expectedCellKeys, rows],
+    [columnCount, expectedCellKeys, needsMeasurement, rows],
   );
 
   const getAlignment = (
@@ -170,10 +307,11 @@ export const TableRenderer: FC<TableRendererProps> = ({
   if (columnCount === 0) return null;
 
   const hasWidths = columnWidths.length === columnCount;
+  const resolvedWidths = hasWidths ? columnWidths : estimatedColumnWidths;
 
   return (
     <View style={[styles.container, style]}>
-      {!hasWidths && (
+      {needsMeasurement ? (
         <View style={styles.measurementContainer}>
           <View style={styles.measurementRow}>
             {headers.map((cell, colIndex) => (
@@ -214,24 +352,62 @@ export const TableRenderer: FC<TableRendererProps> = ({
             </View>
           ))}
         </View>
-      )}
+      ) : null}
 
-      {hasWidths ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator
-          style={styles.tableScroll}
-          bounces={false}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator
+        style={styles.tableScroll}
+        bounces={false}
+      >
+        <View
+          style={[
+            styles.table,
+            {
+              backgroundColor:
+                style?.backgroundColor ?? theme.colors.surface ?? "#111827",
+            },
+          ]}
         >
-          <View style={[styles.table, { backgroundColor: style?.backgroundColor ?? theme.colors.surface ?? "#111827" }]}>
-            <View style={styles.headerRow}>
-              {headers.map((cell, colIndex) => (
+          <View style={styles.headerRow}>
+            {headers.map((cell, colIndex) => (
+              <View
+                key={`header-${colIndex}`}
+                style={[
+                  styles.headerCell,
+                  {
+                    width: resolvedWidths[colIndex] ?? MIN_COLUMN_WIDTH,
+                    alignItems: getAlignment(colIndex),
+                  },
+                  colIndex === columnCount - 1 && styles.lastCell,
+                ]}
+              >
+                <CellContent
+                  node={cell}
+                  Renderer={Renderer}
+                  styles={styles}
+                  textStyle={styles.headerText}
+                />
+              </View>
+            ))}
+          </View>
+
+          {rows.map((row, rowIndex) => (
+            <View
+              key={`row-${rowIndex}`}
+              style={[
+                styles.bodyRow,
+                rowIndex === rows.length - 1 && styles.lastRow,
+                rowIndex % 2 === 0 ? styles.evenRow : styles.oddRow,
+              ]}
+            >
+              {row.map((cell, colIndex) => (
                 <View
-                  key={`header-${colIndex}`}
+                  key={`cell-${rowIndex}-${colIndex}`}
                   style={[
-                    styles.headerCell,
+                    styles.bodyCell,
                     {
-                      width: columnWidths[colIndex],
+                      width: resolvedWidths[colIndex] ?? MIN_COLUMN_WIDTH,
                       alignItems: getAlignment(colIndex),
                     },
                     colIndex === columnCount - 1 && styles.lastCell,
@@ -241,46 +417,14 @@ export const TableRenderer: FC<TableRendererProps> = ({
                     node={cell}
                     Renderer={Renderer}
                     styles={styles}
-                    textStyle={styles.headerText}
+                    textStyle={styles.cellText}
                   />
                 </View>
               ))}
             </View>
-
-            {rows.map((row, rowIndex) => (
-              <View
-                key={`row-${rowIndex}`}
-                style={[
-                  styles.bodyRow,
-                  rowIndex === rows.length - 1 && styles.lastRow,
-                  rowIndex % 2 === 0 ? styles.evenRow : styles.oddRow,
-                ]}
-              >
-                {row.map((cell, colIndex) => (
-                  <View
-                    key={`cell-${rowIndex}-${colIndex}`}
-                    style={[
-                      styles.bodyCell,
-                      {
-                        width: columnWidths[colIndex],
-                        alignItems: getAlignment(colIndex),
-                      },
-                      colIndex === columnCount - 1 && styles.lastCell,
-                    ]}
-                  >
-                    <CellContent
-                      node={cell}
-                      Renderer={Renderer}
-                      styles={styles}
-                      textStyle={styles.cellText}
-                    />
-                  </View>
-                ))}
-              </View>
-            ))}
-          </View>
-        </ScrollView>
-      ) : null}
+          ))}
+        </View>
+      </ScrollView>
     </View>
   );
 };

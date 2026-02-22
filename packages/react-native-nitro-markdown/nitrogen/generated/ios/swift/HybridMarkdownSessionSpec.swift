@@ -13,10 +13,12 @@ public protocol HybridMarkdownSessionSpec_protocol: HybridObject {
   var highlightPosition: Double { get set }
 
   // Methods
-  func append(chunk: String) throws -> Void
+  func append(chunk: String) throws -> Double
   func clear() throws -> Void
   func getAllText() throws -> String
-  func addListener(listener: @escaping () -> Void) throws -> () -> Void
+  func getLength() throws -> Double
+  func getTextRange(from: Double, to: Double) throws -> String
+  func addListener(listener: @escaping (_ from: Double, _ to: Double) -> Void) throws -> () -> Void
 }
 
 public extension HybridMarkdownSessionSpec_protocol {

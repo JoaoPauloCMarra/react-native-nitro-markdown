@@ -6,7 +6,10 @@
 #include <cassert>
 #include <string>
 #include <algorithm>
+#include <chrono>
+#include <cmath>
 #include <limits>
+#include <vector>
 
 namespace NitroMarkdown {
 
@@ -90,11 +93,118 @@ public:
         testLinkAttributes();
         testOversizedInputClamp();
         testOffsets();
+        testParseLatencyBudgets();
+        testLargeDocumentMemoryBudget();
 
         TestRunner::printSummary();
     }
 
 private:
+    static double percentile(std::vector<double> values, double percentileValue) {
+        if (values.empty()) return 0.0;
+
+        std::sort(values.begin(), values.end());
+        const double rank = percentileValue * static_cast<double>(values.size() - 1);
+        const size_t lowerIndex = static_cast<size_t>(std::floor(rank));
+        const size_t upperIndex = static_cast<size_t>(std::ceil(rank));
+
+        if (lowerIndex == upperIndex) {
+            return values[lowerIndex];
+        }
+
+        const double weight = rank - static_cast<double>(lowerIndex);
+        return values[lowerIndex] * (1.0 - weight) + values[upperIndex] * weight;
+    }
+
+    static size_t estimateAstBytes(const std::shared_ptr<MarkdownNode>& node) {
+        if (!node) return 0;
+
+        size_t estimated = sizeof(MarkdownNode);
+        estimated += node->children.capacity() * sizeof(std::shared_ptr<MarkdownNode>);
+
+        if (node->content.has_value()) estimated += node->content->capacity();
+        if (node->href.has_value()) estimated += node->href->capacity();
+        if (node->title.has_value()) estimated += node->title->capacity();
+        if (node->alt.has_value()) estimated += node->alt->capacity();
+        if (node->language.has_value()) estimated += node->language->capacity();
+
+        for (const auto& child : node->children) {
+            estimated += estimateAstBytes(child);
+        }
+
+        return estimated;
+    }
+
+    static std::string makePerfPayload(size_t sections) {
+        const std::string section =
+            "# Perf Heading\n"
+            "Streaming markdown performance section with **bold**, *italic*, and `code`.\n\n"
+            "| Feature | Value |\n"
+            "| --- | --- |\n"
+            "| Parse | Fast |\n"
+            "| Render | Stable |\n\n"
+            "- item one\n"
+            "- item two\n"
+            "- item three\n\n";
+
+        std::string payload;
+        payload.reserve(section.size() * sections);
+        for (size_t i = 0; i < sections; i++) {
+            payload += section;
+        }
+        return payload;
+    }
+
+    static void testParseLatencyBudgets() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+        const std::string payload = makePerfPayload(500);
+        const int iterations = 25;
+
+        std::vector<double> timingsMs;
+        timingsMs.reserve(iterations);
+
+        // Warmup for more stable timing.
+        for (int i = 0; i < 5; i++) {
+            parser.parse(payload, options);
+        }
+
+        for (int i = 0; i < iterations; i++) {
+            const auto start = std::chrono::steady_clock::now();
+            auto ast = parser.parse(payload, options);
+            const auto end = std::chrono::steady_clock::now();
+            const std::chrono::duration<double, std::milli> elapsed = end - start;
+            timingsMs.push_back(elapsed.count());
+            TestRunner::assertNotNull(ast.get(), "Perf latency parse result not null");
+        }
+
+        const double p50 = percentile(timingsMs, 0.50);
+        const double p95 = percentile(timingsMs, 0.95);
+        static constexpr double kP50BudgetMs = 40.0;
+        static constexpr double kP95BudgetMs = 90.0;
+
+        std::cout << "ℹ Perf budget parse p50=" << p50 << "ms p95=" << p95 << "ms" << std::endl;
+        TestRunner::assertTrue(p50 <= kP50BudgetMs, "Perf budget parse p50");
+        TestRunner::assertTrue(p95 <= kP95BudgetMs, "Perf budget parse p95");
+    }
+
+    static void testLargeDocumentMemoryBudget() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+        const std::string payload = makePerfPayload(900);
+        auto ast = parser.parse(payload, options);
+        TestRunner::assertNotNull(ast.get(), "Perf memory parse result not null");
+
+        const size_t estimatedBytes = estimateAstBytes(ast);
+        static constexpr size_t kEstimatedAstBytesBudget = 96 * 1024 * 1024; // 96 MB
+
+        std::cout << "ℹ Perf budget estimated AST bytes=" << estimatedBytes << std::endl;
+        TestRunner::assertTrue(
+            estimatedBytes <= kEstimatedAstBytesBudget,
+            "Perf budget large-document estimated AST memory"
+        );
+    }
+
     static void testOffsets() {
         MD4CParser parser;
         ParserOptions options{true, true};

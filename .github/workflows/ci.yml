@@ -43,6 +43,9 @@ jobs:
       - name: Run JavaScript tests
         run: bun run test
 
+      - name: Run stream performance budget tests
+        run: bun run test -F react-native-nitro-markdown -- stream-performance-budget.test.ts
+
       - name: Setup CMake (for C++ tests)
         run: |
           # Verify CMake is available
@@ -50,7 +53,7 @@ jobs:
           # Verify C++ compiler is available
           gcc --version || clang --version || echo "C++ compiler available"
 
-      - name: Run C++ tests
+      - name: Run C++ tests (includes parse latency + memory budgets)
         run: bun run test:cpp
 
       - name: Build packages

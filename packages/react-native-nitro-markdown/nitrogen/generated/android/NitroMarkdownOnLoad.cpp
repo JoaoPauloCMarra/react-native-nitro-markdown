@@ -17,6 +17,7 @@
 
 #include "JHybridMarkdownSessionSpec.hpp"
 #include "JFunc_void.hpp"
+#include "JFunc_void_double_double.hpp"
 #include "HybridMarkdownParser.hpp"
 #include <NitroModules/DefaultConstructableObject.hpp>
 
@@ -31,6 +32,7 @@ int initialize(JavaVM* vm) {
     // Register native JNI methods
     margelo::nitro::Markdown::JHybridMarkdownSessionSpec::registerNatives();
     margelo::nitro::Markdown::JFunc_void_cxx::registerNatives();
+    margelo::nitro::Markdown::JFunc_void_double_double_cxx::registerNatives();
 
     // Register Nitro Hybrid Objects
     HybridObjectRegistry::registerHybridObjectConstructor(

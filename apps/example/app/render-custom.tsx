@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useCallback, type ReactNode } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -10,9 +10,11 @@ import {
   Markdown,
   TableRenderer,
   CodeBlock,
+  type MarkdownNode,
   type EnhancedRendererProps,
   type CustomRendererProps,
   type NodeStyleOverrides,
+  type AstTransform,
 } from "react-native-nitro-markdown";
 import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 import {
@@ -95,6 +97,27 @@ const CUSTOM_STYLE_OVERRIDES: NodeStyleOverrides = {
 
 export default function RenderCustomScreen() {
   const tabHeight = useBottomTabHeight();
+  const astTransform = useCallback<AstTransform>((ast) => {
+    const transformNode = (node: MarkdownNode): MarkdownNode => {
+      const children: MarkdownNode[] | undefined =
+        node.children?.map(transformNode);
+
+      if (node.type === "text") {
+        return {
+          ...node,
+          content: (node.content ?? "").replace(/:wink:/g, "😉"),
+          children,
+        };
+      }
+
+      return {
+        ...node,
+        children,
+      };
+    };
+
+    return transformNode(ast);
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -107,21 +130,30 @@ export default function RenderCustomScreen() {
         bounces={false}
         showsVerticalScrollIndicator={false}
       >
-        <Markdown
-          options={{ gfm: true, math: true }}
-          styles={CUSTOM_STYLE_OVERRIDES}
-          renderers={{
-            // Using pre-mapped props - simpler custom renderers!
-            heading: CustomHeading,
-            blockquote: CustomBlockquote,
-            image: CustomImage,
-            code_block: CustomCodeBlock,
-            table: CustomTable,
-            horizontal_rule: () => <View style={customStyles.hr} />,
-          }}
-        >
-          {`${CUSTOM_RENDER_COMPONENTS}\n\n${COMPLEX_MARKDOWN}`}
-        </Markdown>
+        <View style={styles.hero}>
+          <Text style={styles.title}>Custom Components</Text>
+          <Text style={styles.subtitle}>
+            Replace built-in renderers and add AST transforms in one place.
+          </Text>
+        </View>
+        <View style={styles.card}>
+          <Markdown
+            options={{ gfm: true, math: true }}
+            astTransform={astTransform}
+            styles={CUSTOM_STYLE_OVERRIDES}
+            renderers={{
+              // Using pre-mapped props - simpler custom renderers!
+              heading: CustomHeading,
+              blockquote: CustomBlockquote,
+              image: CustomImage,
+              code_block: CustomCodeBlock,
+              table: CustomTable,
+              horizontal_rule: () => <View style={customStyles.hr} />,
+            }}
+          >
+            {`${CUSTOM_RENDER_COMPONENTS}\n\nQuick emoticon transform demo: :wink:\n\n${COMPLEX_MARKDOWN}`}
+          </Markdown>
+        </View>
       </ScrollView>
     </View>
   );
@@ -138,6 +170,35 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
     paddingBottom: 120,
+    gap: 14,
+  },
+  hero: {
+    backgroundColor: EXAMPLE_COLORS.surface,
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: EXAMPLE_COLORS.border,
+    boxShadow: `0px 8px 18px ${EXAMPLE_COLORS.text}1a`,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: EXAMPLE_COLORS.text,
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    marginTop: 6,
+    fontSize: 14,
+    color: EXAMPLE_COLORS.textMuted,
+    lineHeight: 20,
+  },
+  card: {
+    backgroundColor: EXAMPLE_COLORS.surface,
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: EXAMPLE_COLORS.border,
+    boxShadow: `0px 8px 20px ${EXAMPLE_COLORS.text}14`,
   },
 });
 
@@ -186,7 +247,7 @@ const customStyles = StyleSheet.create({
     borderRadius: 16,
     overflow: "hidden",
     marginVertical: 20,
-    boxShadow: `0px 4px 10px ${EXAMPLE_COLORS.text}14`,
+    boxShadow: `0px 8px 16px ${EXAMPLE_COLORS.text}1f`,
     borderWidth: 1,
     borderColor: EXAMPLE_COLORS.border,
   },

@@ -1,5 +1,12 @@
 import { parseMarkdown } from "../index";
-import type { MarkdownNode, ParserOptions } from "../index";
+import type {
+  AstTransform,
+  MarkdownNode,
+  MarkdownPlugin,
+  MarkdownProps,
+  MarkdownStreamProps,
+  ParserOptions,
+} from "../index";
 
 describe("type exports", () => {
   it("exports MarkdownNode type", () => {
@@ -16,6 +23,47 @@ describe("type exports", () => {
       math: true,
     };
     expect(options.gfm).toBe(true);
+  });
+
+  it("exports AstTransform type", () => {
+    const transform: AstTransform = (ast) => ast;
+    const ast = parseMarkdown("Hello");
+    expect(transform(ast)).toBe(ast);
+  });
+
+  it("exports MarkdownProps and MarkdownStreamProps types", () => {
+    const plugin: MarkdownPlugin = {
+      name: "test-plugin",
+      beforeParse: (markdown) => markdown,
+      afterParse: (ast) => ast,
+    };
+
+    const markdownProps: MarkdownProps = {
+      children: "# Title",
+      plugins: [plugin],
+      sourceAst: parseMarkdown("# Title"),
+    };
+
+    const streamProps: MarkdownStreamProps = {
+      session: {
+        __type: "HybridObject<MarkdownSession>",
+        name: "Session",
+        toString: () => "[HybridObject Session]",
+        equals: (_other) => false,
+        dispose: () => undefined,
+        append: (_chunk) => 0,
+        clear: () => undefined,
+        getAllText: () => "",
+        getLength: () => 0,
+        getTextRange: (_from, _to) => "",
+        highlightPosition: 0,
+        addListener: (_listener) => () => undefined,
+      },
+    };
+
+    expect(markdownProps.children).toBe("# Title");
+    expect(markdownProps.plugins?.[0]?.name).toBe("test-plugin");
+    expect(typeof streamProps.session.getAllText).toBe("function");
   });
 
   it("MarkdownNode supports all node types", () => {
@@ -65,6 +113,8 @@ describe("type exports", () => {
     expect(minimal.checked).toBeUndefined();
     expect(minimal.isHeader).toBeUndefined();
     expect(minimal.align).toBeUndefined();
+    expect(minimal.beg).toBeUndefined();
+    expect(minimal.end).toBeUndefined();
   });
 
   it("MarkdownNode children are typed correctly", () => {

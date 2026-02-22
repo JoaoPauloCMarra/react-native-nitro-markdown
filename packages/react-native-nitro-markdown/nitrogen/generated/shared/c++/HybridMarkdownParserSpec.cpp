@@ -16,6 +16,8 @@ namespace margelo::nitro::Markdown {
     registerHybrids(this, [](Prototype& prototype) {
       prototype.registerHybridMethod("parse", &HybridMarkdownParserSpec::parse);
       prototype.registerHybridMethod("parseWithOptions", &HybridMarkdownParserSpec::parseWithOptions);
+      prototype.registerHybridMethod("extractPlainText", &HybridMarkdownParserSpec::extractPlainText);
+      prototype.registerHybridMethod("extractPlainTextWithOptions", &HybridMarkdownParserSpec::extractPlainTextWithOptions);
     });
   }
 

@@ -56,10 +56,12 @@ namespace margelo::nitro::Markdown {
 
   public:
     // Methods
-    void append(const std::string& chunk) override;
+    double append(const std::string& chunk) override;
     void clear() override;
     std::string getAllText() override;
-    std::function<void()> addListener(const std::function<void()>& listener) override;
+    double getLength() override;
+    std::string getTextRange(double from, double to) override;
+    std::function<void()> addListener(const std::function<void(double /* from */, double /* to */)>& listener) override;
 
   private:
     friend HybridBase;
