@@ -24,23 +24,6 @@ import com.margelo.nitro.core.HybridObject
   "LocalVariableName", "PropertyName", "PrivatePropertyName", "FunctionName"
 )
 abstract class HybridMarkdownSessionSpec: HybridObject() {
-  @DoNotStrip
-  private var mHybridData: HybridData = initHybrid()
-
-  init {
-    super.updateNative(mHybridData)
-  }
-
-  override fun updateNative(hybridData: HybridData) {
-    mHybridData = hybridData
-    super.updateNative(hybridData)
-  }
-
-  // Default implementation of `HybridObject.toString()`
-  override fun toString(): String {
-    return "[HybridObject MarkdownSession]"
-  }
-
   // Properties
   @get:DoNotStrip
   @get:Keep
@@ -77,8 +60,30 @@ abstract class HybridMarkdownSessionSpec: HybridObject() {
     val __result = addListener(listener)
     return Func_void_java(__result)
   }
+  
+  @DoNotStrip
+  @Keep
+  abstract fun reset(text: String): Unit
+  
+  @DoNotStrip
+  @Keep
+  abstract fun replace(from: Double, to: Double, text: String): Double
 
-  private external fun initHybrid(): HybridData
+  // Default implementation of `HybridObject.toString()`
+  override fun toString(): String {
+    return "[HybridObject MarkdownSession]"
+  }
+
+  // C++ backing class
+  @DoNotStrip
+  @Keep
+  protected open class CxxPart(javaPart: HybridMarkdownSessionSpec): HybridObject.CxxPart(javaPart) {
+    // C++ JHybridMarkdownSessionSpec::CxxPart::initHybrid(...)
+    external override fun initHybrid(): HybridData
+  }
+  override fun createCxxPart(): CxxPart {
+    return CxxPart(this)
+  }
 
   companion object {
     protected const val TAG = "HybridMarkdownSessionSpec"

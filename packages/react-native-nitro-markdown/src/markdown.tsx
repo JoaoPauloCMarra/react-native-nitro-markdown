@@ -17,6 +17,7 @@ import {
   type ListRenderItemInfo,
   type FlatListProps,
   type StyleProp,
+  type TextStyle,
   type ViewStyle,
 } from "react-native";
 import {
@@ -53,6 +54,7 @@ import {
   type NodeStyleOverrides,
   type StylingStrategy,
 } from "./theme";
+import type { CodeHighlighter } from "./utils/code-highlight";
 
 const baseStylesCache = new WeakMap<MarkdownTheme, BaseStyles>();
 const parseAstCache = new Map<string, MarkdownNode>();
@@ -78,6 +80,10 @@ export type MarkdownPlugin = {
    * Optional plugin version metadata for diagnostics.
    */
   version?: string | number;
+  /**
+   * Execution priority. Higher values run first (default: 0).
+   */
+  priority?: number;
   /**
    * Optional text preprocessor executed before native parsing.
    * Should return a full markdown string.
@@ -183,13 +189,15 @@ const getCachedParsedAst = (
 const applyBeforeParsePlugins = (
   markdown: string,
   plugins?: MarkdownPlugin[],
+  onError?: (error: Error, phase: 'before-plugin', pluginName?: string) => void,
 ): string => {
   if (!plugins || plugins.length === 0) {
     return markdown;
   }
 
+  const sorted = [...plugins].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
   let nextMarkdown = markdown;
-  for (const plugin of plugins) {
+  for (const plugin of sorted) {
     if (!plugin.beforeParse) continue;
 
     try {
@@ -203,6 +211,7 @@ const applyBeforeParsePlugins = (
         `[react-native-nitro-markdown] plugin beforeParse${pluginLabel} threw; using previous markdown.`,
         error,
       );
+      onError?.(error instanceof Error ? error : new Error(String(error)), 'before-plugin', plugin.name);
     }
   }
 
@@ -212,13 +221,15 @@ const applyBeforeParsePlugins = (
 const applyAfterParsePlugins = (
   ast: MarkdownNode,
   plugins?: MarkdownPlugin[],
+  onError?: (error: Error, phase: 'after-plugin', pluginName?: string) => void,
 ): MarkdownNode => {
   if (!plugins || plugins.length === 0) {
     return ast;
   }
 
+  const sorted = [...plugins].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
   let nextAst = ast;
-  for (const plugin of plugins) {
+  for (const plugin of sorted) {
     if (!plugin.afterParse) continue;
 
     try {
@@ -232,6 +243,7 @@ const applyAfterParsePlugins = (
         `[react-native-nitro-markdown] plugin afterParse${pluginLabel} threw; using previous AST.`,
         error,
       );
+      onError?.(error instanceof Error ? error : new Error(String(error)), 'after-plugin', plugin.name);
     }
   }
 
@@ -273,6 +285,13 @@ export type MarkdownProps = {
     ast: MarkdownNode;
     text: string;
   }) => void;
+  /**
+   * Called when a parse error or plugin error occurs.
+   * @param error - The thrown error.
+   * @param phase - Where the error occurred.
+   * @param pluginName - The plugin name, if applicable.
+   */
+  onError?: (error: Error, phase: 'parse' | 'before-plugin' | 'after-plugin', pluginName?: string) => void;
   /**
    * Custom renderers for specific markdown node types.
    * Each renderer receives { node, children, Renderer } plus type-specific props.
@@ -325,6 +344,18 @@ export type MarkdownProps = {
    * Optional FlatList tuning for virtualization.
    */
   virtualization?: MarkdownVirtualizationOptions;
+  /**
+   * Optional configuration for the table renderer.
+   */
+  tableOptions?: {
+    minColumnWidth?: number;
+    measurementStabilizeMs?: number;
+  };
+  /**
+   * Enable built-in syntax highlighting for code blocks.
+   * Pass `true` to use the built-in tokenizer, or a custom highlighter function.
+   */
+  highlightCode?: boolean | CodeHighlighter;
 };
 
 export const Markdown: FC<MarkdownProps> = ({
@@ -341,16 +372,19 @@ export const Markdown: FC<MarkdownProps> = ({
   onParsingInProgress,
   onParseComplete,
   onLinkPress,
+  onError,
   virtualize = false,
   virtualizationMinBlocks = 40,
   virtualization,
+  tableOptions,
+  highlightCode,
 }) => {
   const parserOptionGfm = options?.gfm;
   const parserOptionMath = options?.math;
 
   const parseResult = useMemo(() => {
     try {
-      const markdownToParse = applyBeforeParsePlugins(children, plugins);
+      const markdownToParse = applyBeforeParsePlugins(children, plugins, onError ? (e, phase, name) => onError(e, phase, name) : undefined);
       const parserOptions = normalizeParserOptions({
         gfm: parserOptionGfm,
         math: parserOptionMath,
@@ -358,7 +392,7 @@ export const Markdown: FC<MarkdownProps> = ({
       let parsedAst = sourceAst
         ? cloneMarkdownNode(sourceAst)
         : getCachedParsedAst(markdownToParse, parserOptions);
-      parsedAst = applyAfterParsePlugins(parsedAst, plugins);
+      parsedAst = applyAfterParsePlugins(parsedAst, plugins, onError ? (e, phase, name) => onError(e, phase, name) : undefined);
 
       let ast = parsedAst;
       if (astTransform) {
@@ -379,7 +413,8 @@ export const Markdown: FC<MarkdownProps> = ({
       return {
         ast,
       };
-    } catch {
+    } catch (parseError) {
+      onError?.(parseError instanceof Error ? parseError : new Error(String(parseError)), 'parse');
       return {
         ast: null,
       };
@@ -391,6 +426,7 @@ export const Markdown: FC<MarkdownProps> = ({
     plugins,
     sourceAst,
     astTransform,
+    onError,
   ]);
 
   useEffect(() => {
@@ -429,8 +465,10 @@ export const Markdown: FC<MarkdownProps> = ({
       styles: nodeStyles,
       stylingStrategy,
       onLinkPress,
+      tableOptions,
+      highlightCode,
     }),
-    [renderers, theme, nodeStyles, stylingStrategy, onLinkPress],
+    [renderers, theme, nodeStyles, stylingStrategy, onLinkPress, tableOptions, highlightCode],
   );
 
   const topLevelBlocks =
@@ -644,7 +682,9 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
     }
   }
 
-  const nodeStyleOverride = nodeStyles?.[node.type];
+  const nodeStyleOverride = nodeStyles?.[node.type] as
+    | (ViewStyle & TextStyle)
+    | undefined;
 
   switch (node.type) {
     case "document":

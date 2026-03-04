@@ -17,77 +17,71 @@
 
 namespace margelo::nitro::Markdown {
 
-  jni::local_ref<JHybridMarkdownSessionSpec::jhybriddata> JHybridMarkdownSessionSpec::initHybrid(jni::alias_ref<jhybridobject> jThis) {
+  std::shared_ptr<JHybridMarkdownSessionSpec> JHybridMarkdownSessionSpec::JavaPart::getJHybridMarkdownSessionSpec() {
+    auto hybridObject = JHybridObject::JavaPart::getJHybridObject();
+    auto castHybridObject = std::dynamic_pointer_cast<JHybridMarkdownSessionSpec>(hybridObject);
+    if (castHybridObject == nullptr) [[unlikely]] {
+      throw std::runtime_error("Failed to downcast JHybridObject to JHybridMarkdownSessionSpec!");
+    }
+    return castHybridObject;
+  }
+
+  jni::local_ref<JHybridMarkdownSessionSpec::CxxPart::jhybriddata> JHybridMarkdownSessionSpec::CxxPart::initHybrid(jni::alias_ref<jhybridobject> jThis) {
     return makeCxxInstance(jThis);
   }
 
-  void JHybridMarkdownSessionSpec::registerNatives() {
-    registerHybrid({
-      makeNativeMethod("initHybrid", JHybridMarkdownSessionSpec::initHybrid),
-    });
-  }
-
-  size_t JHybridMarkdownSessionSpec::getExternalMemorySize() noexcept {
-    static const auto method = javaClassStatic()->getMethod<jlong()>("getMemorySize");
-    return method(_javaPart);
-  }
-
-  bool JHybridMarkdownSessionSpec::equals(const std::shared_ptr<HybridObject>& other) {
-    if (auto otherCast = std::dynamic_pointer_cast<JHybridMarkdownSessionSpec>(other)) {
-      return _javaPart == otherCast->_javaPart;
+  std::shared_ptr<JHybridObject> JHybridMarkdownSessionSpec::CxxPart::createHybridObject(const jni::local_ref<JHybridObject::JavaPart>& javaPart) {
+    auto castJavaPart = jni::dynamic_ref_cast<JHybridMarkdownSessionSpec::JavaPart>(javaPart);
+    if (castJavaPart == nullptr) [[unlikely]] {
+      throw std::runtime_error("Failed to cast JHybridObject::JavaPart to JHybridMarkdownSessionSpec::JavaPart!");
     }
-    return false;
+    return std::make_shared<JHybridMarkdownSessionSpec>(castJavaPart);
   }
 
-  void JHybridMarkdownSessionSpec::dispose() noexcept {
-    static const auto method = javaClassStatic()->getMethod<void()>("dispose");
-    method(_javaPart);
-  }
-
-  std::string JHybridMarkdownSessionSpec::toString() {
-    static const auto method = javaClassStatic()->getMethod<jni::JString()>("toString");
-    auto javaString = method(_javaPart);
-    return javaString->toStdString();
+  void JHybridMarkdownSessionSpec::CxxPart::registerNatives() {
+    registerHybrid({
+      makeNativeMethod("initHybrid", JHybridMarkdownSessionSpec::CxxPart::initHybrid),
+    });
   }
 
   // Properties
   double JHybridMarkdownSessionSpec::getHighlightPosition() {
-    static const auto method = javaClassStatic()->getMethod<double()>("getHighlightPosition");
+    static const auto method = _javaPart->javaClassStatic()->getMethod<double()>("getHighlightPosition");
     auto __result = method(_javaPart);
     return __result;
   }
   void JHybridMarkdownSessionSpec::setHighlightPosition(double highlightPosition) {
-    static const auto method = javaClassStatic()->getMethod<void(double /* highlightPosition */)>("setHighlightPosition");
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(double /* highlightPosition */)>("setHighlightPosition");
     method(_javaPart, highlightPosition);
   }
 
   // Methods
   double JHybridMarkdownSessionSpec::append(const std::string& chunk) {
-    static const auto method = javaClassStatic()->getMethod<double(jni::alias_ref<jni::JString> /* chunk */)>("append");
+    static const auto method = _javaPart->javaClassStatic()->getMethod<double(jni::alias_ref<jni::JString> /* chunk */)>("append");
     auto __result = method(_javaPart, jni::make_jstring(chunk));
     return __result;
   }
   void JHybridMarkdownSessionSpec::clear() {
-    static const auto method = javaClassStatic()->getMethod<void()>("clear");
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void()>("clear");
     method(_javaPart);
   }
   std::string JHybridMarkdownSessionSpec::getAllText() {
-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<jni::JString>()>("getAllText");
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<jni::JString>()>("getAllText");
     auto __result = method(_javaPart);
     return __result->toStdString();
   }
   double JHybridMarkdownSessionSpec::getLength() {
-    static const auto method = javaClassStatic()->getMethod<double()>("getLength");
+    static const auto method = _javaPart->javaClassStatic()->getMethod<double()>("getLength");
     auto __result = method(_javaPart);
     return __result;
   }
   std::string JHybridMarkdownSessionSpec::getTextRange(double from, double to) {
-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<jni::JString>(double /* from */, double /* to */)>("getTextRange");
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<jni::JString>(double /* from */, double /* to */)>("getTextRange");
     auto __result = method(_javaPart, from, to);
     return __result->toStdString();
   }
   std::function<void()> JHybridMarkdownSessionSpec::addListener(const std::function<void(double /* from */, double /* to */)>& listener) {
-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JFunc_void::javaobject>(jni::alias_ref<JFunc_void_double_double::javaobject> /* listener */)>("addListener_cxx");
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JFunc_void::javaobject>(jni::alias_ref<JFunc_void_double_double::javaobject> /* listener */)>("addListener_cxx");
     auto __result = method(_javaPart, JFunc_void_double_double_cxx::fromCpp(listener));
     return [&]() -> std::function<void()> {
       if (__result->isInstanceOf(JFunc_void_cxx::javaClassStatic())) [[likely]] {
@@ -98,6 +92,15 @@ namespace margelo::nitro::Markdown {
         return JNICallable<JFunc_void, void()>(std::move(__resultRef));
       }
     }();
+  }
+  void JHybridMarkdownSessionSpec::reset(const std::string& text) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<jni::JString> /* text */)>("reset");
+    method(_javaPart, jni::make_jstring(text));
+  }
+  double JHybridMarkdownSessionSpec::replace(double from, double to, const std::string& text) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<double(double /* from */, double /* to */, jni::alias_ref<jni::JString> /* text */)>("replace");
+    auto __result = method(_javaPart, from, to, jni::make_jstring(text));
+    return __result;
   }
 
 } // namespace margelo::nitro::Markdown

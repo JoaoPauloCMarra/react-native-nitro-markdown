@@ -19,6 +19,8 @@ public protocol HybridMarkdownSessionSpec_protocol: HybridObject {
   func getLength() throws -> Double
   func getTextRange(from: Double, to: Double) throws -> String
   func addListener(listener: @escaping (_ from: Double, _ to: Double) -> Void) throws -> () -> Void
+  func reset(text: String) throws -> Void
+  func replace(from: Double, to: Double, text: String) throws -> Double
 }
 
 public extension HybridMarkdownSessionSpec_protocol {

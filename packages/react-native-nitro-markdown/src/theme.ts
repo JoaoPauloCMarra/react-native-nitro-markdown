@@ -20,6 +20,16 @@ export type MarkdownTheme = {
     tableHeaderText: string | undefined;
     tableRowEven: string | undefined;
     tableRowOdd: string | undefined;
+    codeTokenColors?: {
+      keyword?: string;
+      string?: string;
+      comment?: string;
+      number?: string;
+      operator?: string;
+      punctuation?: string;
+      type?: string;
+      default?: string;
+    };
   };
   spacing: {
     xs: number;
@@ -74,6 +84,15 @@ export const defaultMarkdownTheme: MarkdownTheme = {
     tableHeaderText: "#64748b",
     tableRowEven: "transparent",
     tableRowOdd: "#f8fafc",
+    codeTokenColors: {
+      keyword: '#c792ea',
+      string: '#c3e88d',
+      comment: '#546e7a',
+      number: '#f78c6c',
+      operator: '#89ddff',
+      punctuation: '#89ddff',
+      type: '#ffcb6b',
+    },
   },
   spacing: {
     xs: 4,
@@ -129,8 +148,17 @@ export type PartialMarkdownTheme = {
       : MarkdownTheme[K];
 };
 
+type TextNodeType =
+  | "text" | "bold" | "italic" | "strikethrough" | "link"
+  | "code_inline" | "heading" | "paragraph" | "math_inline" | "html_inline";
+type ViewNodeType =
+  | "document" | "blockquote" | "code_block" | "horizontal_rule"
+  | "image" | "list" | "list_item" | "task_list_item" | "table"
+  | "table_head" | "table_body" | "table_row" | "table_cell"
+  | "math_block" | "html_block" | "line_break" | "soft_break";
+
 export type NodeStyleOverrides = Partial<
-  Record<MarkdownNode["type"], ViewStyle | TextStyle>
+  { [K in TextNodeType]: TextStyle } & { [K in ViewNodeType]: ViewStyle }
 >;
 
 export type StylingStrategy = "opinionated" | "minimal";

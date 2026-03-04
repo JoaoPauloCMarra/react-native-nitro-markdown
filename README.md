@@ -19,7 +19,7 @@ Native Markdown parsing and rendering for React Native.
 ## Requirements
 
 - React Native `>=0.75.0`
-- `react-native-nitro-modules`
+- `react-native-nitro-modules >=0.35.0`
 
 Optional for math rendering:
 
@@ -113,6 +113,11 @@ This table maps each runtime API to where it is demonstrated.
 | `useMarkdownContext` / `MarkdownContext` | Access theme/renderer/link handlers inside custom trees | README examples |
 | Built-in renderer components (`CodeBlock`, `TableRenderer`, etc.) | Compose renderer overrides with built-ins | `apps/example/app/render-custom.tsx` |
 | `onLinkPress`, `onParsingInProgress`, `onParseComplete`, `plugins`, `sourceAst` | Advanced lifecycle/link/pipeline control | README examples |
+| `onError` | Structured error reporting for parse and plugin failures | README examples |
+| `highlightCode` / `defaultHighlighter` | Opt-in syntax highlighting for code blocks | README examples |
+| `tableOptions` | Per-instance table column and measurement tuning | README examples |
+| `stripSourceOffsets` | Remove source position data from parsed AST | README examples |
+| `MarkdownSession.reset` / `MarkdownSession.replace` | Full and partial buffer mutation | README examples |
 
 ## Feature Index
 
@@ -133,6 +138,12 @@ Use this table as a quick map from feature -> API -> demo usage.
 | Headless parsing         | `parseMarkdown`, `parseMarkdownWithOptions`         | Parse markdown without built-in UI                        | `app/index.tsx` + README examples     |
 | Custom node rendering    | `renderers` + built-in renderer components          | Replace specific node UI while preserving parser behavior | `app/render-custom.tsx`               |
 | Styling and theme        | `theme`, `styles`, `stylingStrategy`, `mergeThemes` | Control visual tokens and per-node styles                 | `app/render-default-styles.tsx`       |
+| Syntax highlighting      | `highlightCode`, `defaultHighlighter`, `codeTokenColors` | Opt-in token-colored code block rendering            | README examples                       |
+| Plugin priority          | `MarkdownPlugin.priority`                           | Control plugin execution order                            | README examples                       |
+| Error reporting          | `onError`                                           | Observe parse and plugin failures without crashing        | README examples                       |
+| Table tuning             | `tableOptions`                                      | Configure column width and measurement debounce           | README examples                       |
+| AST cleanup              | `stripSourceOffsets`                                | Remove source positions from AST for compact storage      | README examples                       |
+| Session mutation         | `MarkdownSession.reset`, `MarkdownSession.replace`  | Replace or partially edit the session text buffer         | README examples                       |
 | Low-level parser access  | `MarkdownParserModule`                              | Direct access to Nitro parser methods                     | README examples                       |
 
 ## Package Exports
@@ -164,6 +175,9 @@ Use this table as a quick map from feature -> API -> demo usage.
   - `CodeBlock`, `InlineCode`
   - `List`, `ListItem`, `TaskListItem`
   - `TableRenderer`, `Image`, `MathInline`, `MathBlock`
+- Syntax highlighting:
+  - `defaultHighlighter`
+  - `CodeHighlighter`, `HighlightedToken`, `TokenType`
 - Types:
   - `MarkdownNode`, `ParserOptions`, `MarkdownParser`
   - `MarkdownProps`, `AstTransform`, `MarkdownPlugin`, `MarkdownStreamProps`, `MarkdownVirtualizationOptions`
@@ -178,7 +192,7 @@ Use this table as a quick map from feature -> API -> demo usage.
 
 ### Headless Entry (`react-native-nitro-markdown/headless`)
 
-Exports only parser-related API (`parseMarkdown`, `parseMarkdownWithOptions`, `extractPlainText`, `extractPlainTextWithOptions`, `getTextContent`, `getFlattenedText`, types). Use this when you do not need built-in UI rendering.
+Exports only parser-related API (`parseMarkdown`, `parseMarkdownWithOptions`, `extractPlainText`, `extractPlainTextWithOptions`, `getTextContent`, `getFlattenedText`, `stripSourceOffsets`, types). Use this when you do not need built-in UI rendering.
 
 ## Component API
 
@@ -209,6 +223,9 @@ Demo usage:
 | `onParsingInProgress` | `() => void`                 | `undefined`                                      | Called when parse inputs change.                                                          |
 | `onParseComplete`     | `(result) => void`           | `undefined`                                      | Called with `{ raw, ast, text }` after successful parse.                                  |
 | `onLinkPress`         | `LinkPressHandler`           | `undefined`                                      | Intercepts link press before default open behavior. Return `false` to block default open. |
+| `onError`             | `(error, phase, pluginName?) => void` | `undefined`                           | Called when a parse or plugin error occurs. `phase` is `'parse'`, `'before-plugin'`, or `'after-plugin'`. |
+| `highlightCode`       | `boolean \| CodeHighlighter` | `undefined`                                      | Enables syntax highlighting for code blocks. Pass `true` for the built-in highlighter or a custom `CodeHighlighter` function. |
+| `tableOptions`        | `{ minColumnWidth?: number; measurementStabilizeMs?: number }` | `undefined`     | Table layout tuning. `minColumnWidth` defaults to `60`; `measurementStabilizeMs` defaults to `140`. |
 | `virtualize`          | `boolean \| "auto"`          | `false`                                          | Enables top-level block virtualization. Use `"auto"` to activate by block threshold.       |
 | `virtualizationMinBlocks` | `number`                 | `40`                                             | Minimum top-level block count before virtualization activates.                             |
 | `virtualization`      | `MarkdownVirtualizationOptions` | `undefined`                                   | Optional FlatList tuning (`windowSize`, `initialNumToRender`, batching, clipping).        |
@@ -219,7 +236,8 @@ Notes:
 - `text` in `onParseComplete` is produced by `getFlattenedText(ast)`.
 - `astTransform` should be wrapped with `useCallback` to avoid unnecessary re-parses.
 - `astTransform` is a post-parse AST rewrite hook. It does not add parser syntax support and is not a markdown-it plugin API.
-- Plugin pipeline order is: `beforeParse` -> parse/sourceAst -> `afterParse` -> `astTransform` -> render.
+- Plugin pipeline order is: `beforeParse` plugins (sorted by `priority` desc) -> parse/sourceAst -> `afterParse` plugins (sorted by `priority` desc) -> `astTransform` -> render.
+- `onError` is called per-failure; individual plugin failures do not abort the full pipeline.
 - Tables render immediately with estimated column widths, then refine widths after layout measurement to improve reliability on slower layout cycles.
 - For very large markdown content, enable `virtualize` to avoid mounting all top-level blocks at once.
 - `virtualize="auto"` enables threshold-driven virtualization while keeping small markdown renders on plain `View` trees.
@@ -277,6 +295,7 @@ import { Markdown, type MarkdownPlugin } from "react-native-nitro-markdown";
 const plugins: MarkdownPlugin[] = [
   {
     name: "rewrite-before-parse",
+    priority: 10, // runs before lower-priority plugins
     beforeParse: (input) => input.replace(/:rocket:/g, "ROCKET_TOKEN"),
   },
   {
@@ -296,6 +315,40 @@ const plugins: MarkdownPlugin[] = [
 ];
 
 <Markdown plugins={plugins}>{"Launch :rocket:"}</Markdown>;
+```
+
+### `onError` example
+
+```tsx
+import { Markdown } from "react-native-nitro-markdown";
+
+<Markdown
+  onError={(error, phase, pluginName) => {
+    console.warn(`[markdown] ${phase} error`, { error, pluginName });
+  }}
+  plugins={plugins}
+>
+  {content}
+</Markdown>;
+```
+
+### Syntax highlighting example
+
+```tsx
+import { Markdown } from "react-native-nitro-markdown";
+
+// Built-in highlighter (JS/TS, Python, Bash)
+<Markdown highlightCode>{"```typescript\nconst x: number = 42;\n```"}</Markdown>;
+
+// Custom highlighter
+import type { CodeHighlighter } from "react-native-nitro-markdown";
+
+const myHighlighter: CodeHighlighter = (language, code) => {
+  // return an array of { text, type } tokens
+  return [{ text: code, type: "default" }];
+};
+
+<Markdown highlightCode={myHighlighter}>{content}</Markdown>;
 ```
 
 ### `sourceAst` example (skip parsing in render)
@@ -406,6 +459,8 @@ session.append("hello");
 | --- | --- | --- |
 | `append` | `(chunk: string) => number` | Appends text and returns new UTF-16 length. |
 | `clear` | `() => void` | Clears buffer and emits a reset range event (`0, 0`). |
+| `reset` | `(text: string) => void` | Replaces full buffer content and emits a full-range change event. |
+| `replace` | `(from: number, to: number, text: string) => number` | Partial buffer mutation; returns new total UTF-16 length. |
 | `getAllText` | `() => string` | Returns full session text. |
 | `getLength` | `() => number` | Returns current UTF-16 text length without materializing a copy. |
 | `getTextRange` | `(from: number, to: number) => string` | Returns a substring range for delta-driven streaming updates. |
@@ -495,6 +550,7 @@ import {
   extractPlainTextWithOptions,
   getTextContent,
   getFlattenedText,
+  stripSourceOffsets,
 } from "react-native-nitro-markdown/headless";
 ```
 
@@ -506,6 +562,7 @@ import {
 | `extractPlainTextWithOptions` | `(text: string, options: ParserOptions) => string`   | Same as above with parser flags.                                   |
 | `getTextContent`           | `(node: MarkdownNode) => string`                         | Concatenates text recursively without layout normalization.        |
 | `getFlattenedText`         | `(node: MarkdownNode) => string`                         | Returns normalized plain text with paragraph and block separators. |
+| `stripSourceOffsets`       | `(node: MarkdownNode) => MarkdownNode`                   | Recursively removes `beg`/`end` source position fields. Useful for compact serialization or snapshot testing. |
 
 ### Parser Options
 
@@ -656,6 +713,7 @@ import type {
   - `text`, `textMuted`, `heading`, `link`, `code`, `codeBackground`, `codeLanguage`
   - `blockquote`, `border`, `surface`, `surfaceLight`, `accent`
   - `tableBorder`, `tableHeader`, `tableHeaderText`, `tableRowEven`, `tableRowOdd`
+  - `codeTokenColors?`: `{ keyword?, string?, comment?, number?, operator?, punctuation?, type?, default? }` — per-token colors used by `highlightCode`
 - `spacing`: `xs`, `s`, `m`, `l`, `xl`
 - `fontSizes`: `xs`, `s`, `m`, `l`, `xl`, `h1`, `h2`, `h3`, `h4`, `h5`, `h6`
 - `fontFamilies`: `regular`, `heading`, `mono`
@@ -669,11 +727,16 @@ Helpers:
 - `minimalMarkdownTheme`
 - `mergeThemes(base, partial)`
 
-`NodeStyleOverrides` lets you override per-node styles:
+`NodeStyleOverrides` lets you override per-node styles with type-safe shape checking:
 
 ```ts
+// Text-type nodes accept TextStyle; view-type nodes accept ViewStyle.
+// TypeScript will catch mismatched style shapes at compile time.
 type NodeStyleOverrides = Partial<
-  Record<MarkdownNode["type"], ViewStyle | TextStyle>
+  {
+    text: TextStyle; bold: TextStyle; italic: TextStyle; /* ... */
+    document: ViewStyle; blockquote: ViewStyle; code_block: ViewStyle; /* ... */
+  }
 >;
 ```
 

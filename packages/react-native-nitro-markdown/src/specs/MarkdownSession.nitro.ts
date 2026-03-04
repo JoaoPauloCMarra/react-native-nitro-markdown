@@ -15,4 +15,14 @@ export interface MarkdownSession extends HybridObject<{
   highlightPosition: number;
 
   addListener(listener: MarkdownSessionListener): () => void;
+
+  /**
+   * Replaces the entire buffer with new text and notifies listeners with (0, newLength).
+   */
+  reset(text: string): void;
+  /**
+   * Replaces the text in [from, to) with the given text.
+   * Returns the new total buffer length.
+   */
+  replace(from: number, to: number, text: string): number;
 }

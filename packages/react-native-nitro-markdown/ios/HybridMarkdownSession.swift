@@ -78,6 +78,24 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
         }
     }
     
+    func reset(text: String) -> Void {
+      lock.lock()
+      buffer = text
+      lock.unlock()
+      notifyListeners(from: 0, to: Double((text as NSString).length))
+    }
+
+    func replace(from: Double, to: Double, text: String) -> Double {
+      lock.lock()
+      let startIdx = buffer.index(buffer.startIndex, offsetBy: Int(from), limitedBy: buffer.endIndex) ?? buffer.endIndex
+      let endIdx = buffer.index(buffer.startIndex, offsetBy: Int(to), limitedBy: buffer.endIndex) ?? buffer.endIndex
+      buffer.replaceSubrange(startIdx..<endIdx, with: text)
+      let newLength = Double((buffer as NSString).length)
+      lock.unlock()
+      notifyListeners(from: from, to: from + Double((text as NSString).length))
+      return newLength
+    }
+
     private func notifyListeners(from: Double, to: Double) {
         lock.lock()
         let currentListeners = Array(listeners.values)

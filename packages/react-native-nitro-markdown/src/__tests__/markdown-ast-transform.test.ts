@@ -115,6 +115,15 @@ const createMockSession = (initialText: string) => {
         listeners.delete(listener);
       };
     },
+    reset: (newText) => {
+      text = newText;
+      emit(0, text.length);
+    },
+    replace: (from, to, newText) => {
+      text = text.slice(0, from) + newText + text.slice(to);
+      emit(from, from + newText.length);
+      return text.length;
+    },
   };
 
   return {

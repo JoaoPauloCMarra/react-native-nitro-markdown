@@ -118,6 +118,20 @@ namespace margelo::nitro::Markdown {
       auto __value = std::move(__result.value());
       return __value;
     }
+    inline void reset(const std::string& text) override {
+      auto __result = _swiftPart.reset(text);
+      if (__result.hasError()) [[unlikely]] {
+        std::rethrow_exception(__result.error());
+      }
+    }
+    inline double replace(double from, double to, const std::string& text) override {
+      auto __result = _swiftPart.replace(std::forward<decltype(from)>(from), std::forward<decltype(to)>(to), text);
+      if (__result.hasError()) [[unlikely]] {
+        std::rethrow_exception(__result.error());
+      }
+      auto __value = std::move(__result.value());
+      return __value;
+    }
 
   private:
     NitroMarkdown::HybridMarkdownSessionSpec_cxx _swiftPart;

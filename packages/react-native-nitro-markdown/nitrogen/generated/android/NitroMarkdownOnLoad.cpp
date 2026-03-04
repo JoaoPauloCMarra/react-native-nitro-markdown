@@ -24,35 +24,45 @@
 namespace margelo::nitro::Markdown {
 
 int initialize(JavaVM* vm) {
+  return facebook::jni::initialize(vm, []() {
+    ::margelo::nitro::Markdown::registerAllNatives();
+  });
+}
+
+struct JHybridMarkdownSessionSpecImpl: public jni::JavaClass<JHybridMarkdownSessionSpecImpl, JHybridMarkdownSessionSpec::JavaPart> {
+  static auto constexpr kJavaDescriptor = "Lcom/margelo/nitro/com/nitromarkdown/HybridMarkdownSession;";
+  static std::shared_ptr<JHybridMarkdownSessionSpec> create() {
+    static auto constructorFn = javaClassStatic()->getConstructor<JHybridMarkdownSessionSpecImpl::javaobject()>();
+    jni::local_ref<JHybridMarkdownSessionSpec::JavaPart> javaPart = javaClassStatic()->newObject(constructorFn);
+    return javaPart->getJHybridMarkdownSessionSpec();
+  }
+};
+
+void registerAllNatives() {
   using namespace margelo::nitro;
   using namespace margelo::nitro::Markdown;
-  using namespace facebook;
 
-  return facebook::jni::initialize(vm, [] {
-    // Register native JNI methods
-    margelo::nitro::Markdown::JHybridMarkdownSessionSpec::registerNatives();
-    margelo::nitro::Markdown::JFunc_void_cxx::registerNatives();
-    margelo::nitro::Markdown::JFunc_void_double_double_cxx::registerNatives();
+  // Register native JNI methods
+  margelo::nitro::Markdown::JHybridMarkdownSessionSpec::CxxPart::registerNatives();
+  margelo::nitro::Markdown::JFunc_void_cxx::registerNatives();
+  margelo::nitro::Markdown::JFunc_void_double_double_cxx::registerNatives();
 
-    // Register Nitro Hybrid Objects
-    HybridObjectRegistry::registerHybridObjectConstructor(
-      "MarkdownParser",
-      []() -> std::shared_ptr<HybridObject> {
-        static_assert(std::is_default_constructible_v<HybridMarkdownParser>,
-                      "The HybridObject \"HybridMarkdownParser\" is not default-constructible! "
-                      "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
-        return std::make_shared<HybridMarkdownParser>();
-      }
-    );
-    HybridObjectRegistry::registerHybridObjectConstructor(
-      "MarkdownSession",
-      []() -> std::shared_ptr<HybridObject> {
-        static DefaultConstructableObject<JHybridMarkdownSessionSpec::javaobject> object("com/margelo/nitro/com/nitromarkdown/HybridMarkdownSession");
-        auto instance = object.create();
-        return instance->cthis()->shared();
-      }
-    );
-  });
+  // Register Nitro Hybrid Objects
+  HybridObjectRegistry::registerHybridObjectConstructor(
+    "MarkdownParser",
+    []() -> std::shared_ptr<HybridObject> {
+      static_assert(std::is_default_constructible_v<HybridMarkdownParser>,
+                    "The HybridObject \"HybridMarkdownParser\" is not default-constructible! "
+                    "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
+      return std::make_shared<HybridMarkdownParser>();
+    }
+  );
+  HybridObjectRegistry::registerHybridObjectConstructor(
+    "MarkdownSession",
+    []() -> std::shared_ptr<HybridObject> {
+      return JHybridMarkdownSessionSpecImpl::create();
+    }
+  );
 }
 
 } // namespace margelo::nitro::Markdown
