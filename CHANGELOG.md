@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Android: `NitroMarkdownPackage` now calls `NitroMarkdownOnLoad.initializeNative()` instead of the deprecated `System.loadLibrary("NitroMarkdown")`, fixing a startup crash on Nitro 0.35.0.
+- Android: `NitroMarkdownPackage` now extends `BaseReactPackage` instead of the deprecated `TurboReactPackage`.
+- Android: `cpp-adapter.cpp` now uses `facebook::jni::initialize` + `registerAllNatives()` instead of the deprecated `initialize(vm)` wrapper.
 
 ## [0.5.0] - 2026-02-22
 
