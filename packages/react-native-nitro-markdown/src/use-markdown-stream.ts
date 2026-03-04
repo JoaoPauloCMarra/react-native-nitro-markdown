@@ -39,6 +39,14 @@ export function useMarkdownSession() {
 
   const getSession = useCallback(() => sessionRef.current!, []);
 
+  const reset = useCallback((text: string) => {
+    sessionRef.current!.reset(text);
+  }, []);
+
+  const replace = useCallback((from: number, to: number, text: string) => {
+    return sessionRef.current!.replace(from, to, text);
+  }, []);
+
   return {
     getSession,
     isStreaming,
@@ -46,6 +54,8 @@ export function useMarkdownSession() {
     stop,
     clear,
     setHighlight,
+    reset,
+    replace,
   };
 }
 

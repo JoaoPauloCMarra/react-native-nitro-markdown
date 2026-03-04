@@ -70,6 +70,25 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
         }
     }
 
+    override fun reset(text: String) {
+        synchronized(lock) {
+            buffer.replace(0, buffer.length, text)
+        }
+        notifyListeners(0.0, text.length.toDouble())
+    }
+
+    override fun replace(from: Double, to: Double, text: String): Double {
+        val newLength: Double
+        synchronized(lock) {
+            val start = from.toInt().coerceIn(0, buffer.length)
+            val end = to.toInt().coerceIn(start, buffer.length)
+            buffer.replace(start, end, text)
+            newLength = buffer.length.toDouble()
+        }
+        notifyListeners(from, from + text.length.toDouble())
+        return newLength
+    }
+
     private fun notifyListeners(from: Double, to: Double) {
         val currentListeners: Collection<(Double, Double) -> Unit>
         synchronized(lock) {

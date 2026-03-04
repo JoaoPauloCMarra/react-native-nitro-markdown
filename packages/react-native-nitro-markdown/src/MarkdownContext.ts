@@ -11,6 +11,7 @@ import {
   type NodeStyleOverrides,
   type StylingStrategy,
 } from "./theme";
+import type { CodeHighlighter } from "./utils/code-highlight";
 
 export type NodeRendererProps = {
   node: MarkdownNode;
@@ -91,6 +92,11 @@ export type MarkdownContextValue = {
   styles?: NodeStyleOverrides;
   stylingStrategy: StylingStrategy;
   onLinkPress?: LinkPressHandler;
+  highlightCode?: boolean | CodeHighlighter;
+  tableOptions?: {
+    minColumnWidth?: number;
+    measurementStabilizeMs?: number;
+  };
 };
 
 export const MarkdownContext = createContext<MarkdownContextValue>({

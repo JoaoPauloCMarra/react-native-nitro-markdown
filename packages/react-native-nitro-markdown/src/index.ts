@@ -55,3 +55,6 @@ export { MathInline, MathBlock } from "./renderers/math";
 export { createMarkdownSession } from "./MarkdownSession";
 export type { MarkdownSession } from "./MarkdownSession";
 export { useMarkdownSession, useStream } from "./use-markdown-stream";
+
+export type { HighlightedToken, TokenType, CodeHighlighter } from "./utils/code-highlight";
+export { defaultHighlighter } from "./utils/code-highlight";

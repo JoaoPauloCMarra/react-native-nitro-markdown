@@ -58,6 +58,8 @@ describe("type exports", () => {
         getTextRange: (_from, _to) => "",
         highlightPosition: 0,
         addListener: (_listener) => () => undefined,
+        reset: (_text) => undefined,
+        replace: (_from, _to, _text) => 0,
       },
     };
 

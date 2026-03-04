@@ -53,6 +53,15 @@ const createSessionHarness = (initialText = ""): SessionHarness => {
         listeners.delete(listener);
       };
     },
+    reset: (newText) => {
+      text = newText;
+      emitRange(0, text.length);
+    },
+    replace: (from, to, newText) => {
+      text = text.slice(0, from) + newText + text.slice(to);
+      emitRange(from, from + newText.length);
+      return text.length;
+    },
   };
 
   return {

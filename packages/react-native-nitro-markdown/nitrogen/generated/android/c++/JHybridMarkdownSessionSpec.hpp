@@ -18,34 +18,33 @@ namespace margelo::nitro::Markdown {
 
   using namespace facebook;
 
-  class JHybridMarkdownSessionSpec: public jni::HybridClass<JHybridMarkdownSessionSpec, JHybridObject>,
-                                    public virtual HybridMarkdownSessionSpec {
+  class JHybridMarkdownSessionSpec: public virtual HybridMarkdownSessionSpec, public virtual JHybridObject {
   public:
-    static auto constexpr kJavaDescriptor = "Lcom/margelo/nitro/com/nitromarkdown/HybridMarkdownSessionSpec;";
-    static jni::local_ref<jhybriddata> initHybrid(jni::alias_ref<jhybridobject> jThis);
-    static void registerNatives();
+    struct JavaPart: public jni::JavaClass<JavaPart, JHybridObject::JavaPart> {
+      static auto constexpr kJavaDescriptor = "Lcom/margelo/nitro/com/nitromarkdown/HybridMarkdownSessionSpec;";
+      std::shared_ptr<JHybridMarkdownSessionSpec> getJHybridMarkdownSessionSpec();
+    };
+    struct CxxPart: public jni::HybridClass<CxxPart, JHybridObject::CxxPart> {
+      static auto constexpr kJavaDescriptor = "Lcom/margelo/nitro/com/nitromarkdown/HybridMarkdownSessionSpec$CxxPart;";
+      static jni::local_ref<jhybriddata> initHybrid(jni::alias_ref<jhybridobject> jThis);
+      static void registerNatives();
+      using HybridBase::HybridBase;
+    protected:
+      std::shared_ptr<JHybridObject> createHybridObject(const jni::local_ref<JHybridObject::JavaPart>& javaPart) override;
+    };
 
-  protected:
-    // C++ constructor (called from Java via `initHybrid()`)
-    explicit JHybridMarkdownSessionSpec(jni::alias_ref<jhybridobject> jThis) :
+  public:
+    explicit JHybridMarkdownSessionSpec(const jni::local_ref<JHybridMarkdownSessionSpec::JavaPart>& javaPart):
       HybridObject(HybridMarkdownSessionSpec::TAG),
-      HybridBase(jThis),
-      _javaPart(jni::make_global(jThis)) {}
-
-  public:
+      JHybridObject(javaPart),
+      _javaPart(jni::make_global(javaPart)) {}
     ~JHybridMarkdownSessionSpec() override {
       // Hermes GC can destroy JS objects on a non-JNI Thread.
       jni::ThreadScope::WithClassLoader([&] { _javaPart.reset(); });
     }
 
   public:
-    size_t getExternalMemorySize() noexcept override;
-    bool equals(const std::shared_ptr<HybridObject>& other) override;
-    void dispose() noexcept override;
-    std::string toString() override;
-
-  public:
-    inline const jni::global_ref<JHybridMarkdownSessionSpec::javaobject>& getJavaPart() const noexcept {
+    inline const jni::global_ref<JHybridMarkdownSessionSpec::JavaPart>& getJavaPart() const noexcept {
       return _javaPart;
     }
 
@@ -62,11 +61,11 @@ namespace margelo::nitro::Markdown {
     double getLength() override;
     std::string getTextRange(double from, double to) override;
     std::function<void()> addListener(const std::function<void(double /* from */, double /* to */)>& listener) override;
+    void reset(const std::string& text) override;
+    double replace(double from, double to, const std::string& text) override;
 
   private:
-    friend HybridBase;
-    using HybridBase::HybridBase;
-    jni::global_ref<JHybridMarkdownSessionSpec::javaobject> _javaPart;
+    jni::global_ref<JHybridMarkdownSessionSpec::JavaPart> _javaPart;
   };
 
 } // namespace margelo::nitro::Markdown

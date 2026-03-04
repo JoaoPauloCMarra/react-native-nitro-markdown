@@ -56,6 +56,8 @@ namespace margelo::nitro::Markdown {
       virtual double getLength() = 0;
       virtual std::string getTextRange(double from, double to) = 0;
       virtual std::function<void()> addListener(const std::function<void(double /* from */, double /* to */)>& listener) = 0;
+      virtual void reset(const std::string& text) = 0;
+      virtual double replace(double from, double to, const std::string& text) = 0;
 
     protected:
       // Hybrid Setup

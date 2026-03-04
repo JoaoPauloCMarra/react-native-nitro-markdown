@@ -1,6 +1,6 @@
 {
   "name": "react-native-nitro-markdown",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "High-performance Markdown parser for React Native using Nitro Modules and md4c",
   "main": "lib/commonjs/index.js",
   "module": "lib/module/index.js",
@@ -61,7 +61,8 @@
     "benchmark": "node ../../scripts/benchmark-comparison.js",
     "prepack": "node -e \"const fs=require('fs'); fs.copyFileSync('../../README.md','./README.md'); fs.copyFileSync('../../LICENSE','./LICENSE')\"",
     "postpack": "node -e \"const fs=require('fs'); if(fs.existsSync('./README.md'))fs.unlinkSync('./README.md'); if(fs.existsSync('./LICENSE'))fs.unlinkSync('./LICENSE')\"",
-    "test:cpp": "node scripts/test-cpp.js"
+    "test:cpp": "node scripts/test-cpp.js",
+    "size": "size-limit"
   },
   "keywords": [
     "react-native",
@@ -87,17 +88,19 @@
     "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {
+    "@size-limit/preset-small-lib": "^11.0.0",
     "@types/react": "^19.2.14",
     "@types/react-native": "^0.73.0",
     "@types/react-test-renderer": "^19.1.0",
     "react-native-builder-bob": "^0.40.18",
     "react-test-renderer": "^19.2.4",
+    "size-limit": "^11.0.0",
     "typescript": "^5.9.3"
   },
   "peerDependencies": {
     "react": "*",
     "react-native": ">=0.75.0",
-    "react-native-nitro-modules": "*",
+    "react-native-nitro-modules": ">=0.35.0",
     "react-native-mathjax-svg": ">=0.9.0",
     "react-native-svg": ">=13.0.0"
   },

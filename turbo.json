@@ -40,6 +40,11 @@
       "persistent": true
     },
     "test:cpp": {
+      "cache": false,
+      "outputLogs": "new-only"
+    },
+    "size": {
+      "dependsOn": ["build"],
       "cache": false
     }
   }
