@@ -113,3 +113,53 @@ describe("Markdown plugins", () => {
     expect(JSON.stringify(renderer.toJSON())).toContain("From source AST");
   });
 });
+
+describe("plugin error handling", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("calls onError when beforeParse plugin throws", () => {
+    const onError = jest.fn();
+    const plugin = {
+      name: "bad-plugin",
+      beforeParse: (): string => {
+        throw new Error("plugin failed");
+      },
+    };
+
+    renderMarkdown({
+      children: "Hello",
+      plugins: [plugin],
+      onError,
+    });
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.any(Error),
+      "before-plugin",
+      "bad-plugin",
+    );
+  });
+
+  it("calls onError when afterParse plugin throws", () => {
+    const onError = jest.fn();
+    const plugin = {
+      name: "bad-after-plugin",
+      afterParse: (): never => {
+        throw new Error("plugin failed");
+      },
+    };
+
+    renderMarkdown({
+      children: "Hello",
+      plugins: [plugin],
+      onError,
+    });
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.any(Error),
+      "after-plugin",
+      "bad-after-plugin",
+    );
+  });
+});

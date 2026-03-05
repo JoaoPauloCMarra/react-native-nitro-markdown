@@ -147,6 +147,13 @@ export const TableRenderer: FC<TableRendererProps> = ({
     };
   }, [estimatedColumnWidths, expectedCellKeySignature, measurementStabilizeMs]);
 
+  useEffect(() => {
+    return () => {
+      measuredWidths.current.clear();
+      measuredCells.current.clear();
+    };
+  }, []);
+
   const onCellLayout = useCallback(
     (cellKey: string, width: number) => {
       if (width <= 0 || widthsCalculated.current || !needsMeasurement) return;

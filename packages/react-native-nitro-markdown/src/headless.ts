@@ -87,7 +87,18 @@ export const MarkdownParserModule =
  * @param text - The markdown text to parse
  * @returns The root node of the parsed AST
  */
-export function parseMarkdown(text: string): MarkdownNode {
+export function parseMarkdown(text: string): MarkdownNode;
+/**
+ * Parse markdown text with custom options.
+ * @param text - The markdown text to parse
+ * @param options - Parser options (gfm, math)
+ * @returns The root node of the parsed AST
+ */
+export function parseMarkdown(text: string, options: ParserOptions): MarkdownNode;
+export function parseMarkdown(text: string, options?: ParserOptions): MarkdownNode {
+  if (options != null) {
+    return parseMarkdownWithOptions(text, options);
+  }
   if (typeof MarkdownParserModule.parse === "function") {
     const jsonStr = MarkdownParserModule.parse(text);
     return JSON.parse(jsonStr) as MarkdownNode;

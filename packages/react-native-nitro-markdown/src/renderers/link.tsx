@@ -49,7 +49,11 @@ export const Link: FC<LinkProps> = ({ href, children, style }) => {
       if (!canOpen) return;
 
       await Linking.openURL(allowedExternalHref);
-    } catch {}
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('[NitroMarkdown] Link press handler failed:', error);
+      }
+    }
   };
 
   return (

@@ -47,6 +47,7 @@
     "!cpp/build",
     "!android/build",
     "!android/.cxx",
+    "!ios/build",
     "!scripts"
   ],
   "scripts": {
@@ -80,6 +81,7 @@
   },
   "author": "João Paulo C. Marra <joaopaulocmarra@gmail.com>",
   "license": "MIT",
+  "sideEffects": false,
   "bugs": {
     "url": "https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/issues"
   },

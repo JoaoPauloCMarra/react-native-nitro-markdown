@@ -57,6 +57,22 @@ import {
 import type { CodeHighlighter } from "./utils/code-highlight";
 
 
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash = hash & hash; // Convert to 32bit int
+  }
+  return hash;
+}
+
+const ERROR_PHASE = {
+  PARSE: 'parse',
+  BEFORE_PLUGIN: 'before-plugin',
+  AFTER_PLUGIN: 'after-plugin',
+} as const;
+
 const baseStylesCache = new WeakMap<MarkdownTheme, BaseStyles>();
 const parseAstCache = new Map<string, MarkdownNode>();
 const MAX_PARSE_CACHE_ENTRIES = 32;
@@ -167,7 +183,7 @@ const getCachedParsedAst = (
     return parseWithNativeParser(text, options);
   }
 
-  const cacheKey = `${getParserOptionsKey(options)}|${text}`;
+  const cacheKey = `${getParserOptionsKey(options)}|${text.length}|${hashString(text)}`;
   const cachedNode = parseAstCache.get(cacheKey);
   if (cachedNode) {
     parseAstCache.delete(cacheKey);
@@ -212,7 +228,7 @@ const applyBeforeParsePlugins = (
         `[react-native-nitro-markdown] plugin beforeParse${pluginLabel} threw; using previous markdown.`,
         error,
       );
-      onError?.(error instanceof Error ? error : new Error(String(error)), 'before-plugin', plugin.name);
+      onError?.(error instanceof Error ? error : new Error(String(error)), ERROR_PHASE.BEFORE_PLUGIN, plugin.name);
     }
   }
 
@@ -244,7 +260,7 @@ const applyAfterParsePlugins = (
         `[react-native-nitro-markdown] plugin afterParse${pluginLabel} threw; using previous AST.`,
         error,
       );
-      onError?.(error instanceof Error ? error : new Error(String(error)), 'after-plugin', plugin.name);
+      onError?.(error instanceof Error ? error : new Error(String(error)), ERROR_PHASE.AFTER_PLUGIN, plugin.name);
     }
   }
 
@@ -420,7 +436,7 @@ export const Markdown: FC<MarkdownProps> = ({
         ast,
       };
     } catch (parseError) {
-      onError?.(parseError instanceof Error ? parseError : new Error(String(parseError)), 'parse');
+      onError?.(parseError instanceof Error ? parseError : new Error(String(parseError)), ERROR_PHASE.PARSE);
       return {
         ast: null,
       };

@@ -1,4 +1,18 @@
-export * from "./headless";
+export {
+  MarkdownParserModule,
+  parseMarkdown,
+  parseMarkdownWithOptions,
+  extractPlainText,
+  extractPlainTextWithOptions,
+  getTextContent,
+  getFlattenedText,
+  stripSourceOffsets,
+} from "./headless";
+export type {
+  MarkdownNode,
+  ParserOptions,
+  MarkdownParser,
+} from "./headless";
 
 export { Markdown } from "./markdown";
 export type {
