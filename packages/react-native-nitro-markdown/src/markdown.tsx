@@ -77,10 +77,10 @@ const ERROR_PHASE = {
  * Safely invoke the onError callback, preventing callback exceptions from
  * propagating and breaking the render cycle.
  */
-function safeOnError(
-  onError: ((error: Error, phase: string, pluginName?: string) => void) | undefined,
+function safeOnError<P extends string>(
+  onError: ((error: Error, phase: P, pluginName?: string) => void) | undefined,
   error: unknown,
-  phase: string,
+  phase: P,
   pluginName?: string,
 ): void {
   try {

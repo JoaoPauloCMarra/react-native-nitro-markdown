@@ -17,7 +17,6 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
     @Volatile
     private var isDestroyed = false
 
-    // H4: synchronized getter and setter for highlightPosition
     @GuardedBy("lock")
     override var highlightPosition: Double = 0.0
         get() = synchronized(lock) { field }
@@ -31,7 +30,6 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
         val from: Int
         val to: Int
         synchronized(lock) {
-            // H5: guard against OOM by limiting buffer size
             if (buffer.length + chunk.length > MAX_BUFFER_SIZE) {
                 throw IllegalArgumentException("Buffer size limit exceeded (max ${MAX_BUFFER_SIZE} chars)")
             }
@@ -64,7 +62,6 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
     }
 
     override fun getTextRange(from: Double, to: Double): String {
-        // M4: safe Double → Int coercion via Long to avoid precision issues
         if (from.isNaN() || from < 0.0) return ""
         synchronized(lock) {
             val start = from.toLong().coerceIn(0L, buffer.length.toLong()).toInt()
@@ -74,7 +71,6 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
     }
 
     override fun addListener(listener: (Double, Double) -> Unit): () -> Unit {
-        // L6: guard against adding listeners to a destroyed session
         if (isDestroyed) throw IllegalStateException("HybridMarkdownSession is destroyed")
         val id: Long
         synchronized(lock) {
@@ -96,11 +92,9 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
     }
 
     override fun replace(from: Double, to: Double, text: String): Double {
-        // M3: validate range before proceeding
         require(from >= 0.0 && to >= from) { "Invalid range: from=$from must be >= 0 and to=$to must be >= from" }
         val newLength: Double
         synchronized(lock) {
-            // M4: safe Double → Int coercion via Long to avoid precision issues
             val start = from.toLong().coerceIn(0L, buffer.length.toLong()).toInt()
             val end = to.toLong().coerceIn(start.toLong(), buffer.length.toLong()).toInt()
             buffer.replace(start, end, text)
@@ -110,7 +104,6 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
         return newLength
     }
 
-    // H3: try-catch per listener so one failing callback doesn't stop the rest
     private fun notifyListeners(from: Double, to: Double) {
         val snapshot: List<(Double, Double) -> Unit>
         synchronized(lock) {
@@ -125,8 +118,7 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
         }
     }
 
-    // H5: lifecycle cleanup — clears all listeners and marks the session as destroyed.
-    // Called explicitly when the session is no longer needed (e.g. from JS via a destroy method).
+    // Clears all listeners and marks the session as destroyed.
     fun onDestroyed() {
         synchronized(lock) {
             isDestroyed = true
@@ -134,11 +126,8 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
         }
     }
 
-    // H5: HybridMarkdownSessionSpec (and its base HybridObject) provides no explicit destroy() /
-    // dispose() lifecycle hook that the Nitro framework calls for us. finalize() is the only JVM
-    // safety-net available without explicit resource management. It is deprecated in Java 9+ but
-    // still functional on Android. This ensures listeners are always cleared even if the caller
-    // never explicitly disposes the session.
+    // finalize() is the only JVM safety-net since HybridObject has no explicit dispose hook.
+    // Deprecated in Java 9+ but functional on Android.
     @Suppress("deprecation")
     override fun finalize() {
         try {

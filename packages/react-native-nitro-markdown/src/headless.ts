@@ -112,11 +112,7 @@ export function parseMarkdown(text: string, options?: ParserOptions): MarkdownNo
   }
 
   if (__DEV__) {
-    console.error(
-      '[NitroMarkdown] parseMarkdown: Native parser module is not available. ' +
-      'Check that react-native-nitro-markdown is properly installed and linked. ' +
-      'Returning empty AST as fallback.'
-    );
+    console.error('[NitroMarkdown] parseMarkdown: native parser unavailable — check installation.');
   }
   return { type: "document", children: [] };
 }
@@ -137,11 +133,7 @@ export function parseMarkdownWithOptions(
   }
 
   if (__DEV__) {
-    console.error(
-      '[NitroMarkdown] parseMarkdownWithOptions: Native parser module is not available. ' +
-      'Check that react-native-nitro-markdown is properly installed and linked. ' +
-      'Returning empty AST as fallback.'
-    );
+    console.error('[NitroMarkdown] parseMarkdownWithOptions: native parser unavailable — check installation.');
   }
   return { type: "document", children: [] };
 }

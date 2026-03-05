@@ -30,7 +30,7 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
             let toInt = utf16Length(buffer)
             notifyFrom = Double(fromInt)
             notifyTo = Double(toInt)
-        } // lock released here by defer
+        }
         notifyListeners(from: notifyFrom, to: notifyTo)
         return notifyTo
     }
@@ -41,7 +41,7 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
             defer { lock.unlock() }
             buffer = ""
             highlightPosition = 0
-        } // lock released here by defer
+        }
         notifyListeners(from: 0, to: 0)
     }
 
@@ -95,7 +95,7 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
             defer { lock.unlock() }
             buffer = text
             notifyTo = Double((text as NSString).length)
-        } // lock released here by defer
+        }
         notifyListeners(from: 0, to: notifyTo)
     }
 
@@ -120,7 +120,7 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
             newLength = Double((buffer as NSString).length)
             notifyFrom = from
             notifyTo = from + Double((text as NSString).length)
-        } // lock released here by defer
+        }
         if start == end && text.isEmpty {
             return newLength
         }

@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  TZ: UTC
+
 jobs:
   quality:
     name: Quality Checks
@@ -13,7 +16,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -21,21 +24,27 @@ jobs:
           bun-version: latest
 
       - name: Cache dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.bun/install/cache
             node_modules
             packages/*/node_modules
+            apps/*/node_modules
           key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-bun-
 
-      - name: Install dependencies
-        run: bun install
+      - name: Cache Turbo
+        uses: actions/cache@v5
+        with:
+          path: node_modules/.cache/turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
 
-      - name: Verify package integrity
-        run: bun run build --dry-run || echo "Build dry-run not supported, skipping"
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
       - name: Run type checking
         run: bun run typecheck
@@ -45,13 +54,6 @@ jobs:
 
       - name: Run stream performance budget tests
         run: bun run test -F react-native-nitro-markdown -- stream-performance-budget.test.ts
-
-      - name: Setup CMake (for C++ tests)
-        run: |
-          # Verify CMake is available
-          cmake --version
-          # Verify C++ compiler is available
-          gcc --version || clang --version || echo "C++ compiler available"
 
       - name: Run C++ tests (includes parse latency + memory budgets)
         run: bun run test:cpp

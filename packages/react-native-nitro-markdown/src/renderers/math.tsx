@@ -24,11 +24,7 @@ try {
   MathJaxComponent = mathJaxModule.default || mathJaxModule;
 } catch (err) {
   if (__DEV__) {
-    console.warn(
-      '[NitroMarkdown] Math rendering unavailable: react-native-mathjax-svg not found. ' +
-      'Install it to enable LaTeX/math rendering. ' +
-      'Math blocks will render as plain text.',
-    );
+    console.warn('[NitroMarkdown] react-native-mathjax-svg not found — math will render as plain text.');
   }
 }
 
@@ -41,7 +37,6 @@ const createMathStyles = (theme: MarkdownTheme) =>
   StyleSheet.create({
     mathInlineContainer: {
       marginHorizontal: 2,
-      // Ensure the inline view has layout alignment
       justifyContent: "center",
     },
     mathInlineFallbackContainer: {
