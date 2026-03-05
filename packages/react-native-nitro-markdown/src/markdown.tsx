@@ -56,6 +56,7 @@ import {
 } from "./theme";
 import type { CodeHighlighter } from "./utils/code-highlight";
 
+
 const baseStylesCache = new WeakMap<MarkdownTheme, BaseStyles>();
 const parseAstCache = new Map<string, MarkdownNode>();
 const MAX_PARSE_CACHE_ENTRIES = 32;
@@ -274,7 +275,12 @@ export type MarkdownProps = {
    */
   astTransform?: AstTransform;
   /**
-   * Callback fired when parsing begins.
+   * Callback fired after the current parse cycle completes and the component
+   * has re-rendered with new content. Because the native parser runs
+   * synchronously inside `useMemo`, there is no observable "in-progress"
+   * window — this callback fires in the `useEffect` commit phase, after the
+   * new AST is already rendered. Use `onParseComplete` for post-parse
+   * inspection of results.
    */
   onParsingInProgress?: () => void;
   /**
@@ -887,13 +893,13 @@ const getBaseStyles = (theme: MarkdownTheme): BaseStyles => {
 const createBaseStyles = (theme: MarkdownTheme) =>
   StyleSheet.create({
     container: {
-      flex: 1,
+      flexShrink: 1,
     },
     virtualizedList: {
       flex: 1,
     },
     document: {
-      flex: 1,
+      flexShrink: 1,
     },
     errorText: {
       color: "#f87171",
