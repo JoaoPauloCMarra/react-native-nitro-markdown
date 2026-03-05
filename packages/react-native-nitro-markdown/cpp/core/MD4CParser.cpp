@@ -19,9 +19,13 @@ size_t clampInputSize(size_t inputSize) {
 // Safe pointer offset calculation — guards against out-of-allocation arithmetic.
 // md4c callbacks receive pointers into the input buffer, so arithmetic is valid
 // as long as the input string is stable. This check catches any edge cases.
-static MD_OFFSET safeOffset(const char* text, const char* base, size_t baseSize) {
-    if (text < base || text > base + baseSize) return 0;
-    return static_cast<MD_OFFSET>(text - base);
+static MD_OFFSET safeOffset(const char* text, const char* base, size_t baseSize) noexcept {
+    if (text < base) return 0;
+    ptrdiff_t diff = text - base;
+    if (diff < 0 || static_cast<size_t>(diff) > baseSize) return 0;
+    // Check MD_OFFSET won't truncate
+    if (static_cast<size_t>(diff) > static_cast<size_t>(std::numeric_limits<MD_OFFSET>::max())) return 0;
+    return static_cast<MD_OFFSET>(diff);
 }
 } // namespace
 
@@ -46,13 +50,21 @@ public:
     }
     
     void flushText() {
-        if (!currentText.empty() && !nodeStack.empty()) {
-            auto textNode = std::make_shared<MarkdownNode>(NodeType::Text);
-            textNode->content = std::move(currentText);
-            textNode->beg = currentTextBeg;
-            textNode->end = lastTextEnd;
-            nodeStack.top()->addChild(std::move(textNode));
-            currentText.clear();
+        if (!currentText.empty()) {
+            if (!nodeStack.empty()) {
+                auto textNode = std::make_shared<MarkdownNode>(NodeType::Text);
+                textNode->content = std::move(currentText);
+                textNode->beg = currentTextBeg;
+                textNode->end = lastTextEnd;
+                nodeStack.top()->addChild(std::move(textNode));
+                currentText.clear();
+            } else {
+#if defined(NITROMARKDOWN_DEBUG) || defined(DEBUG)
+                // This indicates a parser state bug - text available but no node to attach it to
+                fprintf(stderr, "[NitroMarkdown] Warning: flushText called with empty nodeStack, text dropped: %.50s\n", currentText.c_str());
+#endif
+                currentText.clear();
+            }
         }
     }
     
@@ -113,26 +125,27 @@ public:
         return result;
     }
     
-    static int enterBlock(MD_BLOCKTYPE type, void* detail, MD_OFFSET off, void* userdata) {
+    static int enterBlock(MD_BLOCKTYPE type, void* detail, MD_OFFSET off, void* userdata) noexcept {
+        try {
         auto* impl = static_cast<Impl*>(userdata);
         if (impl == nullptr) return 1; // Signal error to md4c
 
         switch (type) {
             case MD_BLOCK_DOC:
                 break;
-                
+
             case MD_BLOCK_QUOTE: {
                 impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Blockquote), off);
                 break;
             }
-                
+
             case MD_BLOCK_UL: {
                 auto node = std::make_shared<MarkdownNode>(NodeType::List);
                 node->ordered = false;
                 impl->pushNode(node, off);
                 break;
             }
-                
+
             case MD_BLOCK_OL: {
                 auto* d = static_cast<MD_BLOCK_OL_DETAIL*>(detail);
                 auto node = std::make_shared<MarkdownNode>(NodeType::List);
@@ -141,7 +154,7 @@ public:
                 impl->pushNode(node, off);
                 break;
             }
-                
+
             case MD_BLOCK_LI: {
                 auto* d = static_cast<MD_BLOCK_LI_DETAIL*>(detail);
                 if (d->is_task) {
@@ -153,12 +166,12 @@ public:
                 }
                 break;
             }
-                
+
             case MD_BLOCK_HR: {
                 impl->pushNode(std::make_shared<MarkdownNode>(NodeType::HorizontalRule), off);
                 break;
             }
-                
+
             case MD_BLOCK_H: {
                 auto* d = static_cast<MD_BLOCK_H_DETAIL*>(detail);
                 auto node = std::make_shared<MarkdownNode>(NodeType::Heading);
@@ -166,7 +179,7 @@ public:
                 impl->pushNode(node, off);
                 break;
             }
-                
+
             case MD_BLOCK_CODE: {
                 auto* d = static_cast<MD_BLOCK_CODE_DETAIL*>(detail);
                 auto node = std::make_shared<MarkdownNode>(NodeType::CodeBlock);
@@ -176,37 +189,37 @@ public:
                 impl->pushNode(node, off);
                 break;
             }
-                
+
             case MD_BLOCK_HTML: {
                 impl->pushNode(std::make_shared<MarkdownNode>(NodeType::HtmlBlock), off);
                 break;
             }
-                
+
             case MD_BLOCK_P: {
                 impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Paragraph), off);
                 break;
             }
-                
+
             case MD_BLOCK_TABLE: {
                 impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Table), off);
                 break;
             }
-                
+
             case MD_BLOCK_THEAD: {
                 impl->pushNode(std::make_shared<MarkdownNode>(NodeType::TableHead), off);
                 break;
             }
-                
+
             case MD_BLOCK_TBODY: {
                 impl->pushNode(std::make_shared<MarkdownNode>(NodeType::TableBody), off);
                 break;
             }
-                
+
             case MD_BLOCK_TR: {
                 impl->pushNode(std::make_shared<MarkdownNode>(NodeType::TableRow), off);
                 break;
             }
-                
+
             case MD_BLOCK_TH: {
                 auto* d = static_cast<MD_BLOCK_TD_DETAIL*>(detail);
                 auto node = std::make_shared<MarkdownNode>(NodeType::TableCell);
@@ -220,7 +233,7 @@ public:
                 impl->pushNode(node, off);
                 break;
             }
-                
+
             case MD_BLOCK_TD: {
                 auto* d = static_cast<MD_BLOCK_TD_DETAIL*>(detail);
                 auto node = std::make_shared<MarkdownNode>(NodeType::TableCell);
@@ -235,12 +248,15 @@ public:
                 break;
             }
         }
-        
+
         return 0;
+        } catch (...) {
+            return 1; // Signal error to md4c
+        }
     }
     
-    static int leaveBlock(MD_BLOCKTYPE type, void* detail, MD_OFFSET off, void* userdata) {
-        (void)detail;
+    static int leaveBlock(MD_BLOCKTYPE type, [[maybe_unused]] void* detail, MD_OFFSET off, void* userdata) noexcept {
+        try {
         auto* impl = static_cast<Impl*>(userdata);
         if (impl == nullptr) return 1; // Signal error to md4c
 
@@ -255,11 +271,15 @@ public:
                 impl->popNode(off);
                 break;
         }
-        
+
         return 0;
+        } catch (...) {
+            return 1; // Signal error to md4c
+        }
     }
     
-    static int enterSpan(MD_SPANTYPE type, void* detail, MD_OFFSET off, void* userdata) {
+    static int enterSpan(MD_SPANTYPE type, void* detail, MD_OFFSET off, void* userdata) noexcept {
+        try {
         auto* impl = static_cast<Impl*>(userdata);
         if (impl == nullptr) return 1; // Signal error to md4c
 
@@ -268,17 +288,17 @@ public:
                 impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Italic), off);
                 break;
             }
-                
+
             case MD_SPAN_STRONG: {
                 impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Bold), off);
                 break;
             }
-                
+
             case MD_SPAN_DEL: {
                 impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Strikethrough), off);
                 break;
             }
-                
+
             case MD_SPAN_A: {
                 auto* d = static_cast<MD_SPAN_A_DETAIL*>(detail);
                 auto node = std::make_shared<MarkdownNode>(NodeType::Link);
@@ -291,7 +311,7 @@ public:
                 impl->pushNode(node, off);
                 break;
             }
-                
+
             case MD_SPAN_IMG: {
                 auto* d = static_cast<MD_SPAN_IMG_DETAIL*>(detail);
                 auto node = std::make_shared<MarkdownNode>(NodeType::Image);
@@ -304,39 +324,42 @@ public:
                 impl->pushNode(node, off);
                 break;
             }
-                
+
             case MD_SPAN_CODE: {
                 impl->pushNode(std::make_shared<MarkdownNode>(NodeType::CodeInline), off);
                 break;
             }
-                
+
             case MD_SPAN_LATEXMATH: {
                 impl->pushNode(std::make_shared<MarkdownNode>(NodeType::MathInline), off);
                 break;
             }
-                
+
             case MD_SPAN_LATEXMATH_DISPLAY: {
                 impl->pushNode(std::make_shared<MarkdownNode>(NodeType::MathBlock), off);
                 break;
             }
-                
+
             case MD_SPAN_U: {
                 impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Italic), off);
                 break;
             }
-                
+
             case MD_SPAN_WIKILINK: {
                 auto node = std::make_shared<MarkdownNode>(NodeType::Link);
                 impl->pushNode(node, off);
                 break;
             }
         }
-        
+
         return 0;
+        } catch (...) {
+            return 1; // Signal error to md4c
+        }
     }
     
-    static int leaveSpan(MD_SPANTYPE type, void* detail, MD_OFFSET off, void* userdata) {
-        (void)detail;
+    static int leaveSpan(MD_SPANTYPE type, [[maybe_unused]] void* detail, MD_OFFSET off, void* userdata) noexcept {
+        try {
         auto* impl = static_cast<Impl*>(userdata);
         if (impl == nullptr) return 1; // Signal error to md4c
 
@@ -361,9 +384,13 @@ public:
 
         impl->popNode(off);
         return 0;
+        } catch (...) {
+            return 1; // Signal error to md4c
+        }
     }
     
-    static int text(MD_TEXTTYPE type, const MD_CHAR* text, MD_SIZE size, void* userdata) {
+    static int text(MD_TEXTTYPE type, const MD_CHAR* text, MD_SIZE size, void* userdata) noexcept {
+        try {
         auto* impl = static_cast<Impl*>(userdata);
         if (impl == nullptr) return 1; // Signal error to md4c
 
@@ -378,7 +405,7 @@ public:
                 impl->lastTextEnd = off + 1;
                 break;
             }
-                
+
             case MD_TEXT_BR:
                 impl->flushText();
                 if (!impl->nodeStack.empty()) {
@@ -403,7 +430,7 @@ public:
                     impl->nodeStack.top()->addChild(node);
                 }
                 break;
-                
+
             case MD_TEXT_ENTITY:
                 if (text && size > 0) {
                     MD_OFFSET off = safeOffset(text, impl->inputText, impl->inputTextSize);
@@ -413,7 +440,7 @@ public:
                     impl->lastTextEnd = off + size;
                 }
                 break;
-                
+
             case MD_TEXT_NORMAL:
             case MD_TEXT_CODE:
             case MD_TEXT_LATEXMATH:
@@ -431,8 +458,11 @@ public:
                 break;
             }
         }
-        
+
         return 0;
+        } catch (...) {
+            return 1; // Signal error to md4c
+        }
     }
 };
 
