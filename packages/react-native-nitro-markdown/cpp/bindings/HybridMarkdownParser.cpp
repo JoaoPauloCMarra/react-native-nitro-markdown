@@ -79,6 +79,19 @@ inline void appendBoolField(std::string& output, const char* key, bool value) {
     output += value ? "true" : "false";
 }
 
+static size_t estimateJsonSize(const std::shared_ptr<InternalMarkdownNode>& node) {
+    size_t size = 64; // base overhead per node (type, beg, end, braces)
+    if (node->content) size += node->content->size();
+    if (node->href) size += node->href->size() + 10;
+    if (node->title) size += node->title->size() + 10;
+    if (node->alt) size += node->alt->size() + 8;
+    if (node->language) size += node->language->size() + 12;
+    for (const auto& child : node->children) {
+        size += estimateJsonSize(child);
+    }
+    return size;
+}
+
 void appendNodeJson(std::string& output, const std::shared_ptr<InternalMarkdownNode>& node) {
     output.push_back('{');
 
@@ -256,7 +269,7 @@ std::string HybridMarkdownParser::extractPlainTextWithOptions(const std::string&
 
 std::string HybridMarkdownParser::nodeToJson(const std::shared_ptr<InternalMarkdownNode>& node) {
     std::string json;
-    json.reserve(1024);
+    json.reserve(estimateJsonSize(node));
     appendNodeJson(json, node);
     return json;
 }

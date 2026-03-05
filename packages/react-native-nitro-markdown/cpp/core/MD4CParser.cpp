@@ -15,6 +15,14 @@ size_t clampInputSize(size_t inputSize) {
     }
     return inputSize;
 }
+
+// Safe pointer offset calculation — guards against out-of-allocation arithmetic.
+// md4c callbacks receive pointers into the input buffer, so arithmetic is valid
+// as long as the input string is stable. This check catches any edge cases.
+static MD_OFFSET safeOffset(const char* text, const char* base, size_t baseSize) {
+    if (text < base || text > base + baseSize) return 0;
+    return static_cast<MD_OFFSET>(text - base);
+}
 } // namespace
 
 class MD4CParser::Impl {
@@ -74,17 +82,18 @@ public:
         std::string result;
         result.reserve(attr->size);
 
-        for (unsigned i = 0; ; i++) {
+        // md4c invariant: substr_types is terminated by an entry where
+        // substr_offsets[i] == attr->size (the sentinel entry). Reading
+        // substr_offsets[i+1] is always valid when substr_offsets[i] < attr->size.
+        for (unsigned i = 0; attr->substr_offsets[i] < attr->size; i++) {
             size_t start = static_cast<size_t>(attr->substr_offsets[i]);
-            size_t end = static_cast<size_t>(attr->substr_offsets[i + 1]);
+            size_t end = static_cast<size_t>(attr->substr_offsets[i + 1]); // safe: [i+1] always valid when [i] < size
 
-            if (end > attr->size) {
+            if (end > static_cast<size_t>(attr->size)) {
                 end = static_cast<size_t>(attr->size);
             }
-            if (start > end) {
-                break;
-            }
 
+            // Append content for all recognised text types
             if (attr->substr_types[i] == MD_TEXT_NORMAL ||
                 attr->substr_types[i] == MD_TEXT_ENTITY ||
                 attr->substr_types[i] == MD_TEXT_NULLCHAR) {
@@ -92,12 +101,11 @@ public:
                     result.append(attr->text + start, end - start);
                 }
             }
-
-            if (end >= attr->size) {
-                break;
-            }
         }
 
+        // Fallback: if all substrings had unrecognised types (should not occur
+        // per the md4c spec, but guards against future spec extensions), return
+        // the raw attribute text.
         if (result.empty() && attr->size > 0) {
             result.assign(attr->text, attr->size);
         }
@@ -107,7 +115,8 @@ public:
     
     static int enterBlock(MD_BLOCKTYPE type, void* detail, MD_OFFSET off, void* userdata) {
         auto* impl = static_cast<Impl*>(userdata);
-        
+        if (impl == nullptr) return 1; // Signal error to md4c
+
         switch (type) {
             case MD_BLOCK_DOC:
                 break;
@@ -233,7 +242,8 @@ public:
     static int leaveBlock(MD_BLOCKTYPE type, void* detail, MD_OFFSET off, void* userdata) {
         (void)detail;
         auto* impl = static_cast<Impl*>(userdata);
-        
+        if (impl == nullptr) return 1; // Signal error to md4c
+
         switch (type) {
             case MD_BLOCK_DOC:
                 impl->root->end = off;
@@ -251,7 +261,8 @@ public:
     
     static int enterSpan(MD_SPANTYPE type, void* detail, MD_OFFSET off, void* userdata) {
         auto* impl = static_cast<Impl*>(userdata);
-        
+        if (impl == nullptr) return 1; // Signal error to md4c
+
         switch (type) {
             case MD_SPAN_EM: {
                 impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Italic), off);
@@ -327,6 +338,7 @@ public:
     static int leaveSpan(MD_SPANTYPE type, void* detail, MD_OFFSET off, void* userdata) {
         (void)detail;
         auto* impl = static_cast<Impl*>(userdata);
+        if (impl == nullptr) return 1; // Signal error to md4c
 
         if (!impl->nodeStack.empty()) {
             auto currentNode = impl->nodeStack.top();
@@ -353,16 +365,14 @@ public:
     
     static int text(MD_TEXTTYPE type, const MD_CHAR* text, MD_SIZE size, void* userdata) {
         auto* impl = static_cast<Impl*>(userdata);
+        if (impl == nullptr) return 1; // Signal error to md4c
 
         if (!text || size == 0) return 0;
 
         switch (type) {
             case MD_TEXT_NULLCHAR: {
-                MD_OFFSET off = impl->lastTextEnd;
-                ptrdiff_t diff = text - impl->inputText;
-                if (diff >= 0 && static_cast<size_t>(diff) <= impl->inputTextSize) {
-                    off = static_cast<MD_OFFSET>(diff);
-                }
+                MD_OFFSET off = safeOffset(text, impl->inputText, impl->inputTextSize);
+                if (off == 0 && text != impl->inputText) off = impl->lastTextEnd;
                 if (impl->currentText.empty()) impl->currentTextBeg = off;
                 impl->currentText += '\0';
                 impl->lastTextEnd = off + 1;
@@ -371,19 +381,23 @@ public:
                 
             case MD_TEXT_BR:
                 impl->flushText();
-                impl->nodeStack.top()->addChild(
-                    std::make_shared<MarkdownNode>(NodeType::LineBreak));
+                if (!impl->nodeStack.empty()) {
+                    impl->nodeStack.top()->addChild(
+                        std::make_shared<MarkdownNode>(NodeType::LineBreak));
+                }
                 break;
-                
+
             case MD_TEXT_SOFTBR:
                 impl->flushText();
-                impl->nodeStack.top()->addChild(
-                    std::make_shared<MarkdownNode>(NodeType::SoftBreak));
+                if (!impl->nodeStack.empty()) {
+                    impl->nodeStack.top()->addChild(
+                        std::make_shared<MarkdownNode>(NodeType::SoftBreak));
+                }
                 break;
-                
+
             case MD_TEXT_HTML:
                 impl->flushText();
-                {
+                if (!impl->nodeStack.empty()) {
                     auto node = std::make_shared<MarkdownNode>(NodeType::HtmlInline);
                     node->content = std::string(text, size);
                     impl->nodeStack.top()->addChild(node);
@@ -392,11 +406,8 @@ public:
                 
             case MD_TEXT_ENTITY:
                 if (text && size > 0) {
-                    MD_OFFSET off = impl->lastTextEnd;
-                    ptrdiff_t diff = text - impl->inputText;
-                    if (diff >= 0 && static_cast<size_t>(diff) <= impl->inputTextSize) {
-                        off = static_cast<MD_OFFSET>(diff);
-                    }
+                    MD_OFFSET off = safeOffset(text, impl->inputText, impl->inputTextSize);
+                    if (off == 0 && text != impl->inputText) off = impl->lastTextEnd;
                     if (impl->currentText.empty()) impl->currentTextBeg = off;
                     impl->currentText.append(text, size);
                     impl->lastTextEnd = off + size;
@@ -408,12 +419,9 @@ public:
             case MD_TEXT_LATEXMATH:
             default: {
                 if (text && size > 0) {
-                    MD_OFFSET off = impl->lastTextEnd;
-                    ptrdiff_t diff = text - impl->inputText;
-                    if (diff >= 0 && static_cast<size_t>(diff) <= impl->inputTextSize) {
-                        off = static_cast<MD_OFFSET>(diff);
-                    }
-                    
+                    MD_OFFSET off = safeOffset(text, impl->inputText, impl->inputTextSize);
+                    if (off == 0 && text != impl->inputText) off = impl->lastTextEnd;
+
                     if (impl->currentText.empty()) {
                         impl->currentTextBeg = off;
                     }

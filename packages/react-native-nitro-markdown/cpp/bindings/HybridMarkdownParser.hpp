@@ -11,16 +11,16 @@ using InternalParserOptions = ::NitroMarkdown::ParserOptions;
 
 class HybridMarkdownParser : public HybridMarkdownParserSpec {
 public:
-    HybridMarkdownParser() : HybridObject(TAG), HybridMarkdownParserSpec() {
+    HybridMarkdownParser() : HybridMarkdownParserSpec() {
         parser_ = std::make_unique<::NitroMarkdown::MD4CParser>();
     }
     
     ~HybridMarkdownParser() override = default;
 
-    std::string parse(const std::string& text) override;
-    std::string parseWithOptions(const std::string& text, const ParserOptions& options) override;
-    std::string extractPlainText(const std::string& text) override;
-    std::string extractPlainTextWithOptions(const std::string& text, const ParserOptions& options) override;
+    [[nodiscard]] std::string parse(const std::string& text) override;
+    [[nodiscard]] std::string parseWithOptions(const std::string& text, const ParserOptions& options) override;
+    [[nodiscard]] std::string extractPlainText(const std::string& text) override;
+    [[nodiscard]] std::string extractPlainTextWithOptions(const std::string& text, const ParserOptions& options) override;
 
 private:
     std::unique_ptr<::NitroMarkdown::MD4CParser> parser_;
