@@ -1,28 +1,27 @@
 package com.nitromarkdown
 
-import com.facebook.react.BaseReactPackage
+import android.util.Log
+import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule
 import com.facebook.react.bridge.ReactApplicationContext
-import com.facebook.react.module.model.ReactModuleInfoProvider
 import com.facebook.react.uimanager.ViewManager
 import com.margelo.nitro.com.nitromarkdown.NitroMarkdownOnLoad
 
-class NitroMarkdownPackage : BaseReactPackage() {
+class NitroMarkdownPackage : ReactPackage {
+    override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> = emptyList()
+    override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> = emptyList()
+
     companion object {
+        private const val TAG = "NitroMarkdownPackage"
+
         init {
-            NitroMarkdownOnLoad.initializeNative()
+            try {
+                NitroMarkdownOnLoad.initializeNative()
+                Log.d(TAG, "NitroMarkdown native library initialized successfully.")
+            } catch (e: Throwable) {
+                Log.e(TAG, "Failed to initialize NitroMarkdown native library.", e)
+                throw e
+            }
         }
-    }
-
-    override fun getModule(name: String, reactContext: ReactApplicationContext): NativeModule? {
-        return null
-    }
-
-    override fun getReactModuleInfoProvider(): ReactModuleInfoProvider {
-        return ReactModuleInfoProvider { emptyMap() }
-    }
-
-    override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> {
-        return emptyList()
     }
 }
