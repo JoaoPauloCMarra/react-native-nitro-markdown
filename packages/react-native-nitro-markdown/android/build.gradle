@@ -11,7 +11,10 @@ buildscript {
 
 def reactNativeArchitectures() {
   def value = rootProject.getProperties().get("reactNativeArchitectures")
-  return value ? value.split(",") : ["armeabi-v7a", "x86", "x86_64", "arm64-v8a"]
+  // L4: Default to 64-bit only. 32-bit ABIs (armeabi-v7a, x86) are excluded from the default
+  // because all Android devices on API 24+ support 64-bit, and 32-bit increases APK size with no
+  // practical benefit for this library. Override via gradle.properties if needed.
+  return value ? value.split(",") : ["arm64-v8a", "x86_64"]
 }
 
 def isNewArchitectureEnabled() {
@@ -48,7 +51,10 @@ android {
 
     externalNativeBuild {
       cmake {
-        cppFlags "-frtti -fexceptions -Wall -Wextra -fstack-protector-all"
+        // L3/L5: -fstack-protector-strong replaces -fstack-protector-all (better coverage/perf
+        // tradeoff). -Wformat/-Werror=format-security guard against format-string exploits.
+        // -D_FORTIFY_SOURCE=2 enables glibc/Bionic source fortification for buffer overflows.
+        cppFlags "-frtti -fexceptions -Wall -Wextra -fstack-protector-strong -Wformat -Werror=format-security -D_FORTIFY_SOURCE=2"
         arguments "-DANDROID_STL=c++_shared", "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
         abiFilters (*reactNativeArchitectures())
       }

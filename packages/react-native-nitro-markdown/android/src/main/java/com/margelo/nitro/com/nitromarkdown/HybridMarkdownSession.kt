@@ -1,13 +1,15 @@
 package com.margelo.nitro.com.nitromarkdown
 
+import androidx.annotation.GuardedBy
+
 class HybridMarkdownSession : HybridMarkdownSessionSpec() {
-    // @GuardedBy("lock")
+    @GuardedBy("lock")
     private var buffer = StringBuilder()
 
-    // @GuardedBy("lock")
+    @GuardedBy("lock")
     private val listeners = mutableMapOf<Long, (Double, Double) -> Unit>()
 
-    // @GuardedBy("lock")
+    @GuardedBy("lock")
     private var nextListenerId = 0L
 
     private val lock = Any()
@@ -16,7 +18,7 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
     private var isDestroyed = false
 
     // H4: synchronized getter and setter for highlightPosition
-    // @GuardedBy("lock")
+    @GuardedBy("lock")
     override var highlightPosition: Double = 0.0
         get() = synchronized(lock) { field }
         set(value) = synchronized(lock) { field = value }
@@ -123,13 +125,34 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
         }
     }
 
-    // L6: lifecycle cleanup — clears all listeners and marks the session as destroyed
+    // H5: lifecycle cleanup — clears all listeners and marks the session as destroyed.
+    // Called explicitly when the session is no longer needed (e.g. from JS via a destroy method).
     fun onDestroyed() {
         synchronized(lock) {
             isDestroyed = true
             listeners.clear()
         }
     }
+
+    // H5: HybridMarkdownSessionSpec (and its base HybridObject) provides no explicit destroy() /
+    // dispose() lifecycle hook that the Nitro framework calls for us. finalize() is the only JVM
+    // safety-net available without explicit resource management. It is deprecated in Java 9+ but
+    // still functional on Android. This ensures listeners are always cleared even if the caller
+    // never explicitly disposes the session.
+    @Suppress("deprecation")
+    override fun finalize() {
+        try {
+            onDestroyed()
+        } finally {
+            super.finalize()
+        }
+    }
+
+    // H6: The C++ generated file (JHybridMarkdownSessionSpec.cpp) is marked DO NOT MODIFY and
+    // cannot be edited. However, fbjni (used by Nitro) automatically propagates Java/Kotlin
+    // exceptions thrown across the JNI boundary as C++ exceptions. Therefore, an
+    // IllegalArgumentException thrown in append() will be rethrown on the C++ side without
+    // requiring manual JNI exception checks in the generated code.
 
     companion object {
         private const val TAG = "HybridMarkdownSession"

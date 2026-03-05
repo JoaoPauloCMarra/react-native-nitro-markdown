@@ -14,14 +14,24 @@ class NitroMarkdownPackage : ReactPackage {
     companion object {
         private const val TAG = "NitroMarkdownPackage"
 
-        init {
+        // C4: Use lazy initialization so a native library load failure does not propagate an
+        // uncaught exception during ClassLoader initialization, which would crash the app before
+        // any error-handling code can run. The library simply won't be available if loading fails.
+        private val initialized: Boolean by lazy {
             try {
+                Log.d(TAG, "Initializing NitroMarkdown native module")
                 NitroMarkdownOnLoad.initializeNative()
-                Log.d(TAG, "NitroMarkdown native library initialized successfully.")
+                Log.d(TAG, "NitroMarkdown native module initialized successfully")
+                true
             } catch (e: Throwable) {
-                Log.e(TAG, "Failed to initialize NitroMarkdown native library.", e)
-                throw e
+                Log.e(TAG, "Failed to initialize NitroMarkdown native module", e)
+                false
             }
+        }
+
+        @JvmStatic
+        fun initialize() {
+            initialized // trigger lazy init
         }
     }
 }

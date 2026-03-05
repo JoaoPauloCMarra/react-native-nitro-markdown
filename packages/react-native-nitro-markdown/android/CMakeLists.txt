@@ -38,3 +38,10 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 # Include Nitro autolinking (adds nitrogen sources, definitions, and links)
 include(${CMAKE_CURRENT_SOURCE_DIR}/../nitrogen/generated/android/NitroMarkdown+autolinking.cmake)
 
+# L5: Per-build-type optimization flags. Release builds get full optimization and strip debug
+# symbols from the binary. Debug builds disable optimization for easier debugging.
+target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
+    $<$<CONFIG:Release>:-O3 -DNDEBUG>
+    $<$<CONFIG:Debug>:-O0 -g>
+)
+
