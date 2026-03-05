@@ -73,6 +73,25 @@ const ERROR_PHASE = {
   AFTER_PLUGIN: 'after-plugin',
 } as const;
 
+/**
+ * Safely invoke the onError callback, preventing callback exceptions from
+ * propagating and breaking the render cycle.
+ */
+function safeOnError(
+  onError: ((error: Error, phase: string, pluginName?: string) => void) | undefined,
+  error: unknown,
+  phase: string,
+  pluginName?: string,
+): void {
+  try {
+    onError?.(error instanceof Error ? error : new Error(String(error)), phase, pluginName);
+  } catch (callbackError) {
+    if (__DEV__) {
+      console.warn('[NitroMarkdown] onError callback threw an exception:', callbackError);
+    }
+  }
+}
+
 const baseStylesCache = new WeakMap<MarkdownTheme, BaseStyles>();
 const parseAstCache = new Map<string, MarkdownNode>();
 const MAX_PARSE_CACHE_ENTRIES = 32;
@@ -228,7 +247,7 @@ const applyBeforeParsePlugins = (
         `[react-native-nitro-markdown] plugin beforeParse${pluginLabel} threw; using previous markdown.`,
         error,
       );
-      onError?.(error instanceof Error ? error : new Error(String(error)), ERROR_PHASE.BEFORE_PLUGIN, plugin.name);
+      safeOnError(onError, error, ERROR_PHASE.BEFORE_PLUGIN, plugin.name);
     }
   }
 
@@ -260,7 +279,7 @@ const applyAfterParsePlugins = (
         `[react-native-nitro-markdown] plugin afterParse${pluginLabel} threw; using previous AST.`,
         error,
       );
-      onError?.(error instanceof Error ? error : new Error(String(error)), ERROR_PHASE.AFTER_PLUGIN, plugin.name);
+      safeOnError(onError, error, ERROR_PHASE.AFTER_PLUGIN, plugin.name);
     }
   }
 
@@ -406,7 +425,7 @@ export const Markdown: FC<MarkdownProps> = ({
 
   const parseResult = useMemo(() => {
     try {
-      const markdownToParse = applyBeforeParsePlugins(children, plugins, onError ? (e, phase, name) => onError(e, phase, name) : undefined);
+      const markdownToParse = applyBeforeParsePlugins(children, plugins, onError);
       const parserOptions = normalizeParserOptions({
         gfm: parserOptionGfm,
         math: parserOptionMath,
@@ -414,7 +433,7 @@ export const Markdown: FC<MarkdownProps> = ({
       let parsedAst = sourceAst
         ? cloneMarkdownNode(sourceAst)
         : getCachedParsedAst(markdownToParse, parserOptions);
-      parsedAst = applyAfterParsePlugins(parsedAst, plugins, onError ? (e, phase, name) => onError(e, phase, name) : undefined);
+      parsedAst = applyAfterParsePlugins(parsedAst, plugins, onError);
 
       let ast = parsedAst;
       if (astTransform) {
@@ -436,7 +455,7 @@ export const Markdown: FC<MarkdownProps> = ({
         ast,
       };
     } catch (parseError) {
-      onError?.(parseError instanceof Error ? parseError : new Error(String(parseError)), ERROR_PHASE.PARSE);
+      safeOnError(onError, parseError, ERROR_PHASE.PARSE);
       return {
         ast: null,
       };

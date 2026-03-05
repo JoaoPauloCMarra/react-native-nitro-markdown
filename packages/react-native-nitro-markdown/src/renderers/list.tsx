@@ -10,6 +10,8 @@ type ListProps = {
   style?: ViewStyle;
 };
 
+// Note: ordered and start are accepted for API consistency but layout is
+// handled at the ListItem level — the List container is style-only.
 export const List: FC<ListProps> = ({ depth, children, style }) => {
   const { theme } = useMarkdownContext();
   const styles = useMemo(

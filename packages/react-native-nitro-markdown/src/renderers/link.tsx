@@ -39,7 +39,7 @@ export const Link: FC<LinkProps> = ({ href, children, style }) => {
     if (!normalizedHref) return;
 
     try {
-      const shouldOpen = (await onLinkPress?.(normalizedHref)) !== false;
+      const shouldOpen = (await Promise.resolve(onLinkPress?.(normalizedHref))) !== false;
       if (!shouldOpen) return;
 
       const allowedExternalHref = getAllowedExternalHref(normalizedHref);

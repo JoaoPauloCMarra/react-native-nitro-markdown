@@ -22,8 +22,14 @@ try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const mathJaxModule = require("react-native-mathjax-svg");
   MathJaxComponent = mathJaxModule.default || mathJaxModule;
-} catch {
-  // ignored
+} catch (err) {
+  if (__DEV__) {
+    console.warn(
+      '[NitroMarkdown] Math rendering unavailable: react-native-mathjax-svg not found. ' +
+      'Install it to enable LaTeX/math rendering. ' +
+      'Math blocks will render as plain text.',
+    );
+  }
 }
 
 type MathInlineProps = {
