@@ -1,26 +1,38 @@
 package com.margelo.nitro.com.nitromarkdown
 
 class HybridMarkdownSession : HybridMarkdownSessionSpec() {
+    // @GuardedBy("lock")
     private var buffer = StringBuilder()
+
+    // @GuardedBy("lock")
     private val listeners = mutableMapOf<Long, (Double, Double) -> Unit>()
+
+    // @GuardedBy("lock")
     private var nextListenerId = 0L
+
     private val lock = Any()
 
+    @Volatile
+    private var isDestroyed = false
+
+    // H4: synchronized getter and setter for highlightPosition
+    // @GuardedBy("lock")
     override var highlightPosition: Double = 0.0
-        set(value) {
-            synchronized(lock) { field = value }
-            // No notify for highlighting to avoid flood
-        }
-
-
+        get() = synchronized(lock) { field }
+        set(value) = synchronized(lock) { field = value }
+        // No notify for highlighting to avoid flood
 
     override val memorySize: Long
-        get() = buffer.length.toLong()
+        get() = synchronized(lock) { buffer.length.toLong() }
 
     override fun append(chunk: String): Double {
         val from: Int
         val to: Int
         synchronized(lock) {
+            // H5: guard against OOM by limiting buffer size
+            if (buffer.length + chunk.length > MAX_BUFFER_SIZE) {
+                throw IllegalArgumentException("Buffer size limit exceeded (max ${MAX_BUFFER_SIZE} chars)")
+            }
             from = buffer.length
             buffer.append(chunk)
             to = buffer.length
@@ -50,14 +62,18 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
     }
 
     override fun getTextRange(from: Double, to: Double): String {
+        // M4: safe Double → Int coercion via Long to avoid precision issues
+        if (from.isNaN() || from < 0.0) return ""
         synchronized(lock) {
-            val start = from.toInt().coerceIn(0, buffer.length)
-            val end = to.toInt().coerceIn(start, buffer.length)
+            val start = from.toLong().coerceIn(0L, buffer.length.toLong()).toInt()
+            val end = to.toLong().coerceIn(start.toLong(), buffer.length.toLong()).toInt()
             return buffer.substring(start, end)
         }
     }
 
     override fun addListener(listener: (Double, Double) -> Unit): () -> Unit {
+        // L6: guard against adding listeners to a destroyed session
+        if (isDestroyed) throw IllegalStateException("HybridMarkdownSession is destroyed")
         val id: Long
         synchronized(lock) {
             id = nextListenerId++
@@ -78,10 +94,13 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
     }
 
     override fun replace(from: Double, to: Double, text: String): Double {
+        // M3: validate range before proceeding
+        require(from >= 0.0 && to >= from) { "Invalid range: from=$from must be >= 0 and to=$to must be >= from" }
         val newLength: Double
         synchronized(lock) {
-            val start = from.toInt().coerceIn(0, buffer.length)
-            val end = to.toInt().coerceIn(start, buffer.length)
+            // M4: safe Double → Int coercion via Long to avoid precision issues
+            val start = from.toLong().coerceIn(0L, buffer.length.toLong()).toInt()
+            val end = to.toLong().coerceIn(start.toLong(), buffer.length.toLong()).toInt()
             buffer.replace(start, end, text)
             newLength = buffer.length.toDouble()
         }
@@ -89,11 +108,31 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
         return newLength
     }
 
+    // H3: try-catch per listener so one failing callback doesn't stop the rest
     private fun notifyListeners(from: Double, to: Double) {
-        val currentListeners: Collection<(Double, Double) -> Unit>
+        val snapshot: List<(Double, Double) -> Unit>
         synchronized(lock) {
-            currentListeners = listeners.values.toList()
+            snapshot = listeners.values.toList()
         }
-        currentListeners.forEach { it(from, to) }
+        for (listener in snapshot) {
+            try {
+                listener(from, to)
+            } catch (e: Throwable) {
+                android.util.Log.e(TAG, "Listener callback threw an exception", e)
+            }
+        }
+    }
+
+    // L6: lifecycle cleanup — clears all listeners and marks the session as destroyed
+    fun onDestroyed() {
+        synchronized(lock) {
+            isDestroyed = true
+            listeners.clear()
+        }
+    }
+
+    companion object {
+        private const val TAG = "HybridMarkdownSession"
+        private const val MAX_BUFFER_SIZE = 10 * 1024 * 1024 // 10 MB
     }
 }
