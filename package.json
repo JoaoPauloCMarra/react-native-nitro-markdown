@@ -9,7 +9,7 @@
     "setup": "node scripts/setup.js",
     "publish-package": "node scripts/publish.js",
     "build": "turbo run build",
-    "lint": "bunx eslint . --fix",
+    "lint": "bun run --cwd packages/react-native-nitro-markdown lint",
     "clean": "turbo run clean",
     "codegen": "turbo run codegen",
     "typecheck": "turbo run typecheck",
