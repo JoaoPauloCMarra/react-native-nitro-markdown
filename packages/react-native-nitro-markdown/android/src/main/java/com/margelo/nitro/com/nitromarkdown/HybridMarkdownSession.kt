@@ -62,7 +62,7 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
     }
 
     override fun getTextRange(from: Double, to: Double): String {
-        if (from.isNaN() || from < 0.0) return ""
+        if (from.isNaN() || to.isNaN() || from < 0.0) return ""
         synchronized(lock) {
             val start = from.toLong().coerceIn(0L, buffer.length.toLong()).toInt()
             val end = to.toLong().coerceIn(start.toLong(), buffer.length.toLong()).toInt()
@@ -71,22 +71,18 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
     }
 
     override fun addListener(listener: (Double, Double) -> Unit): () -> Unit {
-        if (isDestroyed) throw IllegalStateException("HybridMarkdownSession is destroyed")
-        val id: Long
         synchronized(lock) {
-            id = nextListenerId++
+            if (isDestroyed) throw IllegalStateException("HybridMarkdownSession is destroyed")
+            val id = nextListenerId++
             listeners[id] = listener
-        }
-        return {
-            synchronized(lock) {
-                listeners.remove(id)
-            }
+            return { synchronized(lock) { listeners.remove(id) } }
         }
     }
 
     override fun reset(text: String) {
         synchronized(lock) {
             buffer.replace(0, buffer.length, text)
+            highlightPosition = 0.0
         }
         notifyListeners(0.0, text.length.toDouble())
     }
@@ -118,7 +114,6 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
         }
     }
 
-    // Clears all listeners and marks the session as destroyed.
     fun onDestroyed() {
         synchronized(lock) {
             isDestroyed = true
@@ -126,15 +121,9 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
         }
     }
 
-    // finalize() is the only JVM safety-net since HybridObject has no explicit dispose hook.
-    // Deprecated in Java 9+ but functional on Android.
-    @Suppress("deprecation")
-    override fun finalize() {
-        try {
-            onDestroyed()
-        } finally {
-            super.finalize()
-        }
+    override fun dispose() {
+        onDestroyed()
+        super.dispose()
     }
 
     // H6: The C++ generated file (JHybridMarkdownSessionSpec.cpp) is marked DO NOT MODIFY and

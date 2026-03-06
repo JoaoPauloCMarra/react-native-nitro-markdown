@@ -9,7 +9,6 @@
     "setup": "node scripts/setup.js",
     "publish-package": "node scripts/publish.js",
     "build": "turbo run build",
-    "dev": "turbo run dev",
     "lint": "bunx eslint . --fix",
     "format": "bunx prettier --write .",
     "format:check": "bunx prettier --check .",
@@ -20,11 +19,11 @@
     "test:coverage": "turbo run test -- --coverage",
     "test:cpp": "turbo run test:cpp --filter=react-native-nitro-markdown",
     "benchmark": "node scripts/benchmark-comparison.js",
-    "start": "turbo run start --filter=example --",
-    "example:ios": "turbo run ios --filter=example",
-    "example:android": "turbo run android --filter=example",
-    "example:prebuild": "turbo run prebuild --filter=example",
-    "example:prebuild:clean": "turbo run prebuild:clean --filter=example"
+    "example:start": "bun run --cwd apps/example start",
+    "example:ios": "bun run --cwd apps/example ios",
+    "example:android": "bun run --cwd apps/example android",
+    "example:prebuild": "bun run --cwd apps/example prebuild",
+    "example:prebuild:clean": "bun run --cwd apps/example prebuild:clean"
   },
   "devDependencies": {
     "@types/commonmark": "^0.27.10",
@@ -42,7 +41,7 @@
     "react-native-builder-bob": "^0.40.18",
     "rimraf": "^6.1.3",
     "ts-jest": "^29.4.6",
-    "turbo": "^2.8.10",
+    "turbo": "^2.8.13",
     "typescript": "^5.9.3"
   },
   "overrides": {

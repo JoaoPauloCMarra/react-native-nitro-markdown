@@ -501,10 +501,15 @@ std::shared_ptr<MarkdownNode> MD4CParser::parse(const std::string& markdown, con
         nullptr
     };
 
-    md_parse(markdown.c_str(),
-             static_cast<MD_SIZE>(inputSize),
-             &parser, 
-             impl_.get());
+    int result = md_parse(markdown.c_str(),
+                          static_cast<MD_SIZE>(inputSize),
+                          &parser,
+                          impl_.get());
+    if (result != 0) {
+        // md_parse failed (callback aborted or runtime error).
+        // The AST may be partial but is still a valid tree rooted at Document,
+        // so we continue rather than throw — callers can use whatever was parsed.
+    }
 
     impl_->flushText();
     return impl_->root;

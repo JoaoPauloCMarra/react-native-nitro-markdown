@@ -38,7 +38,6 @@ function getKeywords(language: string): Set<string> {
   return JS_KEYWORDS; // default for js/ts/jsx/tsx/java/c/cpp etc.
 }
 
-// Tokenize a single line into tokens
 function tokenizeLine(line: string, language: string): HighlightedToken[] {
   const keywords = getKeywords(language);
   const tokens: HighlightedToken[] = [];
@@ -49,12 +48,13 @@ function tokenizeLine(line: string, language: string): HighlightedToken[] {
   const isPythonLike = lang === 'python' || lang === 'py';
   const isShellLike = lang === 'bash' || lang === 'sh' || lang === 'shell' || lang === 'zsh';
 
-  if (trimmed.startsWith('//') || trimmed.startsWith('#') && (isShellLike || isPythonLike)) {
+  if (trimmed.startsWith('//') || (trimmed.startsWith('#') && (isShellLike || isPythonLike))) {
     return [{ text: line, type: 'comment' }];
   }
 
-  // Simple token regex: strings, numbers, operators, identifiers, punctuation
-  const tokenRegex = /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)|(\b\d+(?:\.\d+)?\b)|(\/\/[^\n]*|#[^\n]*)|([a-zA-Z_$][a-zA-Z0-9_$]*)|([+\-*/%=<>!&|^~?:]+)|([()\[\]{},;.])|(\s+)|(.)/g;
+  // Only include # as comment for shell/python languages
+  const commentPattern = (isShellLike || isPythonLike) ? '\/\/[^\\n]*|#[^\\n]*' : '\/\/[^\\n]*';
+  const tokenRegex = new RegExp(`("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'|\`(?:[^\`\\\\]|\\\\.)*\`)|(\\b\\d+(?:\\.\\d+)?\\b)|(${commentPattern})|([a-zA-Z_$][a-zA-Z0-9_$]*)|([+\\-*/%=<>!&|^~?:]+)|([(\\)\\[\\]{},;.])|(\\s+)|(.)`, 'g');
 
   let match: RegExpExecArray | null;
   while ((match = tokenRegex.exec(line)) !== null) {

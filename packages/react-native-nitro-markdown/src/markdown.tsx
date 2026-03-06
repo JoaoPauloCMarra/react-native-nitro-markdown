@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   type FC,
   Fragment,
   type ReactElement,
@@ -423,9 +424,15 @@ export const Markdown: FC<MarkdownProps> = ({
   const parserOptionGfm = options?.gfm;
   const parserOptionMath = options?.math;
 
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+
+  const pluginsRef = useRef(plugins);
+  pluginsRef.current = plugins;
+
   const parseResult = useMemo(() => {
     try {
-      const markdownToParse = applyBeforeParsePlugins(children, plugins, onError);
+      const markdownToParse = applyBeforeParsePlugins(children, pluginsRef.current, onErrorRef.current);
       const parserOptions = normalizeParserOptions({
         gfm: parserOptionGfm,
         math: parserOptionMath,
@@ -433,7 +440,7 @@ export const Markdown: FC<MarkdownProps> = ({
       let parsedAst = sourceAst
         ? cloneMarkdownNode(sourceAst)
         : getCachedParsedAst(markdownToParse, parserOptions);
-      parsedAst = applyAfterParsePlugins(parsedAst, plugins, onError);
+      parsedAst = applyAfterParsePlugins(parsedAst, pluginsRef.current, onErrorRef.current);
 
       let ast = parsedAst;
       if (astTransform) {
@@ -455,7 +462,7 @@ export const Markdown: FC<MarkdownProps> = ({
         ast,
       };
     } catch (parseError) {
-      safeOnError(onError, parseError, ERROR_PHASE.PARSE);
+      safeOnError(onErrorRef.current, parseError, ERROR_PHASE.PARSE);
       return {
         ast: null,
       };
@@ -464,10 +471,8 @@ export const Markdown: FC<MarkdownProps> = ({
     children,
     parserOptionGfm,
     parserOptionMath,
-    plugins,
     sourceAst,
     astTransform,
-    onError,
   ]);
 
   useEffect(() => {
@@ -476,7 +481,6 @@ export const Markdown: FC<MarkdownProps> = ({
     children,
     parserOptionGfm,
     parserOptionMath,
-    plugins,
     onParsingInProgress,
   ]);
 

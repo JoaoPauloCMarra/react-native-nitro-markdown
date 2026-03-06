@@ -6,7 +6,11 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
     private var listeners: [UUID: (Double, Double) -> Void] = [:]
     private let lock = NSLock()
 
-    var highlightPosition: Double = 0
+    var highlightPosition: Double {
+        get { lock.lock(); defer { lock.unlock() }; return _highlightPosition }
+        set { lock.lock(); defer { lock.unlock() }; _highlightPosition = newValue }
+    }
+    private var _highlightPosition: Double = 0
 
     var memorySize: Int {
         return buffer.utf8.count
@@ -40,7 +44,7 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
             lock.lock()
             defer { lock.unlock() }
             buffer = ""
-            highlightPosition = 0
+            _highlightPosition = 0
         }
         notifyListeners(from: 0, to: 0)
     }
@@ -82,9 +86,10 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
         lock.unlock()
 
         return { [weak self] in
-            self?.lock.lock()
-            self?.listeners.removeValue(forKey: id)
-            self?.lock.unlock()
+            guard let self else { return }
+            self.lock.lock()
+            defer { self.lock.unlock() }
+            self.listeners.removeValue(forKey: id)
         }
     }
 
@@ -94,15 +99,13 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
             lock.lock()
             defer { lock.unlock() }
             buffer = text
+            _highlightPosition = 0
             notifyTo = Double((text as NSString).length)
         }
         notifyListeners(from: 0, to: notifyTo)
     }
 
     func replace(from: Double, to: Double, text: String) throws -> Double {
-        guard from.isFinite && to.isFinite && from >= 0 && to >= 0 && from <= to else {
-            return Double(utf16Length(buffer))
-        }
         let notifyFrom: Double
         let notifyTo: Double
         let newLength: Double
@@ -111,6 +114,9 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
         do {
             lock.lock()
             defer { lock.unlock() }
+            guard from.isFinite && to.isFinite && from >= 0 && to >= 0 && from <= to else {
+                return Double(utf16Length(buffer))
+            }
             let nsBuffer = NSMutableString(string: buffer)
             let length = nsBuffer.length
             start = max(0, min(Int(from), length))

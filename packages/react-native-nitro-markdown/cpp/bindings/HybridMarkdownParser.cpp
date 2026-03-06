@@ -206,10 +206,6 @@ std::string flattenNodeText(const std::shared_ptr<InternalMarkdownNode>& node) {
         case NodeType::MathInline:
         case NodeType::HtmlInline:
             return node->content.value_or("");
-        case NodeType::CodeBlock:
-        case NodeType::MathBlock:
-        case NodeType::HtmlBlock:
-            return trimCopy(node->content.value_or("")) + "\n\n";
         case NodeType::LineBreak:
             return "\n";
         case NodeType::SoftBreak:
@@ -232,6 +228,9 @@ std::string flattenNodeText(const std::shared_ptr<InternalMarkdownNode>& node) {
         case NodeType::Paragraph:
         case NodeType::Heading:
         case NodeType::Blockquote:
+        case NodeType::CodeBlock:
+        case NodeType::MathBlock:
+        case NodeType::HtmlBlock:
             return trimCopy(childrenText) + "\n\n";
         case NodeType::ListItem:
         case NodeType::TaskListItem:

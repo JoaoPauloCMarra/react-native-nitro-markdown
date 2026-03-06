@@ -11,7 +11,7 @@ using InternalParserOptions = ::NitroMarkdown::ParserOptions;
 
 class HybridMarkdownParser : public HybridMarkdownParserSpec {
 public:
-    HybridMarkdownParser() : HybridMarkdownParserSpec() {
+    HybridMarkdownParser() : HybridObject(TAG), HybridMarkdownParserSpec() {
         parser_ = std::make_unique<::NitroMarkdown::MD4CParser>();
     }
     
