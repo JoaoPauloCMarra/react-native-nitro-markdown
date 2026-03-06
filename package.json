@@ -10,8 +10,6 @@
     "publish-package": "node scripts/publish.js",
     "build": "turbo run build",
     "lint": "bunx eslint . --fix",
-    "format": "bunx prettier --write .",
-    "format:check": "bunx prettier --check .",
     "clean": "turbo run clean",
     "codegen": "turbo run codegen",
     "typecheck": "turbo run typecheck",
