@@ -62,36 +62,47 @@ async function runSmokeTests(): Promise<LogEntry[]> {
 
   try {
     const ast = parseMarkdown("# Hello\n\nWorld");
-    ast.type === "document" && (ast.children?.length ?? 0) > 0
-      ? pass("parseMarkdown", `root=${ast.type}, children=${ast.children?.length}`)
-      : fail("parseMarkdown", "unexpected AST shape");
+    if (ast.type === "document" && (ast.children?.length ?? 0) > 0) {
+      pass(
+        "parseMarkdown",
+        `root=${ast.type}, children=${ast.children?.length}`,
+      );
+    } else {
+      fail("parseMarkdown", "unexpected AST shape");
+    }
   } catch (e) {
     fail("parseMarkdown", String(e));
   }
 
   try {
     const gfmAst = parseMarkdown("| A |\n|---|\n| B |", { gfm: true });
-    gfmAst.children?.some((c) => c.type === "table")
-      ? pass("parseMarkdown + GFM tables")
-      : fail("parseMarkdown + GFM tables", "no table node found");
+    if (gfmAst.children?.some((c) => c.type === "table")) {
+      pass("parseMarkdown + GFM tables");
+    } else {
+      fail("parseMarkdown + GFM tables", "no table node found");
+    }
   } catch (e) {
     fail("parseMarkdown + GFM tables", String(e));
   }
 
   try {
     const mathAst = parseMarkdown("$$x^2$$", { math: true });
-    JSON.stringify(mathAst).includes("math_block")
-      ? pass("parseMarkdown + math")
-      : fail("parseMarkdown + math", "no math_block node");
+    if (JSON.stringify(mathAst).includes("math_block")) {
+      pass("parseMarkdown + math");
+    } else {
+      fail("parseMarkdown + math", "no math_block node");
+    }
   } catch (e) {
     fail("parseMarkdown + math", String(e));
   }
 
   try {
     const plain = extractPlainText("**bold** and *italic*");
-    plain.includes("bold") && plain.includes("italic")
-      ? pass("extractPlainText", `"${plain.trim().slice(0, 40)}"`)
-      : fail("extractPlainText", `got "${plain.trim().slice(0, 40)}"`);
+    if (plain.includes("bold") && plain.includes("italic")) {
+      pass("extractPlainText", `"${plain.trim().slice(0, 40)}"`);
+    } else {
+      fail("extractPlainText", `got "${plain.trim().slice(0, 40)}"`);
+    }
   } catch (e) {
     fail("extractPlainText", String(e));
   }
@@ -99,9 +110,11 @@ async function runSmokeTests(): Promise<LogEntry[]> {
   try {
     const ast = parseMarkdown("# Hello\n\nWorld");
     const flat = getFlattenedText(ast);
-    flat.includes("Hello") && flat.includes("World")
-      ? pass("getFlattenedText")
-      : fail("getFlattenedText", `got "${flat.slice(0, 40)}"`);
+    if (flat.includes("Hello") && flat.includes("World")) {
+      pass("getFlattenedText");
+    } else {
+      fail("getFlattenedText", `got "${flat.slice(0, 40)}"`);
+    }
   } catch (e) {
     fail("getFlattenedText", String(e));
   }
@@ -109,9 +122,11 @@ async function runSmokeTests(): Promise<LogEntry[]> {
   try {
     const ast = parseMarkdown("test");
     const stripped = stripSourceOffsets(ast);
-    !("beg" in stripped) && !("end" in stripped)
-      ? pass("stripSourceOffsets")
-      : fail("stripSourceOffsets", "offsets still present");
+    if (!("beg" in stripped) && !("end" in stripped)) {
+      pass("stripSourceOffsets");
+    } else {
+      fail("stripSourceOffsets", "offsets still present");
+    }
   } catch (e) {
     fail("stripSourceOffsets", String(e));
   }
@@ -128,29 +143,41 @@ async function runSmokeTests(): Promise<LogEntry[]> {
       colors: { link: "#ff0000" },
       fontSizes: { h1: 40 },
     });
-    merged.colors.link === "#ff0000" &&
-    merged.fontSizes.h1 === 40 &&
-    merged.colors.surface === defaultMarkdownTheme.colors.surface
-      ? pass("mergeThemes", "partial merge preserves base")
-      : fail("mergeThemes", "unexpected merge result");
+    if (
+      merged.colors.link === "#ff0000" &&
+      merged.fontSizes.h1 === 40 &&
+      merged.colors.surface === defaultMarkdownTheme.colors.surface
+    ) {
+      pass("mergeThemes", "partial merge preserves base");
+    } else {
+      fail("mergeThemes", "unexpected merge result");
+    }
   } catch (e) {
     fail("mergeThemes", String(e));
   }
 
   try {
-    typeof defaultMarkdownTheme.colors.text === "string" &&
-    typeof defaultMarkdownTheme.fontSizes.m === "number"
-      ? pass("defaultMarkdownTheme exported")
-      : fail("defaultMarkdownTheme", "missing expected fields");
+    if (
+      typeof defaultMarkdownTheme.colors.text === "string" &&
+      typeof defaultMarkdownTheme.fontSizes.m === "number"
+    ) {
+      pass("defaultMarkdownTheme exported");
+    } else {
+      fail("defaultMarkdownTheme", "missing expected fields");
+    }
   } catch (e) {
     fail("defaultMarkdownTheme", String(e));
   }
 
   try {
-    minimalMarkdownTheme.spacing.m === 0 &&
-    minimalMarkdownTheme.fontFamilies.regular === undefined
-      ? pass("minimalMarkdownTheme", "zero spacing, no font family")
-      : fail("minimalMarkdownTheme", "unexpected values");
+    if (
+      minimalMarkdownTheme.spacing.m === 0 &&
+      minimalMarkdownTheme.fontFamilies.regular === undefined
+    ) {
+      pass("minimalMarkdownTheme", "zero spacing, no font family");
+    } else {
+      fail("minimalMarkdownTheme", "unexpected values");
+    }
   } catch (e) {
     fail("minimalMarkdownTheme", String(e));
   }
@@ -163,7 +190,9 @@ async function runSmokeTests(): Promise<LogEntry[]> {
   header("AST NODE COVERAGE");
 
   const allFeaturesMd = [
-    "# H1", "## H2", "### H3",
+    "# H1",
+    "## H2",
+    "### H3",
     "**bold** *italic* ~~strike~~ `code`",
     "[link](https://example.com)",
     "![img](https://picsum.photos/1/1)",
@@ -188,16 +217,36 @@ async function runSmokeTests(): Promise<LogEntry[]> {
     walk(ast);
 
     const expected = [
-      "document", "heading", "paragraph", "text", "bold", "italic",
-      "strikethrough", "code_inline", "link", "image", "blockquote",
-      "horizontal_rule", "list", "list_item", "task_list_item", "table",
-      "table_head", "table_body", "table_row", "table_cell", "code_block",
-      "math_inline", "math_block",
+      "document",
+      "heading",
+      "paragraph",
+      "text",
+      "bold",
+      "italic",
+      "strikethrough",
+      "code_inline",
+      "link",
+      "image",
+      "blockquote",
+      "horizontal_rule",
+      "list",
+      "list_item",
+      "task_list_item",
+      "table",
+      "table_head",
+      "table_body",
+      "table_row",
+      "table_cell",
+      "code_block",
+      "math_inline",
+      "math_block",
     ];
     const missing = expected.filter((t) => !allTypes.has(t));
-    missing.length === 0
-      ? pass("All 23 node types present", `${allTypes.size} types`)
-      : fail("Missing node types", missing.join(", "));
+    if (missing.length === 0) {
+      pass("All 23 node types present", `${allTypes.size} types`);
+    } else {
+      fail("Missing node types", missing.join(", "));
+    }
   } catch (e) {
     fail("AST node coverage", String(e));
   }
@@ -227,12 +276,16 @@ async function runSmokeTests(): Promise<LogEntry[]> {
     const ast = parseMarkdown(md);
     afterParse(ast);
 
-    beforeRan && md.includes("replaced")
-      ? pass("beforeParse plugin", `"${md}"`)
-      : fail("beforeParse plugin");
-    afterRan
-      ? pass("afterParse plugin")
-      : fail("afterParse plugin");
+    if (beforeRan && md.includes("replaced")) {
+      pass("beforeParse plugin", `"${md}"`);
+    } else {
+      fail("beforeParse plugin");
+    }
+    if (afterRan) {
+      pass("afterParse plugin");
+    } else {
+      fail("afterParse plugin");
+    }
   } catch (e) {
     fail("Plugin pipeline", String(e));
   }
@@ -244,9 +297,11 @@ async function runSmokeTests(): Promise<LogEntry[]> {
     } catch {
       caught = true;
     }
-    caught
-      ? pass("Plugin error isolation", "crash caught gracefully")
-      : fail("Plugin error isolation");
+    if (caught) {
+      pass("Plugin error isolation", "crash caught gracefully");
+    } else {
+      fail("Plugin error isolation");
+    }
   } catch (e) {
     fail("Plugin error isolation", String(e));
   }
@@ -270,9 +325,11 @@ async function runSmokeTests(): Promise<LogEntry[]> {
     });
     const transformed = walkTransform(ast);
     const text = getFlattenedText(transformed);
-    text.includes("[emoji]")
-      ? pass("astTransform", `"${text.trim()}"`)
-      : fail("astTransform");
+    if (text.includes("[emoji]")) {
+      pass("astTransform", `"${text.trim()}"`);
+    } else {
+      fail("astTransform");
+    }
   } catch (e) {
     fail("astTransform", String(e));
   }
@@ -289,41 +346,66 @@ async function runSmokeTests(): Promise<LogEntry[]> {
     session.append("Hello ");
     session.append("**world**");
     const text = session.getAllText();
-    text === "Hello **world**"
-      ? pass("session.append + getAllText")
-      : fail("session.append + getAllText", `got "${text}"`);
+    if (text === "Hello **world**") {
+      pass("session.append + getAllText");
+    } else {
+      fail("session.append + getAllText", `got "${text}"`);
+    }
 
     const range = session.getTextRange(0, 5);
-    range === "Hello"
-      ? pass("session.getTextRange")
-      : fail("session.getTextRange", `got "${range}"`);
+    if (range === "Hello") {
+      pass("session.getTextRange");
+    } else {
+      fail("session.getTextRange", `got "${range}"`);
+    }
 
     session.reset("fresh");
-    session.getAllText() === "fresh"
-      ? pass("session.reset")
-      : fail("session.reset");
+    if (session.getAllText() === "fresh") {
+      pass("session.reset");
+    } else {
+      fail("session.reset");
+    }
 
     session.replace(0, 5, "new text");
-    session.getAllText() === "new text"
-      ? pass("session.replace")
-      : fail("session.replace", `got "${session.getAllText()}"`);
+    if (session.getAllText() === "new text") {
+      pass("session.replace");
+    } else {
+      fail("session.replace", `got "${session.getAllText()}"`);
+    }
 
-    const listenerResult = await new Promise<{ called: boolean; from: number; to: number }>((resolve) => {
+    const listenerResult = await new Promise<{
+      called: boolean;
+      from: number;
+      to: number;
+    }>((resolve) => {
       const unsub = session.addListener((from: number, to: number) => {
         unsub();
         resolve({ called: true, from, to });
       });
       session.append("!");
-      setTimeout(() => resolve({ called: false, from: -1, to: -1 }), 500);
+      setTimeout(() => {
+        resolve({ called: false, from: -1, to: -1 });
+      }, 500);
     });
-    listenerResult.called && listenerResult.from >= 0 && listenerResult.to > listenerResult.from
-      ? pass("session.addListener")
-      : fail("session.addListener", `called=${listenerResult.called} from=${listenerResult.from} to=${listenerResult.to}`);
+    if (
+      listenerResult.called &&
+      listenerResult.from >= 0 &&
+      listenerResult.to > listenerResult.from
+    ) {
+      pass("session.addListener");
+    } else {
+      fail(
+        "session.addListener",
+        `called=${listenerResult.called} from=${listenerResult.from} to=${listenerResult.to}`,
+      );
+    }
 
     session.clear();
-    session.getAllText() === ""
-      ? pass("session.clear")
-      : fail("session.clear");
+    if (session.getAllText() === "") {
+      pass("session.clear");
+    } else {
+      fail("session.clear");
+    }
   } catch (e) {
     fail("MarkdownSession", String(e));
   }
@@ -346,9 +428,14 @@ async function runSmokeTests(): Promise<LogEntry[]> {
         },
       ],
     };
-    preBuilt.type === "document" && preBuilt.children?.[0]?.type === "heading"
-      ? pass("sourceAst structure valid")
-      : fail("sourceAst structure");
+    if (
+      preBuilt.type === "document" &&
+      preBuilt.children?.[0]?.type === "heading"
+    ) {
+      pass("sourceAst structure valid");
+    } else {
+      fail("sourceAst structure");
+    }
   } catch (e) {
     fail("sourceAst", String(e));
   }
@@ -477,13 +564,19 @@ export default function BenchmarkScreen() {
 
       <View style={styles.buttonRow}>
         <Pressable
-          style={[styles.benchmarkButton, mode === "smoke" && styles.buttonActive]}
+          style={[
+            styles.benchmarkButton,
+            mode === "smoke" && styles.buttonActive,
+          ]}
           onPress={runSmoke}
         >
           <Text style={styles.benchmarkText}>Run Smoke Tests</Text>
         </Pressable>
         <Pressable
-          style={[styles.benchmarkButton, mode === "bench" && styles.buttonActive]}
+          style={[
+            styles.benchmarkButton,
+            mode === "bench" && styles.buttonActive,
+          ]}
           onPress={runBenchmark}
         >
           <Text style={styles.benchmarkText}>Run Benchmark</Text>
@@ -503,7 +596,8 @@ export default function BenchmarkScreen() {
         ) : mode === "smoke" && smokeLogs.length > 0 ? (
           <View style={styles.resultsContainer}>
             {smokeLogs.map((log, i) => {
-              if (log.type === "spacer") return <View key={i} style={styles.spacer} />;
+              if (log.type === "spacer")
+                return <View key={i} style={styles.spacer} />;
               return (
                 <Text
                   key={i}

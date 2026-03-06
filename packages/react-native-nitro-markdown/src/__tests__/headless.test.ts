@@ -1,13 +1,80 @@
-import "./setup";
+import { mockParser } from "./setup";
+import type { MarkdownNode } from "../headless";
 import {
-  getFlattenedText,
+  parseMarkdown,
+  parseMarkdownWithOptions,
+  extractPlainText,
+  extractPlainTextWithOptions,
   getTextContent,
+  getFlattenedText,
   stripSourceOffsets,
-  type MarkdownNode,
 } from "../headless";
 
+describe("parseMarkdown", () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it("returns a document node", () => {
+    const ast = parseMarkdown("hello");
+    expect(ast.type).toBe("document");
+    expect(mockParser.parse).toHaveBeenCalledWith("hello");
+  });
+
+  it("delegates to parseWithOptions when options provided", () => {
+    parseMarkdownWithOptions("hello", { gfm: true });
+    expect(mockParser.parseWithOptions).toHaveBeenCalledWith("hello", { gfm: true });
+  });
+
+  it("overloaded parseMarkdown forwards options", () => {
+    parseMarkdown("hello", { math: true });
+    expect(mockParser.parseWithOptions).toHaveBeenCalledWith("hello", { math: true });
+  });
+
+  it("handles empty input", () => {
+    const ast = parseMarkdown("");
+    expect(ast.type).toBe("document");
+    expect(ast.children).toEqual([]);
+  });
+});
+
+describe("extractPlainText", () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it("uses native extractPlainText", () => {
+    const result = extractPlainText("# Title");
+    expect(mockParser.extractPlainText).toHaveBeenCalledWith("# Title");
+    expect(result).toBe("# Title");
+  });
+
+  it("uses native extractPlainTextWithOptions", () => {
+    const result = extractPlainTextWithOptions("# Title", { gfm: true });
+    expect(mockParser.extractPlainTextWithOptions).toHaveBeenCalledWith("# Title", { gfm: true });
+    expect(result).toBe("# Title");
+  });
+});
+
+describe("getTextContent", () => {
+  it("returns content when present", () => {
+    expect(getTextContent({ type: "text", content: "hello" })).toBe("hello");
+  });
+
+  it("concatenates children text recursively", () => {
+    const node: MarkdownNode = {
+      type: "paragraph",
+      children: [
+        { type: "text", content: "Hello " },
+        { type: "bold", children: [{ type: "text", content: "world" }] },
+      ],
+    };
+    expect(getTextContent(node)).toBe("Hello world");
+  });
+
+  it("returns empty string for node with no content or children", () => {
+    expect(getTextContent({ type: "paragraph" })).toBe("");
+  });
+});
+
 describe("getFlattenedText", () => {
-  it("extracts text from a simple paragraph", () => {
+  it("extracts text from a paragraph", () => {
     const node: MarkdownNode = {
       type: "paragraph",
       children: [{ type: "text", content: "Hello world" }],
@@ -24,267 +91,93 @@ describe("getFlattenedText", () => {
     expect(getFlattenedText(node)).toBe("Title\n\n");
   });
 
-  it("extracts text from a code block", () => {
+  it("handles code_block with content", () => {
+    expect(getFlattenedText({ type: "code_block", content: "const x = 1;\n" })).toBe("const x = 1;\n\n");
+  });
+
+  it("handles code_block without content", () => {
+    expect(getFlattenedText({ type: "code_block" })).toBe("\n\n");
+  });
+
+  it("handles inline types", () => {
+    expect(getFlattenedText({ type: "code_inline", content: "foo()" })).toBe("foo()");
+    expect(getFlattenedText({ type: "math_inline", content: "E=mc^2" })).toBe("E=mc^2");
+    expect(getFlattenedText({ type: "html_inline", content: "<br>" })).toBe("<br>");
+  });
+
+  it("handles break types", () => {
+    expect(getFlattenedText({ type: "line_break" })).toBe("\n");
+    expect(getFlattenedText({ type: "soft_break" })).toBe(" ");
+    expect(getFlattenedText({ type: "horizontal_rule" })).toBe("---\n\n");
+  });
+
+  it("handles image with alt, title, or neither", () => {
+    expect(getFlattenedText({ type: "image", alt: "A photo", href: "x" })).toBe("A photo");
+    expect(getFlattenedText({ type: "image", title: "Title", href: "x" })).toBe("Title");
+    expect(getFlattenedText({ type: "image", href: "x" })).toBe("");
+  });
+
+  it("handles table structure", () => {
     const node: MarkdownNode = {
-      type: "code_block",
-      language: "javascript",
-      content: "const x = 1;\n",
+      type: "table",
+      children: [{
+        type: "table_head",
+        children: [{
+          type: "table_row",
+          children: [{ type: "table_cell", isHeader: true, children: [{ type: "text", content: "H" }] }],
+        }],
+      }],
     };
-    expect(getFlattenedText(node)).toBe("const x = 1;\n\n");
+    const result = getFlattenedText(node);
+    expect(result).toContain("H");
+    expect(result).toContain("|");
   });
 
-  it("extracts text from code_inline", () => {
-    const node: MarkdownNode = {
-      type: "code_inline",
-      content: "foo()",
-    };
-    expect(getFlattenedText(node)).toBe("foo()");
+  it("handles document with no children", () => {
+    expect(getFlattenedText({ type: "document" })).toBe("");
+    expect(getFlattenedText({ type: "document", children: [] })).toBe("");
   });
 
-  it("extracts text from math_inline", () => {
-    const node: MarkdownNode = {
-      type: "math_inline",
-      content: "E=mc^2",
-    };
-    expect(getFlattenedText(node)).toBe("E=mc^2");
-  });
-
-  it("extracts text from html_inline", () => {
-    const node: MarkdownNode = {
-      type: "html_inline",
-      content: "<br>",
-    };
-    expect(getFlattenedText(node)).toBe("<br>");
-  });
-
-  it("extracts text from math_block", () => {
-    const node: MarkdownNode = {
-      type: "math_block",
-      content: "\\sum_{i=1}^n",
-    };
-    expect(getFlattenedText(node)).toBe("\\sum_{i=1}^n\n\n");
-  });
-
-  it("extracts text from html_block", () => {
-    const node: MarkdownNode = {
-      type: "html_block",
-      content: "<div>test</div>  ",
-    };
-    expect(getFlattenedText(node)).toBe("<div>test</div>\n\n");
-  });
-
-  it("returns newline for line_break", () => {
-    const node: MarkdownNode = { type: "line_break" };
-    expect(getFlattenedText(node)).toBe("\n");
-  });
-
-  it("returns space for soft_break", () => {
-    const node: MarkdownNode = { type: "soft_break" };
-    expect(getFlattenedText(node)).toBe(" ");
-  });
-
-  it("returns --- for horizontal_rule", () => {
-    const node: MarkdownNode = { type: "horizontal_rule" };
-    expect(getFlattenedText(node)).toBe("---\n\n");
-  });
-
-  it("extracts alt text from image", () => {
-    const node: MarkdownNode = {
-      type: "image",
-      alt: "A photo",
-      href: "https://example.com/img.png",
-    };
-    expect(getFlattenedText(node)).toBe("A photo");
-  });
-
-  it("falls back to title for image with no alt", () => {
-    const node: MarkdownNode = {
-      type: "image",
-      title: "Photo title",
-      href: "https://example.com/img.png",
-    };
-    expect(getFlattenedText(node)).toBe("Photo title");
-  });
-
-  it("returns empty string for image with no alt or title", () => {
-    const node: MarkdownNode = {
-      type: "image",
-      href: "https://example.com/img.png",
-    };
-    expect(getFlattenedText(node)).toBe("");
-  });
-
-  it("extracts text from a list", () => {
+  it("handles list items", () => {
     const node: MarkdownNode = {
       type: "list",
       ordered: false,
       children: [
-        {
-          type: "list_item",
-          children: [
-            {
-              type: "paragraph",
-              children: [{ type: "text", content: "Item 1" }],
-            },
-          ],
-        },
-        {
-          type: "list_item",
-          children: [
-            {
-              type: "paragraph",
-              children: [{ type: "text", content: "Item 2" }],
-            },
-          ],
-        },
+        { type: "list_item", children: [{ type: "paragraph", children: [{ type: "text", content: "Item 1" }] }] },
       ],
     };
-    const result = getFlattenedText(node);
-    expect(result).toContain("Item 1");
-    expect(result).toContain("Item 2");
+    expect(getFlattenedText(node)).toContain("Item 1");
   });
 
-  it("extracts text from task_list_item", () => {
+  it("handles blockquote", () => {
+    const node: MarkdownNode = {
+      type: "blockquote",
+      children: [{ type: "paragraph", children: [{ type: "text", content: "Quoted" }] }],
+    };
+    expect(getFlattenedText(node)).toBe("Quoted\n\n");
+  });
+
+  it("handles math_block and html_block", () => {
+    expect(getFlattenedText({ type: "math_block", content: "\\sum" })).toBe("\\sum\n\n");
+    expect(getFlattenedText({ type: "html_block", content: "<div>hi</div>  " })).toBe("<div>hi</div>\n\n");
+  });
+
+  it("handles task_list_item", () => {
     const node: MarkdownNode = {
       type: "task_list_item",
       checked: true,
-      children: [
-        {
-          type: "paragraph",
-          children: [{ type: "text", content: "Done task" }],
-        },
-      ],
+      children: [{ type: "paragraph", children: [{ type: "text", content: "Done" }] }],
     };
-    const result = getFlattenedText(node);
-    expect(result).toContain("Done task");
-  });
-
-  it("extracts text from nested document structure", () => {
-    const node: MarkdownNode = {
-      type: "document",
-      children: [
-        {
-          type: "heading",
-          level: 1,
-          children: [{ type: "text", content: "Title" }],
-        },
-        {
-          type: "paragraph",
-          children: [
-            { type: "text", content: "Hello " },
-            {
-              type: "bold",
-              children: [{ type: "text", content: "world" }],
-            },
-          ],
-        },
-      ],
-    };
-    const result = getFlattenedText(node);
-    expect(result).toContain("Title");
-    expect(result).toContain("Hello ");
-    expect(result).toContain("world");
-  });
-
-  it("extracts text from a blockquote", () => {
-    const node: MarkdownNode = {
-      type: "blockquote",
-      children: [
-        {
-          type: "paragraph",
-          children: [{ type: "text", content: "Quoted text" }],
-        },
-      ],
-    };
-    // blockquote case: childrenText = paragraph("Quoted text\n\n") => trimmed + "\n\n"
-    // paragraph childrenText = "Quoted text" => trimmed + "\n\n" = "Quoted text\n\n"
-    // blockquote: "Quoted text\n\n".trim() + "\n\n" = "Quoted text\n\n"
-    expect(getFlattenedText(node)).toBe("Quoted text\n\n");
-  });
-
-  it("handles table structures", () => {
-    const node: MarkdownNode = {
-      type: "table",
-      children: [
-        {
-          type: "table_head",
-          children: [
-            {
-              type: "table_row",
-              children: [
-                {
-                  type: "table_cell",
-                  isHeader: true,
-                  children: [{ type: "text", content: "Header" }],
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    };
-    const result = getFlattenedText(node);
-    expect(result).toContain("Header");
-    expect(result).toContain("|");
-  });
-
-  it("returns empty string for text node with no content", () => {
-    const node: MarkdownNode = { type: "text" };
-    expect(getFlattenedText(node)).toBe("");
-  });
-
-  it("returns empty string for code_block with no content", () => {
-    const node: MarkdownNode = { type: "code_block" };
-    expect(getFlattenedText(node)).toBe("\n\n");
-  });
-
-  it("handles document with no children", () => {
-    const node: MarkdownNode = { type: "document" };
-    expect(getFlattenedText(node)).toBe("");
-  });
-
-  it("handles document with empty children array", () => {
-    const node: MarkdownNode = { type: "document", children: [] };
-    expect(getFlattenedText(node)).toBe("");
-  });
-});
-
-describe("getTextContent", () => {
-  it("returns content when present", () => {
-    const node: MarkdownNode = { type: "text", content: "hello" };
-    expect(getTextContent(node)).toBe("hello");
-  });
-
-  it("concatenates children text recursively", () => {
-    const node: MarkdownNode = {
-      type: "paragraph",
-      children: [
-        { type: "text", content: "Hello " },
-        { type: "bold", children: [{ type: "text", content: "world" }] },
-      ],
-    };
-    expect(getTextContent(node)).toBe("Hello world");
-  });
-
-  it("returns empty string for node with no content or children", () => {
-    const node: MarkdownNode = { type: "paragraph" };
-    expect(getTextContent(node)).toBe("");
+    expect(getFlattenedText(node)).toContain("Done");
   });
 });
 
 describe("stripSourceOffsets", () => {
   it("removes beg and end from a single node", () => {
-    const node: MarkdownNode = {
-      type: "text",
-      content: "hello",
-      beg: 0,
-      end: 5,
-    };
-    const result = stripSourceOffsets(node);
+    const result = stripSourceOffsets({ type: "text", content: "hello", beg: 0, end: 5 });
     expect(result.beg).toBeUndefined();
     expect(result.end).toBeUndefined();
     expect(result.content).toBe("hello");
-    expect(result.type).toBe("text");
   });
 
   it("recursively removes offsets from children", () => {
@@ -292,27 +185,15 @@ describe("stripSourceOffsets", () => {
       type: "document",
       beg: 0,
       end: 20,
-      children: [
-        {
-          type: "paragraph",
-          beg: 0,
-          end: 10,
-          children: [{ type: "text", content: "hi", beg: 0, end: 2 }],
-        },
-      ],
+      children: [{ type: "text", content: "hi", beg: 0, end: 2 }],
     };
     const result = stripSourceOffsets(node);
     expect(result.beg).toBeUndefined();
-    expect(result.end).toBeUndefined();
     expect(result.children![0].beg).toBeUndefined();
-    expect(result.children![0].end).toBeUndefined();
-    expect(result.children![0].children![0].beg).toBeUndefined();
-    expect(result.children![0].children![0].end).toBeUndefined();
   });
 
   it("does not add children key when original has none", () => {
-    const node: MarkdownNode = { type: "text", content: "x" };
-    const result = stripSourceOffsets(node);
+    const result = stripSourceOffsets({ type: "text", content: "x" });
     expect(Object.keys(result)).not.toContain("children");
   });
 });

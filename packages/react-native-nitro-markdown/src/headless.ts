@@ -81,10 +81,12 @@ export type MarkdownNode = {
 
 let MarkdownParserModule: MarkdownParser | null = null;
 try {
-  MarkdownParserModule = NitroModules.createHybridObject<MarkdownParser>("MarkdownParser");
+  MarkdownParserModule =
+    NitroModules.createHybridObject<MarkdownParser>("MarkdownParser");
 } catch (e) {
   if (__DEV__) {
-    console.error('[NitroMarkdown] Failed to create native MarkdownParser:', e);
+    // eslint-disable-next-line no-console
+    console.error("[NitroMarkdown] Failed to create native MarkdownParser:", e);
   }
 }
 export { MarkdownParserModule };
@@ -101,18 +103,30 @@ export function parseMarkdown(text: string): MarkdownNode;
  * @param options - Parser options (gfm, math)
  * @returns The root node of the parsed AST
  */
-export function parseMarkdown(text: string, options: ParserOptions): MarkdownNode;
-export function parseMarkdown(text: string, options?: ParserOptions): MarkdownNode {
+export function parseMarkdown(
+  text: string,
+  options: ParserOptions,
+): MarkdownNode;
+export function parseMarkdown(
+  text: string,
+  options?: ParserOptions,
+): MarkdownNode {
   if (options != null) {
     return parseMarkdownWithOptions(text, options);
   }
-  if (MarkdownParserModule != null && typeof MarkdownParserModule.parse === "function") {
+  if (
+    MarkdownParserModule != null &&
+    typeof MarkdownParserModule.parse === "function"
+  ) {
     const jsonStr = MarkdownParserModule.parse(text);
     return JSON.parse(jsonStr) as MarkdownNode;
   }
 
   if (__DEV__) {
-    console.error('[NitroMarkdown] parseMarkdown: native parser unavailable — check installation.');
+    // eslint-disable-next-line no-console
+    console.error(
+      "[NitroMarkdown] parseMarkdown: native parser unavailable — check installation.",
+    );
   }
   return { type: "document", children: [] };
 }
@@ -127,13 +141,19 @@ export function parseMarkdownWithOptions(
   text: string,
   options: ParserOptions,
 ): MarkdownNode {
-  if (MarkdownParserModule != null && typeof MarkdownParserModule.parseWithOptions === "function") {
+  if (
+    MarkdownParserModule != null &&
+    typeof MarkdownParserModule.parseWithOptions === "function"
+  ) {
     const jsonStr = MarkdownParserModule.parseWithOptions(text, options);
     return JSON.parse(jsonStr) as MarkdownNode;
   }
 
   if (__DEV__) {
-    console.error('[NitroMarkdown] parseMarkdownWithOptions: native parser unavailable — check installation.');
+    // eslint-disable-next-line no-console
+    console.error(
+      "[NitroMarkdown] parseMarkdownWithOptions: native parser unavailable — check installation.",
+    );
   }
   return { type: "document", children: [] };
 }
@@ -143,7 +163,10 @@ export function parseMarkdownWithOptions(
  * Useful for search/indexing flows that don't need full AST rendering.
  */
 export function extractPlainText(text: string): string {
-  if (MarkdownParserModule != null && typeof MarkdownParserModule.extractPlainText === "function") {
+  if (
+    MarkdownParserModule != null &&
+    typeof MarkdownParserModule.extractPlainText === "function"
+  ) {
     return MarkdownParserModule.extractPlainText(text);
   }
 
@@ -157,7 +180,10 @@ export function extractPlainTextWithOptions(
   text: string,
   options: ParserOptions,
 ): string {
-  if (MarkdownParserModule != null && typeof MarkdownParserModule.extractPlainTextWithOptions === "function") {
+  if (
+    MarkdownParserModule != null &&
+    typeof MarkdownParserModule.extractPlainTextWithOptions === "function"
+  ) {
     return MarkdownParserModule.extractPlainTextWithOptions(text, options);
   }
 

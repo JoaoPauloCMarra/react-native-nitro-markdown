@@ -57,7 +57,6 @@ import {
 } from "./theme";
 import type { CodeHighlighter } from "./utils/code-highlight";
 
-
 function hashString(str: string): number {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -69,9 +68,9 @@ function hashString(str: string): number {
 }
 
 const ERROR_PHASE = {
-  PARSE: 'parse',
-  BEFORE_PLUGIN: 'before-plugin',
-  AFTER_PLUGIN: 'after-plugin',
+  PARSE: "parse",
+  BEFORE_PLUGIN: "before-plugin",
+  AFTER_PLUGIN: "after-plugin",
 } as const;
 
 /**
@@ -85,10 +84,18 @@ function safeOnError<P extends string>(
   pluginName?: string,
 ): void {
   try {
-    onError?.(error instanceof Error ? error : new Error(String(error)), phase, pluginName);
+    onError?.(
+      error instanceof Error ? error : new Error(String(error)),
+      phase,
+      pluginName,
+    );
   } catch (callbackError) {
     if (__DEV__) {
-      console.warn('[NitroMarkdown] onError callback threw an exception:', callbackError);
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[NitroMarkdown] onError callback threw an exception:",
+        callbackError,
+      );
     }
   }
 }
@@ -226,13 +233,15 @@ const getCachedParsedAst = (
 const applyBeforeParsePlugins = (
   markdown: string,
   plugins?: MarkdownPlugin[],
-  onError?: (error: Error, phase: 'before-plugin', pluginName?: string) => void,
+  onError?: (error: Error, phase: "before-plugin", pluginName?: string) => void,
 ): string => {
   if (!plugins || plugins.length === 0) {
     return markdown;
   }
 
-  const sorted = [...plugins].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+  const sorted = [...plugins].sort(
+    (a, b) => (b.priority ?? 0) - (a.priority ?? 0),
+  );
   let nextMarkdown = markdown;
   for (const plugin of sorted) {
     if (!plugin.beforeParse) continue;
@@ -258,13 +267,15 @@ const applyBeforeParsePlugins = (
 const applyAfterParsePlugins = (
   ast: MarkdownNode,
   plugins?: MarkdownPlugin[],
-  onError?: (error: Error, phase: 'after-plugin', pluginName?: string) => void,
+  onError?: (error: Error, phase: "after-plugin", pluginName?: string) => void,
 ): MarkdownNode => {
   if (!plugins || plugins.length === 0) {
     return ast;
   }
 
-  const sorted = [...plugins].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+  const sorted = [...plugins].sort(
+    (a, b) => (b.priority ?? 0) - (a.priority ?? 0),
+  );
   let nextAst = ast;
   for (const plugin of sorted) {
     if (!plugin.afterParse) continue;
@@ -333,7 +344,11 @@ export type MarkdownProps = {
    * @param phase - Where the error occurred.
    * @param pluginName - The plugin name, if applicable.
    */
-  onError?: (error: Error, phase: 'parse' | 'before-plugin' | 'after-plugin', pluginName?: string) => void;
+  onError?: (
+    error: Error,
+    phase: "parse" | "before-plugin" | "after-plugin",
+    pluginName?: string,
+  ) => void;
   /**
    * Custom renderers for specific markdown node types.
    * Each renderer receives { node, children, Renderer } plus type-specific props.
@@ -424,6 +439,7 @@ export const Markdown: FC<MarkdownProps> = ({
   const parserOptionGfm = options?.gfm;
   const parserOptionMath = options?.math;
 
+  /* eslint-disable react-hooks/refs -- Refs updated/read intentionally to avoid re-parsing on callback identity changes */
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
 
@@ -432,7 +448,11 @@ export const Markdown: FC<MarkdownProps> = ({
 
   const parseResult = useMemo(() => {
     try {
-      const markdownToParse = applyBeforeParsePlugins(children, pluginsRef.current, onErrorRef.current);
+      const markdownToParse = applyBeforeParsePlugins(
+        children,
+        pluginsRef.current,
+        onErrorRef.current,
+      );
       const parserOptions = normalizeParserOptions({
         gfm: parserOptionGfm,
         math: parserOptionMath,
@@ -440,7 +460,11 @@ export const Markdown: FC<MarkdownProps> = ({
       let parsedAst = sourceAst
         ? cloneMarkdownNode(sourceAst)
         : getCachedParsedAst(markdownToParse, parserOptions);
-      parsedAst = applyAfterParsePlugins(parsedAst, pluginsRef.current, onErrorRef.current);
+      parsedAst = applyAfterParsePlugins(
+        parsedAst,
+        pluginsRef.current,
+        onErrorRef.current,
+      );
 
       let ast = parsedAst;
       if (astTransform) {
@@ -467,22 +491,12 @@ export const Markdown: FC<MarkdownProps> = ({
         ast: null,
       };
     }
-  }, [
-    children,
-    parserOptionGfm,
-    parserOptionMath,
-    sourceAst,
-    astTransform,
-  ]);
+  }, [children, parserOptionGfm, parserOptionMath, sourceAst, astTransform]);
+  /* eslint-enable react-hooks/refs */
 
   useEffect(() => {
     onParsingInProgress?.();
-  }, [
-    children,
-    parserOptionGfm,
-    parserOptionMath,
-    onParsingInProgress,
-  ]);
+  }, [children, parserOptionGfm, parserOptionMath, onParsingInProgress]);
 
   useEffect(() => {
     if (!parseResult.ast || !onParseComplete) return;
@@ -513,7 +527,15 @@ export const Markdown: FC<MarkdownProps> = ({
       tableOptions,
       highlightCode,
     }),
-    [renderers, theme, nodeStyles, stylingStrategy, onLinkPress, tableOptions, highlightCode],
+    [
+      renderers,
+      theme,
+      nodeStyles,
+      stylingStrategy,
+      onLinkPress,
+      tableOptions,
+      highlightCode,
+    ],
   );
 
   const topLevelBlocks =

@@ -55,7 +55,7 @@
     "build": "bob build",
     "clean": "rimraf lib nitrogen/generated",
     "codegen": "nitrogen --logLevel=\"debug\"",
-    "lint": "eslint src --max-warnings=0 --ignore-pattern 'src/**/__tests__/**' --ignore-pattern 'src/**/*.nitro.ts'",
+    "lint": "bunx eslint src --max-warnings=0 --ignore-pattern 'src/**/__tests__/**' --ignore-pattern 'src/**/*.nitro.ts'",
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:coverage": "jest --coverage",
@@ -91,7 +91,7 @@
   },
   "devDependencies": {
     "@size-limit/preset-small-lib": "^11.0.0",
-    "@types/react": "^19.2.14",
+    "@types/react": "~19.2.10",
     "@types/react-native": "^0.73.0",
     "@types/react-test-renderer": "^19.1.0",
     "react-native-builder-bob": "^0.40.18",

@@ -1,5 +1,4 @@
 import { Platform, type TextStyle, type ViewStyle } from "react-native";
-import type { MarkdownNode } from "./headless";
 
 export type MarkdownTheme = {
   colors: {
@@ -85,13 +84,13 @@ export const defaultMarkdownTheme: MarkdownTheme = {
     tableRowEven: "transparent",
     tableRowOdd: "#f8fafc",
     codeTokenColors: {
-      keyword: '#c792ea',
-      string: '#c3e88d',
-      comment: '#546e7a',
-      number: '#f78c6c',
-      operator: '#89ddff',
-      punctuation: '#89ddff',
-      type: '#ffcb6b',
+      keyword: "#c792ea",
+      string: "#c3e88d",
+      comment: "#546e7a",
+      number: "#f78c6c",
+      operator: "#89ddff",
+      punctuation: "#89ddff",
+      type: "#ffcb6b",
     },
   },
   spacing: {
@@ -149,13 +148,34 @@ export type PartialMarkdownTheme = {
 };
 
 type TextNodeType =
-  | "text" | "bold" | "italic" | "strikethrough" | "link"
-  | "code_inline" | "heading" | "paragraph" | "math_inline" | "html_inline";
+  | "text"
+  | "bold"
+  | "italic"
+  | "strikethrough"
+  | "link"
+  | "code_inline"
+  | "heading"
+  | "paragraph"
+  | "math_inline"
+  | "html_inline";
 type ViewNodeType =
-  | "document" | "blockquote" | "code_block" | "horizontal_rule"
-  | "image" | "list" | "list_item" | "task_list_item" | "table"
-  | "table_head" | "table_body" | "table_row" | "table_cell"
-  | "math_block" | "html_block" | "line_break" | "soft_break";
+  | "document"
+  | "blockquote"
+  | "code_block"
+  | "horizontal_rule"
+  | "image"
+  | "list"
+  | "list_item"
+  | "task_list_item"
+  | "table"
+  | "table_head"
+  | "table_body"
+  | "table_row"
+  | "table_cell"
+  | "math_block"
+  | "html_block"
+  | "line_break"
+  | "soft_break";
 
 export type NodeStyleOverrides = Partial<
   { [K in TextNodeType]: TextStyle } & { [K in ViewNodeType]: ViewStyle }

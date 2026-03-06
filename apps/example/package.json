@@ -39,7 +39,7 @@
     "@types/commonmark": "^0.27.10",
     "@types/markdown-it": "^14.1.2",
     "@types/marked": "^6.0.0",
-    "@types/react": "~19.2.14",
+    "@types/react": "~19.2.10",
     "babel-preset-expo": "~55.0.10",
     "commonmark": "^0.31.2",
     "markdown-it": "^14.1.1",

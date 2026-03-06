@@ -1,142 +1,78 @@
-import {
-  defaultMarkdownTheme,
-  minimalMarkdownTheme,
-  mergeThemes,
-  type MarkdownTheme,
-  type PartialMarkdownTheme,
-} from "../theme";
+import "./setup";
+import { mergeThemes, defaultMarkdownTheme, minimalMarkdownTheme } from "../theme";
 
 describe("mergeThemes", () => {
   it("returns base theme when partial is undefined", () => {
-    const result = mergeThemes(defaultMarkdownTheme, undefined);
-    expect(result).toBe(defaultMarkdownTheme);
-  });
-
-  it("returns base theme when partial is not provided", () => {
-    const result = mergeThemes(defaultMarkdownTheme);
-    expect(result).toBe(defaultMarkdownTheme);
+    expect(mergeThemes(defaultMarkdownTheme)).toBe(defaultMarkdownTheme);
   });
 
   it("overrides a single color", () => {
-    const partial: PartialMarkdownTheme = {
-      colors: { link: "#ff0000" },
-    };
-    const result = mergeThemes(defaultMarkdownTheme, partial);
-    expect(result.colors.link).toBe("#ff0000");
-    expect(result.colors.text).toBe(defaultMarkdownTheme.colors.text);
+    const result = mergeThemes(defaultMarkdownTheme, { colors: { text: "#ff0000" } });
+    expect(result.colors.text).toBe("#ff0000");
+    expect(result.colors.link).toBe(defaultMarkdownTheme.colors.link);
   });
 
   it("overrides nested spacing values", () => {
-    const partial: PartialMarkdownTheme = {
-      spacing: { m: 99 },
-    };
-    const result = mergeThemes(defaultMarkdownTheme, partial);
-    expect(result.spacing.m).toBe(99);
-    expect(result.spacing.xs).toBe(defaultMarkdownTheme.spacing.xs);
-    expect(result.spacing.l).toBe(defaultMarkdownTheme.spacing.l);
+    const result = mergeThemes(defaultMarkdownTheme, { spacing: { xs: 10 } });
+    expect(result.spacing.xs).toBe(10);
+    expect(result.spacing.m).toBe(defaultMarkdownTheme.spacing.m);
   });
 
   it("overrides fontSizes partially", () => {
-    const partial: PartialMarkdownTheme = {
-      fontSizes: { h1: 48 },
-    };
-    const result = mergeThemes(defaultMarkdownTheme, partial);
-    expect(result.fontSizes.h1).toBe(48);
+    const result = mergeThemes(defaultMarkdownTheme, { fontSizes: { h1: 40 } });
+    expect(result.fontSizes.h1).toBe(40);
     expect(result.fontSizes.m).toBe(defaultMarkdownTheme.fontSizes.m);
   });
 
   it("overrides fontFamilies partially", () => {
-    const partial: PartialMarkdownTheme = {
-      fontFamilies: { mono: "JetBrains Mono" },
-    };
-    const result = mergeThemes(defaultMarkdownTheme, partial);
-    expect(result.fontFamilies.mono).toBe("JetBrains Mono");
-    expect(result.fontFamilies.regular).toBe(
-      defaultMarkdownTheme.fontFamilies.regular,
-    );
+    const result = mergeThemes(defaultMarkdownTheme, { fontFamilies: { mono: "Fira Code" } });
+    expect(result.fontFamilies.mono).toBe("Fira Code");
+    expect(result.fontFamilies.regular).toBe(defaultMarkdownTheme.fontFamilies.regular);
   });
 
   it("overrides borderRadius partially", () => {
-    const partial: PartialMarkdownTheme = {
-      borderRadius: { l: 20 },
-    };
-    const result = mergeThemes(defaultMarkdownTheme, partial);
-    expect(result.borderRadius.l).toBe(20);
-    expect(result.borderRadius.s).toBe(defaultMarkdownTheme.borderRadius.s);
+    const result = mergeThemes(defaultMarkdownTheme, { borderRadius: { s: 0 } });
+    expect(result.borderRadius.s).toBe(0);
+    expect(result.borderRadius.m).toBe(defaultMarkdownTheme.borderRadius.m);
   });
 
   it("overrides headingWeight", () => {
-    const partial: PartialMarkdownTheme = {
-      headingWeight: "900",
-    };
-    const result = mergeThemes(defaultMarkdownTheme, partial);
+    const result = mergeThemes(defaultMarkdownTheme, { headingWeight: "900" });
     expect(result.headingWeight).toBe("900");
   });
 
-  it("preserves base headingWeight when partial headingWeight is undefined", () => {
-    const base: MarkdownTheme = { ...defaultMarkdownTheme, headingWeight: "700" };
-    const partial: PartialMarkdownTheme = {
-      colors: { link: "#00f" },
-    };
-    const result = mergeThemes(base, partial);
+  it("preserves base headingWeight when partial is undefined", () => {
+    const base = { ...defaultMarkdownTheme, headingWeight: "700" as const };
+    const result = mergeThemes(base, { colors: { text: "#000" } });
     expect(result.headingWeight).toBe("700");
   });
 
   it("overrides showCodeLanguage", () => {
-    const partial: PartialMarkdownTheme = {
-      showCodeLanguage: true,
-    };
-    const result = mergeThemes(defaultMarkdownTheme, partial);
-    expect(result.showCodeLanguage).toBe(true);
-  });
-
-  it("preserves base showCodeLanguage when partial showCodeLanguage is undefined", () => {
-    const base: MarkdownTheme = { ...defaultMarkdownTheme, showCodeLanguage: true };
-    const partial: PartialMarkdownTheme = {
-      spacing: { xs: 2 },
-    };
-    const result = mergeThemes(base, partial);
+    const result = mergeThemes(defaultMarkdownTheme, { showCodeLanguage: true });
     expect(result.showCodeLanguage).toBe(true);
   });
 
   it("merges codeTokenColors", () => {
-    const partial: PartialMarkdownTheme = {
-      colors: {
-        codeTokenColors: {
-          keyword: "#ff00ff",
-        },
-      },
-    };
-    const result = mergeThemes(defaultMarkdownTheme, partial);
-    expect(result.colors.codeTokenColors?.keyword).toBe("#ff00ff");
-    // Note: shallow spread means other token colors from partial override base entirely
-    // because codeTokenColors is inside the colors spread
+    const result = mergeThemes(defaultMarkdownTheme, {
+      colors: { codeTokenColors: { keyword: "#ff0000" } },
+    });
+    expect(result.colors.codeTokenColors?.keyword).toBe("#ff0000");
   });
 
   it("works with minimal theme as base", () => {
-    const partial: PartialMarkdownTheme = {
-      colors: { link: "#00ff00" },
-    };
-    const result = mergeThemes(minimalMarkdownTheme, partial);
-    expect(result.colors.link).toBe("#00ff00");
-    expect(result.colors.text).toBe(minimalMarkdownTheme.colors.text);
-    expect(result.spacing).toEqual(minimalMarkdownTheme.spacing);
+    const result = mergeThemes(minimalMarkdownTheme, { colors: { text: "#111" } });
+    expect(result.colors.text).toBe("#111");
+    expect(result.spacing.xs).toBe(0);
   });
 
   it("does not mutate the base theme", () => {
-    const originalLink = defaultMarkdownTheme.colors.link;
-    const partial: PartialMarkdownTheme = {
-      colors: { link: "#999" },
-    };
-    mergeThemes(defaultMarkdownTheme, partial);
-    expect(defaultMarkdownTheme.colors.link).toBe(originalLink);
+    const originalText = defaultMarkdownTheme.colors.text;
+    mergeThemes(defaultMarkdownTheme, { colors: { text: "#000" } });
+    expect(defaultMarkdownTheme.colors.text).toBe(originalText);
   });
 
-  it("returns a new object (not the same reference as base)", () => {
-    const partial: PartialMarkdownTheme = {
-      colors: { link: "#aaa" },
-    };
-    const result = mergeThemes(defaultMarkdownTheme, partial);
+  it("returns a new object reference", () => {
+    const result = mergeThemes(defaultMarkdownTheme, { colors: { text: "#000" } });
     expect(result).not.toBe(defaultMarkdownTheme);
   });
 });

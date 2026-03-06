@@ -8,11 +8,7 @@ export {
   getFlattenedText,
   stripSourceOffsets,
 } from "./headless";
-export type {
-  MarkdownNode,
-  ParserOptions,
-  MarkdownParser,
-} from "./headless";
+export type { MarkdownNode, ParserOptions, MarkdownParser } from "./headless";
 
 export { Markdown } from "./markdown";
 export type {
@@ -70,5 +66,9 @@ export { createMarkdownSession } from "./MarkdownSession";
 export type { MarkdownSession } from "./MarkdownSession";
 export { useMarkdownSession, useStream } from "./use-markdown-stream";
 
-export type { HighlightedToken, TokenType, CodeHighlighter } from "./utils/code-highlight";
+export type {
+  HighlightedToken,
+  TokenType,
+  CodeHighlighter,
+} from "./utils/code-highlight";
 export { defaultHighlighter } from "./utils/code-highlight";

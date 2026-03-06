@@ -22,9 +22,12 @@ try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const mathJaxModule = require("react-native-mathjax-svg");
   MathJaxComponent = mathJaxModule.default || mathJaxModule;
-} catch (err) {
+} catch {
   if (__DEV__) {
-    console.warn('[NitroMarkdown] react-native-mathjax-svg not found — math will render as plain text.');
+    // eslint-disable-next-line no-console
+    console.warn(
+      "[NitroMarkdown] react-native-mathjax-svg not found — math will render as plain text.",
+    );
   }
 }
 

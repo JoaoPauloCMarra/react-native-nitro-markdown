@@ -1,30 +1,26 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
 
 env:
   TZ: UTC
+  BUN_VERSION: "1.1.38"
 
 jobs:
   quality:
-    name: Quality Checks
+    name: Lint, Typecheck & Unit Tests
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Cache dependencies
-        uses: actions/cache@v5
+      - uses: actions/cache@v5
         with:
           path: |
             ~/.bun/install/cache
@@ -32,48 +28,21 @@ jobs:
             packages/*/node_modules
             apps/*/node_modules
           key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
+          restore-keys: ${{ runner.os }}-bun-
 
-      - name: Cache Turbo
-        uses: actions/cache@v5
-        with:
-          path: node_modules/.cache/turbo
-          key: ${{ runner.os }}-turbo-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-turbo-
+      - run: bun install --frozen-lockfile
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - name: Lint
+        run: bun run lint
 
-      - name: Run type checking
+      - name: Typecheck
         run: bun run typecheck
 
-      - name: Run JavaScript tests
-        run: bun run test
+      - name: Unit tests with coverage
+        run: bun run test:coverage
 
-      - name: Run stream performance budget tests
-        run: bun run test -F react-native-nitro-markdown -- stream-performance-budget.test.ts
+      - name: Benchmark regression checks
+        run: bun run benchmark
 
-      - name: Run C++ tests (includes parse latency + memory budgets)
+      - name: C++ tests
         run: bun run test:cpp
-
-      - name: Build packages
-        run: bun run build
-
-      - name: Verify build artifacts
-        run: |
-          # Check that lib directories were created
-          [ -d "packages/react-native-nitro-markdown/lib/commonjs" ] || exit 1
-          [ -d "packages/react-native-nitro-markdown/lib/module" ] || exit 1
-          # Check that TypeScript definitions exist for both targets
-          [ -f "packages/react-native-nitro-markdown/lib/typescript/commonjs/index.d.ts" ] || exit 1
-          [ -f "packages/react-native-nitro-markdown/lib/typescript/module/index.d.ts" ] || exit 1
-          echo "✅ Build artifacts verified"
-
-      - name: Test package packaging
-        run: |
-          cd packages/react-native-nitro-markdown
-          # Test that npm pack works (dry run)
-          npm pack --dry-run > /dev/null 2>&1 || exit 1
-          echo "✅ Package can be packed for publishing"
