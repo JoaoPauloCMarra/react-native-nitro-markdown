@@ -9,10 +9,7 @@
     "setup": "node scripts/setup.js",
     "publish-package": "node scripts/publish.js",
     "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "bunx eslint . --fix",
-    "format": "bunx prettier --write .",
-    "format:check": "bunx prettier --check .",
+    "lint": "bun run --cwd packages/react-native-nitro-markdown lint",
     "clean": "turbo run clean",
     "codegen": "turbo run codegen",
     "typecheck": "turbo run typecheck",
@@ -20,19 +17,23 @@
     "test:coverage": "turbo run test -- --coverage",
     "test:cpp": "turbo run test:cpp --filter=react-native-nitro-markdown",
     "benchmark": "node scripts/benchmark-comparison.js",
-    "start": "turbo run start --filter=example --",
-    "example:ios": "turbo run ios --filter=example",
-    "example:android": "turbo run android --filter=example",
-    "example:prebuild": "turbo run prebuild --filter=example",
-    "example:prebuild:clean": "turbo run prebuild:clean --filter=example"
+    "example:start": "bun run --cwd apps/example start",
+    "example:ios": "bun run --cwd apps/example ios",
+    "example:android": "bun run --cwd apps/example android",
+    "example:prebuild": "bun run --cwd apps/example prebuild",
+    "example:prebuild:clean": "bun run --cwd apps/example prebuild:clean"
   },
   "devDependencies": {
+    "@swc/core": "^1.15.18",
+    "react": "19.2.0",
+    "react-native": "0.83.2",
+    "@swc/jest": "^0.2.39",
     "@types/commonmark": "^0.27.10",
     "@types/jest": "^29.5.14",
     "@types/markdown-it": "^14.1.2",
     "@types/marked": "^6.0.0",
     "@types/node": "^20.19.33",
-    "@types/react": "^19.2.14",
+    "@types/react": "~19.2.10",
     "commonmark": "^0.31.2",
     "eslint-config-expo-magic": "^2.0.2",
     "jest": "^29.7.0",
@@ -41,13 +42,16 @@
     "nitrogen": "^0.35.0",
     "react-native-builder-bob": "^0.40.18",
     "rimraf": "^6.1.3",
-    "ts-jest": "^29.4.6",
-    "turbo": "^2.8.10",
+    "turbo": "^2.8.13",
     "typescript": "^5.9.3"
   },
   "overrides": {
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
     "react-native-nitro-modules": "0.35.0",
-    "react-native": "0.83.2"
+    "react-native": "0.83.2",
+    "react-native-safe-area-context": "5.6.2",
+    "react-native-screens": "4.23.0"
   },
   "dependencies": {
     "react-native-nitro-modules": "0.35.0"

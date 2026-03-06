@@ -234,6 +234,7 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
     allowIncremental,
     hasBeforeParsePlugins,
     options,
+    plugins,
     session,
     updateIntervalMs,
     updateStrategy,

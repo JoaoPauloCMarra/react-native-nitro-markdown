@@ -17,10 +17,10 @@ public:
     
     ~HybridMarkdownParser() override = default;
 
-    std::string parse(const std::string& text) override;
-    std::string parseWithOptions(const std::string& text, const ParserOptions& options) override;
-    std::string extractPlainText(const std::string& text) override;
-    std::string extractPlainTextWithOptions(const std::string& text, const ParserOptions& options) override;
+    [[nodiscard]] std::string parse(const std::string& text) override;
+    [[nodiscard]] std::string parseWithOptions(const std::string& text, const ParserOptions& options) override;
+    [[nodiscard]] std::string extractPlainText(const std::string& text) override;
+    [[nodiscard]] std::string extractPlainTextWithOptions(const std::string& text, const ParserOptions& options) override;
 
 private:
     std::unique_ptr<::NitroMarkdown::MD4CParser> parser_;

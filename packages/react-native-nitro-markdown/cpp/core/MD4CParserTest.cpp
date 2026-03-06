@@ -80,6 +80,18 @@ public:
         testTable();
         testNestedFormatting();
 
+        // Regression and feature coverage tests
+        testCodeBlockHasTextChildren();
+        testStrikethrough();
+        testMathInline();
+        testMathBlock();
+        testHeadingLevels2Through6();
+        testOrderedListWithCustomStart();
+        testSoftBreakAndHardBreak();
+        testTableCellAlignment();
+        testNestedBlockquotes();
+        testImageWithTitle();
+
         // Safety and crash prevention tests
         testMemoryLeaks();
         testNullAndEmptyInputs();
@@ -721,6 +733,268 @@ private:
         TestRunner::assertNotNull(result2.get(), "Options {false, false} result not null");
         TestRunner::assertNotNull(result3.get(), "Options {true, false} result not null");
         TestRunner::assertNotNull(result4.get(), "Options {false, true} result not null");
+    }
+
+    // Regression test: CodeBlock children contain text (used by extractPlainText/flattenNodeText)
+    static void testCodeBlockHasTextChildren() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+        auto result = parser.parse("```python\nprint('hello')\n```", options);
+
+        TestRunner::assertTrue(result->children.size() == 1, "CodeBlock: has one child");
+        auto codeBlock = result->children[0];
+        TestRunner::assertEqual("code_block", nodeTypeToString(codeBlock->type), "CodeBlock: node type");
+        TestRunner::assertEqual("python", codeBlock->language.value_or(""), "CodeBlock: language is python");
+        TestRunner::assertTrue(!codeBlock->children.empty(), "CodeBlock: has text children");
+
+        // Collect all text content from children
+        std::string allText;
+        for (const auto& child : codeBlock->children) {
+            if (child->type == NodeType::Text && child->content.has_value()) {
+                allText += child->content.value();
+            }
+        }
+        TestRunner::assertTrue(allText.find("print('hello')") != std::string::npos,
+            "CodeBlock: text children contain code content");
+    }
+
+    static void testStrikethrough() {
+        MD4CParser parser;
+        ParserOptions options{true, true}; // gfm enabled
+        auto result = parser.parse("~~deleted~~", options);
+
+        TestRunner::assertTrue(result->children.size() == 1, "Strikethrough: has paragraph");
+        auto para = result->children[0];
+        TestRunner::assertEqual("paragraph", nodeTypeToString(para->type), "Strikethrough: paragraph type");
+        TestRunner::assertTrue(!para->children.empty(), "Strikethrough: paragraph has children");
+
+        auto strike = para->children[0];
+        TestRunner::assertEqual("strikethrough", nodeTypeToString(strike->type), "Strikethrough: node type");
+        TestRunner::assertTrue(!strike->children.empty(), "Strikethrough: has text child");
+
+        auto text = strike->children[0];
+        TestRunner::assertEqual("text", nodeTypeToString(text->type), "Strikethrough: text node type");
+        TestRunner::assertEqual("deleted", text->content.value_or(""), "Strikethrough: text content");
+    }
+
+    static void testMathInline() {
+        MD4CParser parser;
+        ParserOptions options{true, true}; // math enabled
+        auto result = parser.parse("$x$", options);
+
+        TestRunner::assertTrue(result->children.size() == 1, "MathInline: has paragraph");
+        auto para = result->children[0];
+        TestRunner::assertTrue(!para->children.empty(), "MathInline: paragraph has children");
+
+        auto math = para->children[0];
+        TestRunner::assertEqual("math_inline", nodeTypeToString(math->type), "MathInline: node type");
+        // MathInline content is stored via text callback as children
+        // (similar to CodeInline which stores in content field)
+        // Check that the math span exists and has text
+        bool hasContent = !math->children.empty() || math->content.has_value();
+        TestRunner::assertTrue(hasContent, "MathInline: has content or children");
+    }
+
+    static void testMathBlock() {
+        MD4CParser parser;
+        ParserOptions options{true, true}; // math enabled
+        auto result = parser.parse("$$x^2 + y^2$$", options);
+
+        TestRunner::assertTrue(!result->children.empty(), "MathBlock: has children");
+
+        // Find the math_block or paragraph containing math_block span
+        // md4c with LATEXMATHSPANS treats $$ as MD_SPAN_LATEXMATH_DISPLAY inside a paragraph
+        auto para = result->children[0];
+        bool foundMathBlock = false;
+        if (nodeTypeToString(para->type) == "paragraph") {
+            for (const auto& child : para->children) {
+                if (child->type == NodeType::MathBlock) {
+                    foundMathBlock = true;
+                    break;
+                }
+            }
+        } else if (para->type == NodeType::MathBlock) {
+            foundMathBlock = true;
+        }
+        TestRunner::assertTrue(foundMathBlock, "MathBlock: found math_block node");
+    }
+
+    static void testHeadingLevels2Through6() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+
+        for (int level = 2; level <= 6; level++) {
+            std::string markdown = std::string(level, '#') + " Heading " + std::to_string(level);
+            auto result = parser.parse(markdown, options);
+
+            TestRunner::assertTrue(result->children.size() == 1,
+                "Heading L" + std::to_string(level) + ": has one child");
+            auto heading = result->children[0];
+            TestRunner::assertEqual("heading", nodeTypeToString(heading->type),
+                "Heading L" + std::to_string(level) + ": node type");
+            TestRunner::assertEqual(std::to_string(level),
+                std::to_string(heading->level.value_or(0)),
+                "Heading L" + std::to_string(level) + ": level value");
+
+            if (!heading->children.empty()) {
+                auto text = heading->children[0];
+                TestRunner::assertEqual("Heading " + std::to_string(level),
+                    text->content.value_or(""),
+                    "Heading L" + std::to_string(level) + ": text content");
+            }
+        }
+    }
+
+    static void testOrderedListWithCustomStart() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+        auto result = parser.parse("5. First\n6. Second\n7. Third", options);
+
+        TestRunner::assertTrue(result->children.size() == 1, "OL custom start: has list");
+        auto list = result->children[0];
+        TestRunner::assertEqual("list", nodeTypeToString(list->type), "OL custom start: list type");
+        TestRunner::assertTrue(list->ordered.value_or(false), "OL custom start: is ordered");
+        TestRunner::assertEqual("5", std::to_string(list->start.value_or(0)),
+            "OL custom start: starts at 5");
+        TestRunner::assertTrue(list->children.size() == 3, "OL custom start: has 3 items");
+    }
+
+    static void testSoftBreakAndHardBreak() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+
+        // Soft break: single newline within a paragraph
+        auto result1 = parser.parse("line1\nline2", options);
+        auto para1 = result1->children[0];
+        TestRunner::assertEqual("paragraph", nodeTypeToString(para1->type), "SoftBreak: paragraph type");
+        bool foundSoftBreak = false;
+        for (const auto& child : para1->children) {
+            if (child->type == NodeType::SoftBreak) {
+                foundSoftBreak = true;
+                break;
+            }
+        }
+        TestRunner::assertTrue(foundSoftBreak, "SoftBreak: found soft_break node");
+
+        // Hard break: two trailing spaces + newline
+        auto result2 = parser.parse("line1  \nline2", options);
+        auto para2 = result2->children[0];
+        TestRunner::assertEqual("paragraph", nodeTypeToString(para2->type), "HardBreak: paragraph type");
+        bool foundHardBreak = false;
+        for (const auto& child : para2->children) {
+            if (child->type == NodeType::LineBreak) {
+                foundHardBreak = true;
+                break;
+            }
+        }
+        TestRunner::assertTrue(foundHardBreak, "HardBreak: found line_break node");
+    }
+
+    static void testTableCellAlignment() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+        auto result = parser.parse(
+            "| Left | Center | Right |\n"
+            "|:-----|:------:|------:|\n"
+            "| a    | b      | c     |",
+            options);
+
+        TestRunner::assertTrue(result->children.size() == 1, "TableAlign: has table");
+        auto table = result->children[0];
+        TestRunner::assertEqual("table", nodeTypeToString(table->type), "TableAlign: table type");
+
+        // Find header row (inside thead)
+        std::shared_ptr<MarkdownNode> headerRow;
+        for (const auto& child : table->children) {
+            if (child->type == NodeType::TableHead && !child->children.empty()) {
+                headerRow = child->children[0]; // first TR
+                break;
+            }
+        }
+        TestRunner::assertTrue(headerRow != nullptr, "TableAlign: found header row");
+        TestRunner::assertTrue(headerRow->children.size() == 3, "TableAlign: header has 3 cells");
+
+        if (headerRow && headerRow->children.size() == 3) {
+            TestRunner::assertEqual("left",
+                textAlignToString(headerRow->children[0]->align.value_or(TextAlign::Default)),
+                "TableAlign: first cell is left-aligned");
+            TestRunner::assertEqual("center",
+                textAlignToString(headerRow->children[1]->align.value_or(TextAlign::Default)),
+                "TableAlign: second cell is center-aligned");
+            TestRunner::assertEqual("right",
+                textAlignToString(headerRow->children[2]->align.value_or(TextAlign::Default)),
+                "TableAlign: third cell is right-aligned");
+
+            // Header cells should have isHeader=true
+            TestRunner::assertTrue(headerRow->children[0]->isHeader.value_or(false),
+                "TableAlign: first cell isHeader");
+        }
+
+        // Find body row and verify alignment propagates to body cells
+        std::shared_ptr<MarkdownNode> bodyRow;
+        for (const auto& child : table->children) {
+            if (child->type == NodeType::TableBody && !child->children.empty()) {
+                bodyRow = child->children[0]; // first TR in tbody
+                break;
+            }
+        }
+        TestRunner::assertTrue(bodyRow != nullptr, "TableAlign: found body row");
+        if (bodyRow && bodyRow->children.size() == 3) {
+            TestRunner::assertEqual("left",
+                textAlignToString(bodyRow->children[0]->align.value_or(TextAlign::Default)),
+                "TableAlign: body cell 1 is left-aligned");
+            TestRunner::assertTrue(!bodyRow->children[0]->isHeader.value_or(true),
+                "TableAlign: body cell isHeader is false");
+        }
+    }
+
+    static void testNestedBlockquotes() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+        auto result = parser.parse("> > nested quote", options);
+
+        TestRunner::assertTrue(!result->children.empty(), "NestedBlockquote: has children");
+        auto outer = result->children[0];
+        TestRunner::assertEqual("blockquote", nodeTypeToString(outer->type),
+            "NestedBlockquote: outer is blockquote");
+
+        // Find inner blockquote
+        std::shared_ptr<MarkdownNode> inner;
+        for (const auto& child : outer->children) {
+            if (child->type == NodeType::Blockquote) {
+                inner = child;
+                break;
+            }
+        }
+        TestRunner::assertTrue(inner != nullptr, "NestedBlockquote: found inner blockquote");
+
+        // Inner blockquote should contain a paragraph with text
+        if (inner && !inner->children.empty()) {
+            auto para = inner->children[0];
+            TestRunner::assertEqual("paragraph", nodeTypeToString(para->type),
+                "NestedBlockquote: inner has paragraph");
+            if (!para->children.empty()) {
+                TestRunner::assertEqual("nested quote",
+                    para->children[0]->content.value_or(""),
+                    "NestedBlockquote: text content");
+            }
+        }
+    }
+
+    static void testImageWithTitle() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+        auto result = parser.parse("![alt text](image.png \"my title\")", options);
+
+        TestRunner::assertTrue(!result->children.empty(), "ImageTitle: has children");
+        auto para = result->children[0];
+        TestRunner::assertTrue(!para->children.empty(), "ImageTitle: paragraph has children");
+
+        auto image = para->children[0];
+        TestRunner::assertEqual("image", nodeTypeToString(image->type), "ImageTitle: node type");
+        TestRunner::assertEqual("image.png", image->href.value_or(""), "ImageTitle: src");
+        TestRunner::assertEqual("alt text", image->alt.value_or(""), "ImageTitle: alt");
+        TestRunner::assertEqual("my title", image->title.value_or(""), "ImageTitle: title");
     }
 };
 

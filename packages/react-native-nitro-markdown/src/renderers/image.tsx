@@ -128,7 +128,15 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
           setAspectRatio(width / height);
         }
       },
-      () => {},
+      (error) => {
+        if (__DEV__) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            "[NitroMarkdown] Failed to get image dimensions:",
+            error,
+          );
+        }
+      },
     );
   }, [url]);
 

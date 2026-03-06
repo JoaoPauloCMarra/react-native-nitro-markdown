@@ -79,6 +79,37 @@ inline void appendBoolField(std::string& output, const char* key, bool value) {
     output += value ? "true" : "false";
 }
 
+static constexpr size_t kMaxEstimatedSize = 64 * 1024 * 1024; // 64 MB cap
+
+static size_t estimateJsonSize(const std::shared_ptr<InternalMarkdownNode>& node) noexcept {
+    if (!node) return 0;
+    size_t size = 64; // base overhead per node (type, beg, end, braces)
+    auto safeAdd = [](size_t a, size_t b) -> size_t {
+        return (b > kMaxEstimatedSize - a) ? kMaxEstimatedSize : a + b;
+    };
+    if (node->content && size < kMaxEstimatedSize) {
+        size = safeAdd(size, node->content->size());
+    }
+    if (node->href && size < kMaxEstimatedSize) {
+        size = safeAdd(size, node->href->size() + 10);
+    }
+    if (node->title && size < kMaxEstimatedSize) {
+        size = safeAdd(size, node->title->size() + 10);
+    }
+    if (node->alt && size < kMaxEstimatedSize) {
+        size = safeAdd(size, node->alt->size() + 8);
+    }
+    if (node->language && size < kMaxEstimatedSize) {
+        size = safeAdd(size, node->language->size() + 12);
+    }
+    for (const auto& child : node->children) {
+        if (size >= kMaxEstimatedSize) break;
+        size_t childSize = estimateJsonSize(child);
+        size = safeAdd(size, childSize);
+    }
+    return size;
+}
+
 void appendNodeJson(std::string& output, const std::shared_ptr<InternalMarkdownNode>& node) {
     output.push_back('{');
 
@@ -175,10 +206,6 @@ std::string flattenNodeText(const std::shared_ptr<InternalMarkdownNode>& node) {
         case NodeType::MathInline:
         case NodeType::HtmlInline:
             return node->content.value_or("");
-        case NodeType::CodeBlock:
-        case NodeType::MathBlock:
-        case NodeType::HtmlBlock:
-            return trimCopy(node->content.value_or("")) + "\n\n";
         case NodeType::LineBreak:
             return "\n";
         case NodeType::SoftBreak:
@@ -201,6 +228,9 @@ std::string flattenNodeText(const std::shared_ptr<InternalMarkdownNode>& node) {
         case NodeType::Paragraph:
         case NodeType::Heading:
         case NodeType::Blockquote:
+        case NodeType::CodeBlock:
+        case NodeType::MathBlock:
+        case NodeType::HtmlBlock:
             return trimCopy(childrenText) + "\n\n";
         case NodeType::ListItem:
         case NodeType::TaskListItem:
@@ -219,10 +249,8 @@ std::string flattenNodeText(const std::shared_ptr<InternalMarkdownNode>& node) {
 } // namespace
 
 std::string HybridMarkdownParser::parse(const std::string& text) {
-    InternalParserOptions opts;
-    opts.gfm = true;
-    opts.math = true;
-    
+    InternalParserOptions opts{.gfm = true, .math = true};
+
     auto ast = parser_->parse(text, opts);
     return nodeToJson(ast);
 }
@@ -237,9 +265,7 @@ std::string HybridMarkdownParser::parseWithOptions(const std::string& text, cons
 }
 
 std::string HybridMarkdownParser::extractPlainText(const std::string& text) {
-    InternalParserOptions opts;
-    opts.gfm = true;
-    opts.math = true;
+    InternalParserOptions opts{.gfm = true, .math = true};
 
     auto ast = parser_->parse(text, opts);
     return flattenNodeText(ast);
@@ -256,7 +282,7 @@ std::string HybridMarkdownParser::extractPlainTextWithOptions(const std::string&
 
 std::string HybridMarkdownParser::nodeToJson(const std::shared_ptr<InternalMarkdownNode>& node) {
     std::string json;
-    json.reserve(1024);
+    json.reserve(estimateJsonSize(node));
     appendNodeJson(json, node);
     return json;
 }

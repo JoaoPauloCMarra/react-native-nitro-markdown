@@ -7,7 +7,6 @@
     "icon": "./assets/icon.png",
     "scheme": "nitromarkdown",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.nitromarkdown.example"

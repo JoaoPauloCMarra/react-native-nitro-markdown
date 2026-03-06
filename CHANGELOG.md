@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] - 2026-03-05
+
+### Fixed
+
+- **Android**: Added `consumer-rules.pro` with explicit `-keep` rules for Nitro Hybrid Object classes and `Func_*` JNI wrappers — prevents R8 full-mode stripping in release builds.
+- **Android**: `HybridMarkdownSession.append()` now enforces a 10 MB buffer limit to prevent OOM.
+- **Android**: `highlightPosition` getter is now synchronized; added `@GuardedBy` annotations throughout `HybridMarkdownSession`.
+- **Android**: `HybridMarkdownSession` now implements `onDestroyed()` + `finalize()` to clear listeners and prevent post-destroy callbacks.
+- **Android**: `NitroMarkdownPackage` uses lazy native init so a `System.loadLibrary` failure does not crash ClassLoader initialization.
+- **Android**: CMake version range (`3.18.1...3.28`) and Release/Debug compiler optimization flags.
+- **iOS**: `HybridMarkdownSession.replace()` now uses `NSMutableString.replaceCharacters(in:NSRange:)` for UTF-16-consistent indices, matching all other session methods.
+- **iOS**: `notifyListeners()` is called outside the `NSLock` scope in all mutating methods, preventing potential deadlock when a listener calls back into the session.
+- **iOS**: Added `isFinite` guards in `getTextRange()` and `replace()` to reject NaN/Infinity inputs.
+- **C++**: All five md4c callbacks (`enterBlock`, `leaveBlock`, `enterSpan`, `leaveSpan`, `text`) are now `noexcept` with `try/catch(...)` — prevents undefined behavior from C++ exceptions escaping a C callback boundary.
+- **C++**: JSON size estimation uses overflow-safe arithmetic with a 64 MB cap.
+- **JS/TS**: `MarkdownParserModule` creation is now wrapped in try/catch with `__DEV__` logging; `parseMarkdown`/`parseMarkdownWithOptions` return an empty document AST on failure instead of throwing.
+- **JS/TS**: `plugins` added to `useEffect` dependency array in `MarkdownStream`.
+- **JS/TS**: `onLinkPress` result is wrapped with `Promise.resolve()` to support both sync and async handlers.
+- **JS/TS**: Package exports are now explicit named exports; `sideEffects: false` set for tree-shaking.
+
 ## [0.5.2] - 2026-03-04
 
 ### Fixed

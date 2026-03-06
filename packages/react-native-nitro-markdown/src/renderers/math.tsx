@@ -23,7 +23,12 @@ try {
   const mathJaxModule = require("react-native-mathjax-svg");
   MathJaxComponent = mathJaxModule.default || mathJaxModule;
 } catch {
-  // ignored
+  if (__DEV__) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      "[NitroMarkdown] react-native-mathjax-svg not found — math will render as plain text.",
+    );
+  }
 }
 
 type MathInlineProps = {
@@ -35,7 +40,6 @@ const createMathStyles = (theme: MarkdownTheme) =>
   StyleSheet.create({
     mathInlineContainer: {
       marginHorizontal: 2,
-      // Ensure the inline view has layout alignment
       justifyContent: "center",
     },
     mathInlineFallbackContainer: {

@@ -10,8 +10,11 @@ import {
 } from "react-native";
 import { getTextContent } from "../headless";
 import { useMarkdownContext } from "../MarkdownContext";
+import {
+  defaultHighlighter,
+  type HighlightedToken,
+} from "../utils/code-highlight";
 import type { MarkdownNode } from "../headless";
-import { defaultHighlighter, type HighlightedToken } from "../utils/code-highlight";
 
 type CodeBlockProps = {
   language?: string;
@@ -29,11 +32,12 @@ export const CodeBlock: FC<CodeBlockProps> = ({
   const ctx = useMarkdownContext();
   const { theme } = ctx;
 
-  const highlighter = ctx.highlightCode === true
-    ? defaultHighlighter
-    : typeof ctx.highlightCode === 'function'
-      ? ctx.highlightCode
-      : null;
+  const highlighter =
+    ctx.highlightCode === true
+      ? defaultHighlighter
+      : typeof ctx.highlightCode === "function"
+        ? ctx.highlightCode
+        : null;
 
   const displayContent = content ?? (node ? getTextContent(node) : "");
 
@@ -85,16 +89,19 @@ export const CodeBlock: FC<CodeBlockProps> = ({
       >
         {highlighter && language ? (
           <Text style={styles.codeBlockText} selectable>
-            {highlighter(language, displayContent).map((token: HighlightedToken, i: number) => {
-              const tokenColor = ctx.theme.colors.codeTokenColors?.[token.type];
-              return tokenColor ? (
-                <Text key={i} style={{ color: tokenColor }}>
-                  {token.text}
-                </Text>
-              ) : (
-                <Text key={i}>{token.text}</Text>
-              );
-            })}
+            {highlighter(language, displayContent).map(
+              (token: HighlightedToken, i: number) => {
+                const tokenColor =
+                  ctx.theme.colors.codeTokenColors?.[token.type];
+                return tokenColor ? (
+                  <Text key={i} style={{ color: tokenColor }}>
+                    {token.text}
+                  </Text>
+                ) : (
+                  <Text key={i}>{token.text}</Text>
+                );
+              },
+            )}
           </Text>
         ) : (
           <Text style={styles.codeBlockText} selectable>

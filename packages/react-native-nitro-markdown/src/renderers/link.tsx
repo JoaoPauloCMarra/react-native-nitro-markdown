@@ -39,7 +39,8 @@ export const Link: FC<LinkProps> = ({ href, children, style }) => {
     if (!normalizedHref) return;
 
     try {
-      const shouldOpen = (await onLinkPress?.(normalizedHref)) !== false;
+      const shouldOpen =
+        (await Promise.resolve(onLinkPress?.(normalizedHref))) !== false;
       if (!shouldOpen) return;
 
       const allowedExternalHref = getAllowedExternalHref(normalizedHref);
@@ -49,7 +50,12 @@ export const Link: FC<LinkProps> = ({ href, children, style }) => {
       if (!canOpen) return;
 
       await Linking.openURL(allowedExternalHref);
-    } catch {}
+    } catch (error) {
+      if (__DEV__) {
+        // eslint-disable-next-line no-console
+        console.warn("[NitroMarkdown] Link press handler failed:", error);
+      }
+    }
   };
 
   return (

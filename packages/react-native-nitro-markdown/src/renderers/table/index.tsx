@@ -15,15 +15,18 @@ import {
   type ViewStyle,
   type LayoutChangeEvent,
 } from "react-native";
-import { useMarkdownContext, type NodeRendererProps } from "../../MarkdownContext";
-import type { MarkdownTheme } from "../../theme";
 import { CellContent } from "./cell-content";
-import { extractTableData, estimateColumnWidths } from "./table-utils";
 import {
   columnWidthsReducer,
   DEFAULT_MIN_COLUMN_WIDTH,
   DEFAULT_MEASUREMENT_STABILIZE_MS,
 } from "./table-reducer";
+import { extractTableData, estimateColumnWidths } from "./table-utils";
+import {
+  useMarkdownContext,
+  type NodeRendererProps,
+} from "../../MarkdownContext";
+import type { MarkdownTheme } from "../../theme";
 
 type TableRendererProps = {
   node: import("../../headless").MarkdownNode;
@@ -146,6 +149,15 @@ export const TableRenderer: FC<TableRendererProps> = ({
       }
     };
   }, [estimatedColumnWidths, expectedCellKeySignature, measurementStabilizeMs]);
+
+  useEffect(() => {
+    const widthsMap = measuredWidths.current;
+    const cellsSet = measuredCells.current;
+    return () => {
+      widthsMap.clear();
+      cellsSet.clear();
+    };
+  }, []);
 
   const onCellLayout = useCallback(
     (cellKey: string, width: number) => {

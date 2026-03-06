@@ -1,6 +1,6 @@
 {
   "name": "react-native-nitro-markdown",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "High-performance Markdown parser for React Native using Nitro Modules and md4c",
   "main": "lib/commonjs/index.js",
   "module": "lib/module/index.js",
@@ -47,6 +47,7 @@
     "!cpp/build",
     "!android/build",
     "!android/.cxx",
+    "!ios/build",
     "!scripts"
   ],
   "scripts": {
@@ -54,7 +55,7 @@
     "build": "bob build",
     "clean": "rimraf lib nitrogen/generated",
     "codegen": "nitrogen --logLevel=\"debug\"",
-    "lint": "eslint src --max-warnings=0 --ignore-pattern 'src/**/__tests__/**' --ignore-pattern 'src/**/*.nitro.ts'",
+    "lint": "bunx eslint src --max-warnings=0 --ignore-pattern 'src/**/__tests__/**' --ignore-pattern 'src/**/*.nitro.ts'",
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:coverage": "jest --coverage",
@@ -80,6 +81,7 @@
   },
   "author": "João Paulo C. Marra <joaopaulocmarra@gmail.com>",
   "license": "MIT",
+  "sideEffects": false,
   "bugs": {
     "url": "https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/issues"
   },
@@ -89,7 +91,7 @@
   },
   "devDependencies": {
     "@size-limit/preset-small-lib": "^11.0.0",
-    "@types/react": "^19.2.14",
+    "@types/react": "~19.2.10",
     "@types/react-native": "^0.73.0",
     "@types/react-test-renderer": "^19.1.0",
     "react-native-builder-bob": "^0.40.18",
