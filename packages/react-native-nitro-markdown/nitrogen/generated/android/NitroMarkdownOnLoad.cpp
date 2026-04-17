@@ -30,9 +30,9 @@ int initialize(JavaVM* vm) {
 }
 
 struct JHybridMarkdownSessionSpecImpl: public jni::JavaClass<JHybridMarkdownSessionSpecImpl, JHybridMarkdownSessionSpec::JavaPart> {
-  static auto constexpr kJavaDescriptor = "Lcom/margelo/nitro/com/nitromarkdown/HybridMarkdownSession;";
+  static constexpr auto kJavaDescriptor = "Lcom/margelo/nitro/com/nitromarkdown/HybridMarkdownSession;";
   static std::shared_ptr<JHybridMarkdownSessionSpec> create() {
-    static auto constructorFn = javaClassStatic()->getConstructor<JHybridMarkdownSessionSpecImpl::javaobject()>();
+    static const auto constructorFn = javaClassStatic()->getConstructor<JHybridMarkdownSessionSpecImpl::javaobject()>();
     jni::local_ref<JHybridMarkdownSessionSpec::JavaPart> javaPart = javaClassStatic()->newObject(constructorFn);
     return javaPart->getJHybridMarkdownSessionSpec();
   }

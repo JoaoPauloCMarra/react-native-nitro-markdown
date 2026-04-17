@@ -26,6 +26,7 @@ import {
   useMarkdownContext,
   type NodeRendererProps,
 } from "../../MarkdownContext";
+import { getCachedStyles } from "../style-cache";
 import type { MarkdownTheme } from "../../theme";
 
 type TableRendererProps = {
@@ -58,7 +59,7 @@ export const TableRenderer: FC<TableRendererProps> = ({
   );
 
   const columnCount = headers.length;
-  const styles = useMemo(() => createTableStyles(theme), [theme]);
+  const styles = getCachedStyles(tableStylesCache, theme, createTableStyles);
   const estimatedColumnWidths = useMemo(
     () => estimateColumnWidths(headers, rows, columnCount, minColumnWidth),
     [headers, rows, columnCount, minColumnWidth],
@@ -213,6 +214,14 @@ export const TableRenderer: FC<TableRendererProps> = ({
     return "flex-start";
   };
 
+  const tableBackgroundStyle = useMemo(
+    () => ({
+      backgroundColor:
+        style?.backgroundColor ?? theme.colors.surface ?? "#111827",
+    }),
+    [style, theme.colors.surface],
+  );
+
   if (columnCount === 0) return null;
 
   const hasWidths = columnWidths.length === columnCount;
@@ -269,15 +278,7 @@ export const TableRenderer: FC<TableRendererProps> = ({
         style={styles.tableScroll}
         bounces={false}
       >
-        <View
-          style={[
-            styles.table,
-            {
-              backgroundColor:
-                style?.backgroundColor ?? theme.colors.surface ?? "#111827",
-            },
-          ]}
-        >
+        <View style={[styles.table, tableBackgroundStyle]}>
           <View style={styles.headerRow}>
             {headers.map((cell, colIndex) => (
               <View
@@ -337,6 +338,10 @@ export const TableRenderer: FC<TableRendererProps> = ({
     </View>
   );
 };
+
+type TableStyles = ReturnType<typeof createTableStyles>;
+
+const tableStylesCache = new WeakMap<MarkdownTheme, TableStyles>();
 
 const createTableStyles = (theme: MarkdownTheme) => {
   const colors = theme?.colors || {};

@@ -8,6 +8,7 @@ import {
   type ViewStyle,
   type TextStyle,
 } from "react-native";
+import { getCachedStyles } from "./style-cache";
 import { getTextContent } from "../headless";
 import { useMarkdownContext } from "../MarkdownContext";
 import {
@@ -15,6 +16,7 @@ import {
   type HighlightedToken,
 } from "../utils/code-highlight";
 import type { MarkdownNode } from "../headless";
+import type { MarkdownTheme } from "../theme";
 
 type CodeBlockProps = {
   language?: string;
@@ -40,40 +42,13 @@ export const CodeBlock: FC<CodeBlockProps> = ({
         : null;
 
   const displayContent = content ?? (node ? getTextContent(node) : "");
-
-  const styles = useMemo(
+  const highlightedTokens = useMemo(
     () =>
-      StyleSheet.create({
-        codeBlock: {
-          backgroundColor: theme.colors.codeBackground,
-          borderRadius: theme.borderRadius.m,
-          padding: theme.spacing.l,
-          marginVertical: theme.spacing.m,
-          borderWidth: 1,
-          borderColor: theme.colors.border,
-        },
-        codeLanguage: {
-          color: theme.colors.codeLanguage,
-          fontSize: theme.fontSizes.xs,
-          fontWeight: "600",
-          marginBottom: theme.spacing.s,
-          textTransform: "uppercase",
-          letterSpacing: 0.5,
-          fontFamily: theme.fontFamilies.mono,
-          ...(Platform.OS === "android" && { includeFontPadding: false }),
-        },
-        codeBlockText: {
-          fontFamily:
-            theme.fontFamilies.mono ??
-            Platform.select({ ios: "Courier", android: "monospace" }),
-          fontSize: theme.fontSizes.s,
-          color: theme.colors.text,
-          lineHeight: theme.fontSizes.s * 1.5,
-          ...(Platform.OS === "android" && { includeFontPadding: false }),
-        },
-      }),
-    [theme],
+      highlighter && language ? highlighter(language, displayContent) : null,
+    [displayContent, highlighter, language],
   );
+
+  const styles = getCachedStyles(codeBlockStylesCache, theme, createCodeStyles);
 
   const showLanguage = theme.showCodeLanguage && language;
 
@@ -87,21 +62,18 @@ export const CodeBlock: FC<CodeBlockProps> = ({
         showsHorizontalScrollIndicator={false}
         bounces={false}
       >
-        {highlighter && language ? (
+        {highlightedTokens ? (
           <Text style={styles.codeBlockText} selectable>
-            {highlighter(language, displayContent).map(
-              (token: HighlightedToken, i: number) => {
-                const tokenColor =
-                  ctx.theme.colors.codeTokenColors?.[token.type];
-                return tokenColor ? (
-                  <Text key={i} style={{ color: tokenColor }}>
-                    {token.text}
-                  </Text>
-                ) : (
-                  <Text key={i}>{token.text}</Text>
-                );
-              },
-            )}
+            {highlightedTokens.map((token: HighlightedToken, i: number) => {
+              const tokenColor = ctx.theme.colors.codeTokenColors?.[token.type];
+              return tokenColor ? (
+                <Text key={i} style={{ color: tokenColor }}>
+                  {token.text}
+                </Text>
+              ) : (
+                <Text key={i}>{token.text}</Text>
+              );
+            })}
           </Text>
         ) : (
           <Text style={styles.codeBlockText} selectable>
@@ -131,23 +103,63 @@ export const InlineCode: FC<InlineCodeProps> = ({
   const displayContent =
     content ?? children ?? (node ? getTextContent(node) : "");
 
-  const styles = useMemo(
-    () =>
-      StyleSheet.create({
-        codeInline: {
-          fontFamily:
-            theme.fontFamilies.mono ??
-            Platform.select({ ios: "Courier", android: "monospace" }),
-          fontSize: theme.fontSizes.s,
-          color: theme.colors.code,
-          backgroundColor: theme.colors.codeBackground,
-          paddingHorizontal: theme.spacing.xs,
-          paddingVertical: 2,
-          borderRadius: theme.borderRadius.s,
-          ...(Platform.OS === "android" && { includeFontPadding: false }),
-        },
-      }),
-    [theme],
+  const styles = getCachedStyles(
+    inlineCodeStylesCache,
+    theme,
+    createInlineStyles,
   );
   return <Text style={[styles.codeInline, style]}>{displayContent}</Text>;
 };
+
+type CodeBlockStyles = ReturnType<typeof createCodeStyles>;
+type InlineCodeStyles = ReturnType<typeof createInlineStyles>;
+
+const codeBlockStylesCache = new WeakMap<MarkdownTheme, CodeBlockStyles>();
+const inlineCodeStylesCache = new WeakMap<MarkdownTheme, InlineCodeStyles>();
+
+const getMonoFontFamily = (theme: MarkdownTheme) =>
+  theme.fontFamilies.mono ??
+  Platform.select({ ios: "Courier", android: "monospace" });
+
+const createCodeStyles = (theme: MarkdownTheme) =>
+  StyleSheet.create({
+    codeBlock: {
+      backgroundColor: theme.colors.codeBackground,
+      borderRadius: theme.borderRadius.m,
+      padding: theme.spacing.l,
+      marginVertical: theme.spacing.m,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    codeLanguage: {
+      color: theme.colors.codeLanguage,
+      fontSize: theme.fontSizes.xs,
+      fontWeight: "600",
+      marginBottom: theme.spacing.s,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      fontFamily: theme.fontFamilies.mono,
+      ...(Platform.OS === "android" && { includeFontPadding: false }),
+    },
+    codeBlockText: {
+      fontFamily: getMonoFontFamily(theme),
+      fontSize: theme.fontSizes.s,
+      color: theme.colors.text,
+      lineHeight: theme.fontSizes.s * 1.5,
+      ...(Platform.OS === "android" && { includeFontPadding: false }),
+    },
+  });
+
+const createInlineStyles = (theme: MarkdownTheme) =>
+  StyleSheet.create({
+    codeInline: {
+      fontFamily: getMonoFontFamily(theme),
+      fontSize: theme.fontSizes.s,
+      color: theme.colors.code,
+      backgroundColor: theme.colors.codeBackground,
+      paddingHorizontal: theme.spacing.xs,
+      paddingVertical: 2,
+      borderRadius: theme.borderRadius.s,
+      ...(Platform.OS === "android" && { includeFontPadding: false }),
+    },
+  });

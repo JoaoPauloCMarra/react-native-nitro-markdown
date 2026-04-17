@@ -1,6 +1,8 @@
-import { useMemo, type FC, type ReactNode } from "react";
+import type { FC, ReactNode } from "react";
 import { View, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
+import { getCachedStyles } from "./style-cache";
 import { useMarkdownContext } from "../MarkdownContext";
+import type { MarkdownTheme } from "../theme";
 
 type ParagraphProps = {
   children: ReactNode;
@@ -14,22 +16,7 @@ export const Paragraph: FC<ParagraphProps> = ({
   style,
 }) => {
   const { theme } = useMarkdownContext();
-  const styles = useMemo(
-    () =>
-      StyleSheet.create({
-        paragraph: {
-          flexDirection: "row",
-          flexWrap: "wrap",
-          marginBottom: theme.spacing.l,
-          gap: 0,
-        },
-        paragraphInListItem: {
-          marginBottom: 0,
-          marginTop: 0,
-        },
-      }),
-    [theme],
-  );
+  const styles = getCachedStyles(stylesCache, theme, createStyles);
 
   return (
     <View
@@ -43,3 +30,21 @@ export const Paragraph: FC<ParagraphProps> = ({
     </View>
   );
 };
+
+type ParagraphStyles = ReturnType<typeof createStyles>;
+
+const stylesCache = new WeakMap<MarkdownTheme, ParagraphStyles>();
+
+const createStyles = (theme: MarkdownTheme) =>
+  StyleSheet.create({
+    paragraph: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      marginBottom: theme.spacing.l,
+      gap: 0,
+    },
+    paragraphInListItem: {
+      marginBottom: 0,
+      marginTop: 0,
+    },
+  });

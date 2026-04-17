@@ -424,10 +424,28 @@ public:
 
             case MD_TEXT_HTML:
                 impl->flushText();
-                if (!impl->nodeStack.empty()) {
+                if (!impl->nodeStack.empty() && text && size > 0) {
+                    MD_OFFSET off = safeOffset(text, impl->inputText, impl->inputTextSize);
+                    if (off == 0 && text != impl->inputText) off = impl->lastTextEnd;
+
+                    if (impl->nodeStack.top()->type == NodeType::HtmlBlock) {
+                        auto htmlBlock = impl->nodeStack.top();
+                        if (htmlBlock->content.has_value()) {
+                            htmlBlock->content->append(text, size);
+                        } else {
+                            htmlBlock->content = std::string(text, size);
+                        }
+                        htmlBlock->end = off + size;
+                        impl->lastTextEnd = off + size;
+                        break;
+                    }
+
                     auto node = std::make_shared<MarkdownNode>(NodeType::HtmlInline);
                     node->content = std::string(text, size);
+                    node->beg = off;
+                    node->end = off + size;
                     impl->nodeStack.top()->addChild(node);
+                    impl->lastTextEnd = off + size;
                 }
                 break;
 
@@ -476,7 +494,7 @@ std::shared_ptr<MarkdownNode> MD4CParser::parse(const std::string& markdown, con
     size_t inputSize = clampInputSize(markdown.size());
     impl_->inputTextSize = inputSize;
     
-    unsigned int flags = MD_FLAG_NOHTML;
+    unsigned int flags = options.html ? 0 : MD_FLAG_NOHTML;
     
     if (options.gfm) {
         flags |= MD_FLAG_TABLES;

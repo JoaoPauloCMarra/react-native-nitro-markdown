@@ -1,6 +1,6 @@
 import {
   useState,
-  useLayoutEffect,
+  useEffect,
   useMemo,
   type ReactNode,
   type FC,
@@ -110,21 +110,28 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
     [theme, aspectRatio],
   );
 
-  useLayoutEffect(() => {
-    // Fast path for consistent aspect ratios if checking picsum
+  useEffect(() => {
+    let isMounted = true;
+    setLoading(true);
+    setError(false);
+    setAspectRatio(undefined);
+
     const picsumMatch = url.match(/picsum\.photos\/.*\/(\d+)\/(\d+)/);
     if (picsumMatch) {
       const w = parseInt(picsumMatch[1], 10);
       const h = parseInt(picsumMatch[2], 10);
       if (!isNaN(w) && !isNaN(h) && h !== 0) {
         setAspectRatio(w / h);
+        return () => {
+          isMounted = false;
+        };
       }
     }
 
     RNImage.getSize(
       url,
       (width, height) => {
-        if (width > 0 && height > 0) {
+        if (isMounted && width > 0 && height > 0) {
           setAspectRatio(width / height);
         }
       },
@@ -138,6 +145,10 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
         }
       },
     );
+
+    return () => {
+      isMounted = false;
+    };
   }, [url]);
 
   const altContent = useMemo(() => {

@@ -9,11 +9,20 @@
   },
   "autolinking": {
     "MarkdownParser": {
-      "cpp": "HybridMarkdownParser"
+      "all": {
+        "language": "c++",
+        "implementationClassName": "HybridMarkdownParser"
+      }
     },
     "MarkdownSession": {
-      "swift": "HybridMarkdownSession",
-      "kotlin": "HybridMarkdownSession"
+      "ios": {
+        "language": "swift",
+        "implementationClassName": "HybridMarkdownSession"
+      },
+      "android": {
+        "language": "kotlin",
+        "implementationClassName": "HybridMarkdownSession"
+      }
     }
   }
 }

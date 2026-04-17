@@ -118,7 +118,7 @@ struct MarkdownNode {
 struct ParserOptions {
     bool gfm = true;
     bool math = true;
+    bool html = false;
 };
 
 } // namespace NitroMarkdown
-

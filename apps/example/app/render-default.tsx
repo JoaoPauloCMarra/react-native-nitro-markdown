@@ -1,4 +1,4 @@
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { Markdown } from "react-native-nitro-markdown";
 import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 import { COMPLEX_MARKDOWN } from "../markdown-test-data";
@@ -9,15 +9,7 @@ export default function RenderScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: tabHeight + 20 },
-        ]}
-        bounces={false}
-        showsVerticalScrollIndicator={false}
-      >
+      <View style={[styles.content, { paddingBottom: tabHeight + 20 }]}>
         <View style={styles.hero}>
           <Text style={styles.title}>Default Renderer</Text>
           <Text style={styles.subtitle}>
@@ -25,11 +17,20 @@ export default function RenderScreen() {
           </Text>
         </View>
         <View style={styles.card}>
-          <Markdown options={{ gfm: true, math: true }}>
+          <Markdown
+            options={{ gfm: true, math: true }}
+            style={styles.markdown}
+            virtualize={true}
+            virtualization={{
+              initialNumToRender: 10,
+              maxToRenderPerBatch: 8,
+              windowSize: 7,
+            }}
+          >
             {COMPLEX_MARKDOWN}
           </Markdown>
         </View>
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -39,10 +40,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: EXAMPLE_COLORS.background,
   },
-  scrollView: {
+  content: {
     flex: 1,
-  },
-  scrollContent: {
     padding: 20,
     gap: 14,
   },
@@ -67,11 +66,15 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   card: {
+    flex: 1,
     backgroundColor: EXAMPLE_COLORS.surface,
     borderRadius: 18,
     padding: 20,
     borderWidth: 1,
     borderColor: EXAMPLE_COLORS.border,
     boxShadow: `0px 8px 20px ${EXAMPLE_COLORS.text}14`,
+  },
+  markdown: {
+    flex: 1,
   },
 });

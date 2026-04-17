@@ -33,6 +33,16 @@ type LogEntry = {
   type: "header" | "pass" | "fail" | "info" | "spacer";
 };
 
+function collectNodeTypes(ast: MarkdownNode): Set<string> {
+  const allTypes = new Set<string>();
+  const walk = (node: MarkdownNode) => {
+    allTypes.add(node.type);
+    node.children?.forEach(walk);
+  };
+  walk(ast);
+  return allTypes;
+}
+
 async function runSmokeTests(): Promise<LogEntry[]> {
   const logs: LogEntry[] = [];
 
@@ -86,6 +96,17 @@ async function runSmokeTests(): Promise<LogEntry[]> {
   }
 
   try {
+    const gfmOffAst = parseMarkdown("| A |\n|---|\n| B |", { gfm: false });
+    if (!collectNodeTypes(gfmOffAst).has("table")) {
+      pass("parseMarkdown + GFM disabled", "table syntax stays plain");
+    } else {
+      fail("parseMarkdown + GFM disabled", "unexpected table node");
+    }
+  } catch (e) {
+    fail("parseMarkdown + GFM disabled", String(e));
+  }
+
+  try {
     const mathAst = parseMarkdown("$$x^2$$", { math: true });
     if (JSON.stringify(mathAst).includes("math_block")) {
       pass("parseMarkdown + math");
@@ -94,6 +115,48 @@ async function runSmokeTests(): Promise<LogEntry[]> {
     }
   } catch (e) {
     fail("parseMarkdown + math", String(e));
+  }
+
+  try {
+    const mathOffAst = parseMarkdown("$x^2$", { math: false });
+    if (!collectNodeTypes(mathOffAst).has("math_inline")) {
+      pass("parseMarkdown + math disabled", "dollar spans stay plain");
+    } else {
+      fail("parseMarkdown + math disabled", "unexpected math_inline node");
+    }
+  } catch (e) {
+    fail("parseMarkdown + math disabled", String(e));
+  }
+
+  try {
+    const htmlDefaultAst = parseMarkdown("Hello <span>inline</span>");
+    const htmlDefaultTypes = collectNodeTypes(htmlDefaultAst);
+    if (
+      !htmlDefaultTypes.has("html_inline") &&
+      !htmlDefaultTypes.has("html_block")
+    ) {
+      pass("parseMarkdown + HTML default", "raw HTML AST disabled");
+    } else {
+      fail("parseMarkdown + HTML default", "unexpected raw HTML node");
+    }
+  } catch (e) {
+    fail("parseMarkdown + HTML default", String(e));
+  }
+
+  try {
+    const htmlAst = parseMarkdown(
+      "Hello <span>inline</span>\n\n<div>block</div>",
+      { html: true },
+    );
+    const allTypes = collectNodeTypes(htmlAst);
+
+    if (allTypes.has("html_inline") && allTypes.has("html_block")) {
+      pass("parseMarkdown + HTML", "html_inline + html_block");
+    } else {
+      fail("parseMarkdown + HTML", "missing raw HTML nodes");
+    }
+  } catch (e) {
+    fail("parseMarkdown + HTML", String(e));
   }
 
   try {
@@ -209,12 +272,7 @@ async function runSmokeTests(): Promise<LogEntry[]> {
 
   try {
     const ast = parseMarkdown(allFeaturesMd, { gfm: true, math: true });
-    const allTypes = new Set<string>();
-    const walk = (node: MarkdownNode) => {
-      allTypes.add(node.type);
-      node.children?.forEach(walk);
-    };
-    walk(ast);
+    const allTypes = collectNodeTypes(ast);
 
     const expected = [
       "document",

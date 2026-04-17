@@ -13,6 +13,7 @@ set(CPP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../cpp")
 file(GLOB MD4C_SOURCES "${CPP_ROOT}/md4c/*.c")
 file(GLOB CORE_SOURCES "${CPP_ROOT}/core/*.cpp")
 file(GLOB BINDING_SOURCES "${CPP_ROOT}/bindings/*.cpp")
+list(FILTER CORE_SOURCES EXCLUDE REGEX ".*Test\\.cpp$")
 
 # Create the shared library with our sources
 add_library(${PROJECT_NAME} SHARED
@@ -44,4 +45,3 @@ target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
     $<$<CONFIG:Release>:-O3 -DNDEBUG>
     $<$<CONFIG:Debug>:-O0 -g>
 )
-

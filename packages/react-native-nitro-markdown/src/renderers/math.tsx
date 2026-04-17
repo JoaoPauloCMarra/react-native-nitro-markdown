@@ -1,4 +1,4 @@
-import { useMemo, type FC, type ComponentType } from "react";
+import type { FC, ComponentType } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
+import { getCachedStyles } from "./style-cache";
 import { useMarkdownContext } from "../MarkdownContext";
 import type { MarkdownTheme } from "../theme";
 
@@ -35,6 +36,10 @@ type MathInlineProps = {
   content?: string;
   style?: ViewStyle;
 };
+
+type MathStyles = ReturnType<typeof createMathStyles>;
+
+const mathStylesCache = new WeakMap<MarkdownTheme, MathStyles>();
 
 const createMathStyles = (theme: MarkdownTheme) =>
   StyleSheet.create({
@@ -92,7 +97,7 @@ const createMathStyles = (theme: MarkdownTheme) =>
 
 export const MathInline: FC<MathInlineProps> = ({ content, style }) => {
   const { theme } = useMarkdownContext();
-  const styles = useMemo(() => createMathStyles(theme), [theme]);
+  const styles = getCachedStyles(mathStylesCache, theme, createMathStyles);
 
   if (!content) return null;
 
@@ -126,7 +131,7 @@ type MathBlockProps = {
 
 export const MathBlock: FC<MathBlockProps> = ({ content, style }) => {
   const { theme } = useMarkdownContext();
-  const styles = useMemo(() => createMathStyles(theme), [theme]);
+  const styles = getCachedStyles(mathStylesCache, theme, createMathStyles);
 
   if (!content) return null;
 

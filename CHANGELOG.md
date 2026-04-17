@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.4] - 2026-04-17
+
+### Added
+
+- `ParserOptions.html` opt-in flag for native `html_inline` and `html_block` parsing. HTML remains disabled by default and still requires custom renderers.
+- Regression coverage for plugin replacement, parser option toggles, and native HTML AST parsing.
+
+### Changed
+
+- Upgraded Nitro Modules and Nitrogen to `0.35.4`; peer dependency floor is now `react-native-nitro-modules >=0.35.4`.
+- Aligned the example app with current Expo SDK 55 patch releases and React Native `0.83.4`.
+- Added an example-app HTML parser demo with custom `html_inline` and `html_block` renderers.
+- Switched long example renderer screens to `Markdown` virtualization to keep large documents responsive.
+- Cached default renderer style sheets and memoized code highlighting work in hot render paths.
+- Updated safe toolchain patches: `turbo` `2.9.6`, `eslint-config-expo-magic` `2.4.0`, `react-native-builder-bob` `0.41.0`, `@swc/core` `1.15.26`, and `marked` `17.0.6`.
+- Migrated `nitro.json` to the current Nitro autolinking schema.
+
+### Fixed
+
+- `Markdown` now re-runs the parse/plugin pipeline when the `plugins` prop changes.
+- Android `HybridMarkdownSession` now rejects infinite range values before range slicing or replacement.
+- Native Android and iOS build inputs now exclude standalone C++ test sources.
+- Image rendering now avoids post-unmount dimension updates during virtualized list recycling.
+
 ## [0.5.3] - 2026-03-05
 
 ### Fixed

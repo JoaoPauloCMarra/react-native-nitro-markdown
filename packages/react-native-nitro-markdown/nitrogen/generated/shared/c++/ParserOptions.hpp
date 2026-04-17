@@ -41,10 +41,11 @@ namespace margelo::nitro::Markdown {
   public:
     std::optional<bool> gfm     SWIFT_PRIVATE;
     std::optional<bool> math     SWIFT_PRIVATE;
+    std::optional<bool> html     SWIFT_PRIVATE;
 
   public:
     ParserOptions() = default;
-    explicit ParserOptions(std::optional<bool> gfm, std::optional<bool> math): gfm(gfm), math(math) {}
+    explicit ParserOptions(std::optional<bool> gfm, std::optional<bool> math, std::optional<bool> html): gfm(gfm), math(math), html(html) {}
 
   public:
     friend bool operator==(const ParserOptions& lhs, const ParserOptions& rhs) = default;
@@ -61,13 +62,15 @@ namespace margelo::nitro {
       jsi::Object obj = arg.asObject(runtime);
       return margelo::nitro::Markdown::ParserOptions(
         JSIConverter<std::optional<bool>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "gfm"))),
-        JSIConverter<std::optional<bool>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "math")))
+        JSIConverter<std::optional<bool>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "math"))),
+        JSIConverter<std::optional<bool>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "html")))
       );
     }
     static inline jsi::Value toJSI(jsi::Runtime& runtime, const margelo::nitro::Markdown::ParserOptions& arg) {
       jsi::Object obj(runtime);
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "gfm"), JSIConverter<std::optional<bool>>::toJSI(runtime, arg.gfm));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "math"), JSIConverter<std::optional<bool>>::toJSI(runtime, arg.math));
+      obj.setProperty(runtime, PropNameIDCache::get(runtime, "html"), JSIConverter<std::optional<bool>>::toJSI(runtime, arg.html));
       return obj;
     }
     static inline bool canConvert(jsi::Runtime& runtime, const jsi::Value& value) {
@@ -80,6 +83,7 @@ namespace margelo::nitro {
       }
       if (!JSIConverter<std::optional<bool>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "gfm")))) return false;
       if (!JSIConverter<std::optional<bool>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "math")))) return false;
+      if (!JSIConverter<std::optional<bool>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "html")))) return false;
       return true;
     }
   };

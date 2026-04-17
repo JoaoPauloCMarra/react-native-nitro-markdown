@@ -20,8 +20,11 @@ describe("parseMarkdown", () => {
   });
 
   it("delegates to parseWithOptions when options provided", () => {
-    parseMarkdownWithOptions("hello", { gfm: true });
-    expect(mockParser.parseWithOptions).toHaveBeenCalledWith("hello", { gfm: true });
+    parseMarkdownWithOptions("hello", { gfm: true, html: true });
+    expect(mockParser.parseWithOptions).toHaveBeenCalledWith("hello", {
+      gfm: true,
+      html: true,
+    });
   });
 
   it("overloaded parseMarkdown forwards options", () => {

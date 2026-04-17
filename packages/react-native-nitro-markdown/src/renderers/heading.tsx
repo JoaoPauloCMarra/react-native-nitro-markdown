@@ -1,6 +1,8 @@
-import { useMemo, type FC, type ReactNode } from "react";
+import type { FC, ReactNode } from "react";
 import { Text, StyleSheet, Platform, type TextStyle } from "react-native";
+import { getCachedStyles } from "./style-cache";
 import { useMarkdownContext } from "../MarkdownContext";
+import type { MarkdownTheme } from "../theme";
 
 type HeadingProps = {
   level: number;
@@ -20,59 +22,7 @@ const ANDROID_SYSTEM_FONTS = new Set([
 
 export const Heading: FC<HeadingProps> = ({ level, children, style }) => {
   const { theme } = useMarkdownContext();
-  const headingWeight =
-    theme.headingWeight ??
-    (Platform.OS === "android" &&
-    theme.fontFamilies.heading &&
-    !ANDROID_SYSTEM_FONTS.has(theme.fontFamilies.heading)
-      ? "normal"
-      : "700");
-  const styles = useMemo(
-    () =>
-      StyleSheet.create({
-        heading: {
-          color: theme.colors.heading,
-          fontWeight: headingWeight,
-          marginTop: theme.spacing.xl,
-          marginBottom: theme.spacing.m,
-          fontFamily: theme.fontFamilies.heading,
-          letterSpacing: -0.2,
-          ...(Platform.OS === "android" && { includeFontPadding: false }),
-        },
-        h1: {
-          fontSize: theme.fontSizes.h1,
-          lineHeight: theme.fontSizes.h1 * 1.3,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.colors.border,
-          paddingBottom: theme.spacing.s,
-          letterSpacing: -0.6,
-        },
-        h2: {
-          fontSize: theme.fontSizes.h2,
-          lineHeight: theme.fontSizes.h2 * 1.3,
-          letterSpacing: -0.4,
-        },
-        h3: {
-          fontSize: theme.fontSizes.h3,
-          lineHeight: theme.fontSizes.h3 * 1.3,
-          letterSpacing: -0.2,
-        },
-        h4: {
-          fontSize: theme.fontSizes.h4,
-          lineHeight: theme.fontSizes.h4 * 1.3,
-        },
-        h5: {
-          fontSize: theme.fontSizes.h5,
-          lineHeight: theme.fontSizes.h5 * 1.3,
-        },
-        h6: {
-          fontSize: theme.fontSizes.h6,
-          lineHeight: theme.fontSizes.h6 * 1.3,
-          color: theme.colors.textMuted,
-        },
-      }),
-    [headingWeight, theme],
-  );
+  const styles = getCachedStyles(stylesCache, theme, createStyles);
 
   const headingStyles = [
     styles.heading,
@@ -86,3 +36,59 @@ export const Heading: FC<HeadingProps> = ({ level, children, style }) => {
 
   return <Text style={[...headingStyles, style]}>{children}</Text>;
 };
+
+type HeadingStyles = ReturnType<typeof createStyles>;
+
+const stylesCache = new WeakMap<MarkdownTheme, HeadingStyles>();
+
+const getHeadingWeight = (theme: MarkdownTheme) =>
+  theme.headingWeight ??
+  (Platform.OS === "android" &&
+  theme.fontFamilies.heading &&
+  !ANDROID_SYSTEM_FONTS.has(theme.fontFamilies.heading)
+    ? "normal"
+    : "700");
+
+const createStyles = (theme: MarkdownTheme) =>
+  StyleSheet.create({
+    heading: {
+      color: theme.colors.heading,
+      fontWeight: getHeadingWeight(theme),
+      marginTop: theme.spacing.xl,
+      marginBottom: theme.spacing.m,
+      fontFamily: theme.fontFamilies.heading,
+      letterSpacing: -0.2,
+      ...(Platform.OS === "android" && { includeFontPadding: false }),
+    },
+    h1: {
+      fontSize: theme.fontSizes.h1,
+      lineHeight: theme.fontSizes.h1 * 1.3,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+      paddingBottom: theme.spacing.s,
+      letterSpacing: -0.6,
+    },
+    h2: {
+      fontSize: theme.fontSizes.h2,
+      lineHeight: theme.fontSizes.h2 * 1.3,
+      letterSpacing: -0.4,
+    },
+    h3: {
+      fontSize: theme.fontSizes.h3,
+      lineHeight: theme.fontSizes.h3 * 1.3,
+      letterSpacing: -0.2,
+    },
+    h4: {
+      fontSize: theme.fontSizes.h4,
+      lineHeight: theme.fontSizes.h4 * 1.3,
+    },
+    h5: {
+      fontSize: theme.fontSizes.h5,
+      lineHeight: theme.fontSizes.h5 * 1.3,
+    },
+    h6: {
+      fontSize: theme.fontSizes.h6,
+      lineHeight: theme.fontSizes.h6 * 1.3,
+      color: theme.colors.textMuted,
+    },
+  });

@@ -249,7 +249,7 @@ std::string flattenNodeText(const std::shared_ptr<InternalMarkdownNode>& node) {
 } // namespace
 
 std::string HybridMarkdownParser::parse(const std::string& text) {
-    InternalParserOptions opts{.gfm = true, .math = true};
+    InternalParserOptions opts{.gfm = true, .math = true, .html = false};
 
     auto ast = parser_->parse(text, opts);
     return nodeToJson(ast);
@@ -259,13 +259,14 @@ std::string HybridMarkdownParser::parseWithOptions(const std::string& text, cons
     InternalParserOptions internalOpts;
     internalOpts.gfm = options.gfm.value_or(true);
     internalOpts.math = options.math.value_or(true);
+    internalOpts.html = options.html.value_or(false);
     
     auto ast = parser_->parse(text, internalOpts);
     return nodeToJson(ast);
 }
 
 std::string HybridMarkdownParser::extractPlainText(const std::string& text) {
-    InternalParserOptions opts{.gfm = true, .math = true};
+    InternalParserOptions opts{.gfm = true, .math = true, .html = false};
 
     auto ast = parser_->parse(text, opts);
     return flattenNodeText(ast);
@@ -275,6 +276,7 @@ std::string HybridMarkdownParser::extractPlainTextWithOptions(const std::string&
     InternalParserOptions internalOpts;
     internalOpts.gfm = options.gfm.value_or(true);
     internalOpts.math = options.math.value_or(true);
+    internalOpts.html = options.html.value_or(false);
 
     auto ast = parser_->parse(text, internalOpts);
     return flattenNodeText(ast);
