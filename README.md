@@ -12,6 +12,9 @@ Native Markdown parsing and rendering for React Native, powered by [md4c](https:
 - **Full rendering pipeline** -- parser + renderer + streaming session in one package
 - **GFM support** -- tables, strikethrough, task lists, autolinks
 - **Math rendering** -- inline and block LaTeX via `react-native-mathjax-svg` (optional)
+- **Opt-in HTML AST nodes** -- preserve raw HTML as `html_inline` / `html_block` for custom renderers
+- **Large document support** -- top-level block virtualization and cached renderer styles
+- **Code highlighting** -- built-in JS/TS, Python, and Bash tokenizer with custom highlighter support
 - **Headless API** -- parse markdown and extract text without any UI
 - **Streaming** -- incremental rendering for chat/LLM token streams
 - **Customizable** -- themes, per-node style overrides, custom renderers, AST transforms, plugin pipeline
@@ -21,14 +24,23 @@ Native Markdown parsing and rendering for React Native, powered by [md4c](https:
 | Dependency | Version |
 |---|---|
 | React Native | `>=0.75.0` |
-| react-native-nitro-modules | `>=0.35.0` |
+| react-native-nitro-modules | `>=0.35.4` |
 | react-native-mathjax-svg *(optional)* | `>=0.9.0` |
 | react-native-svg *(optional, for math)* | `>=13.0.0` |
 
 ## Installation
 
+With npm:
+
 ```bash
 npm install react-native-nitro-markdown react-native-nitro-modules
+cd ios && pod install
+```
+
+With Bun:
+
+```bash
+bun add react-native-nitro-markdown react-native-nitro-modules
 cd ios && pod install
 ```
 
@@ -61,6 +73,22 @@ export function Example() {
 
 ## API Reference
 
+### Parser Options
+
+`ParserOptions` controls native parser extensions. Defaults are conservative for HTML and feature-complete for Markdown extensions.
+
+| Option | Default | Enables | Notes |
+|---|---:|---|---|
+| `gfm` | `true` | Tables, strikethrough, task lists, permissive autolinks | Set `false` for stricter CommonMark-style parsing |
+| `math` | `true` | Inline and display LaTeX spans | Rendering falls back to plain styled text unless optional math deps are installed |
+| `html` | `false` | `html_inline` and `html_block` AST nodes | Raw HTML is not rendered by default; provide custom renderers |
+
+```tsx
+<Markdown options={{ gfm: true, math: true, html: false }}>
+  {content}
+</Markdown>
+```
+
 ### `<Markdown>`
 
 The main component. Parses a markdown string and renders it.
@@ -72,7 +100,7 @@ import { Markdown } from "react-native-nitro-markdown";
 | Prop | Type | Default | Description |
 |---|---|---|---|
 | `children` | `string` | required | Markdown input string |
-| `options` | `ParserOptions` | -- | Parser flags (`gfm`, `math`) |
+| `options` | `ParserOptions` | -- | Parser flags (`gfm`, `math`, `html`) |
 | `plugins` | `MarkdownPlugin[]` | -- | Plugin hooks (`beforeParse`, `afterParse`) |
 | `sourceAst` | `MarkdownNode` | -- | Pre-parsed AST; skips native parse when provided |
 | `astTransform` | `AstTransform` | -- | Post-parse AST rewrite before render |
@@ -174,7 +202,7 @@ import {
 
 | Function | Description |
 |---|---|
-| `parseMarkdown(text, options?)` | Parse to AST (options: `{ gfm?, math? }`) |
+| `parseMarkdown(text, options?)` | Parse to AST (options: `{ gfm?, math?, html? }`) |
 | `parseMarkdownWithOptions(text, options)` | Parse with explicit options |
 | `extractPlainText(text)` | Parse and return plain text from native parser |
 | `extractPlainTextWithOptions(text, options)` | Same with parser flags |
@@ -218,8 +246,40 @@ Renderers receive `EnhancedRendererProps` with `node`, `children`, and `Renderer
 | `code_inline` | `content` |
 | `list` | `ordered`, `start` |
 | `task_list_item` | `checked` |
+| `html_inline`, `html_block` | Read raw HTML from `node.content` |
 
 Return `undefined` to fall back to the built-in renderer, or `null` to render nothing.
+
+#### Rendering HTML Nodes
+
+HTML parsing is opt-in and produces raw AST nodes. The built-in renderer intentionally renders nothing for `html_inline` and `html_block`; applications decide what is safe to display.
+
+```tsx
+import { Text, View } from "react-native";
+import { Markdown } from "react-native-nitro-markdown";
+
+<Markdown
+  options={{ html: true }}
+  renderers={{
+    html_inline: ({ node }) => {
+      if (node.content === "<br>") return <Text>{"\n"}</Text>;
+      return null;
+    },
+    html_block: ({ node }) => {
+      if (!node.content?.includes('data-kind="release-note"')) return null;
+      return (
+        <View>
+          <Text>Release note</Text>
+        </View>
+      );
+    },
+  }}
+>
+  {content}
+</Markdown>;
+```
+
+Do not pass untrusted HTML directly into a WebView from a renderer. Sanitize or map known tags/attributes to native components.
 
 ### Theme API
 
@@ -337,7 +397,11 @@ const plugins: MarkdownPlugin[] = [
 ```tsx
 import { Markdown, parseMarkdownWithOptions } from "react-native-nitro-markdown";
 
-const ast = parseMarkdownWithOptions(content, { gfm: true, math: true });
+const ast = parseMarkdownWithOptions(content, {
+  gfm: true,
+  math: true,
+  html: false,
+});
 
 <Markdown sourceAst={ast}>{"ignored when sourceAst is provided"}</Markdown>;
 ```
@@ -363,6 +427,8 @@ Keep `Markdown` as the primary vertical scroller when virtualization is enabled 
 ### Syntax Highlighting
 
 ```tsx
+import type { CodeHighlighter } from "react-native-nitro-markdown";
+
 // Built-in highlighter (JS/TS, Python, Bash)
 <Markdown highlightCode>{"```typescript\nconst x: number = 42;\n```"}</Markdown>
 
@@ -395,7 +461,7 @@ Default link behavior: trims href, calls `onLinkPress`, validates scheme (`http:
 
 `document`, `heading`, `paragraph`, `text`, `bold`, `italic`, `strikethrough`, `link`, `image`, `code_inline`, `code_block`, `blockquote`, `horizontal_rule`, `line_break`, `soft_break`, `table`, `table_head`, `table_body`, `table_row`, `table_cell`, `list`, `list_item`, `task_list_item`, `math_inline`, `math_block`, `html_block`, `html_inline`
 
-`html_inline` and `html_block` are parsed but not rendered by default.
+`html_inline` and `html_block` are parsed only when `options.html` is `true`; they are not rendered by default. Use a custom renderer to handle them, and read raw HTML from `node.content`.
 
 ## Package Exports
 
@@ -409,10 +475,11 @@ Parser and text utilities only -- no React dependencies. Use this for server-sid
 
 ## Performance Tips
 
-- Use `updateStrategy="raf"` for streaming
-- Batch `session.append()` calls (50-100ms intervals) rather than per-character
-- Enable `virtualize` for large documents
-- Use the headless API when you don't need built-in renderers
+- Use `updateStrategy="raf"` for streaming UI updates.
+- Batch `session.append()` calls at 50-100ms intervals rather than per-character.
+- Enable `virtualize="auto"` for long documents and keep `Markdown` as the primary vertical scroller.
+- Memoize custom `plugins`, `renderers`, `theme`, and `styles` objects when they are created inside a component.
+- Use the headless API when you only need parsing, plain text extraction, search indexing, or a custom renderer.
 
 ## Troubleshooting
 
@@ -432,7 +499,7 @@ The `apps/example` directory contains a full demo app with these screens:
 | Bench | `app/index.tsx` | Smoke tests + benchmark vs JS parsers |
 | Default | `app/render-default.tsx` | Built-in renderer defaults |
 | Styles | `app/render-default-styles.tsx` | Theme and style overrides |
-| Custom | `app/render-custom.tsx` | Custom renderers + AST transform |
+| Custom | `app/render-custom.tsx` | HTML AST rendering, custom renderers, AST transform |
 | Stream | `app/render-stream.tsx` | Live streaming with token append |
 
 ## Contributing

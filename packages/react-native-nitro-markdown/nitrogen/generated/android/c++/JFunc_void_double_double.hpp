@@ -23,7 +23,7 @@ namespace margelo::nitro::Markdown {
    */
   struct JFunc_void_double_double: public jni::JavaClass<JFunc_void_double_double> {
   public:
-    static auto constexpr kJavaDescriptor = "Lcom/margelo/nitro/com/nitromarkdown/Func_void_double_double;";
+    static constexpr auto kJavaDescriptor = "Lcom/margelo/nitro/com/nitromarkdown/Func_void_double_double;";
 
   public:
     /**
@@ -59,7 +59,7 @@ namespace margelo::nitro::Markdown {
     }
 
   public:
-    static auto constexpr kJavaDescriptor = "Lcom/margelo/nitro/com/nitromarkdown/Func_void_double_double_cxx;";
+    static constexpr auto kJavaDescriptor = "Lcom/margelo/nitro/com/nitromarkdown/Func_void_double_double_cxx;";
     static void registerNatives() {
       registerHybrid({makeNativeMethod("invoke_cxx", JFunc_void_double_double_cxx::invoke_cxx)});
     }

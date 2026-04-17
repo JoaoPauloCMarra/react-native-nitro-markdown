@@ -1,8 +1,11 @@
 import type { MarkdownNode } from "../headless";
 
+Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+
 type MockParserOptions = {
   gfm?: boolean;
   math?: boolean;
+  html?: boolean;
 };
 
 function createMockAst(text: string): MarkdownNode {
@@ -103,9 +106,20 @@ jest.mock("react-native-nitro-modules", () => ({
 }));
 
 jest.mock("react-native", () => ({
+  View: "View",
+  Text: "Text",
+  FlatList: "FlatList",
+  ScrollView: "ScrollView",
+  Image: {
+    getSize: jest.fn(),
+  },
+  Linking: {
+    canOpenURL: jest.fn(),
+    openURL: jest.fn(),
+  },
   StyleSheet: {
     create: (obj: Record<string, unknown>) => obj,
-    flatten: (obj: Record<string, unknown>) => obj,
+    flatten: (obj: unknown) => obj,
   },
   Platform: {
     OS: "ios",

@@ -104,6 +104,7 @@ const baseStylesCache = new WeakMap<MarkdownTheme, BaseStyles>();
 const parseAstCache = new Map<string, MarkdownNode>();
 const MAX_PARSE_CACHE_ENTRIES = 32;
 const MAX_CACHEABLE_TEXT_LENGTH = 24_000;
+const EMPTY_RENDERERS: CustomRenderers = {};
 
 export type AstTransform = (ast: MarkdownNode) => MarkdownNode;
 export type MarkdownVirtualizationOptions = Pick<
@@ -166,12 +167,14 @@ const cloneMarkdownNode = (node: MarkdownNode): MarkdownNode => {
 };
 
 const getParserOptionsKey = (options?: ParserOptions): string => {
-  if (!options) return "gfm:default|math:default";
+  if (!options) return "gfm:default|math:default|html:default";
 
   const gfm = options.gfm === undefined ? "default" : options.gfm ? "1" : "0";
   const math =
     options.math === undefined ? "default" : options.math ? "1" : "0";
-  return `gfm:${gfm}|math:${math}`;
+  const html =
+    options.html === undefined ? "default" : options.html ? "1" : "0";
+  return `gfm:${gfm}|math:${math}|html:${html}`;
 };
 
 const normalizeParserOptions = (
@@ -181,14 +184,16 @@ const normalizeParserOptions = (
 
   const gfm = options.gfm;
   const math = options.math;
+  const html = options.html;
 
-  if (gfm === undefined && math === undefined) {
+  if (gfm === undefined && math === undefined && html === undefined) {
     return undefined;
   }
 
   return {
     gfm,
     math,
+    html,
   };
 };
 
@@ -304,7 +309,7 @@ export type MarkdownProps = {
    */
   children: string;
   /**
-   * Parser options to enable GFM or Math support.
+   * Parser options to enable GFM, math, or raw HTML AST support.
    */
   options?: ParserOptions;
   /**
@@ -421,7 +426,7 @@ export const Markdown: FC<MarkdownProps> = ({
   plugins,
   sourceAst,
   astTransform,
-  renderers = {},
+  renderers = EMPTY_RENDERERS,
   theme: userTheme,
   styles: nodeStyles,
   stylingStrategy = "opinionated",
@@ -438,31 +443,30 @@ export const Markdown: FC<MarkdownProps> = ({
 }) => {
   const parserOptionGfm = options?.gfm;
   const parserOptionMath = options?.math;
+  const parserOptionHtml = options?.html;
 
   /* eslint-disable react-hooks/refs -- Refs updated/read intentionally to avoid re-parsing on callback identity changes */
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
 
-  const pluginsRef = useRef(plugins);
-  pluginsRef.current = plugins;
-
   const parseResult = useMemo(() => {
     try {
       const markdownToParse = applyBeforeParsePlugins(
         children,
-        pluginsRef.current,
+        plugins,
         onErrorRef.current,
       );
       const parserOptions = normalizeParserOptions({
         gfm: parserOptionGfm,
         math: parserOptionMath,
+        html: parserOptionHtml,
       });
       let parsedAst = sourceAst
         ? cloneMarkdownNode(sourceAst)
         : getCachedParsedAst(markdownToParse, parserOptions);
       parsedAst = applyAfterParsePlugins(
         parsedAst,
-        pluginsRef.current,
+        plugins,
         onErrorRef.current,
       );
 
@@ -491,12 +495,26 @@ export const Markdown: FC<MarkdownProps> = ({
         ast: null,
       };
     }
-  }, [children, parserOptionGfm, parserOptionMath, sourceAst, astTransform]);
+  }, [
+    children,
+    parserOptionGfm,
+    parserOptionMath,
+    parserOptionHtml,
+    sourceAst,
+    astTransform,
+    plugins,
+  ]);
   /* eslint-enable react-hooks/refs */
 
   useEffect(() => {
     onParsingInProgress?.();
-  }, [children, parserOptionGfm, parserOptionMath, onParsingInProgress]);
+  }, [
+    children,
+    parserOptionGfm,
+    parserOptionMath,
+    parserOptionHtml,
+    onParsingInProgress,
+  ]);
 
   useEffect(() => {
     if (!parseResult.ast || !onParseComplete) return;

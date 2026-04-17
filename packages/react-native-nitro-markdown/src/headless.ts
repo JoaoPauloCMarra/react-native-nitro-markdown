@@ -100,7 +100,7 @@ export function parseMarkdown(text: string): MarkdownNode;
 /**
  * Parse markdown text with custom options.
  * @param text - The markdown text to parse
- * @param options - Parser options (gfm, math)
+ * @param options - Parser options (gfm, math, html)
  * @returns The root node of the parsed AST
  */
 export function parseMarkdown(
@@ -134,7 +134,7 @@ export function parseMarkdown(
 /**
  * Parse markdown text with custom options.
  * @param text - The markdown text to parse
- * @param options - Parser options (gfm, math)
+ * @param options - Parser options (gfm, math, html)
  * @returns The root node of the parsed AST
  */
 export function parseMarkdownWithOptions(

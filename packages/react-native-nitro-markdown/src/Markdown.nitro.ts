@@ -3,6 +3,7 @@ import type { HybridObject } from "react-native-nitro-modules";
 export interface ParserOptions {
   gfm?: boolean;
   math?: boolean;
+  html?: boolean;
 }
 
 export interface MarkdownParser extends HybridObject<{

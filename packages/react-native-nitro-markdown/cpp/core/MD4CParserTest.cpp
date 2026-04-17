@@ -85,6 +85,9 @@ public:
         testStrikethrough();
         testMathInline();
         testMathBlock();
+        testParserOptionToggles();
+        testHtmlDisabledByDefault();
+        testHtmlEnabled();
         testHeadingLevels2Through6();
         testOrderedListWithCustomStart();
         testSoftBreakAndHardBreak();
@@ -112,6 +115,21 @@ public:
     }
 
 private:
+    static std::shared_ptr<MarkdownNode> findFirstNode(
+        const std::shared_ptr<MarkdownNode>& node,
+        NodeType type
+    ) {
+        if (!node) return nullptr;
+        if (node->type == type) return node;
+
+        for (const auto& child : node->children) {
+            auto found = findFirstNode(child, type);
+            if (found) return found;
+        }
+
+        return nullptr;
+    }
+
     static double percentile(std::vector<double> values, double percentileValue) {
         if (values.empty()) return 0.0;
 
@@ -718,7 +736,6 @@ private:
     static void testConcurrentOptions() {
         MD4CParser parser;
 
-        // Test different option combinations
         ParserOptions options1{true, true};
         ParserOptions options2{false, false};
         ParserOptions options3{true, false};
@@ -733,6 +750,50 @@ private:
         TestRunner::assertNotNull(result2.get(), "Options {false, false} result not null");
         TestRunner::assertNotNull(result3.get(), "Options {true, false} result not null");
         TestRunner::assertNotNull(result4.get(), "Options {false, true} result not null");
+    }
+
+    static void testParserOptionToggles() {
+        MD4CParser parser;
+
+        const std::string tableMarkdown = "| A |\n|---|\n| B |";
+        ParserOptions gfmEnabled{true, false};
+        ParserOptions gfmDisabled{false, false};
+        auto gfmResult = parser.parse(tableMarkdown, gfmEnabled);
+        auto noGfmResult = parser.parse(tableMarkdown, gfmDisabled);
+        TestRunner::assertNotNull(
+            findFirstNode(gfmResult, NodeType::Table).get(),
+            "ParserOptions.gfm true: table node"
+        );
+        TestRunner::assertTrue(
+            findFirstNode(noGfmResult, NodeType::Table) == nullptr,
+            "ParserOptions.gfm false: no table node"
+        );
+
+        ParserOptions mathEnabled{false, true};
+        ParserOptions mathDisabled{false, false};
+        auto mathResult = parser.parse("$x^2$", mathEnabled);
+        auto noMathResult = parser.parse("$x^2$", mathDisabled);
+        TestRunner::assertNotNull(
+            findFirstNode(mathResult, NodeType::MathInline).get(),
+            "ParserOptions.math true: math_inline node"
+        );
+        TestRunner::assertTrue(
+            findFirstNode(noMathResult, NodeType::MathInline) == nullptr,
+            "ParserOptions.math false: no math_inline node"
+        );
+
+        ParserOptions htmlDefault{true, true};
+        ParserOptions htmlEnabled{true, true, true};
+        auto htmlDefaultResult = parser.parse("<div>block</div>\n", htmlDefault);
+        auto htmlEnabledResult = parser.parse("<div>block</div>\n", htmlEnabled);
+        TestRunner::assertTrue(
+            findFirstNode(htmlDefaultResult, NodeType::HtmlBlock) == nullptr,
+            "ParserOptions.html default: no html_block node"
+        );
+        TestRunner::assertNotNull(
+            findFirstNode(htmlEnabledResult, NodeType::HtmlBlock).get(),
+            "ParserOptions.html true: html_block node"
+        );
     }
 
     // Regression test: CodeBlock children contain text (used by extractPlainText/flattenNodeText)
@@ -817,6 +878,47 @@ private:
             foundMathBlock = true;
         }
         TestRunner::assertTrue(foundMathBlock, "MathBlock: found math_block node");
+    }
+
+    static void testHtmlDisabledByDefault() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+        auto result = parser.parse("before <span>hi</span> after\n\n<div>block</div>", options);
+
+        TestRunner::assertTrue(
+            findFirstNode(result, NodeType::HtmlInline) == nullptr,
+            "HTML disabled: no html_inline node"
+        );
+        TestRunner::assertTrue(
+            findFirstNode(result, NodeType::HtmlBlock) == nullptr,
+            "HTML disabled: no html_block node"
+        );
+    }
+
+    static void testHtmlEnabled() {
+        MD4CParser parser;
+        ParserOptions options{true, true, true};
+
+        auto inlineResult = parser.parse("before <span>hi</span> after", options);
+        auto htmlInline = findFirstNode(inlineResult, NodeType::HtmlInline);
+        TestRunner::assertNotNull(htmlInline.get(), "HTML enabled: found html_inline node");
+        if (htmlInline) {
+            TestRunner::assertEqual(
+                "<span>",
+                htmlInline->content.value_or(""),
+                "HTML enabled: inline content"
+            );
+        }
+
+        auto blockResult = parser.parse("<div>block</div>\n", options);
+        auto htmlBlock = findFirstNode(blockResult, NodeType::HtmlBlock);
+        TestRunner::assertNotNull(htmlBlock.get(), "HTML enabled: found html_block node");
+        if (htmlBlock) {
+            TestRunner::assertTrue(
+                htmlBlock->content.value_or("").find("<div>block</div>") != std::string::npos,
+                "HTML enabled: block content"
+            );
+        }
     }
 
     static void testHeadingLevels2Through6() {

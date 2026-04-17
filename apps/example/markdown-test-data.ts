@@ -224,6 +224,18 @@ The goal is to ensure that performance remains consistent regardless of content 
 
 This comprehensive test suite validates that the parser maintains high performance and accuracy across all supported markdown features and edge cases.`;
 
+export const HTML_PARSER_MARKDOWN = `# HTML Parser Demo
+
+Raw HTML parsing is opt-in with \`options={{ html: true }}\`.
+
+Inline HTML maps to native styling: <span data-tone="accent">highlighted native text</span>.
+
+<aside data-kind="release-note">
+  <strong>Release note</strong>
+  <p>The parser exposes this as an html_block node, and this demo maps the safe content into a native card.</p>
+</aside>
+`;
+
 export const CUSTOM_RENDER_COMPONENTS = `# Custom Renderer Examples
 
 > **Tip:** Use the bottom tabs to switch between rendering modes!

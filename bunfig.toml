@@ -1,8 +1,7 @@
 [install]
 # Hoist dependencies to root node_modules
-auto = true
+linker = "hoisted"
 
 [install.lockfile]
 # Save lockfile
 save = true
-

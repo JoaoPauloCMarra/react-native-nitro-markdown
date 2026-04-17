@@ -1,4 +1,4 @@
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { Markdown, type NodeStyleOverrides } from "react-native-nitro-markdown";
 import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 import {
@@ -17,15 +17,7 @@ export default function RenderDefaultStylesScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: tabHeight + 20 },
-        ]}
-        bounces={false}
-        showsVerticalScrollIndicator={false}
-      >
+      <View style={[styles.content, { paddingBottom: tabHeight + 20 }]}>
         <View style={styles.hero}>
           <Text style={styles.title}>Style Overrides</Text>
           <Text style={styles.subtitle}>
@@ -36,11 +28,18 @@ export default function RenderDefaultStylesScreen() {
           <Markdown
             options={{ gfm: true, math: true }}
             styles={STYLE_OVERRIDES}
+            style={styles.markdown}
+            virtualize={true}
+            virtualization={{
+              initialNumToRender: 10,
+              maxToRenderPerBatch: 8,
+              windowSize: 7,
+            }}
           >
             {`${CUSTOM_RENDER_COMPONENTS}\n\n${COMPLEX_MARKDOWN}`}
           </Markdown>
         </View>
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -87,12 +86,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: EXAMPLE_COLORS.background,
   },
-  scrollView: {
+  content: {
     flex: 1,
-  },
-  scrollContent: {
     padding: 20,
-    paddingBottom: 120,
     gap: 14,
   },
   hero: {
@@ -116,11 +112,15 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   card: {
+    flex: 1,
     backgroundColor: EXAMPLE_COLORS.surface,
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
     borderColor: EXAMPLE_COLORS.border,
     boxShadow: `0px 8px 20px ${EXAMPLE_COLORS.text}14`,
+  },
+  markdown: {
+    flex: 1,
   },
 });

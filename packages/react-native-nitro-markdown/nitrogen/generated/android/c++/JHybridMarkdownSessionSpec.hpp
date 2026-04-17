@@ -21,11 +21,11 @@ namespace margelo::nitro::Markdown {
   class JHybridMarkdownSessionSpec: public virtual HybridMarkdownSessionSpec, public virtual JHybridObject {
   public:
     struct JavaPart: public jni::JavaClass<JavaPart, JHybridObject::JavaPart> {
-      static auto constexpr kJavaDescriptor = "Lcom/margelo/nitro/com/nitromarkdown/HybridMarkdownSessionSpec;";
+      static constexpr auto kJavaDescriptor = "Lcom/margelo/nitro/com/nitromarkdown/HybridMarkdownSessionSpec;";
       std::shared_ptr<JHybridMarkdownSessionSpec> getJHybridMarkdownSessionSpec();
     };
     struct CxxPart: public jni::HybridClass<CxxPart, JHybridObject::CxxPart> {
-      static auto constexpr kJavaDescriptor = "Lcom/margelo/nitro/com/nitromarkdown/HybridMarkdownSessionSpec$CxxPart;";
+      static constexpr auto kJavaDescriptor = "Lcom/margelo/nitro/com/nitromarkdown/HybridMarkdownSessionSpec$CxxPart;";
       static jni::local_ref<jhybriddata> initHybrid(jni::alias_ref<jhybridobject> jThis);
       static void registerNatives();
       using HybridBase::HybridBase;

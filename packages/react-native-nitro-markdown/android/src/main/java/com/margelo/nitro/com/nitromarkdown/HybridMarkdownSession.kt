@@ -62,7 +62,7 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
     }
 
     override fun getTextRange(from: Double, to: Double): String {
-        if (from.isNaN() || to.isNaN() || from < 0.0) return ""
+        if (!from.isFinite() || !to.isFinite() || from < 0.0 || to < 0.0 || from > to) return ""
         synchronized(lock) {
             val start = from.toLong().coerceIn(0L, buffer.length.toLong()).toInt()
             val end = to.toLong().coerceIn(start.toLong(), buffer.length.toLong()).toInt()
@@ -88,15 +88,21 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
     }
 
     override fun replace(from: Double, to: Double, text: String): Double {
-        require(from >= 0.0 && to >= from) { "Invalid range: from=$from must be >= 0 and to=$to must be >= from" }
+        require(from.isFinite() && to.isFinite() && from >= 0.0 && to >= 0.0 && to >= from) {
+            "Invalid range: from=$from and to=$to must be finite, from must be >= 0, and to must be >= from"
+        }
         val newLength: Double
+        val notifyFrom: Double
+        val notifyTo: Double
         synchronized(lock) {
             val start = from.toLong().coerceIn(0L, buffer.length.toLong()).toInt()
             val end = to.toLong().coerceIn(start.toLong(), buffer.length.toLong()).toInt()
             buffer.replace(start, end, text)
             newLength = buffer.length.toDouble()
+            notifyFrom = start.toDouble()
+            notifyTo = start.toDouble() + text.length.toDouble()
         }
-        notifyListeners(from, from + text.length.toDouble())
+        notifyListeners(notifyFrom, notifyTo)
         return newLength
     }
 
