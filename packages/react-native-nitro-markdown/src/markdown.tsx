@@ -788,28 +788,31 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
     }
   }
 
-  const nodeStyleOverride = nodeStyles?.[node.type] as
-    | (ViewStyle & TextStyle)
+  const nodeTextStyleOverride = nodeStyles?.[node.type] as
+    | TextStyle
+    | undefined;
+  const nodeViewStyleOverride = nodeStyles?.[node.type] as
+    | ViewStyle
     | undefined;
 
   switch (node.type) {
     case "document":
       return (
-        <View style={[baseStyles.document, nodeStyleOverride]}>
+        <View style={[baseStyles.document, nodeViewStyleOverride]}>
           {renderChildren(node.children, false, false)}
         </View>
       );
 
     case "heading":
       return (
-        <Heading level={node.level ?? 1} style={nodeStyleOverride}>
+        <Heading level={node.level ?? 1} style={nodeTextStyleOverride}>
           {renderChildren(node.children, inListItem, true)}
         </Heading>
       );
 
     case "paragraph":
       return (
-        <Paragraph inListItem={inListItem} style={nodeStyleOverride}>
+        <Paragraph inListItem={inListItem} style={nodeViewStyleOverride}>
           {renderChildren(node.children, inListItem, false)}
         </Paragraph>
       );
@@ -819,33 +822,35 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
         return <Text>{node.content}</Text>;
       }
       return (
-        <Text style={[baseStyles.text, nodeStyleOverride]}>{node.content}</Text>
+        <Text style={[baseStyles.text, nodeTextStyleOverride]}>
+          {node.content}
+        </Text>
       );
 
     case "bold":
       return (
-        <Text style={[baseStyles.bold, nodeStyleOverride]}>
+        <Text style={[baseStyles.bold, nodeTextStyleOverride]}>
           {renderChildren(node.children, inListItem, true)}
         </Text>
       );
 
     case "italic":
       return (
-        <Text style={[baseStyles.italic, nodeStyleOverride]}>
+        <Text style={[baseStyles.italic, nodeTextStyleOverride]}>
           {renderChildren(node.children, inListItem, true)}
         </Text>
       );
 
     case "strikethrough":
       return (
-        <Text style={[baseStyles.strikethrough, nodeStyleOverride]}>
+        <Text style={[baseStyles.strikethrough, nodeTextStyleOverride]}>
           {renderChildren(node.children, inListItem, true)}
         </Text>
       );
 
     case "link":
       return (
-        <Link href={node.href ?? ""} style={nodeStyleOverride}>
+        <Link href={node.href ?? ""} style={nodeTextStyleOverride}>
           {renderChildren(node.children, inListItem, true)}
         </Link>
       );
@@ -857,31 +862,33 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
           title={node.title}
           alt={node.alt}
           Renderer={NodeRenderer}
-          style={nodeStyleOverride}
+          style={nodeViewStyleOverride}
         />
       );
 
     case "code_inline":
-      return <InlineCode style={nodeStyleOverride}>{node.content}</InlineCode>;
+      return (
+        <InlineCode style={nodeTextStyleOverride}>{node.content}</InlineCode>
+      );
 
     case "code_block":
       return (
         <CodeBlock
           language={node.language}
           content={getTextContent(node)}
-          style={nodeStyleOverride}
+          style={nodeViewStyleOverride}
         />
       );
 
     case "blockquote":
       return (
-        <Blockquote style={nodeStyleOverride}>
+        <Blockquote style={nodeViewStyleOverride}>
           {renderChildren(node.children, inListItem, false)}
         </Blockquote>
       );
 
     case "horizontal_rule":
-      return <HorizontalRule style={nodeStyleOverride} />;
+      return <HorizontalRule style={nodeViewStyleOverride} />;
 
     case "line_break":
       return <Text>{"\n"}</Text>;
@@ -893,12 +900,15 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
       let mathContent = getTextContent(node);
       if (!mathContent) return null;
       mathContent = mathContent.replace(/^\$+|\$+$/g, "").trim();
-      return <MathInline content={mathContent} style={nodeStyleOverride} />;
+      return <MathInline content={mathContent} style={nodeViewStyleOverride} />;
     }
 
     case "math_block":
       return (
-        <MathBlock content={getTextContent(node)} style={nodeStyleOverride} />
+        <MathBlock
+          content={getTextContent(node)}
+          style={nodeViewStyleOverride}
+        />
       );
 
     case "list":
@@ -907,7 +917,7 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
           ordered={node.ordered ?? false}
           start={node.start}
           depth={depth}
-          style={nodeStyleOverride}
+          style={nodeViewStyleOverride}
         >
           {node.children?.map((child, index) => {
             if (child.type === "task_list_item") {
@@ -945,7 +955,10 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
 
     case "task_list_item":
       return (
-        <TaskListItem checked={node.checked ?? false} style={nodeStyleOverride}>
+        <TaskListItem
+          checked={node.checked ?? false}
+          style={nodeViewStyleOverride}
+        >
           {renderChildren(node.children, true, false)}
         </TaskListItem>
       );
@@ -955,7 +968,7 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
         <TableRenderer
           node={node}
           Renderer={NodeRenderer}
-          style={nodeStyleOverride}
+          style={nodeViewStyleOverride}
         />
       );
 
