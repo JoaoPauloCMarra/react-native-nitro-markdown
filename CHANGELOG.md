@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.5] - 2026-04-24
+
+### Added
+
+- `Markdown` `parseCache?: boolean` prop (default `true`) to control internal parse-result caching for repeated markdown inputs.
+- Release harness script covering lint, typecheck, JS coverage, benchmark checks, and C++ coverage.
+- C++ `llvm-cov` coverage mode for the native MD4C parser test target.
+
+### Changed
+
+- Clarified plugin behavior when `sourceAst` is provided: `beforeParse` hooks are skipped, while `afterParse` hooks still run on the supplied AST.
+- Expanded package coverage for parse-cache control, `sourceAst` pipeline behavior, headless parsing, incremental AST updates, table utilities, and native parser branches.
+- Raised JS/TS package coverage thresholds to at least 90% globally.
+- Updated the example app smoke test dashboard to validate exported parser APIs, renderer exports, plugin behavior, sessions, highlighting, themes, and platform support; unsupported platform rows now render disabled.
+- Synced the example app and repo dependencies with current Expo SDK 55 patch recommendations, React Native `0.83.6`, and Nitro/Nitrogen `0.35.5`.
+- Refactored the publish script to validate release docs, run independent verification checks in parallel, include JS and C++ coverage, and preserve a fast dry-run publish path.
+
+### Fixed
+
+- Parse-cache hits now verify the cached source text before reuse and clone the cached AST before handing it to plugin or transform code.
+
 ## [0.5.4] - 2026-04-17
 
 ### Added

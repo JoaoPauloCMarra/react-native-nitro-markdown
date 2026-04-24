@@ -75,6 +75,37 @@ describe("extractTableData", () => {
     expect(result.headers).toHaveLength(0);
     expect(result.rows).toHaveLength(0);
   });
+
+  it("preserves header alignment metadata", () => {
+    const table: MarkdownNode = {
+      type: "table",
+      children: [{
+        type: "table_head",
+        children: [{
+          type: "table_row",
+          children: [
+            { type: "table_cell", align: "left", children: [{ type: "text", content: "L" }] },
+            { type: "table_cell", align: "center", children: [{ type: "text", content: "C" }] },
+            { type: "table_cell", align: "right", children: [{ type: "text", content: "R" }] },
+          ],
+        }],
+      }],
+    };
+
+    expect(extractTableData(table).alignments).toEqual(["left", "center", "right"]);
+  });
+
+  it("keeps empty rows when table row has no cells", () => {
+    const table: MarkdownNode = {
+      type: "table",
+      children: [{
+        type: "table_body",
+        children: [{ type: "table_row", children: [] }],
+      }],
+    };
+
+    expect(extractTableData(table).rows).toEqual([[]]);
+  });
 });
 
 describe("estimateColumnWidths", () => {
@@ -98,6 +129,41 @@ describe("estimateColumnWidths", () => {
     const widths = estimateColumnWidths(headers as MarkdownNode[], rows as MarkdownNode[][], 1, 60);
     const headerOnlyWidths = estimateColumnWidths(headers as MarkdownNode[], [], 1, 60);
     expect(widths[0]).toBeGreaterThanOrEqual(headerOnlyWidths[0]);
+  });
+
+  it("uses minimum width for columns without header or body cells", () => {
+    const headers = [{ type: "text" as const, content: "H" }];
+    const widths = estimateColumnWidths(headers as MarkdownNode[], [], 3, 72);
+    expect(widths).toHaveLength(3);
+    expect(widths[1]).toBe(72);
+    expect(widths[2]).toBe(72);
+  });
+
+  it("skips missing body cells without shifting later columns", () => {
+    const headers = [
+      { type: "text" as const, content: "A" },
+      { type: "text" as const, content: "B" },
+    ];
+    const rows = [
+      [{ type: "text" as const, content: "short" }],
+      [
+        { type: "text" as const, content: "short" },
+        { type: "text" as const, content: "much longer second column" },
+      ],
+    ];
+
+    const widths = estimateColumnWidths(headers as MarkdownNode[], rows as MarkdownNode[][], 2, 60);
+
+    expect(widths[1]).toBeGreaterThan(widths[0]);
+  });
+
+  it("caps long content at the maximum estimated width", () => {
+    const capped = [{ type: "text" as const, content: "x".repeat(120) }];
+    const beyondCap = [{ type: "text" as const, content: "x".repeat(240) }];
+    const cappedWidth = estimateColumnWidths(capped as MarkdownNode[], [], 1, 60);
+    const beyondCapWidth = estimateColumnWidths(beyondCap as MarkdownNode[], [], 1, 60);
+
+    expect(beyondCapWidth).toEqual(cappedWidth);
   });
 });
 

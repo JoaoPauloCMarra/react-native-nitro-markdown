@@ -117,3 +117,4 @@ temp/
 !README.md
 !CONTRIBUTING.md
 !CHANGELOG.md
+!.github/release-*.md

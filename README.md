@@ -103,6 +103,7 @@ import { Markdown } from "react-native-nitro-markdown";
 | `options` | `ParserOptions` | -- | Parser flags (`gfm`, `math`, `html`) |
 | `plugins` | `MarkdownPlugin[]` | -- | Plugin hooks (`beforeParse`, `afterParse`) |
 | `sourceAst` | `MarkdownNode` | -- | Pre-parsed AST; skips native parse when provided |
+| `parseCache` | `boolean` | `true` | Enable internal parse result caching for repeated inputs |
 | `astTransform` | `AstTransform` | -- | Post-parse AST rewrite before render |
 | `renderers` | `CustomRenderers` | `{}` | Per-node custom renderer overrides |
 | `theme` | `PartialMarkdownTheme` | `defaultMarkdownTheme` | Theme token overrides |
@@ -120,6 +121,10 @@ import { Markdown } from "react-native-nitro-markdown";
 | `virtualization` | `MarkdownVirtualizationOptions` | -- | FlatList tuning (windowSize, batching, etc.) |
 
 **Pipeline order:** `beforeParse` plugins (by priority desc) -> parse/sourceAst -> `afterParse` plugins (by priority desc) -> `astTransform` -> render.
+
+When `sourceAst` is provided, `beforeParse` plugins are skipped because no source string is parsed. `afterParse` plugins still run on the provided AST.
+
+`parseCache` defaults to `true` and caches parse results for repeated markdown inputs. Set `parseCache={false}` to force a fresh native parse on each input change. This flag has no effect when `sourceAst` is provided.
 
 ### `<MarkdownStream>`
 
@@ -406,6 +411,8 @@ const ast = parseMarkdownWithOptions(content, {
 <Markdown sourceAst={ast}>{"ignored when sourceAst is provided"}</Markdown>;
 ```
 
+With `sourceAst`, `beforeParse` plugins are skipped, while `afterParse` and `astTransform` still apply.
+
 ### Virtualization (large documents)
 
 ```tsx
@@ -501,6 +508,11 @@ The `apps/example` directory contains a full demo app with these screens:
 | Styles | `app/render-default-styles.tsx` | Theme and style overrides |
 | Custom | `app/render-custom.tsx` | HTML AST rendering, custom renderers, AST transform |
 | Stream | `app/render-stream.tsx` | Live streaming with token append |
+
+## Release Checks
+
+- `bun run harness` runs lint, typecheck, JS coverage, benchmark checks, and C++ coverage.
+- `bun run publish-package -- --dry-run --yes` validates release docs, runs publish verification, builds the package, and performs an npm dry run.
 
 ## Contributing
 

@@ -101,7 +101,12 @@ function safeOnError<P extends string>(
 }
 
 const baseStylesCache = new WeakMap<MarkdownTheme, BaseStyles>();
-const parseAstCache = new Map<string, MarkdownNode>();
+type ParseAstCacheEntry = {
+  text: string;
+  ast: MarkdownNode;
+};
+
+const parseAstCache = new Map<string, ParseAstCacheEntry>();
 const MAX_PARSE_CACHE_ENTRIES = 32;
 const MAX_CACHEABLE_TEXT_LENGTH = 24_000;
 const EMPTY_RENDERERS: CustomRenderers = {};
@@ -216,15 +221,18 @@ const getCachedParsedAst = (
   }
 
   const cacheKey = `${getParserOptionsKey(options)}|${text.length}|${hashString(text)}`;
-  const cachedNode = parseAstCache.get(cacheKey);
-  if (cachedNode) {
+  const cachedEntry = parseAstCache.get(cacheKey);
+  if (cachedEntry?.text === text) {
     parseAstCache.delete(cacheKey);
-    parseAstCache.set(cacheKey, cachedNode);
-    return cloneMarkdownNode(cachedNode);
+    parseAstCache.set(cacheKey, cachedEntry);
+    return cloneMarkdownNode(cachedEntry.ast);
   }
 
   const parsedNode = parseWithNativeParser(text, options);
-  parseAstCache.set(cacheKey, parsedNode);
+  parseAstCache.set(cacheKey, {
+    text,
+    ast: parsedNode,
+  });
   if (parseAstCache.size > MAX_PARSE_CACHE_ENTRIES) {
     const oldestCacheKey = parseAstCache.keys().next().value;
     if (typeof oldestCacheKey === "string") {
@@ -235,20 +243,27 @@ const getCachedParsedAst = (
   return cloneMarkdownNode(parsedNode);
 };
 
+const sortPluginsByPriority = (
+  plugins?: MarkdownPlugin[],
+): MarkdownPlugin[] | undefined => {
+  if (!plugins || plugins.length === 0) {
+    return undefined;
+  }
+
+  return [...plugins].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+};
+
 const applyBeforeParsePlugins = (
   markdown: string,
-  plugins?: MarkdownPlugin[],
+  sortedPlugins?: MarkdownPlugin[],
   onError?: (error: Error, phase: "before-plugin", pluginName?: string) => void,
 ): string => {
-  if (!plugins || plugins.length === 0) {
+  if (!sortedPlugins || sortedPlugins.length === 0) {
     return markdown;
   }
 
-  const sorted = [...plugins].sort(
-    (a, b) => (b.priority ?? 0) - (a.priority ?? 0),
-  );
   let nextMarkdown = markdown;
-  for (const plugin of sorted) {
+  for (const plugin of sortedPlugins) {
     if (!plugin.beforeParse) continue;
 
     try {
@@ -271,18 +286,15 @@ const applyBeforeParsePlugins = (
 
 const applyAfterParsePlugins = (
   ast: MarkdownNode,
-  plugins?: MarkdownPlugin[],
+  sortedPlugins?: MarkdownPlugin[],
   onError?: (error: Error, phase: "after-plugin", pluginName?: string) => void,
 ): MarkdownNode => {
-  if (!plugins || plugins.length === 0) {
+  if (!sortedPlugins || sortedPlugins.length === 0) {
     return ast;
   }
 
-  const sorted = [...plugins].sort(
-    (a, b) => (b.priority ?? 0) - (a.priority ?? 0),
-  );
   let nextAst = ast;
-  for (const plugin of sorted) {
+  for (const plugin of sortedPlugins) {
     if (!plugin.afterParse) continue;
 
     try {
@@ -321,6 +333,12 @@ export type MarkdownProps = {
    * When provided, native parse is skipped and this tree is rendered instead.
    */
   sourceAst?: MarkdownNode;
+  /**
+   * Enables internal parse AST cache keyed by parser options and markdown.
+   * Disable to force native parse on each parse cycle.
+   * @default true
+   */
+  parseCache?: boolean;
   /**
    * Optional transform applied after parsing and before rendering.
    * The transformed AST is also returned in `onParseComplete`.
@@ -425,6 +443,7 @@ export const Markdown: FC<MarkdownProps> = ({
   options,
   plugins,
   sourceAst,
+  parseCache = true,
   astTransform,
   renderers = EMPTY_RENDERERS,
   theme: userTheme,
@@ -451,11 +470,10 @@ export const Markdown: FC<MarkdownProps> = ({
 
   const parseResult = useMemo(() => {
     try {
-      const markdownToParse = applyBeforeParsePlugins(
-        children,
-        plugins,
-        onErrorRef.current,
-      );
+      const sortedPlugins = sortPluginsByPriority(plugins);
+      const markdownToParse = sourceAst
+        ? children
+        : applyBeforeParsePlugins(children, sortedPlugins, onErrorRef.current);
       const parserOptions = normalizeParserOptions({
         gfm: parserOptionGfm,
         math: parserOptionMath,
@@ -463,10 +481,12 @@ export const Markdown: FC<MarkdownProps> = ({
       });
       let parsedAst = sourceAst
         ? cloneMarkdownNode(sourceAst)
-        : getCachedParsedAst(markdownToParse, parserOptions);
+        : parseCache
+          ? getCachedParsedAst(markdownToParse, parserOptions)
+          : parseWithNativeParser(markdownToParse, parserOptions);
       parsedAst = applyAfterParsePlugins(
         parsedAst,
-        plugins,
+        sortedPlugins,
         onErrorRef.current,
       );
 
@@ -501,6 +521,7 @@ export const Markdown: FC<MarkdownProps> = ({
     parserOptionMath,
     parserOptionHtml,
     sourceAst,
+    parseCache,
     astTransform,
     plugins,
   ]);
