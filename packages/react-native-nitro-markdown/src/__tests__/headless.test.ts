@@ -55,6 +55,85 @@ describe("extractPlainText", () => {
   });
 });
 
+describe("headless native fallback", () => {
+  const runWithParserMock = (
+    createHybridObject: () => unknown,
+    callback: (headless: typeof import("../headless")) => void,
+  ) => {
+    jest.resetModules();
+    jest.doMock("react-native-nitro-modules", () => ({
+      NitroModules: { createHybridObject },
+    }));
+
+    jest.isolateModules(() => {
+      callback(require("../headless") as typeof import("../headless"));
+    });
+
+    jest.dontMock("react-native-nitro-modules");
+    jest.resetModules();
+  };
+
+  it("returns empty fallback values when the native parser cannot be created", () => {
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+
+    runWithParserMock(
+      () => {
+        throw new Error("native module missing");
+      },
+      (headless) => {
+        expect(headless.parseMarkdown("# Missing")).toEqual({
+          type: "document",
+          children: [],
+        });
+        expect(headless.parseMarkdownWithOptions("# Missing", { gfm: true })).toEqual({
+          type: "document",
+          children: [],
+        });
+        expect(headless.extractPlainText("# Missing")).toBe("");
+        expect(headless.extractPlainTextWithOptions("# Missing", { math: true })).toBe("");
+      },
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("derives plain text from parse output when native extract methods are unavailable", () => {
+    runWithParserMock(
+      () => ({
+        parse: jest.fn(() =>
+          JSON.stringify({
+            type: "document",
+            children: [
+              {
+                type: "paragraph",
+                children: [{ type: "text", content: "Fallback text" }],
+              },
+            ],
+          }),
+        ),
+        parseWithOptions: jest.fn(() =>
+          JSON.stringify({
+            type: "document",
+            children: [
+              {
+                type: "heading",
+                children: [{ type: "text", content: "Fallback title" }],
+              },
+            ],
+          }),
+        ),
+      }),
+      (headless) => {
+        expect(headless.extractPlainText("**Fallback text**").trim()).toBe("Fallback text");
+        expect(headless.extractPlainTextWithOptions("# Fallback title", { gfm: true }).trim()).toBe(
+          "Fallback title",
+        );
+      },
+    );
+  });
+});
+
 describe("getTextContent", () => {
   it("returns content when present", () => {
     expect(getTextContent({ type: "text", content: "hello" })).toBe("hello");

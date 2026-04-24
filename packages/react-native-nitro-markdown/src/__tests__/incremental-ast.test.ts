@@ -15,6 +15,29 @@ const setTrailingPathEnd = (ast: MarkdownNode, end: number): MarkdownNode => {
 describe("incremental AST", () => {
   beforeEach(() => jest.clearAllMocks());
 
+  it("forwards parser options for direct AST parsing", () => {
+    parseMarkdownAst("| A |\n|---|\n| B |", { gfm: true });
+
+    expect(mockParser.parseWithOptions).toHaveBeenCalledWith("| A |\n|---|\n| B |", {
+      gfm: true,
+    });
+  });
+
+  it("returns the previous AST when text is unchanged", () => {
+    const previousText = "Hello";
+    const previousAst = parseMarkdownAst(previousText);
+    jest.clearAllMocks();
+
+    const nextAst = getNextStreamAst({
+      previousAst,
+      previousText,
+      nextText: previousText,
+    });
+
+    expect(nextAst).toBe(previousAst);
+    expect(mockParser.parse).not.toHaveBeenCalled();
+  });
+
   it("avoids reparsing for plain text append", () => {
     const previousText = "Hello";
     const previousAst = setTrailingPathEnd(parseMarkdownAst(previousText), previousText.length);
@@ -44,6 +67,20 @@ describe("incremental AST", () => {
     expect(mockParser.parse).toHaveBeenCalledTimes(1);
   });
 
+  it("forces full parse after carriage-return block boundaries", () => {
+    const previousText = "Line\r";
+    const previousAst = setTrailingPathEnd(parseMarkdownAst(previousText), previousText.length);
+    jest.clearAllMocks();
+
+    getNextStreamAst({
+      previousAst,
+      previousText,
+      nextText: `${previousText}Next`,
+    });
+
+    expect(mockParser.parse).toHaveBeenCalledTimes(1);
+  });
+
   it("falls back to full parse when incremental disabled", () => {
     const previousText = "Hello";
     const previousAst = parseMarkdownAst(previousText);
@@ -54,6 +91,20 @@ describe("incremental AST", () => {
       previousAst,
       previousText,
       nextText: "Hello again",
+    });
+
+    expect(mockParser.parse).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to full parse when the trailing text end is stale", () => {
+    const previousText = "Hello";
+    const previousAst = setTrailingPathEnd(parseMarkdownAst(previousText), previousText.length - 1);
+    jest.clearAllMocks();
+
+    getNextStreamAst({
+      previousAst,
+      previousText,
+      nextText: "Hello world",
     });
 
     expect(mockParser.parse).toHaveBeenCalledTimes(1);
@@ -83,6 +134,20 @@ describe("incremental AST", () => {
 
     expect(mockParser.parse).not.toHaveBeenCalled();
     expect(getTextContent(nextAst)).toContain("const b = 2;");
+  });
+
+  it("falls back to full parse when fenced code append cannot update the trailing leaf", () => {
+    const previousText = "Intro\n\n```ts\nconst a = 1;\n";
+    const previousAst = setTrailingPathEnd(parseMarkdownAst(previousText), previousText.length - 1);
+    jest.clearAllMocks();
+
+    getNextStreamAst({
+      previousAst,
+      previousText,
+      nextText: `${previousText}const b = 2;\n`,
+    });
+
+    expect(mockParser.parse).toHaveBeenCalledTimes(1);
   });
 
   it("forces full parse when fenced code block may close", () => {

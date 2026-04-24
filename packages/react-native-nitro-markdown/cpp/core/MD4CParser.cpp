@@ -489,6 +489,14 @@ MD4CParser::MD4CParser() : impl_(std::make_unique<Impl>()) {}
 MD4CParser::~MD4CParser() = default;
 
 std::shared_ptr<MarkdownNode> MD4CParser::parse(const std::string& markdown, const ParserOptions& options) {
+    return parseWithFlags(markdown, options, 0);
+}
+
+std::shared_ptr<MarkdownNode> MD4CParser::parseWithFlags(
+    const std::string& markdown,
+    const ParserOptions& options,
+    unsigned int extraFlags
+) {
     impl_->reset();
     impl_->inputText = markdown.c_str();
     size_t inputSize = clampInputSize(markdown.size());
@@ -506,6 +514,7 @@ std::shared_ptr<MarkdownNode> MD4CParser::parse(const std::string& markdown, con
     if (options.math) {
         flags |= MD_FLAG_LATEXMATHSPANS;
     }
+    flags |= extraFlags;
     
     MD_PARSER parser = {
         0,
@@ -532,5 +541,45 @@ std::shared_ptr<MarkdownNode> MD4CParser::parse(const std::string& markdown, con
     impl_->flushText();
     return impl_->root;
 }
+
+#ifdef NITRO_MARKDOWN_TESTING
+std::shared_ptr<MarkdownNode> MD4CParser::parseWithExtraFlagsForTest(
+    const std::string& markdown,
+    const ParserOptions& options,
+    unsigned int extraFlags
+) {
+    return parseWithFlags(markdown, options, extraFlags);
+}
+
+int MD4CParser::enterBlockNullUserdataForTest() {
+    return Impl::enterBlock(MD_BLOCK_DOC, nullptr, 0, nullptr);
+}
+
+int MD4CParser::leaveBlockNullUserdataForTest() {
+    return Impl::leaveBlock(MD_BLOCK_DOC, nullptr, 0, nullptr);
+}
+
+int MD4CParser::enterSpanNullUserdataForTest() {
+    return Impl::enterSpan(MD_SPAN_EM, nullptr, 0, nullptr);
+}
+
+int MD4CParser::leaveSpanNullUserdataForTest() {
+    return Impl::leaveSpan(MD_SPAN_EM, nullptr, 0, nullptr);
+}
+
+int MD4CParser::textNullUserdataForTest() {
+    return Impl::text(MD_TEXT_NORMAL, "x", 1, nullptr);
+}
+
+int MD4CParser::offsetBeforeBaseForTest() {
+    char buffer[2] = {'a', 'b'};
+    return safeOffset(buffer, buffer + 1, 1);
+}
+
+int MD4CParser::offsetPastBaseForTest() {
+    char buffer[2] = {'a', 'b'};
+    return safeOffset(buffer + 1, buffer, 0);
+}
+#endif
 
 } // namespace NitroMarkdown

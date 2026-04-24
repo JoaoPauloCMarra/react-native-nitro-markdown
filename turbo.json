@@ -27,6 +27,10 @@
       "cache": false,
       "outputLogs": "new-only"
     },
+    "test:cpp:coverage": {
+      "cache": false,
+      "outputLogs": "new-only"
+    },
     "size": {
       "dependsOn": ["build"],
       "cache": false

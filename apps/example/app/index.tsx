@@ -11,14 +11,19 @@ import { Parser } from "commonmark";
 import MarkdownIt from "markdown-it";
 import { marked } from "marked";
 import {
+  Markdown,
+  MarkdownStream,
   parseMarkdown,
+  parseMarkdownWithOptions,
   extractPlainText,
+  extractPlainTextWithOptions,
   getFlattenedText,
   stripSourceOffsets,
   mergeThemes,
   defaultMarkdownTheme,
   minimalMarkdownTheme,
   createMarkdownSession,
+  defaultHighlighter,
   type MarkdownNode,
 } from "react-native-nitro-markdown";
 import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
@@ -30,8 +35,10 @@ const REPEATED_MARKDOWN = COMPLEX_MARKDOWN.repeat(50);
 
 type LogEntry = {
   text: string;
-  type: "header" | "pass" | "fail" | "info" | "spacer";
+  type: "header" | "pass" | "fail" | "info" | "skip" | "spacer";
 };
+
+const NATIVE_RUNTIME_PLATFORMS = ["ios", "android"] as const;
 
 function collectNodeTypes(ast: MarkdownNode): Set<string> {
   const allTypes = new Set<string>();
@@ -45,6 +52,9 @@ function collectNodeTypes(ast: MarkdownNode): Set<string> {
 
 async function runSmokeTests(): Promise<LogEntry[]> {
   const logs: LogEntry[] = [];
+  const supportsNativeRuntime = NATIVE_RUNTIME_PLATFORMS.includes(
+    Platform.OS as (typeof NATIVE_RUNTIME_PLATFORMS)[number],
+  );
 
   const pass = (name: string, detail?: string) => {
     logs.push({
@@ -58,6 +68,18 @@ async function runSmokeTests(): Promise<LogEntry[]> {
       type: "fail",
     });
   };
+  const info = (name: string, detail?: string) => {
+    logs.push({
+      text: `INFO  ${name}${detail ? ` — ${detail}` : ""}`,
+      type: "info",
+    });
+  };
+  const skip = (name: string, detail?: string) => {
+    logs.push({
+      text: `SKIP  ${name}${detail ? ` — ${detail}` : ""}`,
+      type: "skip",
+    });
+  };
   const header = (text: string) => {
     logs.push({ text, type: "header" });
   };
@@ -69,6 +91,7 @@ async function runSmokeTests(): Promise<LogEntry[]> {
   // Headless API
   // -----------------------------------------------------------------------
   header("HEADLESS API");
+  info("Current platform", Platform.OS);
 
   try {
     const ast = parseMarkdown("# Hello\n\nWorld");
@@ -82,6 +105,17 @@ async function runSmokeTests(): Promise<LogEntry[]> {
     }
   } catch (e) {
     fail("parseMarkdown", String(e));
+  }
+
+  try {
+    const ast = parseMarkdownWithOptions("# Hello", { gfm: true });
+    if (ast.type === "document" && (ast.children?.length ?? 0) > 0) {
+      pass("parseMarkdownWithOptions");
+    } else {
+      fail("parseMarkdownWithOptions", "unexpected AST shape");
+    }
+  } catch (e) {
+    fail("parseMarkdownWithOptions", String(e));
   }
 
   try {
@@ -171,6 +205,19 @@ async function runSmokeTests(): Promise<LogEntry[]> {
   }
 
   try {
+    const plain = extractPlainTextWithOptions("| A |\n|---|\n| B |", {
+      gfm: true,
+    });
+    if (plain.includes("A") && plain.includes("B")) {
+      pass("extractPlainTextWithOptions", `"${plain.trim().slice(0, 40)}"`);
+    } else {
+      fail("extractPlainTextWithOptions", `got "${plain.trim().slice(0, 40)}"`);
+    }
+  } catch (e) {
+    fail("extractPlainTextWithOptions", String(e));
+  }
+
+  try {
     const ast = parseMarkdown("# Hello\n\nWorld");
     const flat = getFlattenedText(ast);
     if (flat.includes("Hello") && flat.includes("World")) {
@@ -192,6 +239,23 @@ async function runSmokeTests(): Promise<LogEntry[]> {
     }
   } catch (e) {
     fail("stripSourceOffsets", String(e));
+  }
+
+  spacer();
+
+  // -----------------------------------------------------------------------
+  // Platform support
+  // -----------------------------------------------------------------------
+  header("PLATFORM SUPPORT");
+
+  if (supportsNativeRuntime) {
+    pass("Native parser runtime", `${Platform.OS} supported`);
+    pass("MarkdownSession runtime", `${Platform.OS} supported`);
+    pass("Streaming runtime", `${Platform.OS} supported`);
+  } else {
+    skip("Native parser runtime", `${Platform.OS} is not supported by this example`);
+    skip("MarkdownSession runtime", `${Platform.OS} is not supported by this example`);
+    skip("Streaming runtime", `${Platform.OS} is not supported by this example`);
   }
 
   spacer();
@@ -243,6 +307,47 @@ async function runSmokeTests(): Promise<LogEntry[]> {
     }
   } catch (e) {
     fail("minimalMarkdownTheme", String(e));
+  }
+
+  spacer();
+
+  // -----------------------------------------------------------------------
+  // Render components and helpers
+  // -----------------------------------------------------------------------
+  header("RENDER COMPONENTS");
+
+  try {
+    if (typeof Markdown === "function") {
+      pass("Markdown component export");
+    } else {
+      fail("Markdown component export", typeof Markdown);
+    }
+  } catch (e) {
+    fail("Markdown component export", String(e));
+  }
+
+  try {
+    if (typeof MarkdownStream === "function") {
+      pass("MarkdownStream component export");
+    } else {
+      fail("MarkdownStream component export", typeof MarkdownStream);
+    }
+  } catch (e) {
+    fail("MarkdownStream component export", String(e));
+  }
+
+  try {
+    const tokens = defaultHighlighter("ts", "const answer = 42;");
+    if (
+      tokens.some((token) => token.type === "keyword") &&
+      tokens.some((token) => token.type === "number")
+    ) {
+      pass("defaultHighlighter", `${tokens.length} tokens`);
+    } else {
+      fail("defaultHighlighter", "missing keyword/number tokens");
+    }
+  } catch (e) {
+    fail("defaultHighlighter", String(e));
   }
 
   spacer();
@@ -399,7 +504,9 @@ async function runSmokeTests(): Promise<LogEntry[]> {
   // -----------------------------------------------------------------------
   header("MARKDOWN SESSION");
 
-  try {
+  if (!supportsNativeRuntime) {
+    skip("MarkdownSession methods", `${Platform.OS} is not supported`);
+  } else try {
     const session = createMarkdownSession();
     session.append("Hello ");
     session.append("**world**");
@@ -505,11 +612,14 @@ async function runSmokeTests(): Promise<LogEntry[]> {
   // -----------------------------------------------------------------------
   const passed = logs.filter((l) => l.type === "pass").length;
   const failed = logs.filter((l) => l.type === "fail").length;
+  const skipped = logs.filter((l) => l.type === "skip").length;
   const total = passed + failed;
 
   header("SUMMARY");
   logs.push({
-    text: `${passed}/${total} passed${failed > 0 ? ` (${failed} failed)` : ""}`,
+    text: `${passed}/${total} passed${failed > 0 ? ` (${failed} failed)` : ""}${
+      skipped > 0 ? `, ${skipped} unsupported` : ""
+    }`,
     type: failed > 0 ? "fail" : "pass",
   });
 
@@ -664,6 +774,8 @@ export default function BenchmarkScreen() {
                     log.type === "header" && styles.logHeader,
                     log.type === "pass" && styles.logPass,
                     log.type === "fail" && styles.logFail,
+                    log.type === "info" && styles.logInfo,
+                    log.type === "skip" && styles.logSkip,
                   ]}
                 >
                   {log.text}
@@ -800,6 +912,14 @@ const styles = StyleSheet.create({
   logFail: {
     color: EXAMPLE_COLORS.danger,
     fontWeight: "700",
+  },
+  logInfo: {
+    color: EXAMPLE_COLORS.info,
+  },
+  logSkip: {
+    color: EXAMPLE_COLORS.textMuted,
+    opacity: 0.55,
+    textDecorationLine: "line-through",
   },
   spacer: {
     height: 8,

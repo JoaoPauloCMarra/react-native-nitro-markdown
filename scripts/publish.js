@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { spawnSync } = require("child_process");
+const { spawn, spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
@@ -19,9 +19,15 @@ const colors = {
 const projectRoot = path.resolve(__dirname, "..");
 const packageDir = path.join(projectRoot, "packages", PACKAGE_NAME);
 const packageJsonPath = path.join(packageDir, "package.json");
+const rootReadmePath = path.join(projectRoot, "README.md");
+const changelogPath = path.join(projectRoot, "CHANGELOG.md");
 
 function log(message, color = "green") {
   console.log(colors[color](message));
+}
+
+function formatCommand(command, args) {
+  return [command, ...args].join(" ");
 }
 
 function run(command, args, options = {}) {
@@ -33,7 +39,7 @@ function run(command, args, options = {}) {
   });
 
   if (result.error) {
-    log(`✗ Failed to run ${command}: ${result.error.message}`, "red");
+    log(`Failed to run ${command}: ${result.error.message}`, "red");
     return false;
   }
 
@@ -57,6 +63,47 @@ function runQuiet(command, args, options = {}) {
   };
 }
 
+function runAsync({ label, command, args, cwd = projectRoot }) {
+  return new Promise((resolve) => {
+    const startedAt = Date.now();
+    log(`${label} started: ${formatCommand(command, args)}`, "cyan");
+
+    const child = spawn(command, args, {
+      cwd,
+      stdio: "inherit",
+      shell: false,
+    });
+
+    child.on("error", (error) => {
+      resolve({ label, ok: false, durationMs: Date.now() - startedAt, error });
+    });
+
+    child.on("close", (code) => {
+      resolve({ label, ok: code === 0, durationMs: Date.now() - startedAt, code });
+    });
+  });
+}
+
+async function runParallelSteps(label, steps) {
+  log(label, "cyan");
+  const results = await Promise.all(steps.map(runAsync));
+  let failed = false;
+
+  for (const result of results) {
+    const duration = `${(result.durationMs / 1000).toFixed(1)}s`;
+    if (result.ok) {
+      console.log(`  ✓ ${result.label} (${duration})`);
+    } else {
+      failed = true;
+      log(`  ✗ ${result.label} failed (${duration})`, "red");
+      if (result.error) log(`    ${result.error.message}`, "red");
+    }
+  }
+
+  console.log("");
+  if (failed) process.exit(1);
+}
+
 function askQuestion(question) {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -75,6 +122,8 @@ function parseArgs(args) {
   const parsed = {
     dryRun: false,
     skipPreflight: false,
+    skipChecks: false,
+    skipDocs: false,
     yes: false,
     tag: "latest",
   };
@@ -82,8 +131,12 @@ function parseArgs(args) {
   for (const arg of args) {
     if (arg === "--dry-run") {
       parsed.dryRun = true;
-    } else if (arg === "--skip-checks") {
+    } else if (arg === "--skip-preflight" || arg === "--skip-checks") {
       parsed.skipPreflight = true;
+    } else if (arg === "--skip-verify") {
+      parsed.skipChecks = true;
+    } else if (arg === "--skip-docs") {
+      parsed.skipDocs = true;
     } else if (arg === "--yes" || arg === "-y") {
       parsed.yes = true;
     } else if (arg.startsWith("--tag=")) {
@@ -100,14 +153,16 @@ function parseArgs(args) {
   return parsed;
 }
 
+function readJson(filePath) {
+  return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+}
+
 function getPackageJson() {
-  return JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
+  return readJson(packageJsonPath);
 }
 
 function checkGitStatus() {
-  const result = runQuiet("git", ["status", "--porcelain"], {
-    cwd: projectRoot,
-  });
+  const result = runQuiet("git", ["status", "--porcelain"], { cwd: projectRoot });
   if (result.error || result.status !== 0) return false;
   return result.stdout === "";
 }
@@ -124,16 +179,39 @@ function getPublishedVersion(version) {
   });
 
   if (result.status === 0) return result.stdout;
-  if (result.stderr.includes("E404") || result.stdout.includes("E404")) {
-    return null;
-  }
+  if (result.stderr.includes("E404") || result.stdout.includes("E404")) return null;
   return undefined;
+}
+
+function assertTextIncludes(filePath, label, expected) {
+  const text = fs.readFileSync(filePath, "utf-8");
+  if (!text.includes(expected)) {
+    log(`Missing ${label}: ${expected}`, "red");
+    process.exit(1);
+  }
+}
+
+function validateReleaseDocs(version) {
+  log("Validating release docs...", "cyan");
+
+  assertTextIncludes(changelogPath, "CHANGELOG version entry", `## [${version}]`);
+  assertTextIncludes(rootReadmePath, "README parseCache API", "parseCache");
+  assertTextIncludes(
+    rootReadmePath,
+    "README sourceAst behavior",
+    "When `sourceAst` is provided, `beforeParse` plugins are skipped",
+  );
+  assertTextIncludes(rootReadmePath, "README headless API", "parseMarkdownWithOptions");
+
+  console.log("  ✓ README documents current API surface");
+  console.log(`  ✓ CHANGELOG has ${version} entry`);
+  console.log("");
 }
 
 function runStep(label, command, args, options = {}) {
   log(label, "cyan");
   if (!run(command, args, options)) {
-    log(`✗ ${label.replace(/^[^a-zA-Z]+/, "")} failed`, "red");
+    log(`${label.replace(/^[^a-zA-Z]+/, "")} failed`, "red");
     process.exit(1);
   }
   console.log("");
@@ -141,7 +219,7 @@ function runStep(label, command, args, options = {}) {
 
 async function runPreflight({ dryRun, skipPreflight, version }) {
   if (skipPreflight) {
-    log("Skipping git/npm preflight checks (--skip-checks)", "yellow");
+    log("Skipping git/npm preflight checks", "yellow");
     console.log("");
     return;
   }
@@ -154,27 +232,27 @@ async function runPreflight({ dryRun, skipPreflight, version }) {
   } else if (dryRun) {
     log("  ⚠ Git working directory is dirty; dry-run will continue", "yellow");
   } else {
-    log("✗ Refusing to publish with uncommitted changes", "red");
+    log("Refusing to publish with uncommitted changes", "red");
     process.exit(1);
   }
 
   const publishedVersion = getPublishedVersion(version);
   if (publishedVersion === version) {
-    log(`✗ ${PACKAGE_NAME}@${version} already exists on npm`, "red");
+    log(`${PACKAGE_NAME}@${version} already exists on npm`, "red");
     process.exit(1);
   } else if (publishedVersion === null) {
     console.log(`  ✓ ${PACKAGE_NAME}@${version} is not published yet`);
   } else if (dryRun) {
     log("  ⚠ Could not verify npm version availability; dry-run will continue", "yellow");
   } else {
-    log("✗ Could not verify npm version availability", "red");
+    log("Could not verify npm version availability", "red");
     process.exit(1);
   }
 
   if (!dryRun) {
     const npmUser = getNpmUser();
     if (!npmUser) {
-      log("✗ Not logged in to npm. Run: npm login", "red");
+      log("Not logged in to npm. Run: npm login", "red");
       process.exit(1);
     }
     console.log(`  ✓ Logged in to npm as: ${npmUser}`);
@@ -185,43 +263,45 @@ async function runPreflight({ dryRun, skipPreflight, version }) {
   console.log("");
 }
 
+async function runVerification() {
+  await runParallelSteps("Running independent package checks in parallel...", [
+    { label: "lint", command: "bun", args: ["run", "lint"], cwd: projectRoot },
+    { label: "JS coverage", command: "bun", args: ["run", "test:coverage"], cwd: packageDir },
+    {
+      label: "C++ coverage",
+      command: "bun",
+      args: ["run", "test:cpp:coverage"],
+      cwd: packageDir,
+    },
+  ]);
+
+  runStep("Running repo typecheck...", "bun", ["run", "typecheck"], { cwd: projectRoot });
+  runStep("Building package...", "bun", ["run", "build"], { cwd: packageDir });
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const packageJson = getPackageJson();
   const version = packageJson.version;
 
   console.log("");
-  log(`📦 Publishing ${PACKAGE_NAME}`, "bold");
+  log(`Publishing ${PACKAGE_NAME}`, "bold");
   console.log("");
   log(`Version: ${version}`, "cyan");
   log(`Tag: ${options.tag}`, "cyan");
-  if (options.dryRun) {
-    log("Mode: DRY RUN (no actual publish)", "yellow");
-  }
+  if (options.dryRun) log("Mode: DRY RUN (no actual publish)", "yellow");
   console.log("");
 
   await runPreflight({ ...options, version });
 
-  runStep("🧹 Running lint...", "bun", ["run", "lint"], { cwd: projectRoot });
-  runStep("🧪 Running JS tests...", "bun", ["run", "test"], { cwd: packageDir });
-  runStep("🧪 Running C++ tests...", "bun", ["run", "test:cpp"], {
-    cwd: packageDir,
-  });
-  runStep("🔨 Building package...", "bun", ["run", "build"], { cwd: packageDir });
-  runStep("📝 Running typecheck...", "bun", ["run", "typecheck"], {
-    cwd: packageDir,
-  });
+  if (!options.skipDocs) validateReleaseDocs(version);
+  else log("Skipping release doc validation", "yellow");
 
-  const publishArgs = [
-    "publish",
-    "--tag",
-    options.tag,
-    "--access",
-    "public",
-  ];
-  if (options.dryRun) {
-    publishArgs.push("--dry-run");
-  }
+  if (!options.skipChecks) await runVerification();
+  else log("Skipping verification checks", "yellow");
+
+  const publishArgs = ["publish", "--tag", options.tag, "--access", "public"];
+  if (options.dryRun) publishArgs.push("--dry-run");
 
   if (!options.dryRun && !options.yes) {
     const answer = await askQuestion(
@@ -235,18 +315,18 @@ async function main() {
   }
 
   runStep(
-    options.dryRun ? "📋 Running npm publish dry-run..." : "🚀 Publishing to npm...",
+    options.dryRun ? "Running npm publish dry-run..." : "Publishing to npm...",
     "npm",
     publishArgs,
     { cwd: packageDir },
   );
 
   if (options.dryRun) {
-    log("🏃 Dry run complete. Package publish path is ready.", "green");
+    log("Dry run complete. Package publish path is ready.", "green");
     log(`Run without --dry-run to publish ${PACKAGE_NAME}@${version}`, "cyan");
   } else {
-    log(`✅ Published ${PACKAGE_NAME}@${version}`, "green");
-    log(`   https://www.npmjs.com/package/${PACKAGE_NAME}`, "cyan");
+    log(`Published ${PACKAGE_NAME}@${version}`, "green");
+    log(`https://www.npmjs.com/package/${PACKAGE_NAME}`, "cyan");
   }
 
   console.log("");

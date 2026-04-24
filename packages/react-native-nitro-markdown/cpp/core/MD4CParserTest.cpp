@@ -94,6 +94,10 @@ public:
         testTableCellAlignment();
         testNestedBlockquotes();
         testImageWithTitle();
+        testHorizontalRule();
+        testEntityText();
+        testTestOnlyExtensionFlags();
+        testCallbackNullUserdataGuards();
 
         // Safety and crash prevention tests
         testMemoryLeaks();
@@ -990,6 +994,76 @@ private:
             }
         }
         TestRunner::assertTrue(foundHardBreak, "HardBreak: found line_break node");
+    }
+
+    static void testHorizontalRule() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+        auto result = parser.parse("before\n\n---\n\nafter", options);
+
+        auto rule = findFirstNode(result, NodeType::HorizontalRule);
+        TestRunner::assertNotNull(rule.get(), "HorizontalRule: found node");
+        if (rule) {
+            TestRunner::assertEqual("horizontal_rule", nodeTypeToString(rule->type), "HorizontalRule: node type");
+        }
+    }
+
+    static void testEntityText() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+        auto result = parser.parse("Tom &amp; Jerry &#x21;", options);
+
+        TestRunner::assertNotNull(result.get(), "EntityText: parse result");
+        auto paragraph = findFirstNode(result, NodeType::Paragraph);
+        TestRunner::assertNotNull(paragraph.get(), "EntityText: paragraph");
+        if (paragraph) {
+            std::string text;
+            for (const auto& child : paragraph->children) {
+                if (child->content.has_value()) {
+                    text += child->content.value();
+                }
+            }
+            TestRunner::assertTrue(text.find("&amp;") != std::string::npos, "EntityText: named entity retained");
+            TestRunner::assertTrue(text.find("&#x21;") != std::string::npos, "EntityText: numeric entity retained");
+        }
+    }
+
+    static void testTestOnlyExtensionFlags() {
+        MD4CParser parser;
+        ParserOptions options{false, false};
+
+        auto underlineResult = parser.parseWithExtraFlagsForTest(
+            "__underlined__",
+            options,
+            MD_FLAG_UNDERLINE
+        );
+        auto underline = findFirstNode(underlineResult, NodeType::Italic);
+        TestRunner::assertNotNull(underline.get(), "TestFlags: underline maps to italic");
+
+        auto wikiResult = parser.parseWithExtraFlagsForTest(
+            "[[Wiki Page]]",
+            options,
+            MD_FLAG_WIKILINKS
+        );
+        auto wikiLink = findFirstNode(wikiResult, NodeType::Link);
+        TestRunner::assertNotNull(wikiLink.get(), "TestFlags: wikilink maps to link");
+    }
+
+    static void testCallbackNullUserdataGuards() {
+        TestRunner::assertEqual("1", std::to_string(MD4CParser::enterBlockNullUserdataForTest()),
+            "CallbackGuards: enterBlock null userdata");
+        TestRunner::assertEqual("1", std::to_string(MD4CParser::leaveBlockNullUserdataForTest()),
+            "CallbackGuards: leaveBlock null userdata");
+        TestRunner::assertEqual("1", std::to_string(MD4CParser::enterSpanNullUserdataForTest()),
+            "CallbackGuards: enterSpan null userdata");
+        TestRunner::assertEqual("1", std::to_string(MD4CParser::leaveSpanNullUserdataForTest()),
+            "CallbackGuards: leaveSpan null userdata");
+        TestRunner::assertEqual("1", std::to_string(MD4CParser::textNullUserdataForTest()),
+            "CallbackGuards: text null userdata");
+        TestRunner::assertEqual("0", std::to_string(MD4CParser::offsetBeforeBaseForTest()),
+            "CallbackGuards: offset before base");
+        TestRunner::assertEqual("0", std::to_string(MD4CParser::offsetPastBaseForTest()),
+            "CallbackGuards: offset past base");
     }
 
     static void testTableCellAlignment() {

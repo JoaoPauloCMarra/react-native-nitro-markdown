@@ -30,6 +30,7 @@ target_include_directories(MD4CCore PUBLIC
 # Preprocessor definitions
 target_compile_definitions(MD4CCore PRIVATE
     MD4C_USE_UTF8=1
+    NITRO_MARKDOWN_TESTING=1
 )
 
 # Create the test executable
