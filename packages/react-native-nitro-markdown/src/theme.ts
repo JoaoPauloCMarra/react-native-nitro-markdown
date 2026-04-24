@@ -155,8 +155,6 @@ type TextNodeType =
   | "link"
   | "code_inline"
   | "heading"
-  | "paragraph"
-  | "math_inline"
   | "html_inline";
 type ViewNodeType =
   | "document"
@@ -172,6 +170,8 @@ type ViewNodeType =
   | "table_body"
   | "table_row"
   | "table_cell"
+  | "paragraph"
+  | "math_inline"
   | "math_block"
   | "html_block"
   | "line_break"
