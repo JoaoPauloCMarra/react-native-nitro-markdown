@@ -267,14 +267,11 @@ async function runVerification() {
   await runParallelSteps("Running independent package checks in parallel...", [
     { label: "lint", command: "bun", args: ["run", "lint"], cwd: projectRoot },
     { label: "JS coverage", command: "bun", args: ["run", "test:coverage"], cwd: packageDir },
-    {
-      label: "C++ coverage",
-      command: "bun",
-      args: ["run", "test:cpp:coverage"],
-      cwd: packageDir,
-    },
   ]);
 
+  runStep("Running C++ coverage...", "bun", ["run", "test:cpp:coverage"], {
+    cwd: packageDir,
+  });
   runStep("Running repo typecheck...", "bun", ["run", "typecheck"], { cwd: projectRoot });
   runStep("Building package...", "bun", ["run", "build"], { cwd: packageDir });
 }

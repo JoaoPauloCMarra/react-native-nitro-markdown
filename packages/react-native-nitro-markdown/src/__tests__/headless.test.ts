@@ -106,8 +106,8 @@ describe("headless native fallback", () => {
             type: "document",
             children: [
               {
-                type: "paragraph",
-                children: [{ type: "text", content: "Fallback text" }],
+                type: "code_block",
+                children: [{ type: "text", content: "const fallback = true;" }],
               },
             ],
           }),
@@ -125,12 +125,48 @@ describe("headless native fallback", () => {
         ),
       }),
       (headless) => {
-        expect(headless.extractPlainText("**Fallback text**").trim()).toBe("Fallback text");
+        expect(headless.extractPlainText("```ts\nconst fallback = true;\n```").trim()).toBe(
+          "const fallback = true;",
+        );
         expect(headless.extractPlainTextWithOptions("# Fallback title", { gfm: true }).trim()).toBe(
           "Fallback title",
         );
       },
     );
+  });
+
+  it("returns fallback values when native parser methods throw or return invalid JSON", () => {
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+
+    runWithParserMock(
+      () => ({
+        parse: jest.fn(() => {
+          throw new Error("parse failed");
+        }),
+        parseWithOptions: jest.fn(() => "{invalid-json"),
+        extractPlainText: jest.fn(() => {
+          throw new Error("extract failed");
+        }),
+        extractPlainTextWithOptions: jest.fn(() => {
+          throw new Error("extract with options failed");
+        }),
+      }),
+      (headless) => {
+        expect(headless.parseMarkdown("# Broken")).toEqual({
+          type: "document",
+          children: [],
+        });
+        expect(headless.parseMarkdownWithOptions("# Broken", { gfm: true })).toEqual({
+          type: "document",
+          children: [],
+        });
+        expect(headless.extractPlainText("# Broken")).toBe("");
+        expect(headless.extractPlainTextWithOptions("# Broken", { gfm: true })).toBe("");
+      },
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
   });
 });
 
@@ -175,6 +211,15 @@ describe("getFlattenedText", () => {
 
   it("handles code_block with content", () => {
     expect(getFlattenedText({ type: "code_block", content: "const x = 1;\n" })).toBe("const x = 1;\n\n");
+  });
+
+  it("handles code_block with child text fallback", () => {
+    expect(
+      getFlattenedText({
+        type: "code_block",
+        children: [{ type: "text", content: "const child = true;" }],
+      }),
+    ).toBe("const child = true;\n\n");
   });
 
   it("handles code_block without content", () => {
