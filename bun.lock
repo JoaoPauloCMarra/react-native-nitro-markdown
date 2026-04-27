@@ -71,7 +71,7 @@
     },
     "packages/react-native-nitro-markdown": {
       "name": "react-native-nitro-markdown",
-      "version": "0.5.5",
+      "version": "0.5.6",
       "devDependencies": {
         "@size-limit/preset-small-lib": "^11.0.0",
         "@types/react": "~19.2.14",

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.6] - 2026-04-27
+
+### Fixed
+
+- Headless parsing helpers return the documented empty-document fallback when native parser calls throw or return invalid JSON.
+- Plain-text fallback extraction now preserves code, math, and HTML block text when parser output stores block text in child nodes.
+- The README demo image now uses a GitHub-hosted asset URL so npm package docs can render it.
+- Publish verification runs C++ coverage outside the parallel lint/JS coverage lane to avoid load-sensitive native perf-budget failures.
+
 ## [0.5.5] - 2026-04-24
 
 ### Added

@@ -79,6 +79,21 @@ export type MarkdownNode = {
   children?: MarkdownNode[];
 };
 
+const createEmptyDocument = (): MarkdownNode => ({
+  type: "document",
+  children: [],
+});
+
+function reportNativeParserFailure(methodName: string, error?: unknown): void {
+  if (__DEV__) {
+    // eslint-disable-next-line no-console
+    console.error(
+      `[NitroMarkdown] ${methodName}: native parser failed.`,
+      error,
+    );
+  }
+}
+
 let MarkdownParserModule: MarkdownParser | null = null;
 try {
   MarkdownParserModule =
@@ -118,8 +133,13 @@ export function parseMarkdown(
     MarkdownParserModule != null &&
     typeof MarkdownParserModule.parse === "function"
   ) {
-    const jsonStr = MarkdownParserModule.parse(text);
-    return JSON.parse(jsonStr) as MarkdownNode;
+    try {
+      const jsonStr = MarkdownParserModule.parse(text);
+      return JSON.parse(jsonStr) as MarkdownNode;
+    } catch (error) {
+      reportNativeParserFailure("parseMarkdown", error);
+      return createEmptyDocument();
+    }
   }
 
   if (__DEV__) {
@@ -128,7 +148,7 @@ export function parseMarkdown(
       "[NitroMarkdown] parseMarkdown: native parser unavailable — check installation.",
     );
   }
-  return { type: "document", children: [] };
+  return createEmptyDocument();
 }
 
 /**
@@ -145,8 +165,13 @@ export function parseMarkdownWithOptions(
     MarkdownParserModule != null &&
     typeof MarkdownParserModule.parseWithOptions === "function"
   ) {
-    const jsonStr = MarkdownParserModule.parseWithOptions(text, options);
-    return JSON.parse(jsonStr) as MarkdownNode;
+    try {
+      const jsonStr = MarkdownParserModule.parseWithOptions(text, options);
+      return JSON.parse(jsonStr) as MarkdownNode;
+    } catch (error) {
+      reportNativeParserFailure("parseMarkdownWithOptions", error);
+      return createEmptyDocument();
+    }
   }
 
   if (__DEV__) {
@@ -155,7 +180,7 @@ export function parseMarkdownWithOptions(
       "[NitroMarkdown] parseMarkdownWithOptions: native parser unavailable — check installation.",
     );
   }
-  return { type: "document", children: [] };
+  return createEmptyDocument();
 }
 
 /**
@@ -167,7 +192,11 @@ export function extractPlainText(text: string): string {
     MarkdownParserModule != null &&
     typeof MarkdownParserModule.extractPlainText === "function"
   ) {
-    return MarkdownParserModule.extractPlainText(text);
+    try {
+      return MarkdownParserModule.extractPlainText(text);
+    } catch (error) {
+      reportNativeParserFailure("extractPlainText", error);
+    }
   }
 
   return getFlattenedText(parseMarkdown(text));
@@ -184,7 +213,11 @@ export function extractPlainTextWithOptions(
     MarkdownParserModule != null &&
     typeof MarkdownParserModule.extractPlainTextWithOptions === "function"
   ) {
-    return MarkdownParserModule.extractPlainTextWithOptions(text, options);
+    try {
+      return MarkdownParserModule.extractPlainTextWithOptions(text, options);
+    } catch (error) {
+      reportNativeParserFailure("extractPlainTextWithOptions", error);
+    }
   }
 
   return getFlattenedText(parseMarkdownWithOptions(text, options));
@@ -221,7 +254,9 @@ export const getFlattenedText = (node: MarkdownNode): string => {
     node.type === "math_block" ||
     node.type === "html_block"
   ) {
-    return (node.content ?? "").trim() + "\n\n";
+    const blockContent =
+      node.content ?? node.children?.map(getFlattenedText).join("") ?? "";
+    return blockContent.trim() + "\n\n";
   }
 
   if (node.type === "line_break") return "\n";
