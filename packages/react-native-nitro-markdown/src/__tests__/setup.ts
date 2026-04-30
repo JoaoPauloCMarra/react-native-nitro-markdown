@@ -110,6 +110,9 @@ jest.mock("react-native", () => ({
   Text: "Text",
   FlatList: "FlatList",
   ScrollView: "ScrollView",
+  PanResponder: {
+    create: jest.fn((handlers) => ({ panHandlers: handlers })),
+  },
   Image: {
     getSize: jest.fn(),
   },

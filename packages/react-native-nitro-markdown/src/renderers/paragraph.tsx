@@ -38,8 +38,11 @@ const stylesCache = new WeakMap<MarkdownTheme, ParagraphStyles>();
 const createStyles = (theme: MarkdownTheme) =>
   StyleSheet.create({
     paragraph: {
+      width: "100%",
+      maxWidth: "100%",
       flexDirection: "row",
       flexWrap: "wrap",
+      flexShrink: 1,
       marginBottom: theme.spacing.l,
       gap: 0,
     },

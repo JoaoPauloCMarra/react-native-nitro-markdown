@@ -1,6 +1,6 @@
 # react-native-nitro-markdown
 
-[![npm](https://img.shields.io/badge/npm-v0.5.6-orange?style=flat-square)](https://www.npmjs.com/package/react-native-nitro-markdown)
+[![npm](https://img.shields.io/badge/npm-v0.5.7-orange?style=flat-square)](https://www.npmjs.com/package/react-native-nitro-markdown)
 [![license](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](./LICENSE)
 [![react-native](https://img.shields.io/badge/react--native-%3E%3D0.75-1677a4?style=flat-square)](https://reactnative.dev/)
 [![nitro-modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.35.5-black?style=flat-square)](https://github.com/mrousavy/nitro)
@@ -53,6 +53,12 @@ For math rendering:
 
 ```bash
 npm install react-native-mathjax-svg react-native-svg
+```
+
+or with Bun:
+
+```bash
+bun add react-native-mathjax-svg react-native-svg
 ```
 
 **Expo** (development build):
@@ -142,10 +148,10 @@ import { MarkdownStream } from "react-native-nitro-markdown";
 | Prop | Type | Default | Description |
 |---|---|---|---|
 | `session` | `MarkdownSession` | required | Session supplying streamed text |
-| `updateIntervalMs` | `number` | `50` | Flush interval for `"interval"` strategy |
-| `updateStrategy` | `"interval" \| "raf"` | `"interval"` | Update cadence |
+| `updateIntervalMs` | `number` | `50` | Flush interval for `"interval"` strategy; ignored by `"raf"` |
+| `updateStrategy` | `"interval" \| "raf"` | `"interval"` | `"interval"` uses `updateIntervalMs`; `"raf"` schedules at most once per animation frame |
 | `useTransitionUpdates` | `boolean` | `false` | Wrap updates in `startTransition` |
-| `incrementalParsing` | `boolean` | `true` | Append-optimized incremental AST updates |
+| `incrementalParsing` | `boolean` | `true` | Append-optimized AST updates; disabled automatically when a `beforeParse` plugin is present |
 
 ### `MarkdownSession`
 
@@ -290,6 +296,18 @@ import { Markdown } from "react-native-nitro-markdown";
 ```
 
 Do not pass untrusted HTML directly into a WebView from a renderer. Sanitize or map known tags/attributes to native components.
+
+### Math Rendering
+
+Math parsing is enabled by default. Rendering LaTeX as native SVG requires both optional packages:
+
+```bash
+bun add react-native-mathjax-svg react-native-svg
+```
+
+Without those packages, `math_inline` and `math_block` render as styled plain text fallback.
+
+Inline math (`$...$`) stays inside text flow. Use block math (`$$...$$`) for large formulas; the default `math_block` renderer is horizontally scrollable when the equation is wider than the screen. Custom `math_block` renderers should preserve the same behavior for long display equations.
 
 ### Theme API
 
@@ -487,7 +505,7 @@ Parser and text utilities only -- no React dependencies. Use this for server-sid
 
 ## Performance Tips
 
-- Use `updateStrategy="raf"` for streaming UI updates.
+- Use `updateStrategy="raf"` for frame-aligned streaming UI updates; `updateIntervalMs` is ignored by `"raf"`.
 - Batch `session.append()` calls at 50-100ms intervals rather than per-character.
 - Enable `virtualize="auto"` for long documents and keep `Markdown` as the primary vertical scroller.
 - Memoize custom `plugins`, `renderers`, `theme`, and `styles` objects when they are created inside a component.
@@ -498,6 +516,7 @@ Parser and text utilities only -- no React dependencies. Use this for server-sid
 | Problem | Solution |
 |---|---|
 | Math renders as code-style fallback | Install `react-native-mathjax-svg` and `react-native-svg` |
+| Large inline math overflows text | Use block math (`$$...$$`) for wide formulas; inline math intentionally stays in text flow |
 | iOS build fails after install | Run `pod install` in your iOS directory |
 | Expo app doesn't load native module | Use a development build (`expo prebuild` + `expo run`), not Expo Go |
 | Android heading font weight looks wrong | Set `theme.headingWeight` explicitly |

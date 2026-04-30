@@ -56,7 +56,8 @@ export type MarkdownStreamProps = {
    */
   session: MarkdownSession;
   /**
-   * Throttle UI updates to avoid re-rendering on every token.
+   * Throttle UI updates when updateStrategy is "interval".
+   * Ignored when updateStrategy is "raf".
    * Defaults to 50ms, which keeps UI responsive while streaming.
    */
   updateIntervalMs?: number;

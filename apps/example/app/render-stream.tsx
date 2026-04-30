@@ -16,7 +16,7 @@ import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 import { EXAMPLE_COLORS } from "../theme";
 
 const TOKEN_DELAY_MS = 150;
-const UI_UPDATE_INTERVAL_MS = 60;
+const RAW_PREVIEW_SYNC_INTERVAL_MS = 60;
 const CHARS_PER_TICK = 12;
 const DEMO_TEXT = `
 ### 🚀 High-Performance Markdown
@@ -193,7 +193,7 @@ export default function TokenStreamScreen() {
     const unsubscribe = session.getSession().addListener(() => {
       pendingRef.current = true;
       if (!timer) {
-        timer = setTimeout(flush, UI_UPDATE_INTERVAL_MS);
+        timer = setTimeout(flush, RAW_PREVIEW_SYNC_INTERVAL_MS);
       }
     });
 
@@ -286,7 +286,6 @@ export default function TokenStreamScreen() {
             ) : (
               <MarkdownStream
                 session={session.getSession()}
-                updateIntervalMs={UI_UPDATE_INTERVAL_MS}
                 updateStrategy="raf"
                 useTransitionUpdates
               />
