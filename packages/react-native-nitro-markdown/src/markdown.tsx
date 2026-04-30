@@ -998,12 +998,16 @@ const getBaseStyles = (theme: MarkdownTheme): BaseStyles => {
 const createBaseStyles = (theme: MarkdownTheme) =>
   StyleSheet.create({
     container: {
+      width: "100%",
+      maxWidth: "100%",
       flexShrink: 1,
     },
     virtualizedList: {
       flex: 1,
     },
     document: {
+      width: "100%",
+      maxWidth: "100%",
       flexShrink: 1,
     },
     errorText: {

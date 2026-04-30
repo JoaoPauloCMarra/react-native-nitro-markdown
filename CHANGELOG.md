@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.7] - 2026-04-30
+
+### Fixed
+
+- Wide display math now stays within the markdown viewport and can be panned horizontally on iOS and Android.
+- Math SVG sizing now handles MathJax `ex` dimensions, preventing oversized equations from clipping without a usable horizontal viewport.
+- `MarkdownStream` docs now clarify that `updateIntervalMs` only applies to `updateStrategy="interval"` and is ignored by `"raf"`.
+
 ## [0.5.6] - 2026-04-27
 
 ### Fixed
