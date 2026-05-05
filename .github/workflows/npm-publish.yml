@@ -3,13 +3,27 @@ name: Publish npm package
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag to validate against package.json
+        required: false
+        default: v0.5.8
+      npm_dist_tag:
+        description: npm dist-tag to use for dry-run validation
+        required: false
+        default: latest
+      dry_run:
+        description: Run npm publish as a dry run
+        required: false
+        default: "true"
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: npm-publish-${{ github.event.release.tag_name }}
+  group: npm-publish-${{ github.event.release.tag_name || inputs.release_tag || github.ref_name }}
   cancel-in-progress: false
 
 env:
@@ -26,7 +40,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.event.release.tag_name || github.ref }}
 
       - uses: actions/setup-node@v6
         with:
@@ -48,7 +62,7 @@ jobs:
 
       - name: Validate release tag
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
         run: |
           node - <<'NODE'
           const fs = require("fs");
@@ -66,11 +80,18 @@ jobs:
 
       - name: Select npm dist tag
         run: |
-          if [ "${{ github.event.release.prerelease }}" = "true" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "NPM_DIST_TAG=${{ inputs.npm_dist_tag }}" >> "$GITHUB_ENV"
+          elif [ "${{ github.event.release.prerelease }}" = "true" ]; then
             echo "NPM_DIST_TAG=next" >> "$GITHUB_ENV"
           else
             echo "NPM_DIST_TAG=latest" >> "$GITHUB_ENV"
           fi
 
       - name: Publish package
-        run: node scripts/publish.js --yes --tag="$NPM_DIST_TAG"
+        run: |
+          args=(--yes --tag="$NPM_DIST_TAG")
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" != "false" ]; then
+            args+=(--dry-run)
+          fi
+          node scripts/publish.js "${args[@]}"
