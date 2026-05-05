@@ -36,6 +36,11 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      - name: Install C++ coverage tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y llvm
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
