@@ -95,6 +95,7 @@ lerna-debug.log*
 coverage/
 .jest/
 *.lcov
+artifacts/
 
 # Environment
 .env

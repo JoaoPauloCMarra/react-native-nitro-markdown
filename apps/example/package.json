@@ -14,7 +14,7 @@
   "dependencies": {
     "@babel/runtime": "^7.29.2",
     "@expo/vector-icons": "^15.1.1",
-    "expo": "~55.0.17",
+    "expo": "~55.0.20",
     "expo-asset": "~55.0.16",
     "expo-audio": "~55.0.14",
     "expo-build-properties": "~55.0.13",

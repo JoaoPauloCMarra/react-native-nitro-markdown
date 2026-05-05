@@ -23,7 +23,10 @@
     "example:ios": "bun run --cwd apps/example ios",
     "example:android": "bun run --cwd apps/example android",
     "example:prebuild": "bun run --cwd apps/example prebuild",
-    "example:prebuild:clean": "bun run --cwd apps/example prebuild:clean"
+    "example:prebuild:clean": "bun run --cwd apps/example prebuild:clean",
+    "example:smoke": "node scripts/example-smoke.js",
+    "example:smoke:android": "node scripts/example-smoke.js --android",
+    "example:smoke:ios": "node scripts/example-smoke.js --ios"
   },
   "devDependencies": {
     "@swc/core": "^1.15.30",

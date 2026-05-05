@@ -1,0 +1,69 @@
+name: Publish npm package
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: npm-publish-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+env:
+  BUN_VERSION: "1.1.38"
+  NODE_VERSION: "24"
+
+jobs:
+  publish:
+    name: Publish react-native-nitro-markdown to npm
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Validate release tag
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          node - <<'NODE'
+          const fs = require("fs");
+          const pkg = JSON.parse(
+            fs.readFileSync("packages/react-native-nitro-markdown/package.json", "utf8"),
+          );
+          const expected = `v${pkg.version}`;
+          if (process.env.RELEASE_TAG !== expected) {
+            console.error(
+              `Release tag ${process.env.RELEASE_TAG} does not match package version ${expected}`,
+            );
+            process.exit(1);
+          }
+          NODE
+
+      - name: Select npm dist tag
+        run: |
+          if [ "${{ github.event.release.prerelease }}" = "true" ]; then
+            echo "NPM_DIST_TAG=next" >> "$GITHUB_ENV"
+          else
+            echo "NPM_DIST_TAG=latest" >> "$GITHUB_ENV"
+          fi
+
+      - name: Publish package
+        run: node scripts/publish.js --yes --tag="$NPM_DIST_TAG"

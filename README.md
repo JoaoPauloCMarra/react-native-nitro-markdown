@@ -1,6 +1,6 @@
 # react-native-nitro-markdown
 
-[![npm](https://img.shields.io/badge/npm-v0.5.7-orange?style=flat-square)](https://www.npmjs.com/package/react-native-nitro-markdown)
+[![npm](https://img.shields.io/badge/npm-v0.5.8-orange?style=flat-square)](https://www.npmjs.com/package/react-native-nitro-markdown)
 [![license](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](./LICENSE)
 [![react-native](https://img.shields.io/badge/react--native-%3E%3D0.75-1677a4?style=flat-square)](https://reactnative.dev/)
 [![nitro-modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.35.5-black?style=flat-square)](https://github.com/mrousavy/nitro)
