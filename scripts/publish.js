@@ -131,8 +131,10 @@ function parseArgs(args) {
   for (const arg of args) {
     if (arg === "--dry-run") {
       parsed.dryRun = true;
-    } else if (arg === "--skip-preflight" || arg === "--skip-checks") {
+    } else if (arg === "--skip-preflight") {
       parsed.skipPreflight = true;
+    } else if (arg === "--skip-checks") {
+      parsed.skipChecks = true;
     } else if (arg === "--skip-verify") {
       parsed.skipChecks = true;
     } else if (arg === "--skip-docs") {
@@ -171,6 +173,14 @@ function getNpmUser() {
   const result = runQuiet("npm", ["whoami"], { cwd: projectRoot });
   if (result.status !== 0 || result.stdout === "") return null;
   return result.stdout;
+}
+
+function hasGitHubTrustedPublishingContext() {
+  return (
+    process.env.GITHUB_ACTIONS === "true" &&
+    Boolean(process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN) &&
+    Boolean(process.env.ACTIONS_ID_TOKEN_REQUEST_URL)
+  );
 }
 
 function getPublishedVersion(version) {
@@ -249,7 +259,9 @@ async function runPreflight({ dryRun, skipPreflight, version }) {
     process.exit(1);
   }
 
-  if (!dryRun) {
+  if (!dryRun && hasGitHubTrustedPublishingContext()) {
+    console.log("  ✓ npm auth will use GitHub Actions trusted publishing (OIDC)");
+  } else if (!dryRun) {
     const npmUser = getNpmUser();
     if (!npmUser) {
       log("Not logged in to npm. Run: npm login", "red");

@@ -39,12 +39,20 @@ const resolveStreamText = ({
   }
 
   if (pendingFrom === previousText.length) {
-    const appendedChunk = session.getTextRange(pendingFrom, pendingTo);
-    return `${previousText}${appendedChunk}`;
+    try {
+      const appendedChunk = session.getTextRange(pendingFrom, pendingTo);
+      return `${previousText}${appendedChunk}`;
+    } catch {
+      return session.getAllText();
+    }
   }
 
   if (pendingFrom === 0) {
-    return session.getTextRange(0, pendingTo);
+    try {
+      return session.getTextRange(0, pendingTo);
+    } catch {
+      return session.getAllText();
+    }
   }
 
   return session.getAllText();

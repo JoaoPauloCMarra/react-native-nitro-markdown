@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.8] - 2026-05-05
+
+### Changed
+
+- Aligned the example app with Expo SDK 55 dependency validation by updating `expo` to `~55.0.20`.
+- Aligned the `react-native-nitro-modules` peer dependency floor with the documented `>=0.35.5` requirement.
+- Added example smoke-launch scripts for repeatable Android emulator and iOS simulator dev-client checks.
+
+### Fixed
+
+- `MarkdownStream` now falls back to a full session text read when the native range-read fast path throws during append or reset-like updates.
+- `publish-package --skip-checks` now skips verification checks instead of accidentally skipping preflight validation.
+
 ## [0.5.7] - 2026-04-30
 
 ### Fixed
