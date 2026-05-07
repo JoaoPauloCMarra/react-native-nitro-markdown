@@ -16,6 +16,7 @@ import {
   type NodeStyleOverrides,
   type AstTransform,
 } from "react-native-nitro-markdown";
+import { ExampleHeader, ExamplePanel, ExampleScreen } from "../components/example-ui";
 import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 import {
   COMPLEX_MARKDOWN,
@@ -205,85 +206,45 @@ export default function RenderCustomScreen() {
   }, []);
 
   return (
-    <View style={styles.container}>
-      <View style={[styles.content, { paddingBottom: tabHeight + 20 }]}>
-        <View style={styles.hero}>
-          <Text style={styles.title}>Custom Components</Text>
-          <Text style={styles.subtitle}>
-            Replace built-in renderers and add AST transforms in one place.
-          </Text>
-        </View>
-        <View style={styles.card}>
-          <Markdown
-            options={{ gfm: true, math: true, html: true }}
-            astTransform={astTransform}
-            styles={CUSTOM_STYLE_OVERRIDES}
-            style={styles.markdown}
-            virtualize={true}
-            virtualization={{
-              initialNumToRender: 10,
-              maxToRenderPerBatch: 8,
-              windowSize: 7,
-            }}
-            renderers={{
-              // Using pre-mapped props - simpler custom renderers!
-              paragraph: HtmlAwareParagraph,
-              heading: CustomHeading,
-              blockquote: CustomBlockquote,
-              image: CustomImage,
-              code_block: CustomCodeBlock,
-              table: CustomTable,
-              html_inline: NativeHtmlInline,
-              html_block: NativeHtmlBlock,
-              horizontal_rule: () => <View style={customStyles.hr} />,
-            }}
-          >
-            {`${HTML_PARSER_MARKDOWN}\n\n${CUSTOM_RENDER_COMPONENTS}\n\nQuick emoticon transform demo: :wink:\n\n${COMPLEX_MARKDOWN}`}
-          </Markdown>
-        </View>
-      </View>
-    </View>
+    <ExampleScreen paddingBottom={tabHeight + 20}>
+      <ExampleHeader
+        title="Custom Components"
+        subtitle="Replace built-in renderers and add AST transforms in one place."
+      />
+      <ExamplePanel style={styles.card}>
+        <Markdown
+          options={{ gfm: true, math: true, html: true }}
+          astTransform={astTransform}
+          styles={CUSTOM_STYLE_OVERRIDES}
+          style={styles.markdown}
+          virtualize={true}
+          virtualization={{
+            initialNumToRender: 10,
+            maxToRenderPerBatch: 8,
+            windowSize: 7,
+          }}
+          renderers={{
+            paragraph: HtmlAwareParagraph,
+            heading: CustomHeading,
+            blockquote: CustomBlockquote,
+            image: CustomImage,
+            code_block: CustomCodeBlock,
+            table: CustomTable,
+            html_inline: NativeHtmlInline,
+            html_block: NativeHtmlBlock,
+            horizontal_rule: () => <View style={customStyles.hr} />,
+          }}
+        >
+          {`${HTML_PARSER_MARKDOWN}\n\n${CUSTOM_RENDER_COMPONENTS}\n\nQuick emoticon transform demo: :wink:\n\n${COMPLEX_MARKDOWN}`}
+        </Markdown>
+      </ExamplePanel>
+    </ExampleScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: EXAMPLE_COLORS.background,
-  },
-  content: {
-    flex: 1,
-    padding: 20,
-    gap: 14,
-  },
-  hero: {
-    backgroundColor: EXAMPLE_COLORS.surface,
-    borderRadius: 18,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: EXAMPLE_COLORS.border,
-    boxShadow: `0px 8px 18px ${EXAMPLE_COLORS.text}1a`,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: EXAMPLE_COLORS.text,
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    marginTop: 6,
-    fontSize: 14,
-    color: EXAMPLE_COLORS.textMuted,
-    lineHeight: 20,
-  },
   card: {
     flex: 1,
-    backgroundColor: EXAMPLE_COLORS.surface,
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: EXAMPLE_COLORS.border,
-    boxShadow: `0px 8px 20px ${EXAMPLE_COLORS.text}14`,
   },
   markdown: {
     flex: 1,

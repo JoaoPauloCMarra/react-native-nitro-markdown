@@ -14,35 +14,24 @@ import { getCachedStyles } from "./style-cache";
 import { useMarkdownContext } from "../MarkdownContext";
 import type { MarkdownTheme } from "../theme";
 
-let MathJaxComponent: ComponentType<{
+let RaTeXViewComponent: ComponentType<{
+  latex: string;
   fontSize?: number;
+  displayMode?: boolean;
   color?: string;
-  fontCache?: boolean;
   style?: StyleProp<ViewStyle>;
-  width?: number;
-  height?: number;
-  children?: string;
+  onError?: (event: { nativeEvent: { error: string } }) => void;
 }> | null = null;
-let SvgFromXmlComponent: ComponentType<{
-  xml: string;
-  width?: number;
-  height?: number;
-  style?: StyleProp<ViewStyle>;
-}> | null = null;
-let texToSvg: ((textext: string, fontSize?: number) => string) | null = null;
 
 try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mathJaxModule = require("react-native-mathjax-svg");
-  MathJaxComponent = mathJaxModule.default || mathJaxModule;
-  texToSvg = mathJaxModule.texToSvg ?? null;
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  SvgFromXmlComponent = require("react-native-svg").SvgFromXml;
+  const ratexModule = require("ratex-react-native");
+  RaTeXViewComponent = ratexModule.RaTeXView ?? null;
 } catch {
   if (__DEV__) {
     // eslint-disable-next-line no-console
     console.warn(
-      "[NitroMarkdown] react-native-mathjax-svg not found — math will render as plain text.",
+      "[NitroMarkdown] ratex-react-native not found — math will render as plain text.",
     );
   }
 }
@@ -55,34 +44,13 @@ type MathInlineProps = {
 type MathStyles = ReturnType<typeof createMathStyles>;
 
 const mathStylesCache = new WeakMap<MarkdownTheme, MathStyles>();
-const SVG_WIDTH_PATTERN = /<svg[^>]*\bwidth="([\d.]+)(?:ex|px)"/i;
-const SVG_HEIGHT_PATTERN = /<svg[^>]*\bheight="([\d.]+)(?:ex|px)"/i;
+const INLINE_DISPLAY_MATH_PATTERN =
+  /\\(?:frac|dfrac|tfrac|sqrt|sum|prod|int|lim|begin|matrix|pmatrix|bmatrix|cases)\b/;
 
-function colorizeSvg(svg: string, color: string | undefined) {
-  return color ? svg.replace(/currentColor/gim, color) : svg;
-}
-
-function createMathSvg(
-  content: string,
-  fontSize: number,
-  color: string | undefined,
-) {
-  if (!texToSvg) return null;
-
-  try {
-    const xml = colorizeSvg(texToSvg(content, fontSize / 2), color);
-    const widthMatch = SVG_WIDTH_PATTERN.exec(xml);
-    const heightMatch = SVG_HEIGHT_PATTERN.exec(xml);
-    if (!widthMatch || !heightMatch) return null;
-
-    const width = Number.parseFloat(widthMatch[1]);
-    const height = Number.parseFloat(heightMatch[1]);
-    if (!Number.isFinite(width) || !Number.isFinite(height)) return null;
-
-    return { xml, width, height };
-  } catch {
-    return null;
-  }
+function getInlineMathFontSize(content: string, theme: MarkdownTheme) {
+  return INLINE_DISPLAY_MATH_PATTERN.test(content)
+    ? theme.fontSizes.xl + 2
+    : theme.fontSizes.l;
 }
 
 type HorizontalMathViewportProps = {
@@ -218,6 +186,10 @@ const createMathStyles = (theme: MarkdownTheme) =>
       color: theme.colors.code,
       ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
+    ratexInline: {
+      backgroundColor: "transparent",
+      flexShrink: 0,
+    },
     mathBlockContainer: {
       width: "100%",
       maxWidth: "100%",
@@ -229,7 +201,6 @@ const createMathStyles = (theme: MarkdownTheme) =>
       borderRadius: theme.borderRadius.l,
       borderWidth: 1,
       borderColor: theme.colors.border,
-      // Ensure we don't collapse if MathJax fails to report size immediately
       minHeight: 48,
       overflow: "hidden",
     },
@@ -244,10 +215,8 @@ const createMathStyles = (theme: MarkdownTheme) =>
       alignItems: "center",
       justifyContent: "center",
     },
-    mathBlockSvg: {
+    ratexBlock: {
       backgroundColor: "transparent",
-    },
-    mathBlockSvgFrame: {
       flexShrink: 0,
     },
     mathBlockFallbackContainer: {
@@ -278,21 +247,23 @@ const createMathStyles = (theme: MarkdownTheme) =>
 export const MathInline: FC<MathInlineProps> = ({ content, style }) => {
   const { theme } = useMarkdownContext();
   const styles = getCachedStyles(mathStylesCache, theme, createMathStyles);
+  const [hasRenderError, setHasRenderError] = useState(false);
 
   if (!content) return null;
 
-  if (MathJaxComponent) {
-    const fontSize = theme.fontSizes.s;
+  if (RaTeXViewComponent && !hasRenderError) {
     return (
       <View style={[styles.mathInlineContainer, style]}>
-        <MathJaxComponent
-          fontSize={fontSize}
+        <RaTeXViewComponent
+          latex={content}
+          fontSize={getInlineMathFontSize(content, theme)}
+          displayMode={false}
           color={theme.colors.text}
-          fontCache={false}
-          style={{ backgroundColor: "transparent" }}
-        >
-          {content}
-        </MathJaxComponent>
+          style={styles.ratexInline}
+          onError={() => {
+            setHasRenderError(true);
+          }}
+        />
       </View>
     );
   }
@@ -312,55 +283,27 @@ type MathBlockProps = {
 export const MathBlock: FC<MathBlockProps> = ({ content, style }) => {
   const { theme } = useMarkdownContext();
   const styles = getCachedStyles(mathStylesCache, theme, createMathStyles);
+  const [hasRenderError, setHasRenderError] = useState(false);
 
   if (!content) return null;
 
-  const displayContent = `\\displaystyle ${content}`;
-  const blockSvg =
-    SvgFromXmlComponent &&
-    createMathSvg(displayContent, theme.fontSizes.l, theme.colors.text);
-
-  if (blockSvg && SvgFromXmlComponent) {
-    return (
-      <View style={[styles.mathBlockContainer, style]}>
-        <HorizontalMathViewport
-          style={styles.mathBlockScroll}
-          contentStyle={styles.mathBlockScrollContent}
-          contentWidth={blockSvg.width}
-        >
-          <View
-            style={[
-              styles.mathBlockSvgFrame,
-              { width: blockSvg.width, height: blockSvg.height },
-            ]}
-          >
-            <SvgFromXmlComponent
-              xml={blockSvg.xml}
-              width={blockSvg.width}
-              height={blockSvg.height}
-              style={styles.mathBlockSvg}
-            />
-          </View>
-        </HorizontalMathViewport>
-      </View>
-    );
-  }
-
-  if (MathJaxComponent) {
+  if (RaTeXViewComponent && !hasRenderError) {
     return (
       <View style={[styles.mathBlockContainer, style]}>
         <HorizontalMathViewport
           style={styles.mathBlockScroll}
           contentStyle={styles.mathBlockScrollContent}
         >
-          <MathJaxComponent
-            fontSize={theme.fontSizes.l}
+          <RaTeXViewComponent
+            latex={content}
+            fontSize={theme.fontSizes.xl}
+            displayMode
             color={theme.colors.text}
-            fontCache={false}
-            style={{ backgroundColor: "transparent" }}
-          >
-            {displayContent}
-          </MathJaxComponent>
+            style={styles.ratexBlock}
+            onError={() => {
+              setHasRenderError(true);
+            }}
+          />
         </HorizontalMathViewport>
       </View>
     );

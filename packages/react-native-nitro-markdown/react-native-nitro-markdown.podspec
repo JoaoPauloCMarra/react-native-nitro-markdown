@@ -27,14 +27,13 @@ Pod::Spec.new do |s|
     "CLANG_CXX_LIBRARY" => "libc++",
     "GCC_PREPROCESSOR_DEFINITIONS" => "$(inherited) MD4C_USE_UTF8=1",
     "HEADER_SEARCH_PATHS" => [
-      "\"$(inherited)\"",
-      "\"$(PODS_ROOT)/Headers/Private/Yoga\"",
-      "\"$(PODS_TARGET_SRCROOT)/cpp/md4c\"",
-      "\"$(PODS_TARGET_SRCROOT)/cpp/core\"",
-      "\"$(PODS_TARGET_SRCROOT)/cpp/bindings\"",
-      "\"$(PODS_TARGET_SRCROOT)/nitrogen/generated/shared/c++\"",
-      "\"$(PODS_TARGET_SRCROOT)/nitrogen/generated/ios\""
-    ].join(" ")
+      "$(PODS_ROOT)/Headers/Private/Yoga",
+      "$(PODS_TARGET_SRCROOT)/cpp/md4c",
+      "$(PODS_TARGET_SRCROOT)/cpp/core",
+      "$(PODS_TARGET_SRCROOT)/cpp/bindings",
+      "$(PODS_TARGET_SRCROOT)/nitrogen/generated/shared/c++",
+      "$(PODS_TARGET_SRCROOT)/nitrogen/generated/ios"
+    ]
   }
 
   s.dependency "React-Core"

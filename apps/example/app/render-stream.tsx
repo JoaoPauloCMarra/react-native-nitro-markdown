@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
   ScrollView,
   Platform,
 } from "react-native";
@@ -12,6 +11,13 @@ import {
   useMarkdownSession,
   MarkdownStream,
 } from "react-native-nitro-markdown";
+import {
+  ExampleActionButton,
+  ExampleHeader,
+  ExamplePanel,
+  ExampleScreen,
+  ExampleSectionLabel,
+} from "../components/example-ui";
 import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 import { EXAMPLE_COLORS } from "../theme";
 
@@ -44,6 +50,18 @@ You can even use **lists** or *italics* while streaming tokens in real-time.
   - Nested Item
   
 And it handles paragraphs seamlessly.
+
+## Math While Streaming
+
+Inline math should settle into the text flow as tokens arrive: $E = mc^2$ and $x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$.
+
+Block math should render as a readable equation once the closing delimiters arrive:
+
+$$\\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{6}$$
+
+Larger expressions should stay legible:
+
+$$\\int_{-\\infty}^{\\infty} e^{-x^2}\\,dx = \\sqrt{\\pi}$$
 
 ## More Content for Testing
 
@@ -102,7 +120,6 @@ export default function TokenStreamScreen() {
   }, [session]);
 
   const startStream = useCallback(() => {
-    // Reset if starting fresh
     if (!isStreamMode && streamOffsetRef.current === 0) {
       session.clear();
     }
@@ -204,31 +221,40 @@ export default function TokenStreamScreen() {
   }, [session, isStreamMode, scheduleAutoScroll]);
 
   return (
-    <View style={styles.container}>
+    <ExampleScreen paddingBottom={0} style={styles.screenContent}>
       <View style={styles.header}>
-        <View style={styles.headerCopy}>
-          <Text style={styles.title}>Token Stream</Text>
-          <Text style={styles.subtitle}>
-            Direct Raw vs Markdown Render ({TOKEN_DELAY_MS}ms delay)
-          </Text>
-        </View>
+        <ExampleHeader
+          title="Token Stream"
+          subtitle={`Direct raw vs markdown render (${TOKEN_DELAY_MS}ms delay).`}
+        />
         <View style={styles.controlsRow}>
-          <Pressable
-            style={[styles.btn, isStreamMode && styles.btnActive]}
+          <ExampleActionButton
+            active={isStreamMode}
+            tone="neutral"
+            style={styles.btn}
             onPress={isStreamMode ? stopStream : startStream}
+            icon={
+              <Ionicons
+                name={isStreamMode ? "pause" : "flash"}
+                size={16}
+                color={
+                  isStreamMode ? EXAMPLE_COLORS.accent : EXAMPLE_COLORS.text
+                }
+              />
+            }
           >
-            <Ionicons
-              name={isStreamMode ? "pause" : "flash"}
-              size={16}
-              color={isStreamMode ? EXAMPLE_COLORS.accent : EXAMPLE_COLORS.text}
-            />
-            <Text style={styles.btnText}>
-              {isStreamMode ? "Pause" : streamOffset > 0 ? "Resume" : "Start"}
-            </Text>
-          </Pressable>
-          <Pressable style={styles.btnIcon} onPress={clearStream}>
-            <Ionicons name="trash" size={18} color={EXAMPLE_COLORS.danger} />
-          </Pressable>
+            {isStreamMode ? "Pause" : streamOffset > 0 ? "Resume" : "Start"}
+          </ExampleActionButton>
+          <ExampleActionButton
+            tone="danger"
+            style={styles.clearButton}
+            onPress={clearStream}
+            icon={
+              <Ionicons name="trash" size={16} color={EXAMPLE_COLORS.danger} />
+            }
+          >
+            Clear
+          </ExampleActionButton>
         </View>
       </View>
 
@@ -238,21 +264,25 @@ export default function TokenStreamScreen() {
           { paddingBottom: tabHeight + 20 },
         ]}
         bounces={false}
+        alwaysBounceVertical={false}
+        overScrollMode="never"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.hero}>
-          <Text style={styles.heroTitle}>Streaming Performance Lab</Text>
-          <Text style={styles.heroSubtitle}>
+        <ExamplePanel>
+          <Text style={styles.panelTitle}>Streaming Performance Lab</Text>
+          <Text style={styles.panelSubtitle}>
             Compare raw token input with rendered markdown in real time.
           </Text>
-        </View>
-        <Text style={styles.sectionTitle}>Raw Token Data</Text>
-        <View style={styles.card}>
+        </ExamplePanel>
+        <ExampleSectionLabel>Raw Token Data</ExampleSectionLabel>
+        <ExamplePanel style={styles.card}>
           <ScrollView
             ref={rawScrollViewRef}
             style={styles.cardScroll}
             nestedScrollEnabled
             bounces={false}
+            alwaysBounceVertical={false}
+            overScrollMode="never"
             contentContainerStyle={styles.scrollContent}
           >
             {rawText.length === 0 ? (
@@ -261,15 +291,17 @@ export default function TokenStreamScreen() {
               <Text style={styles.rawText}>{rawText}</Text>
             )}
           </ScrollView>
-        </View>
+        </ExamplePanel>
 
-        <Text style={styles.sectionTitle}>Markdown Renderer</Text>
-        <View style={[styles.card, styles.markdownCard]}>
+        <ExampleSectionLabel>Markdown Renderer</ExampleSectionLabel>
+        <ExamplePanel style={[styles.card, styles.markdownCard]}>
           <ScrollView
             ref={markdownScrollViewRef}
             style={styles.cardScroll}
             nestedScrollEnabled
             bounces={false}
+            alwaysBounceVertical={false}
+            overScrollMode="never"
             contentContainerStyle={styles.scrollContent}
           >
             {rawText.length === 0 ? (
@@ -291,117 +323,59 @@ export default function TokenStreamScreen() {
               />
             )}
           </ScrollView>
-        </View>
+        </ExamplePanel>
       </ScrollView>
-    </View>
+    </ExampleScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: EXAMPLE_COLORS.background },
+  screenContent: {
+    padding: 0,
+  },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 56,
-    paddingBottom: 16,
-    flexDirection: "column",
-    alignItems: "flex-start",
-    backgroundColor: EXAMPLE_COLORS.surface,
-    boxShadow: `0px 1px 8px ${EXAMPLE_COLORS.text}14`,
+    paddingTop: 20,
+    paddingBottom: 10,
   },
-  headerCopy: {
-    width: "100%",
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "800",
+  panelTitle: {
     color: EXAMPLE_COLORS.text,
-    letterSpacing: -0.5,
-  },
-  subtitle: { fontSize: 12, color: EXAMPLE_COLORS.textMuted, marginTop: 2 },
-  hero: {
-    backgroundColor: EXAMPLE_COLORS.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: EXAMPLE_COLORS.border,
-    padding: 14,
-    marginBottom: 6,
-    boxShadow: `0px 8px 16px ${EXAMPLE_COLORS.text}12`,
-  },
-  heroTitle: {
-    color: EXAMPLE_COLORS.text,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "700",
     letterSpacing: -0.2,
   },
-  heroSubtitle: {
+  panelSubtitle: {
     color: EXAMPLE_COLORS.textMuted,
-    fontSize: 13,
-    marginTop: 4,
-    lineHeight: 18,
+    fontSize: 12,
+    marginTop: 2,
+    lineHeight: 16,
   },
 
   controlsRow: {
     flexDirection: "row",
     gap: 8,
     alignItems: "center",
-    width: "100%",
-    marginTop: 12,
+    marginTop: 8,
   },
   btn: {
     flex: 1,
-    paddingHorizontal: 16,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: EXAMPLE_COLORS.surface,
-    borderWidth: 1,
-    borderColor: EXAMPLE_COLORS.border,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
   },
-  btnActive: {
-    borderColor: EXAMPLE_COLORS.accent,
-    backgroundColor: EXAMPLE_COLORS.accentSoft,
+  clearButton: {
+    minWidth: 86,
   },
-  btnIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: EXAMPLE_COLORS.surface,
-    borderWidth: 1,
-    borderColor: EXAMPLE_COLORS.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  btnText: { color: EXAMPLE_COLORS.text, fontSize: 13, fontWeight: "600" },
 
-  scrollContainer: { paddingHorizontal: 16, paddingTop: 16, gap: 16 },
-  sectionTitle: {
-    color: EXAMPLE_COLORS.textMuted,
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: -8,
-    marginLeft: 4,
-  },
+  scrollContainer: { paddingHorizontal: 16, paddingTop: 10, gap: 10 },
 
   card: {
     height: 200,
-    backgroundColor: EXAMPLE_COLORS.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: EXAMPLE_COLORS.border,
     overflow: "hidden",
-    boxShadow: `0px 8px 16px ${EXAMPLE_COLORS.text}12`,
   },
   markdownCard: {
     backgroundColor: EXAMPLE_COLORS.surface,
     height: 400,
   },
   cardScroll: { flex: 1 },
-  scrollContent: { padding: 16 },
+  scrollContent: { padding: 10 },
 
   rawText: {
     color: EXAMPLE_COLORS.textMuted,

@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-05-07
+
+### Added
+
+- RaTeX is now the package math renderer for `math_inline` and `math_block`.
+- Example-app LaTeX render comparison benchmark keeps the previous MathJax/SVG renderer locally for benchmarking only.
+- Shared example-app UI primitives keep tabs visually consistent.
+
+### Changed
+
+- Removed the public math-renderer backend selector; package math rendering now uses RaTeX.
+- Aligned `react-native-nitro-modules` to `0.35.6`.
+- Removed the stale `@types/react-native` package dev dependency; React Native provides its own types.
+
+### Fixed
+
+- iOS pod header search paths now use CocoaPods array values instead of a joined quoted string, preventing Swift driver failures such as `unknown argument: '-isystem'` in Expo 55/56 builds.
+- Native `MarkdownSession` buffer limits are now enforced consistently across iOS and Android `append`, `reset`, and `replace` calls.
+
 ## [0.5.8] - 2026-05-05
 
 ### Changed
