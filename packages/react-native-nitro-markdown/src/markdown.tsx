@@ -627,6 +627,9 @@ export const Markdown: FC<MarkdownProps> = ({
             removeClippedSubviews={
               virtualization?.removeClippedSubviews ?? true
             }
+            bounces={false}
+            alwaysBounceVertical={false}
+            overScrollMode="never"
             showsVerticalScrollIndicator={false}
           />
         ) : (
@@ -774,6 +777,9 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
         language: node.language,
       }),
       ...(node.type === "code_inline" && { content: node.content ?? "" }),
+      ...((node.type === "math_inline" || node.type === "math_block") && {
+        content: getTextContent(node),
+      }),
       ...(node.type === "list" && {
         ordered: node.ordered ?? false,
         start: node.start,

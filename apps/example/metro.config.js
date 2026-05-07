@@ -7,6 +7,7 @@ const monorepoRoot = path.resolve(projectRoot, "../..");
 const config = getDefaultConfig(projectRoot);
 
 const defaultWatchFolders = config.watchFolders ?? [];
+const defaultBlockList = config.resolver.blockList;
 
 // Keep Expo defaults and add the monorepo root.
 config.watchFolders = Array.from(
@@ -27,5 +28,10 @@ config.resolver.extraNodeModules = {
     "packages/react-native-nitro-markdown/src",
   ),
 };
+
+config.resolver.blockList = [
+  ...(Array.isArray(defaultBlockList) ? defaultBlockList : [defaultBlockList]).filter(Boolean),
+  /node_modules\/react-native-nitro-modules\/android\/\.cxx\/.*/,
+];
 
 module.exports = config;

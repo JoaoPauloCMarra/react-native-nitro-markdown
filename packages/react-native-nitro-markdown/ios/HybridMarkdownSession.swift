@@ -2,6 +2,8 @@ import Foundation
 import NitroModules
 
 class HybridMarkdownSession: HybridMarkdownSessionSpec {
+    private static let maxBufferSize = 10 * 1024 * 1024
+
     private var buffer = ""
     private var listeners: [UUID: (Double, Double) -> Void] = [:]
     private let lock = NSLock()
@@ -23,6 +25,18 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
         return (value as NSString).length
     }
 
+    private func validateBufferSize(_ size: Int) throws {
+        if size > Self.maxBufferSize {
+            throw NSError(
+                domain: "NitroMarkdown",
+                code: 1,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "Buffer size limit exceeded (max \(Self.maxBufferSize) chars)"
+                ]
+            )
+        }
+    }
+
     func append(chunk: String) throws -> Double {
         let notifyFrom: Double
         let notifyTo: Double
@@ -30,6 +44,7 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
             lock.lock()
             defer { lock.unlock() }
             let fromInt = utf16Length(buffer)
+            try validateBufferSize(fromInt + utf16Length(chunk))
             buffer += chunk
             let toInt = utf16Length(buffer)
             notifyFrom = Double(fromInt)
@@ -98,6 +113,7 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
         do {
             lock.lock()
             defer { lock.unlock() }
+            try validateBufferSize(utf16Length(text))
             buffer = text
             _highlightPosition = 0
             notifyTo = Double((text as NSString).length)
@@ -121,6 +137,7 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
             let length = nsBuffer.length
             start = max(0, min(Int(from), length))
             end = max(start, min(Int(to), length))
+            try validateBufferSize(length - (end - start) + utf16Length(text))
             nsBuffer.replaceCharacters(in: NSRange(location: start, length: end - start), with: text)
             buffer = nsBuffer as String
             newLength = Double((buffer as NSString).length)

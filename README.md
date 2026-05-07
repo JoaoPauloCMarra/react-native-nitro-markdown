@@ -1,9 +1,9 @@
 # react-native-nitro-markdown
 
-[![npm](https://img.shields.io/badge/npm-v0.5.8-orange?style=flat-square)](https://www.npmjs.com/package/react-native-nitro-markdown)
+[![npm](https://img.shields.io/badge/npm-v0.6.0-orange?style=flat-square)](https://www.npmjs.com/package/react-native-nitro-markdown)
 [![license](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](./LICENSE)
 [![react-native](https://img.shields.io/badge/react--native-%3E%3D0.75-1677a4?style=flat-square)](https://reactnative.dev/)
-[![nitro-modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.35.5-black?style=flat-square)](https://github.com/mrousavy/nitro)
+[![nitro-modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.35.6-black?style=flat-square)](https://github.com/mrousavy/nitro)
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/JoaoPauloCMarra/react-native-nitro-markdown/main/readme/demo.gif" alt="react-native-nitro-markdown demo" width="400" />
@@ -16,7 +16,7 @@ Native Markdown parsing and rendering for React Native, powered by [md4c](https:
 - **Native C++ parser** -- synchronous parsing via JSI with minimal JS thread overhead
 - **Full rendering pipeline** -- parser + renderer + streaming session in one package
 - **GFM support** -- tables, strikethrough, task lists, autolinks
-- **Math rendering** -- inline and block LaTeX via `react-native-mathjax-svg` (optional)
+- **Math rendering** -- inline and block LaTeX via native RaTeX
 - **Opt-in HTML AST nodes** -- preserve raw HTML as `html_inline` / `html_block` for custom renderers
 - **Large document support** -- top-level block virtualization and cached renderer styles
 - **Code highlighting** -- built-in JS/TS, Python, and Bash tokenizer with custom highlighter support
@@ -29,42 +29,29 @@ Native Markdown parsing and rendering for React Native, powered by [md4c](https:
 | Dependency | Version |
 |---|---|
 | React Native | `>=0.75.0` |
-| react-native-nitro-modules | `>=0.35.5` |
-| react-native-mathjax-svg *(optional)* | `>=0.9.0` |
-| react-native-svg *(optional, for math)* | `>=13.0.0` |
+| react-native-nitro-modules | `>=0.35.6` |
+| ratex-react-native | `>=0.1.4` |
 
 ## Installation
 
 With npm:
 
 ```bash
-npm install react-native-nitro-markdown react-native-nitro-modules
+npm install react-native-nitro-markdown react-native-nitro-modules ratex-react-native
 cd ios && pod install
 ```
 
 With Bun:
 
 ```bash
-bun add react-native-nitro-markdown react-native-nitro-modules
+bun add react-native-nitro-markdown react-native-nitro-modules ratex-react-native
 cd ios && pod install
-```
-
-For math rendering:
-
-```bash
-npm install react-native-mathjax-svg react-native-svg
-```
-
-or with Bun:
-
-```bash
-bun add react-native-mathjax-svg react-native-svg
 ```
 
 **Expo** (development build):
 
 ```bash
-npx expo install react-native-nitro-markdown react-native-nitro-modules
+npx expo install react-native-nitro-markdown react-native-nitro-modules ratex-react-native
 npx expo prebuild
 ```
 
@@ -91,7 +78,7 @@ export function Example() {
 | Option | Default | Enables | Notes |
 |---|---:|---|---|
 | `gfm` | `true` | Tables, strikethrough, task lists, permissive autolinks | Set `false` for stricter CommonMark-style parsing |
-| `math` | `true` | Inline and display LaTeX spans | Rendering falls back to plain styled text unless optional math deps are installed |
+| `math` | `true` | Inline and display LaTeX spans | Rendered with RaTeX; falls back to styled plain text if the peer dependency is unavailable at runtime |
 | `html` | `false` | `html_inline` and `html_block` AST nodes | Raw HTML is not rendered by default; provide custom renderers |
 
 ```tsx
@@ -299,13 +286,13 @@ Do not pass untrusted HTML directly into a WebView from a renderer. Sanitize or 
 
 ### Math Rendering
 
-Math parsing is enabled by default. Rendering LaTeX as native SVG requires both optional packages:
+Math parsing is enabled by default. Rendering LaTeX uses the native RaTeX renderer:
 
 ```bash
-bun add react-native-mathjax-svg react-native-svg
+bun add ratex-react-native
 ```
 
-Without those packages, `math_inline` and `math_block` render as styled plain text fallback.
+If `ratex-react-native` is unavailable at runtime, `math_inline` and `math_block` render as styled plain text fallback.
 
 Inline math (`$...$`) stays inside text flow. Use block math (`$$...$$`) for large formulas; the default `math_block` renderer is horizontally scrollable when the equation is wider than the screen. Custom `math_block` renderers should preserve the same behavior for long display equations.
 
@@ -515,7 +502,7 @@ Parser and text utilities only -- no React dependencies. Use this for server-sid
 
 | Problem | Solution |
 |---|---|
-| Math renders as code-style fallback | Install `react-native-mathjax-svg` and `react-native-svg` |
+| Math renders as code-style fallback | Install `ratex-react-native` |
 | Large inline math overflows text | Use block math (`$$...$$`) for wide formulas; inline math intentionally stays in text flow |
 | iOS build fails after install | Run `pod install` in your iOS directory |
 | Expo app doesn't load native module | Use a development build (`expo prebuild` + `expo run`), not Expo Go |

@@ -3,7 +3,7 @@
 -keep class com.margelo.nitro.com.nitromarkdown.** { *; }
 -keep class com.nitromarkdown.** { *; }
 
-# C5: Explicitly preserve nitrogen-generated Func_* wrapper classes accessed via JNI reflection.
+# Explicitly preserve nitrogen-generated Func_* wrapper classes accessed via JNI reflection.
 # These are already covered by the wildcard above, but explicit rules guard against future
 # refactors that might narrow the wildcard, and make the intent clear to ProGuard/R8.
 -keep class com.margelo.nitro.com.nitromarkdown.Func_void { *; }

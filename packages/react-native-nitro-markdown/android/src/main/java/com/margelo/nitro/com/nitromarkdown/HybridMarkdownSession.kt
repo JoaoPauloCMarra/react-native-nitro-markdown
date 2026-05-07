@@ -81,6 +81,9 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
 
     override fun reset(text: String) {
         synchronized(lock) {
+            if (text.length > MAX_BUFFER_SIZE) {
+                throw IllegalArgumentException("Buffer size limit exceeded (max $MAX_BUFFER_SIZE chars)")
+            }
             buffer.replace(0, buffer.length, text)
             highlightPosition = 0.0
         }
@@ -97,6 +100,10 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
         synchronized(lock) {
             val start = from.toLong().coerceIn(0L, buffer.length.toLong()).toInt()
             val end = to.toLong().coerceIn(start.toLong(), buffer.length.toLong()).toInt()
+            val newSize = buffer.length - (end - start) + text.length
+            if (newSize > MAX_BUFFER_SIZE) {
+                throw IllegalArgumentException("Buffer size limit exceeded (max $MAX_BUFFER_SIZE chars)")
+            }
             buffer.replace(start, end, text)
             newLength = buffer.length.toDouble()
             notifyFrom = start.toDouble()
@@ -132,7 +139,7 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
         super.dispose()
     }
 
-    // H6: The C++ generated file (JHybridMarkdownSessionSpec.cpp) is marked DO NOT MODIFY and
+    // The C++ generated file (JHybridMarkdownSessionSpec.cpp) is marked DO NOT MODIFY and
     // cannot be edited. However, fbjni (used by Nitro) automatically propagates Java/Kotlin
     // exceptions thrown across the JNI boundary as C++ exceptions. Therefore, an
     // IllegalArgumentException thrown in append() will be rethrown on the C++ side without

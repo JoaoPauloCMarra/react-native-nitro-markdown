@@ -18,7 +18,8 @@
       "expo-router",
       "expo-build-properties",
       "expo-asset",
-      "expo-audio"
+      "expo-audio",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true,
