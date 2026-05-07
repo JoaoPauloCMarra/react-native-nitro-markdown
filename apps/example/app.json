@@ -12,7 +12,11 @@
       "bundleIdentifier": "com.nitromarkdown.example"
     },
     "android": {
-      "package": "com.nitromarkdown.example"
+      "package": "com.nitromarkdown.example",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#101038"
+      }
     },
     "plugins": [
       "expo-router",
