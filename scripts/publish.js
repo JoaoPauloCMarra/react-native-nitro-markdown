@@ -21,6 +21,7 @@ const packageDir = path.join(projectRoot, "packages", PACKAGE_NAME);
 const packageJsonPath = path.join(packageDir, "package.json");
 const rootReadmePath = path.join(projectRoot, "README.md");
 const changelogPath = path.join(projectRoot, "CHANGELOG.md");
+const podspecPath = path.join(packageDir, `${PACKAGE_NAME}.podspec`);
 
 function log(message, color = "green") {
   console.log(colors[color](message));
@@ -205,6 +206,7 @@ function validateReleaseDocs(version) {
   log("Validating release docs...", "cyan");
 
   assertTextIncludes(changelogPath, "CHANGELOG version entry", `## [${version}]`);
+  assertTextIncludes(podspecPath, "podspec release tag", ':tag => "v#{s.version}"');
   assertTextIncludes(rootReadmePath, "README parseCache API", "parseCache");
   assertTextIncludes(
     rootReadmePath,
@@ -215,6 +217,53 @@ function validateReleaseDocs(version) {
 
   console.log("  ✓ README documents current API surface");
   console.log(`  ✓ CHANGELOG has ${version} entry`);
+  console.log("  ✓ podspec uses v-prefixed release tags");
+  console.log("");
+}
+
+function validatePackedFiles() {
+  log("Validating packed package contents...", "cyan");
+
+  const result = runQuiet("npm", ["pack", "--dry-run", "--json"], { cwd: packageDir });
+  if (result.error || result.status !== 0) {
+    log("npm pack dry-run failed", "red");
+    if (result.stderr) console.error(result.stderr);
+    process.exit(1);
+  }
+
+  let packInfo;
+  try {
+    packInfo = JSON.parse(result.stdout)[0];
+  } catch (error) {
+    log(`Could not parse npm pack output: ${error.message}`, "red");
+    process.exit(1);
+  }
+
+  const files = new Set(packInfo.files.map((file) => file.path));
+  const expectedFiles = [
+    ".watchmanconfig",
+    "LICENSE",
+    "README.md",
+    "android/build.gradle",
+    "cpp/core/MD4CParser.cpp",
+    "ios/HybridMarkdownSession.swift",
+    "lib/module/index.js",
+    "lib/commonjs/index.js",
+    "lib/typescript/module/index.d.ts",
+    "nitrogen/generated/ios/NitroMarkdown+autolinking.rb",
+    "nitrogen/generated/android/NitroMarkdown+autolinking.gradle",
+    "src/index.ts",
+    `${PACKAGE_NAME}.podspec`,
+  ];
+
+  for (const file of expectedFiles) {
+    if (!files.has(file)) {
+      log(`Packed package is missing ${file}`, "red");
+      process.exit(1);
+    }
+  }
+
+  console.log(`  ✓ ${packInfo.name}@${packInfo.version} contains expected package files`);
   console.log("");
 }
 
@@ -308,6 +357,8 @@ async function main() {
 
   if (!options.skipChecks) await runVerification();
   else log("Skipping verification checks", "yellow");
+
+  validatePackedFiles();
 
   const publishArgs = ["publish", "--tag", options.tag, "--access", "public"];
   if (options.dryRun) publishArgs.push("--dry-run");
