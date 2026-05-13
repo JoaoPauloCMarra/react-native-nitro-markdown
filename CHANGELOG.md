@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-05-13
+
+### Changed
+
+- Aligned the example app with current Expo SDK 55 dependency validation by updating `expo` to `~55.0.24`, `expo-build-properties` to `~55.0.14`, and `expo-system-ui` to `~55.0.18`.
+- Updated the manual npm publish workflow dispatch default tag to `v0.6.1`.
+- Aligned the podspec source tag with the repository's `v<version>` release tag format.
+
+### Fixed
+
+- iOS `MarkdownSession.replace()` now matches Android by rejecting invalid ranges and reporting clamped listener ranges for out-of-bounds replacements.
+- Publish verification now asserts the dry-run package tarball includes expected JS, native, generated, README, license, and Watchman files.
+
 ## [0.6.0] - 2026-05-07
 
 ### Added

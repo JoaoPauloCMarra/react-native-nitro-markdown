@@ -131,7 +131,13 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
             lock.lock()
             defer { lock.unlock() }
             guard from.isFinite && to.isFinite && from >= 0 && to >= 0 && from <= to else {
-                return Double(utf16Length(buffer))
+                throw NSError(
+                    domain: "NitroMarkdown",
+                    code: 2,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: "Invalid range: from=\(from) and to=\(to) must be finite, from must be >= 0, and to must be >= from"
+                    ]
+                )
             }
             let nsBuffer = NSMutableString(string: buffer)
             let length = nsBuffer.length
@@ -141,11 +147,8 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
             nsBuffer.replaceCharacters(in: NSRange(location: start, length: end - start), with: text)
             buffer = nsBuffer as String
             newLength = Double((buffer as NSString).length)
-            notifyFrom = from
-            notifyTo = from + Double((text as NSString).length)
-        }
-        if start == end && text.isEmpty {
-            return newLength
+            notifyFrom = Double(start)
+            notifyTo = Double(start + utf16Length(text))
         }
         notifyListeners(from: notifyFrom, to: notifyTo)
         return newLength

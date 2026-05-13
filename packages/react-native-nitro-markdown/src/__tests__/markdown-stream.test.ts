@@ -121,4 +121,32 @@ describe("MarkdownStream", () => {
       expect.objectContaining({ children: "replacement" }),
     );
   });
+
+  it("falls back to full session text for replace ranges inside existing text", () => {
+    const session = createSession({
+      allText: "hello world",
+      rangeText: "x",
+    });
+
+    act(() => {
+      TestRenderer.create(
+        React.createElement(MarkdownStream, {
+          session,
+          updateIntervalMs: 1,
+        }),
+      );
+    });
+
+    act(() => {
+      session.setAllText("hello brave world");
+      session.emit(6, 11);
+      jest.runOnlyPendingTimers();
+    });
+
+    expect(session.getTextRange).not.toHaveBeenCalled();
+    expect(session.getAllText).toHaveBeenCalled();
+    expect(markdownMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ children: "hello brave world" }),
+    );
+  });
 });

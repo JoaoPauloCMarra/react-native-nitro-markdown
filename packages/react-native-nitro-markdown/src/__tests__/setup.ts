@@ -99,9 +99,79 @@ const mockParser = {
   extractPlainTextWithOptions: jest.fn((text: string, _options: MockParserOptions) => text),
 };
 
+function createMockSession() {
+  let buffer = "";
+  let highlightPosition = 0;
+  const listeners = new Map<number, (from: number, to: number) => void>();
+  let nextListenerId = 0;
+
+  const notify = (from: number, to: number) => {
+    for (const listener of listeners.values()) {
+      listener(from, to);
+    }
+  };
+
+  return {
+    append: jest.fn((chunk: string) => {
+      const from = buffer.length;
+      buffer += chunk;
+      notify(from, buffer.length);
+      return buffer.length;
+    }),
+    clear: jest.fn(() => {
+      buffer = "";
+      highlightPosition = 0;
+      notify(0, 0);
+    }),
+    dispose: jest.fn(),
+    getAllText: jest.fn(() => buffer),
+    getLength: jest.fn(() => buffer.length),
+    getTextRange: jest.fn((from: number, to: number) => {
+      if (!Number.isFinite(from) || !Number.isFinite(to) || from < 0 || to < 0 || from > to) {
+        return "";
+      }
+      const start = Math.max(0, Math.min(Math.trunc(from), buffer.length));
+      const end = Math.max(start, Math.min(Math.trunc(to), buffer.length));
+      return buffer.slice(start, end);
+    }),
+    get highlightPosition() {
+      return highlightPosition;
+    },
+    set highlightPosition(value: number) {
+      highlightPosition = value;
+    },
+    reset: jest.fn((text: string) => {
+      buffer = text;
+      highlightPosition = 0;
+      notify(0, buffer.length);
+    }),
+    replace: jest.fn((from: number, to: number, text: string) => {
+      if (!Number.isFinite(from) || !Number.isFinite(to) || from < 0 || to < 0 || from > to) {
+        throw new Error(
+          `Invalid range: from=${from} and to=${to} must be finite, from must be >= 0, and to must be >= from`,
+        );
+      }
+      const start = Math.max(0, Math.min(Math.trunc(from), buffer.length));
+      const end = Math.max(start, Math.min(Math.trunc(to), buffer.length));
+      buffer = `${buffer.slice(0, start)}${text}${buffer.slice(end)}`;
+      notify(start, start + text.length);
+      return buffer.length;
+    }),
+    addListener: jest.fn((listener: (from: number, to: number) => void) => {
+      const id = nextListenerId++;
+      listeners.set(id, listener);
+      return () => {
+        listeners.delete(id);
+      };
+    }),
+  };
+}
+
 jest.mock("react-native-nitro-modules", () => ({
   NitroModules: {
-    createHybridObject: jest.fn(() => mockParser),
+    createHybridObject: jest.fn((name: string) =>
+      name === "MarkdownSession" ? createMockSession() : mockParser,
+    ),
   },
 }));
 

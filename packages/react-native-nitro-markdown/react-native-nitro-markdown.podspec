@@ -11,7 +11,7 @@ Pod::Spec.new do |s|
   s.authors      = package["author"]
 
   s.platforms    = { :ios => "15.1" }
-  s.source       = { :git => "https://github.com/JoaoPauloCMarra/react-native-nitro-markdown.git", :tag => "#{s.version}" }
+  s.source       = { :git => "https://github.com/JoaoPauloCMarra/react-native-nitro-markdown.git", :tag => "v#{s.version}" }
   s.module_name  = "NitroMarkdown"
 
   s.source_files = [
