@@ -1,0 +1,6 @@
+{
+  "ignore_dirs": [
+    "android/.cxx",
+    "android/build"
+  ]
+}
