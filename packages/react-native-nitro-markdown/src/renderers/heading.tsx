@@ -34,7 +34,11 @@ export const Heading: FC<HeadingProps> = ({ level, children, style }) => {
     level === 6 && styles.h6,
   ];
 
-  return <Text style={[...headingStyles, style]}>{children}</Text>;
+  return (
+    <Text style={[...headingStyles, style]} accessibilityRole="header">
+      {children}
+    </Text>
+  );
 };
 
 type HeadingStyles = ReturnType<typeof createStyles>;

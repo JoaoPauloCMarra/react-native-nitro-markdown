@@ -8,6 +8,9 @@ const config = getDefaultConfig(projectRoot);
 
 const defaultWatchFolders = config.watchFolders ?? [];
 const defaultBlockList = config.resolver.blockList;
+const normalizePathForRegex = (value) =>
+  value.replace(/[/\\^$*+?.()|[\]{}]/g, "\\$&");
+const monorepoRootPattern = normalizePathForRegex(monorepoRoot);
 
 // Keep Expo defaults and add the monorepo root.
 config.watchFolders = Array.from(
@@ -31,7 +34,7 @@ config.resolver.extraNodeModules = {
 
 config.resolver.blockList = [
   ...(Array.isArray(defaultBlockList) ? defaultBlockList : [defaultBlockList]).filter(Boolean),
-  /node_modules\/react-native-nitro-modules\/android\/\.cxx\/.*/,
+  new RegExp(`${monorepoRootPattern}[/\\\\].*[/\\\\]\\.cxx[/\\\\].*`),
 ];
 
 module.exports = config;

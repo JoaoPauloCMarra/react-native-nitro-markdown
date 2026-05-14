@@ -1,6 +1,6 @@
 # react-native-nitro-markdown
 
-[![npm](https://img.shields.io/badge/npm-v0.6.1-orange?style=flat-square)](https://www.npmjs.com/package/react-native-nitro-markdown)
+[![npm](https://img.shields.io/badge/npm-v0.6.2-orange?style=flat-square)](https://www.npmjs.com/package/react-native-nitro-markdown)
 [![license](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](./LICENSE)
 [![react-native](https://img.shields.io/badge/react--native-%3E%3D0.75-1677a4?style=flat-square)](https://reactnative.dev/)
 [![nitro-modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.35.6-black?style=flat-square)](https://github.com/mrousavy/nitro)
@@ -114,6 +114,7 @@ import { Markdown } from "react-native-nitro-markdown";
 | `onError` | `(error, phase, pluginName?) => void` | -- | Error handler for parse/plugin failures |
 | `highlightCode` | `boolean \| CodeHighlighter` | -- | Enable syntax highlighting for code blocks |
 | `tableOptions` | `{ minColumnWidth?; measurementStabilizeMs? }` | -- | Table layout tuning |
+| `imageOptions` | `UrlSafetyOptions` | `{ allowedProtocols: ["http:", "https:"] }` | Built-in image URL allowlist |
 | `virtualize` | `boolean \| "auto"` | `false` | Top-level block virtualization |
 | `virtualizationMinBlocks` | `number` | `40` | Block threshold for `"auto"` virtualization |
 | `virtualization` | `MarkdownVirtualizationOptions` | -- | FlatList tuning (windowSize, batching, etc.) |
@@ -163,6 +164,7 @@ session.append("Streaming content...");
 | `getTextRange` | `(from, to) => string` | Get substring range |
 | `addListener` | `(listener) => () => void` | Subscribe to mutation events; returns unsubscribe |
 | `highlightPosition` | `number` | Mutable cursor for stream highlight |
+| `dispose` | `() => void` | Release native listener and buffer storage; called automatically by `useMarkdownSession` on unmount |
 
 ### `useMarkdownSession()`
 
@@ -252,6 +254,29 @@ Renderers receive `EnhancedRendererProps` with `node`, `children`, and `Renderer
 | `html_inline`, `html_block` | Read raw HTML from `node.content` |
 
 Return `undefined` to fall back to the built-in renderer, or `null` to render nothing.
+
+TypeScript users can import specific renderer props for stronger IDE feedback:
+
+```tsx
+import type {
+  CustomRenderers,
+  ImageRendererProps,
+  LinkRendererProps,
+  MathRendererProps,
+} from "react-native-nitro-markdown";
+
+const renderers: CustomRenderers = {
+  link: ({ href, children }: LinkRendererProps) => (
+    <MyLink href={href}>{children}</MyLink>
+  ),
+  image: ({ url, alt }: ImageRendererProps) => (
+    <MyImage source={{ uri: url }} accessibilityLabel={alt} />
+  ),
+  math_block: ({ content }: MathRendererProps) => (
+    <MyMathBlock latex={content} />
+  ),
+};
+```
 
 #### Rendering HTML Nodes
 
@@ -473,6 +498,35 @@ const myHighlighter: CodeHighlighter = (language, code) => {
 ```
 
 Default link behavior: trims href, calls `onLinkPress`, validates scheme (`http:`, `https:`, `mailto:`, `tel:`, `sms:`), then opens via `Linking.openURL`. Relative URLs and anchors are ignored unless handled in `onLinkPress`.
+
+### Image URL Safety
+
+Built-in image rendering only loads `http:` and `https:` URLs by default. Use `imageOptions` to narrow the allowed hosts or, when your app owns the source content, add another protocol explicitly.
+
+```tsx
+import { Markdown, type UrlSafetyOptions } from "react-native-nitro-markdown";
+
+const imageOptions: UrlSafetyOptions = {
+  allowedProtocols: ["https:"],
+  allowedHosts: ["cdn.example.com", "images.example.com"],
+};
+
+<Markdown imageOptions={imageOptions}>{content}</Markdown>;
+```
+
+Relative image URLs are not loaded by the default renderer. Map them in a custom `image` renderer when your app has a trusted asset resolver.
+
+### TypeScript Surface
+
+The package exports public types for every commonly customized surface:
+
+- `MarkdownProps`, `MarkdownStreamProps`, `MarkdownParseCompleteResult`, `MarkdownErrorPhase`
+- `MarkdownNode`, `ParserOptions`, `AstTransform`, `MarkdownPlugin`
+- `CustomRenderers`, `CustomRendererPropsByNode`, and node-specific renderer props
+- `MarkdownTheme`, `PartialMarkdownTheme`, `NodeStyleOverrides`, `TableOptions`, `UrlSafetyOptions`
+- `MarkdownSession`, `CodeHighlighter`, `HighlightedToken`, `TokenType`
+
+Prefer typing shared `renderers`, `plugins`, `theme`, `tableOptions`, and `imageOptions` constants instead of relying on inference from inline JSX props. That keeps mistakes visible in IDEs and gives AI-assisted edits a stricter contract to follow.
 
 ## Supported Node Types
 

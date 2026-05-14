@@ -6,19 +6,49 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
 
     private var buffer = ""
     private var listeners: [UUID: (Double, Double) -> Void] = [:]
+    private var isDisposed = false
     private let lock = NSLock()
 
     var highlightPosition: Double {
-        get { lock.lock(); defer { lock.unlock() }; return _highlightPosition }
-        set { lock.lock(); defer { lock.unlock() }; _highlightPosition = newValue }
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            if isDisposed { return 0 }
+            return _highlightPosition
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            if isDisposed { return }
+            _highlightPosition = newValue
+        }
     }
     private var _highlightPosition: Double = 0
 
     var memorySize: Int {
+        lock.lock()
+        defer { lock.unlock() }
         return buffer.utf8.count
             + MemoryLayout<HybridMarkdownSession>.size
             + MemoryLayout<NSLock>.size
             + listeners.count * 128  // UUID key (16 bytes) + closure overhead estimate
+    }
+
+    deinit {
+        releaseStorage()
+    }
+
+    func dispose() {
+        releaseStorage()
+    }
+
+    private func releaseStorage() {
+        lock.lock()
+        defer { lock.unlock() }
+        listeners.removeAll()
+        buffer = ""
+        _highlightPosition = 0
+        isDisposed = true
     }
 
     private func utf16Length(_ value: String) -> Int {
@@ -43,6 +73,7 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
         do {
             lock.lock()
             defer { lock.unlock() }
+            try validateActiveLocked()
             let fromInt = utf16Length(buffer)
             try validateBufferSize(fromInt + utf16Length(chunk))
             buffer += chunk
@@ -58,6 +89,7 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
         do {
             lock.lock()
             defer { lock.unlock() }
+            try validateActiveLocked()
             buffer = ""
             _highlightPosition = 0
         }
@@ -67,12 +99,14 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
     func getAllText() throws -> String {
         lock.lock()
         defer { lock.unlock() }
+        try validateActiveLocked()
         return buffer
     }
 
     func getLength() throws -> Double {
         lock.lock()
         defer { lock.unlock() }
+        try validateActiveLocked()
         return Double(utf16Length(buffer))
     }
 
@@ -82,6 +116,7 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
         }
         lock.lock()
         defer { lock.unlock() }
+        try validateActiveLocked()
 
         let text = buffer as NSString
         let length = text.length
@@ -97,8 +132,9 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
     func addListener(listener: @escaping (Double, Double) -> Void) throws -> () -> Void {
         let id = UUID()
         lock.lock()
+        defer { lock.unlock() }
+        try validateActiveLocked()
         listeners[id] = listener
-        lock.unlock()
 
         return { [weak self] in
             guard let self else { return }
@@ -113,6 +149,7 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
         do {
             lock.lock()
             defer { lock.unlock() }
+            try validateActiveLocked()
             try validateBufferSize(utf16Length(text))
             buffer = text
             _highlightPosition = 0
@@ -130,6 +167,7 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
         do {
             lock.lock()
             defer { lock.unlock() }
+            try validateActiveLocked()
             guard from.isFinite && to.isFinite && from >= 0 && to >= 0 && from <= to else {
                 throw NSError(
                     domain: "NitroMarkdown",
@@ -152,6 +190,18 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
         }
         notifyListeners(from: notifyFrom, to: notifyTo)
         return newLength
+    }
+
+    private func validateActiveLocked() throws {
+        if isDisposed {
+            throw NSError(
+                domain: "NitroMarkdown",
+                code: 3,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "HybridMarkdownSession is destroyed"
+                ]
+            )
+        }
     }
 
     /// Notifies all registered listeners about a buffer change.

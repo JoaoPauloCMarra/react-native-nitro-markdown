@@ -24,7 +24,7 @@
     "expo-router": "~55.0.14",
     "expo-status-bar": "~55.0.6",
     "expo-system-ui": "~55.0.18",
-    "ratex-react-native": "0.1.4",
+    "ratex-react-native": "0.1.6",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-native": "0.83.6",

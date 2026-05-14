@@ -1,7 +1,28 @@
 import "./setup";
+import React from "react";
+import TestRenderer, { act } from "react-test-renderer";
+import { NitroModules } from "react-native-nitro-modules";
 import { createMarkdownSession } from "../MarkdownSession";
+import { useMarkdownSession } from "../use-markdown-stream";
+
+const createHybridObjectMock = NitroModules.createHybridObject as jest.Mock;
+
+function SessionOwner() {
+  useMarkdownSession();
+  return null;
+}
 
 describe("createMarkdownSession", () => {
+  let consoleErrorSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+  });
+
   it("creates a session without throwing", () => {
     expect(() => createMarkdownSession()).not.toThrow();
   });
@@ -31,5 +52,39 @@ describe("createMarkdownSession", () => {
     expect(() => session.replace(-1, 0, "!")).toThrow("Invalid range");
     expect(() => session.replace(2, 1, "!")).toThrow("Invalid range");
     expect(session.getAllText()).toBe("hello");
+  });
+
+  it("disposes hook-owned sessions on unmount", () => {
+    createHybridObjectMock.mockClear();
+
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+    act(() => {
+      renderer = TestRenderer.create(React.createElement(SessionOwner));
+    });
+
+    const session = createHybridObjectMock.mock.results[0].value;
+
+    act(() => {
+      renderer!.unmount();
+    });
+
+    expect(session.clear).toHaveBeenCalled();
+    expect(session.dispose).toHaveBeenCalled();
+  });
+
+  it("rejects session use after dispose", () => {
+    const session = createMarkdownSession();
+
+    session.append("hello");
+    session.dispose();
+
+    expect(() => session.append("!")).toThrow("destroyed");
+    expect(() => session.clear()).toThrow("destroyed");
+    expect(() => session.getAllText()).toThrow("destroyed");
+    expect(() => session.getLength()).toThrow("destroyed");
+    expect(() => session.getTextRange(0, 1)).toThrow("destroyed");
+    expect(() => session.reset("new")).toThrow("destroyed");
+    expect(() => session.replace(0, 0, "new")).toThrow("destroyed");
+    expect(() => session.addListener(() => undefined)).toThrow("destroyed");
   });
 });

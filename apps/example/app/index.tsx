@@ -36,6 +36,7 @@ import { COMPLEX_MARKDOWN } from "../markdown-test-data";
 import { EXAMPLE_COLORS } from "../theme";
 
 const REPEATED_MARKDOWN = COMPLEX_MARKDOWN.repeat(50);
+const NITRO_BENCHMARK_ITERATIONS = 12;
 const LATEX_BENCH_MARKDOWN = Array.from(
   { length: 18 },
   (_, index) => `
@@ -59,6 +60,9 @@ type LatexBenchmarkTarget = {
 
 type BenchmarkResults = {
   nitroTime: number;
+  nitroP50: number;
+  nitroP95: number;
+  nitroIterations: number;
   commonmarkTime: number;
   markdownItTime: number;
   markedTime: number;
@@ -123,6 +127,15 @@ const legacyMathRenderers: CustomRenderers = {
 };
 
 const NATIVE_RUNTIME_PLATFORMS = ["ios", "android"] as const;
+
+const getPercentile = (values: number[], percentile: number): number => {
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.ceil((percentile / 100) * sorted.length) - 1),
+  );
+  return sorted[index] ?? 0;
+};
 
 function collectNodeTypes(ast: MarkdownNode): Set<string> {
   const allTypes = new Set<string>();
@@ -697,12 +710,24 @@ export default function BenchmarkScreen() {
   const wait = (ms: number) =>
     new Promise((resolve) => setTimeout(resolve, ms));
 
-  const runNitroBenchmark = (): number => {
+  const runNitroBenchmark = () => {
     parseMarkdown("warmup");
-    const startNitro = global.performance.now();
-    parseMarkdown(REPEATED_MARKDOWN);
-    const endNitro = global.performance.now();
-    return endNitro - startNitro;
+    const samples: number[] = [];
+
+    for (let index = 0; index < NITRO_BENCHMARK_ITERATIONS; index++) {
+      const startNitro = global.performance.now();
+      parseMarkdown(REPEATED_MARKDOWN);
+      const endNitro = global.performance.now();
+      samples.push(endNitro - startNitro);
+    }
+
+    const total = samples.reduce((sum, sample) => sum + sample, 0);
+    return {
+      average: total / samples.length,
+      p50: getPercentile(samples, 50),
+      p95: getPercentile(samples, 95),
+      iterations: samples.length,
+    };
   };
 
   const measureLatexRenderer = (
@@ -752,7 +777,7 @@ export default function BenchmarkScreen() {
     try {
       await wait(100);
 
-      const nitroTime = runNitroBenchmark();
+      const nitroBenchmark = runNitroBenchmark();
       await wait(100);
 
       const commonmarkParser = new Parser();
@@ -783,7 +808,10 @@ export default function BenchmarkScreen() {
 
       const ratexTime = await measureLatexRenderer("ratex");
       setBenchmarkResults({
-        nitroTime,
+        nitroTime: nitroBenchmark.average,
+        nitroP50: nitroBenchmark.p50,
+        nitroP95: nitroBenchmark.p95,
+        nitroIterations: nitroBenchmark.iterations,
         commonmarkTime,
         markdownItTime,
         markedTime,
@@ -864,7 +892,16 @@ export default function BenchmarkScreen() {
               <View style={styles.metricRow}>
                 <Text style={styles.metricName}>Nitro C++</Text>
                 <Text style={[styles.metricValue, styles.metricPrimary]}>
-                  {benchmarkResults.nitroTime.toFixed(2)}ms
+                  {benchmarkResults.nitroTime.toFixed(2)}ms avg
+                </Text>
+              </View>
+              <View style={styles.metricRow}>
+                <Text style={styles.metricName}>
+                  Nitro p50 / p95 ({benchmarkResults.nitroIterations}x)
+                </Text>
+                <Text style={styles.metricValue}>
+                  {benchmarkResults.nitroP50.toFixed(2)} /{" "}
+                  {benchmarkResults.nitroP95.toFixed(2)}ms
                 </Text>
               </View>
               <View style={styles.metricRow}>

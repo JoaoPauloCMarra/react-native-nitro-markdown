@@ -102,8 +102,15 @@ const mockParser = {
 function createMockSession() {
   let buffer = "";
   let highlightPosition = 0;
+  let isDisposed = false;
   const listeners = new Map<number, (from: number, to: number) => void>();
   let nextListenerId = 0;
+
+  const assertActive = () => {
+    if (isDisposed) {
+      throw new Error("HybridMarkdownSession is destroyed");
+    }
+  };
 
   const notify = (from: number, to: number) => {
     for (const listener of listeners.values()) {
@@ -113,20 +120,34 @@ function createMockSession() {
 
   return {
     append: jest.fn((chunk: string) => {
+      assertActive();
       const from = buffer.length;
       buffer += chunk;
       notify(from, buffer.length);
       return buffer.length;
     }),
     clear: jest.fn(() => {
+      assertActive();
       buffer = "";
       highlightPosition = 0;
       notify(0, 0);
     }),
-    dispose: jest.fn(),
-    getAllText: jest.fn(() => buffer),
-    getLength: jest.fn(() => buffer.length),
+    dispose: jest.fn(() => {
+      isDisposed = true;
+      listeners.clear();
+      buffer = "";
+      highlightPosition = 0;
+    }),
+    getAllText: jest.fn(() => {
+      assertActive();
+      return buffer;
+    }),
+    getLength: jest.fn(() => {
+      assertActive();
+      return buffer.length;
+    }),
     getTextRange: jest.fn((from: number, to: number) => {
+      assertActive();
       if (!Number.isFinite(from) || !Number.isFinite(to) || from < 0 || to < 0 || from > to) {
         return "";
       }
@@ -138,14 +159,17 @@ function createMockSession() {
       return highlightPosition;
     },
     set highlightPosition(value: number) {
+      assertActive();
       highlightPosition = value;
     },
     reset: jest.fn((text: string) => {
+      assertActive();
       buffer = text;
       highlightPosition = 0;
       notify(0, buffer.length);
     }),
     replace: jest.fn((from: number, to: number, text: string) => {
+      assertActive();
       if (!Number.isFinite(from) || !Number.isFinite(to) || from < 0 || to < 0 || from > to) {
         throw new Error(
           `Invalid range: from=${from} and to=${to} must be finite, from must be >= 0, and to must be >= from`,
@@ -158,6 +182,7 @@ function createMockSession() {
       return buffer.length;
     }),
     addListener: jest.fn((listener: (from: number, to: number) => void) => {
+      assertActive();
       const id = nextListenerId++;
       listeners.set(id, listener);
       return () => {

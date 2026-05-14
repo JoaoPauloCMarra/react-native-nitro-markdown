@@ -19,8 +19,14 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
 
     @GuardedBy("lock")
     override var highlightPosition: Double = 0.0
-        get() = synchronized(lock) { field }
-        set(value) = synchronized(lock) { field = value }
+        get() = synchronized(lock) {
+            checkActiveLocked()
+            field
+        }
+        set(value) = synchronized(lock) {
+            checkActiveLocked()
+            field = value
+        }
         // No notify for highlighting to avoid flood
 
     override val memorySize: Long
@@ -30,6 +36,7 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
         val from: Int
         val to: Int
         synchronized(lock) {
+            checkActiveLocked()
             if (buffer.length + chunk.length > MAX_BUFFER_SIZE) {
                 throw IllegalArgumentException("Buffer size limit exceeded (max ${MAX_BUFFER_SIZE} chars)")
             }
@@ -43,6 +50,7 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
 
     override fun clear() {
         synchronized(lock) {
+            checkActiveLocked()
             buffer.clear()
             highlightPosition = 0.0
         }
@@ -51,12 +59,14 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
 
     override fun getAllText(): String {
         synchronized(lock) {
+            checkActiveLocked()
             return buffer.toString()
         }
     }
 
     override fun getLength(): Double {
         synchronized(lock) {
+            checkActiveLocked()
             return buffer.length.toDouble()
         }
     }
@@ -64,6 +74,7 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
     override fun getTextRange(from: Double, to: Double): String {
         if (!from.isFinite() || !to.isFinite() || from < 0.0 || to < 0.0 || from > to) return ""
         synchronized(lock) {
+            checkActiveLocked()
             val start = from.toLong().coerceIn(0L, buffer.length.toLong()).toInt()
             val end = to.toLong().coerceIn(start.toLong(), buffer.length.toLong()).toInt()
             return buffer.substring(start, end)
@@ -72,7 +83,7 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
 
     override fun addListener(listener: (Double, Double) -> Unit): () -> Unit {
         synchronized(lock) {
-            if (isDestroyed) throw IllegalStateException("HybridMarkdownSession is destroyed")
+            checkActiveLocked()
             val id = nextListenerId++
             listeners[id] = listener
             return { synchronized(lock) { listeners.remove(id) } }
@@ -81,6 +92,7 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
 
     override fun reset(text: String) {
         synchronized(lock) {
+            checkActiveLocked()
             if (text.length > MAX_BUFFER_SIZE) {
                 throw IllegalArgumentException("Buffer size limit exceeded (max $MAX_BUFFER_SIZE chars)")
             }
@@ -98,6 +110,7 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
         val notifyFrom: Double
         val notifyTo: Double
         synchronized(lock) {
+            checkActiveLocked()
             val start = from.toLong().coerceIn(0L, buffer.length.toLong()).toInt()
             val end = to.toLong().coerceIn(start.toLong(), buffer.length.toLong()).toInt()
             val newSize = buffer.length - (end - start) + text.length
@@ -125,6 +138,11 @@ class HybridMarkdownSession : HybridMarkdownSessionSpec() {
                 android.util.Log.e(TAG, "Listener callback threw an exception", e)
             }
         }
+    }
+
+    @GuardedBy("lock")
+    private fun checkActiveLocked() {
+        if (isDestroyed) throw IllegalStateException("HybridMarkdownSession is destroyed")
     }
 
     fun onDestroyed() {

@@ -1,4 +1,8 @@
-import { normalizeLinkHref, getAllowedExternalHref } from "../utils/link-security";
+import {
+  normalizeLinkHref,
+  getAllowedExternalHref,
+  getAllowedImageHref,
+} from "../utils/link-security";
 
 describe("normalizeLinkHref", () => {
   it("returns null for empty string", () => {
@@ -11,6 +15,10 @@ describe("normalizeLinkHref", () => {
 
   it("trims whitespace", () => {
     expect(normalizeLinkHref("  https://example.com  ")).toBe("https://example.com");
+  });
+
+  it("rejects control characters", () => {
+    expect(normalizeLinkHref("https://example.com/\nnext")).toBeNull();
   });
 
   it("returns non-empty href as-is", () => {
@@ -36,5 +44,42 @@ describe("getAllowedExternalHref", () => {
   it("rejects links without explicit protocol", () => {
     expect(getAllowedExternalHref("example.com")).toBeNull();
     expect(getAllowedExternalHref("/relative/path")).toBeNull();
+  });
+});
+
+describe("getAllowedImageHref", () => {
+  it.each(["https://example.com/image.png", "http://example.com/image.png"])(
+    "allows %s by default",
+    (href) => {
+      expect(getAllowedImageHref(href)).toBe(href);
+    },
+  );
+
+  it.each(["data:image/png;base64,abc", "file:///tmp/image.png", "javascript:alert(1)"])(
+    "rejects %s by default",
+    (href) => {
+      expect(getAllowedImageHref(href)).toBeNull();
+    },
+  );
+
+  it("allows configured protocols", () => {
+    expect(
+      getAllowedImageHref("data:image/png;base64,abc", {
+        allowedProtocols: ["https", "data"],
+      }),
+    ).toBe("data:image/png;base64,abc");
+  });
+
+  it("filters configured hosts", () => {
+    expect(
+      getAllowedImageHref("https://assets.example.com/image.png", {
+        allowedHosts: ["assets.example.com"],
+      }),
+    ).toBe("https://assets.example.com/image.png");
+    expect(
+      getAllowedImageHref("https://evil.example.com/image.png", {
+        allowedHosts: ["assets.example.com"],
+      }),
+    ).toBeNull();
   });
 });

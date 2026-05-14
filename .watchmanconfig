@@ -1,0 +1,10 @@
+{
+  "ignore_dirs": [
+    "apps/example/android/.cxx",
+    "apps/example/android/app/.cxx",
+    "apps/example/android/app/build",
+    "apps/example/android/build",
+    "packages/react-native-nitro-markdown/android/.cxx",
+    "packages/react-native-nitro-markdown/android/build"
+  ]
+}

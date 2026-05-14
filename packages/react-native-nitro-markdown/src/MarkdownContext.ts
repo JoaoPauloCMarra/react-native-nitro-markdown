@@ -12,6 +12,7 @@ import {
   type StylingStrategy,
 } from "./theme";
 import type { CodeHighlighter } from "./utils/code-highlight";
+import type { UrlSafetyOptions } from "./utils/link-security";
 
 export type NodeRendererProps = {
   node: MarkdownNode;
@@ -72,19 +73,60 @@ export type TaskListItemRendererProps = {
   checked: boolean;
 } & BaseCustomRendererProps;
 
-export type CustomRendererProps = {} & EnhancedRendererProps;
+export type MathRendererProps = {
+  content: string;
+} & BaseCustomRendererProps;
+
+export type CustomRendererProps = EnhancedRendererProps;
 
 export type LinkPressHandler = (
   href: string,
 ) => void | boolean | Promise<void | boolean>;
 
-export type CustomRenderer = (
-  props: EnhancedRendererProps,
-) => ReactNode | undefined;
+export type CustomRenderer<
+  Props extends EnhancedRendererProps = EnhancedRendererProps,
+> = (props: Props) => ReactNode | undefined;
 
-export type CustomRenderers = Partial<
-  Record<MarkdownNode["type"], CustomRenderer>
->;
+export type CustomRendererPropsByNode = {
+  document: CustomRendererProps;
+  heading: HeadingRendererProps;
+  paragraph: CustomRendererProps;
+  text: CustomRendererProps;
+  bold: CustomRendererProps;
+  italic: CustomRendererProps;
+  strikethrough: CustomRendererProps;
+  link: LinkRendererProps;
+  image: ImageRendererProps;
+  code_inline: InlineCodeRendererProps;
+  code_block: CodeBlockRendererProps;
+  blockquote: CustomRendererProps;
+  horizontal_rule: CustomRendererProps;
+  line_break: CustomRendererProps;
+  soft_break: CustomRendererProps;
+  table: CustomRendererProps;
+  table_head: CustomRendererProps;
+  table_body: CustomRendererProps;
+  table_row: CustomRendererProps;
+  table_cell: CustomRendererProps;
+  list: ListRendererProps;
+  list_item: CustomRendererProps;
+  task_list_item: TaskListItemRendererProps;
+  math_inline: MathRendererProps;
+  math_block: MathRendererProps;
+  html_block: CustomRendererProps;
+  html_inline: CustomRendererProps;
+};
+
+export type CustomRenderers = Partial<{
+  [Type in MarkdownNode["type"]]: CustomRenderer<
+    CustomRendererPropsByNode[Type]
+  >;
+}>;
+
+export type TableOptions = {
+  minColumnWidth?: number;
+  measurementStabilizeMs?: number;
+};
 
 export type MarkdownContextValue = {
   renderers: CustomRenderers;
@@ -93,10 +135,8 @@ export type MarkdownContextValue = {
   stylingStrategy: StylingStrategy;
   onLinkPress?: LinkPressHandler;
   highlightCode?: boolean | CodeHighlighter;
-  tableOptions?: {
-    minColumnWidth?: number;
-    measurementStabilizeMs?: number;
-  };
+  tableOptions?: TableOptions;
+  imageOptions?: UrlSafetyOptions;
 };
 
 export const MarkdownContext = createContext<MarkdownContextValue>({

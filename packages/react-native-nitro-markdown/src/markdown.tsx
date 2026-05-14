@@ -31,9 +31,11 @@ import type { ParserOptions } from "./Markdown.nitro";
 import {
   MarkdownContext,
   useMarkdownContext,
+  type CustomRenderer,
   type CustomRenderers,
   type LinkPressHandler,
   type NodeRendererProps,
+  type TableOptions,
 } from "./MarkdownContext";
 import { Blockquote } from "./renderers/blockquote";
 import { CodeBlock, InlineCode } from "./renderers/code";
@@ -55,6 +57,7 @@ import {
   type StylingStrategy,
 } from "./theme";
 import type { CodeHighlighter } from "./utils/code-highlight";
+import type { UrlSafetyOptions } from "./utils/link-security";
 
 function hashString(str: string): number {
   let hash = 0;
@@ -142,6 +145,14 @@ export type MarkdownPlugin = {
    * Optional AST postprocessor executed after native parsing.
    */
   afterParse?: AstTransform;
+};
+
+export type MarkdownErrorPhase = "parse" | "before-plugin" | "after-plugin";
+
+export type MarkdownParseCompleteResult = {
+  raw: string;
+  ast: MarkdownNode;
+  text: string;
 };
 
 const isMarkdownNode = (value: unknown): value is MarkdownNode => {
@@ -355,11 +366,7 @@ export type MarkdownProps = {
   /**
    * Callback fired when parsing completes.
    */
-  onParseComplete?: (result: {
-    raw: string;
-    ast: MarkdownNode;
-    text: string;
-  }) => void;
+  onParseComplete?: (result: MarkdownParseCompleteResult) => void;
   /**
    * Called when a parse error or plugin error occurs.
    * @param error - The thrown error.
@@ -368,7 +375,7 @@ export type MarkdownProps = {
    */
   onError?: (
     error: Error,
-    phase: "parse" | "before-plugin" | "after-plugin",
+    phase: MarkdownErrorPhase,
     pluginName?: string,
   ) => void;
   /**
@@ -426,10 +433,8 @@ export type MarkdownProps = {
   /**
    * Optional configuration for the table renderer.
    */
-  tableOptions?: {
-    minColumnWidth?: number;
-    measurementStabilizeMs?: number;
-  };
+  tableOptions?: TableOptions;
+  imageOptions?: UrlSafetyOptions;
   /**
    * Enable built-in syntax highlighting for code blocks.
    * Pass `true` to use the built-in tokenizer, or a custom highlighter function.
@@ -457,6 +462,7 @@ export const Markdown: FC<MarkdownProps> = ({
   virtualizationMinBlocks = 40,
   virtualization,
   tableOptions,
+  imageOptions,
   highlightCode,
 }) => {
   const parserOptionGfm = options?.gfm;
@@ -563,6 +569,7 @@ export const Markdown: FC<MarkdownProps> = ({
       stylingStrategy,
       onLinkPress,
       tableOptions,
+      imageOptions,
       highlightCode,
     }),
     [
@@ -572,6 +579,7 @@ export const Markdown: FC<MarkdownProps> = ({
       stylingStrategy,
       onLinkPress,
       tableOptions,
+      imageOptions,
       highlightCode,
     ],
   );
@@ -625,7 +633,7 @@ export const Markdown: FC<MarkdownProps> = ({
               virtualization?.updateCellsBatchingPeriod ?? 16
             }
             removeClippedSubviews={
-              virtualization?.removeClippedSubviews ?? true
+              virtualization?.removeClippedSubviews ?? Platform.OS === "android"
             }
             bounces={false}
             alwaysBounceVertical={false}
@@ -747,7 +755,7 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
     return elements;
   };
 
-  const customRenderer = renderers[node.type];
+  const customRenderer = renderers[node.type] as CustomRenderer | undefined;
   if (customRenderer) {
     const childrenRendered = renderChildren(
       node.children,

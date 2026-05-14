@@ -19,7 +19,15 @@ export function useMarkdownSession() {
   useEffect(() => {
     const session = sessionRef.current!;
     return () => {
-      session.clear();
+      try {
+        session.clear();
+      } finally {
+        try {
+          session.dispose();
+        } finally {
+          sessionRef.current = null;
+        }
+      }
     };
   }, []);
 

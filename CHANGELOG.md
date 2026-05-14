@@ -5,18 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.1] - 2026-05-13
+## [0.6.2] - 2026-05-14
 
 ### Changed
 
+- Aligned `nitrogen` with `react-native-nitro-modules` at `0.35.6` and updated the example app to `ratex-react-native` `0.1.6`.
+- Example app parser benchmarks now report Nitro average, p50, and p95 across repeated runs.
 - Aligned the example app with current Expo SDK 55 dependency validation by updating `expo` to `~55.0.24`, `expo-build-properties` to `~55.0.14`, and `expo-system-ui` to `~55.0.18`.
-- Updated the manual npm publish workflow dispatch default tag to `v0.6.1`.
+- Updated the manual npm publish workflow dispatch default tag to `v0.6.2`.
 - Aligned the podspec source tag with the repository's `v<version>` release tag format.
+- Exported stronger public TypeScript types for renderer props, table options, image URL safety options, parse-complete results, and parse error phases.
+- Expanded README usage, image safety, session lifecycle, and TypeScript guidance for the current API surface.
 
 ### Fixed
 
+- `useMarkdownSession` now disposes its native session on unmount after clearing the buffer.
+- `MarkdownStream` now tolerates native subscription cleanup failures and avoids scheduling state updates after unmount.
+- iOS `MarkdownSession` now locks `memorySize` reads and clears listener/buffer storage through `dispose()`.
 - iOS `MarkdownSession.replace()` now matches Android by rejecting invalid ranges and reporting clamped listener ranges for out-of-bounds replacements.
+- Built-in renderers now expose basic accessibility semantics for headings, links, images, and task items.
+- Built-in image rendering now rejects unsafe URL protocols by default and supports explicit protocol/host allowlists.
+- Virtualized markdown now defaults `removeClippedSubviews` to Android-only unless explicitly configured.
 - Publish verification now asserts the dry-run package tarball includes expected JS, native, generated, README, license, and Watchman files.
+- The example Metro config and root Watchman config now ignore Android `.cxx` scratch directories created during native CMake builds.
 
 ## [0.6.0] - 2026-05-07
 
