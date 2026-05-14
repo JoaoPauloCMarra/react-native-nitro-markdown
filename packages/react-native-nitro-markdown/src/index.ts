@@ -15,6 +15,8 @@ export type {
   MarkdownProps,
   AstTransform,
   MarkdownPlugin,
+  MarkdownErrorPhase,
+  MarkdownParseCompleteResult,
   MarkdownVirtualizationOptions,
 } from "./markdown";
 export { MarkdownStream } from "./markdown-stream";
@@ -35,8 +37,11 @@ export type {
   InlineCodeRendererProps,
   ListRendererProps,
   TaskListItemRendererProps,
+  MathRendererProps,
   LinkPressHandler,
   MarkdownContextValue,
+  CustomRendererPropsByNode,
+  TableOptions,
 } from "./MarkdownContext";
 
 export {
@@ -72,3 +77,4 @@ export type {
   CodeHighlighter,
 } from "./utils/code-highlight";
 export { defaultHighlighter } from "./utils/code-highlight";
+export type { UrlSafetyOptions } from "./utils/link-security";

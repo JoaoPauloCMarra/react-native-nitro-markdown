@@ -58,6 +58,15 @@ const resolveStreamText = ({
   return session.getAllText();
 };
 
+function warnStreamError(message: string, error: unknown): void {
+  if (!__DEV__) return;
+
+  const warn = Reflect.get(console, "warn");
+  if (typeof warn === "function") {
+    warn.call(console, message, error);
+  }
+}
+
 export type MarkdownStreamProps = {
   /**
    * The active MarkdownSession to stream content from.
@@ -124,11 +133,19 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
   const forceFullSyncRef = useRef(false);
   const updateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rafRef = useRef<number | null>(null);
+  const mountedRef = useRef(true);
   const allowIncremental = incrementalParsing && !hasBeforeParsePlugins;
 
   useEffect(() => {
     renderStateRef.current = renderState;
   }, [renderState]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     const initialText = session.getAllText();
@@ -185,9 +202,11 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
         ast: nextAst,
       };
       renderStateRef.current = nextState;
+      if (!mountedRef.current) return;
 
       if (useTransitionUpdates) {
         startTransition(() => {
+          if (!mountedRef.current) return;
           setRenderState(nextState);
         });
       } else {
@@ -208,28 +227,41 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
       }
     };
 
-    const unsubscribe = session.addListener((from, to) => {
-      const nextFrom = normalizeOffset(from);
-      const nextTo = normalizeOffset(to);
+    let unsubscribe: (() => void) | null = null;
 
-      if (nextFrom === null || nextTo === null || nextTo < nextFrom) {
-        forceFullSyncRef.current = true;
-      } else {
-        const currentFrom = pendingFromRef.current;
-        const currentTo = pendingToRef.current;
+    try {
+      unsubscribe = session.addListener((from, to) => {
+        const nextFrom = normalizeOffset(from);
+        const nextTo = normalizeOffset(to);
 
-        pendingFromRef.current =
-          currentFrom === null ? nextFrom : Math.min(currentFrom, nextFrom);
-        pendingToRef.current =
-          currentTo === null ? nextTo : Math.max(currentTo, nextTo);
-      }
+        if (nextFrom === null || nextTo === null || nextTo < nextFrom) {
+          forceFullSyncRef.current = true;
+        } else {
+          const currentFrom = pendingFromRef.current;
+          const currentTo = pendingToRef.current;
 
-      pendingUpdateRef.current = true;
-      scheduleFlush();
-    });
+          pendingFromRef.current =
+            currentFrom === null ? nextFrom : Math.min(currentFrom, nextFrom);
+          pendingToRef.current =
+            currentTo === null ? nextTo : Math.max(currentTo, nextTo);
+        }
+
+        pendingUpdateRef.current = true;
+        scheduleFlush();
+      });
+    } catch (error) {
+      warnStreamError("[NitroMarkdown] Failed to subscribe to stream:", error);
+    }
 
     return () => {
-      unsubscribe();
+      try {
+        unsubscribe?.();
+      } catch (error) {
+        warnStreamError(
+          "[NitroMarkdown] Failed to unsubscribe from stream:",
+          error,
+        );
+      }
       if (updateTimerRef.current) {
         clearTimeout(updateTimerRef.current);
         updateTimerRef.current = null;

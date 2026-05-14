@@ -59,7 +59,11 @@ export const Link: FC<LinkProps> = ({ href, children, style }) => {
   };
 
   return (
-    <Text style={[styles.link, style]} onPress={handlePress}>
+    <Text
+      style={[styles.link, style]}
+      onPress={handlePress}
+      accessibilityRole="link"
+    >
       {children}
     </Text>
   );

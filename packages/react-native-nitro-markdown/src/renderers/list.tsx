@@ -71,7 +71,11 @@ export const TaskListItem: FC<TaskListItemProps> = ({
     createTaskListItemStyles,
   );
   return (
-    <View style={[styles.taskListItem, style]}>
+    <View
+      style={[styles.taskListItem, style]}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+    >
       <View
         style={[styles.taskCheckbox, checked && styles.taskCheckboxChecked]}
       >

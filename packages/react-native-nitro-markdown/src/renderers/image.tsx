@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { parseMarkdownWithOptions, type MarkdownNode } from "../headless";
 import { useMarkdownContext } from "../MarkdownContext";
+import { getAllowedImageHref } from "../utils/link-security";
 import type { NodeRendererProps } from "../MarkdownContext";
 
 const renderInlineContent = (
@@ -46,7 +47,11 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [aspectRatio, setAspectRatio] = useState<number | undefined>(undefined);
-  const { theme } = useMarkdownContext();
+  const { theme, imageOptions } = useMarkdownContext();
+  const allowedImageHref = useMemo(
+    () => getAllowedImageHref(url, imageOptions),
+    [imageOptions, url],
+  );
 
   const styles = useMemo(
     () =>
@@ -113,10 +118,18 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
   useEffect(() => {
     let isMounted = true;
     setLoading(true);
-    setError(false);
+    setError(!allowedImageHref);
     setAspectRatio(undefined);
 
-    const picsumMatch = url.match(/picsum\.photos\/.*\/(\d+)\/(\d+)/);
+    if (!allowedImageHref) {
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    const picsumMatch = allowedImageHref.match(
+      /picsum\.photos\/.*\/(\d+)\/(\d+)/,
+    );
     if (picsumMatch) {
       const w = parseInt(picsumMatch[1], 10);
       const h = parseInt(picsumMatch[2], 10);
@@ -129,7 +142,7 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
     }
 
     RNImage.getSize(
-      url,
+      allowedImageHref,
       (width, height) => {
         if (isMounted && width > 0 && height > 0) {
           setAspectRatio(width / height);
@@ -149,7 +162,7 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
     return () => {
       isMounted = false;
     };
-  }, [url]);
+  }, [allowedImageHref]);
 
   const altContent = useMemo(() => {
     if (!alt || !Renderer) return null;
@@ -180,9 +193,16 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
     return <Text style={styles.imageErrorText}>{alt}</Text>;
   }, [alt, Renderer, styles.imageErrorText]);
 
-  if (error) {
+  const accessibilityLabel = alt || title;
+
+  if (error || !allowedImageHref) {
     return (
-      <View style={[styles.imageError, style]}>
+      <View
+        style={[styles.imageError, style]}
+        accessible={Boolean(accessibilityLabel)}
+        accessibilityRole={accessibilityLabel ? "image" : undefined}
+        accessibilityLabel={accessibilityLabel}
+      >
         <View
           style={{
             flexDirection: "row",
@@ -210,9 +230,12 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
         </View>
       ) : null}
       <RNImage
-        source={{ uri: url }}
+        source={{ uri: allowedImageHref ?? "" }}
         style={[styles.image, loading && !aspectRatio && styles.imageHidden]}
         resizeMode="contain"
+        accessible={Boolean(accessibilityLabel)}
+        accessibilityRole={accessibilityLabel ? "image" : undefined}
+        accessibilityLabel={accessibilityLabel}
         onLoad={() => {
           setLoading(false);
         }}

@@ -52,15 +52,18 @@ function createSession({
 
 describe("MarkdownStream", () => {
   let consoleErrorSpy: jest.SpyInstance;
+  let consoleWarnSpy: jest.SpyInstance;
 
   beforeEach(() => {
     jest.useFakeTimers();
     markdownMock.mockClear();
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
   });
 
   afterEach(() => {
     consoleErrorSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
     jest.useRealTimers();
   });
 
@@ -148,5 +151,44 @@ describe("MarkdownStream", () => {
     expect(markdownMock).toHaveBeenLastCalledWith(
       expect.objectContaining({ children: "hello brave world" }),
     );
+  });
+
+  it("does not throw when a destroyed session rejects subscription", () => {
+    const session = createSession({
+      allText: "hello",
+      rangeText: "",
+    });
+    session.addListener = jest.fn(() => {
+      throw new Error("destroyed");
+    });
+
+    expect(() => {
+      act(() => {
+        TestRenderer.create(React.createElement(MarkdownStream, { session }));
+      });
+    }).not.toThrow();
+  });
+
+  it("does not throw when native unsubscription fails during cleanup", () => {
+    const session = createSession({
+      allText: "hello",
+      rangeText: "",
+    });
+    const unsubscribe = jest.fn(() => {
+      throw new Error("unsubscribe failed");
+    });
+    session.addListener = jest.fn(() => unsubscribe);
+
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+    act(() => {
+      renderer = TestRenderer.create(React.createElement(MarkdownStream, { session }));
+    });
+
+    expect(() => {
+      act(() => {
+        renderer!.unmount();
+      });
+    }).not.toThrow();
+    expect(unsubscribe).toHaveBeenCalled();
   });
 });
