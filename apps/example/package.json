@@ -9,6 +9,10 @@
     "android": "env -u NO_COLOR expo run:android",
     "prebuild": "env -u NO_COLOR expo prebuild",
     "prebuild:clean": "env -u NO_COLOR expo prebuild --clean",
+    "doctor": "env -u NO_COLOR bunx expo-doctor",
+    "lint": "bunx eslint app components hooks --max-warnings=0",
+    "android:assemble": "cd android && ./gradlew :app:assembleDebug",
+    "ios:build": "cd ios && pod install && xcodebuild -workspace NitroMarkdown.xcworkspace -scheme NitroMarkdown -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

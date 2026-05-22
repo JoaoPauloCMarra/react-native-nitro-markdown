@@ -113,41 +113,55 @@ const HtmlAwareParagraph = ({ node, Renderer }: CustomRendererProps) => {
     return undefined;
   }
 
-  let spanDepth = 0;
-  const renderedChildren = children.map((child, index) => {
+  const { renderedChildren } = children.reduce<{
+    spanDepth: number;
+    renderedChildren: ReactNode[];
+  }>((state, child, index) => {
     if (child.type === "html_inline") {
       const content = child.content ?? "";
       if (/^<span\b/i.test(content)) {
-        spanDepth += 1;
-        return null;
+        return {
+          spanDepth: state.spanDepth + 1,
+          renderedChildren: [...state.renderedChildren, null],
+        };
       }
       if (/^<\/span>/i.test(content)) {
-        spanDepth = Math.max(0, spanDepth - 1);
-        return null;
+        return {
+          spanDepth: Math.max(0, state.spanDepth - 1),
+          renderedChildren: [...state.renderedChildren, null],
+        };
       }
     }
 
     if (child.type === "text") {
-      return (
-        <Text
-          key={`${child.type}-${index}`}
-          style={spanDepth > 0 ? customStyles.htmlInline : undefined}
-        >
-          {child.content}
-        </Text>
-      );
+      return {
+        spanDepth: state.spanDepth,
+        renderedChildren: [
+          ...state.renderedChildren,
+          <Text
+            key={`${child.type}-${index}`}
+            style={state.spanDepth > 0 ? customStyles.htmlInline : undefined}
+          >
+            {child.content}
+          </Text>,
+        ],
+      };
     }
 
-    return (
-      <Renderer
-        key={`${child.type}-${index}`}
-        node={child}
-        depth={0}
-        inListItem={false}
-        parentIsText={true}
-      />
-    );
-  });
+    return {
+      spanDepth: state.spanDepth,
+      renderedChildren: [
+        ...state.renderedChildren,
+        <Renderer
+          key={`${child.type}-${index}`}
+          node={child}
+          depth={0}
+          inListItem={false}
+          parentIsText={true}
+        />,
+      ],
+    };
+  }, { spanDepth: 0, renderedChildren: [] });
 
   return <Text style={customStyles.htmlParagraph}>{renderedChildren}</Text>;
 };

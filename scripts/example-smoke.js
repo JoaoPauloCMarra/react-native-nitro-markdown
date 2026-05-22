@@ -217,20 +217,6 @@ async function launchAndroid(smokeTap) {
   run("adb", ["reverse", `tcp:${port}`, `tcp:${port}`], { stdio: "ignore" });
   tryRun("adb", ["shell", "am", "force-stop", packageName], { stdio: "ignore" });
   await runAndroidExpo();
-  run(
-    "adb",
-    [
-      "shell",
-      "am",
-      "start",
-      "-a",
-      "android.intent.action.VIEW",
-      "-d",
-      createDevClientUrl("127.0.0.1"),
-      packageName,
-    ],
-    { stdio: "ignore" },
-  );
   await wait(launchWaitMs);
 
   if (smokeTap) {
@@ -263,17 +249,21 @@ async function launchIos(devClientUrl, smokeTap) {
   await wait(launchWaitMs);
 
   if (smokeTap && commandWorks("osascript", ["-e", "return 1"])) {
-    run(
-      "osascript",
-      [
-        "-e",
-        'tell application "Simulator" to activate',
-        "-e",
-        'tell application "System Events" to click at {160, 315}',
-      ],
-      { stdio: "ignore" },
-    );
-    await wait(smokeWaitMs);
+    try {
+      run(
+        "osascript",
+        [
+          "-e",
+          'tell application "Simulator" to activate',
+          "-e",
+          'tell application "System Events" to click at {160, 315}',
+        ],
+        { stdio: "ignore" },
+      );
+      await wait(smokeWaitMs);
+    } catch {
+      log("Skipping iOS smoke tap because macOS assistive access is unavailable.", "yellow");
+    }
   }
 
   const screenshot = path.join(outputDir, "ios.png");

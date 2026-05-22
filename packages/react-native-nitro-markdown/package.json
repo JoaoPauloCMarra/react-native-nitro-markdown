@@ -57,6 +57,7 @@
     "clean": "rimraf lib nitrogen/generated",
     "codegen": "nitrogen --logLevel=\"debug\"",
     "lint": "bunx eslint src --max-warnings=0 --ignore-pattern 'src/**/__tests__/**' --ignore-pattern 'src/**/*.nitro.ts'",
+    "lint:fix": "bunx eslint src --fix --ignore-pattern 'src/**/__tests__/**' --ignore-pattern 'src/**/*.nitro.ts'",
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:coverage": "jest --coverage",

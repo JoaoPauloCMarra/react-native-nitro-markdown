@@ -78,6 +78,9 @@ jobs:
           }
           NODE
 
+      - name: Release preflight
+        run: bun run release:preflight
+
       - name: Select npm dist tag
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then

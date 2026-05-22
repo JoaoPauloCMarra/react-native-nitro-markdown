@@ -591,8 +591,12 @@ The `apps/example` directory contains a full demo app with these screens:
 
 ## Release Checks
 
-- `bun run harness` runs lint, typecheck, JS coverage, benchmark checks, and C++ coverage.
-- `bun run publish-package -- --dry-run --yes` validates release docs, runs publish verification, builds the package, and performs an npm dry run.
+- `bun run check` runs the package lint, typecheck, unit tests, and C++ tests.
+- `bun run check:ci` runs the full harness: lint, typecheck, JS coverage, benchmark checks, and C++ coverage.
+- `bun run example:check` runs Expo Doctor, example lint, and example typecheck.
+- `bun run release:preflight` runs CI checks, example checks, package audit, and publish dry-run.
+- `bun run example:prebuild`, `bun run example:android:assemble`, and `bun run example:ios:build` verify generated native example projects.
+- `bun run example:smoke:android` and `bun run example:smoke:ios` launch the native example app smoke paths.
 
 ## Contributing
 

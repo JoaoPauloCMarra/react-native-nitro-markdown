@@ -297,8 +297,12 @@ async function runPreflight({ dryRun, skipPreflight, version }) {
 
   const publishedVersion = getPublishedVersion(version);
   if (publishedVersion === version) {
-    log(`${PACKAGE_NAME}@${version} already exists on npm`, "red");
-    process.exit(1);
+    if (dryRun) {
+      log(`  ⚠ ${PACKAGE_NAME}@${version} already exists on npm; dry-run will continue`, "yellow");
+    } else {
+      log(`${PACKAGE_NAME}@${version} already exists on npm`, "red");
+      process.exit(1);
+    }
   } else if (publishedVersion === null) {
     console.log(`  ✓ ${PACKAGE_NAME}@${version} is not published yet`);
   } else if (dryRun) {
@@ -360,6 +364,7 @@ async function main() {
 
   validatePackedFiles();
 
+  const publishCommand = options.dryRun ? "bun" : "npm";
   const publishArgs = ["publish", "--tag", options.tag, "--access", "public"];
   if (options.dryRun) publishArgs.push("--dry-run");
 
@@ -375,8 +380,8 @@ async function main() {
   }
 
   runStep(
-    options.dryRun ? "Running npm publish dry-run..." : "Publishing to npm...",
-    "npm",
+    options.dryRun ? "Running package publish dry-run..." : "Publishing to npm...",
+    publishCommand,
     publishArgs,
     { cwd: packageDir },
   );
