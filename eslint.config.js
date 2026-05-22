@@ -1,4 +1,4 @@
-const config = require("eslint-config-expo-magic");
+const config = require("eslint-config-expo/flat");
 
 module.exports = [
   ...(Array.isArray(config) ? config : [config]),

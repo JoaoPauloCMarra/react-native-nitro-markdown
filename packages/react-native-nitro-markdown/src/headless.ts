@@ -15,44 +15,49 @@ import type { MarkdownParser, ParserOptions } from "./Markdown.nitro";
 
 export type { ParserOptions } from "./Markdown.nitro";
 
+export type MarkdownNodeType =
+  | "document"
+  | "heading"
+  | "paragraph"
+  | "text"
+  | "bold"
+  | "italic"
+  | "strikethrough"
+  | "link"
+  | "image"
+  | "code_inline"
+  | "code_block"
+  | "blockquote"
+  | "horizontal_rule"
+  | "line_break"
+  | "soft_break"
+  | "table"
+  | "table_head"
+  | "table_body"
+  | "table_row"
+  | "table_cell"
+  | "list"
+  | "list_item"
+  | "task_list_item"
+  | "math_inline"
+  | "math_block"
+  | "html_block"
+  | "html_inline";
+
+export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
+export type TableCellAlign = "left" | "center" | "right";
+
 /**
  * Represents a node in the Markdown AST (Abstract Syntax Tree).
  * Each node has a type and optional properties depending on the node type.
  */
 export type MarkdownNode = {
   /** The type of markdown element this node represents. Used to decide how to render the node. */
-  type:
-    | "document"
-    | "heading"
-    | "paragraph"
-    | "text"
-    | "bold"
-    | "italic"
-    | "strikethrough"
-    | "link"
-    | "image"
-    | "code_inline"
-    | "code_block"
-    | "blockquote"
-    | "horizontal_rule"
-    | "line_break"
-    | "soft_break"
-    | "table"
-    | "table_head"
-    | "table_body"
-    | "table_row"
-    | "table_cell"
-    | "list"
-    | "list_item"
-    | "task_list_item"
-    | "math_inline"
-    | "math_block"
-    | "html_block"
-    | "html_inline";
+  type: MarkdownNodeType;
   /** Text content for text, code, and similar nodes. */
   content?: string;
   /** Heading level (1-6) for heading nodes. */
-  level?: number;
+  level?: HeadingLevel;
   /** URL for link and image nodes. */
   href?: string;
   /** Title attribute for link and image nodes. */
@@ -70,7 +75,7 @@ export type MarkdownNode = {
   /** Whether a table cell is part of the header row. */
   isHeader?: boolean;
   /** Text alignment for table cells: 'left', 'center', or 'right'. */
-  align?: string;
+  align?: TableCellAlign;
   /** Source start offset in original markdown text (when provided by native parser). */
   beg?: number;
   /** Source end offset in original markdown text (when provided by native parser). */
@@ -86,7 +91,6 @@ const createEmptyDocument = (): MarkdownNode => ({
 
 function reportNativeParserFailure(methodName: string, error?: unknown): void {
   if (__DEV__) {
-    // eslint-disable-next-line no-console
     console.error(
       `[NitroMarkdown] ${methodName}: native parser failed.`,
       error,
@@ -100,7 +104,6 @@ try {
     NitroModules.createHybridObject<MarkdownParser>("MarkdownParser");
 } catch (e) {
   if (__DEV__) {
-    // eslint-disable-next-line no-console
     console.error("[NitroMarkdown] Failed to create native MarkdownParser:", e);
   }
 }
@@ -143,7 +146,6 @@ export function parseMarkdown(
   }
 
   if (__DEV__) {
-    // eslint-disable-next-line no-console
     console.error(
       "[NitroMarkdown] parseMarkdown: native parser unavailable — check installation.",
     );
@@ -175,7 +177,6 @@ export function parseMarkdownWithOptions(
   }
 
   if (__DEV__) {
-    // eslint-disable-next-line no-console
     console.error(
       "[NitroMarkdown] parseMarkdownWithOptions: native parser unavailable — check installation.",
     );

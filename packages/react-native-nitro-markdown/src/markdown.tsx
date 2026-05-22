@@ -93,7 +93,6 @@ function safeOnError<P extends string>(
     );
   } catch (callbackError) {
     if (__DEV__) {
-      // eslint-disable-next-line no-console
       console.warn(
         "[NitroMarkdown] onError callback threw an exception:",
         callbackError,

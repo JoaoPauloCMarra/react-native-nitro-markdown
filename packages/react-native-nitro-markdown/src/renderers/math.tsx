@@ -29,7 +29,6 @@ try {
   RaTeXViewComponent = ratexModule.RaTeXView ?? null;
 } catch {
   if (__DEV__) {
-    // eslint-disable-next-line no-console
     console.warn(
       "[NitroMarkdown] ratex-react-native not found — math will render as plain text.",
     );

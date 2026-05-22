@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-05-22
+
+### Added
+
+- Added a tracked Expo config plugin that removes duplicate iOS `-lc++` linker flags during example prebuilds.
+- Exported `MarkdownNodeType`, `HeadingLevel`, and `TableCellAlign` for stricter AST typing in consumer code.
+
+### Changed
+
+- Upgraded the example app to Expo SDK 56 with React Native `0.85.3`, React `19.2.3`, TypeScript `6.0.3`, and Expo Router `56.2.5`.
+- Aligned `nitrogen` and `react-native-nitro-modules` at `0.35.7`.
+- Updated native release baselines for Expo 56: iOS deployment target `16.4`, Android compile SDK `36`, and Android target SDK `36`.
+- Replaced the Expo 55 lint preset with Expo SDK 56's flat ESLint config.
+- Removed unused example Expo modules and plugins so the demo no longer declares unnecessary native permissions.
+- Updated release tooling to use Bun `1.3.14`.
+- Updated README badges, installation guidance, and TypeScript examples to match the current package metadata.
+
+### Fixed
+
+- Removed stale lint suppressions that became warnings under the Expo 56 lint stack.
+- Cleaned the example dependency graph so Expo Doctor passes without duplicate native module warnings.
+- Removed local shell color-env warnings from example run scripts.
+
 ## [0.6.2] - 2026-05-14
 
 ### Changed
