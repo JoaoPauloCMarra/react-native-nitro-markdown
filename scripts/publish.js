@@ -365,8 +365,9 @@ async function main() {
   validatePackedFiles();
 
   const publishCommand = options.dryRun ? "bun" : "npm";
-  const publishArgs = ["publish", "--tag", options.tag, "--access", "public"];
-  if (options.dryRun) publishArgs.push("--dry-run");
+  const publishArgs = options.dryRun
+    ? ["pm", "pack", "--dry-run", "--ignore-scripts"]
+    : ["publish", "--tag", options.tag, "--access", "public"];
 
   if (!options.dryRun && !options.yes) {
     const answer = await askQuestion(
@@ -380,7 +381,7 @@ async function main() {
   }
 
   runStep(
-    options.dryRun ? "Running package publish dry-run..." : "Publishing to npm...",
+    options.dryRun ? "Running package pack dry-run..." : "Publishing to npm...",
     publishCommand,
     publishArgs,
     { cwd: packageDir },
