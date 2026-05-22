@@ -20,10 +20,23 @@
     },
     "plugins": [
       "expo-router",
-      "expo-build-properties",
-      "expo-asset",
-      "expo-audio",
-      "expo-font"
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "buildToolsVersion": "36.0.0",
+            "usePrecompiledHeaders": true
+          },
+          "ios": {
+            "deploymentTarget": "16.4"
+          }
+        }
+      ],
+      "expo-system-ui",
+      "expo-status-bar",
+      "./plugins/with-ios-linker-cleanup"
     ],
     "experiments": {
       "typedRoutes": true,

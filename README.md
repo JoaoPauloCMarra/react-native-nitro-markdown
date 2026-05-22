@@ -1,9 +1,9 @@
 # react-native-nitro-markdown
 
-[![npm](https://img.shields.io/badge/npm-v0.6.2-orange?style=flat-square)](https://www.npmjs.com/package/react-native-nitro-markdown)
-[![license](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](./LICENSE)
-[![react-native](https://img.shields.io/badge/react--native-%3E%3D0.75-1677a4?style=flat-square)](https://reactnative.dev/)
-[![nitro-modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.35.6-black?style=flat-square)](https://github.com/mrousavy/nitro)
+[![npm](https://img.shields.io/npm/v/react-native-nitro-markdown?style=flat-square&color=orange)](https://www.npmjs.com/package/react-native-nitro-markdown)
+[![license](https://img.shields.io/npm/l/react-native-nitro-markdown?style=flat-square&color=blue)](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/LICENSE)
+[![react-native](https://img.shields.io/badge/react--native-%3E%3D0.75-1677a4?style=flat-square)](https://reactnative.dev/docs/environment-setup)
+[![nitro-modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.35.7-black?style=flat-square)](https://nitro.margelo.com/)
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/JoaoPauloCMarra/react-native-nitro-markdown/main/readme/demo.gif" alt="react-native-nitro-markdown demo" width="400" />
@@ -29,7 +29,7 @@ Native Markdown parsing and rendering for React Native, powered by [md4c](https:
 | Dependency | Version |
 |---|---|
 | React Native | `>=0.75.0` |
-| react-native-nitro-modules | `>=0.35.6` |
+| react-native-nitro-modules | `>=0.35.7` |
 | ratex-react-native | `>=0.1.4` |
 
 ## Installation
@@ -51,8 +51,8 @@ cd ios && pod install
 **Expo** (development build):
 
 ```bash
-npx expo install react-native-nitro-markdown react-native-nitro-modules ratex-react-native
-npx expo prebuild
+bunx expo install react-native-nitro-markdown react-native-nitro-modules ratex-react-native
+bunx expo prebuild
 ```
 
 ## Quick Start
@@ -276,6 +276,21 @@ const renderers: CustomRenderers = {
     <MyMathBlock latex={content} />
   ),
 };
+```
+
+Use `satisfies CustomRenderers` when you want excess-property checking while preserving the exact function types for each renderer:
+
+```tsx
+import type { CustomRenderers } from "react-native-nitro-markdown";
+
+const renderers = {
+  heading: ({ level, children }) => (
+    <MyHeading variant={`h${level}`}>{children}</MyHeading>
+  ),
+  code_block: ({ language, content }) => (
+    <MyCodeBlock language={language ?? "text"} code={content} />
+  ),
+} satisfies CustomRenderers;
 ```
 
 #### Rendering HTML Nodes
@@ -521,7 +536,7 @@ Relative image URLs are not loaded by the default renderer. Map them in a custom
 The package exports public types for every commonly customized surface:
 
 - `MarkdownProps`, `MarkdownStreamProps`, `MarkdownParseCompleteResult`, `MarkdownErrorPhase`
-- `MarkdownNode`, `ParserOptions`, `AstTransform`, `MarkdownPlugin`
+- `MarkdownNode`, `MarkdownNodeType`, `HeadingLevel`, `TableCellAlign`, `ParserOptions`, `AstTransform`, `MarkdownPlugin`
 - `CustomRenderers`, `CustomRendererPropsByNode`, and node-specific renderer props
 - `MarkdownTheme`, `PartialMarkdownTheme`, `NodeStyleOverrides`, `TableOptions`, `UrlSafetyOptions`
 - `MarkdownSession`, `CodeHighlighter`, `HighlightedToken`, `TokenType`
@@ -581,7 +596,7 @@ The `apps/example` directory contains a full demo app with these screens:
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md).
+See [CONTRIBUTING.md](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/CONTRIBUTING.md).
 
 ## License
 

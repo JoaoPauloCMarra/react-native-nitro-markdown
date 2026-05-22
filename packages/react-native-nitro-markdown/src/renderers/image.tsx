@@ -150,7 +150,6 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
       },
       (error) => {
         if (__DEV__) {
-          // eslint-disable-next-line no-console
           console.warn(
             "[NitroMarkdown] Failed to get image dimensions:",
             error,

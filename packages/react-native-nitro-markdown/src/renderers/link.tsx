@@ -52,7 +52,6 @@ export const Link: FC<LinkProps> = ({ href, children, style }) => {
       await Linking.openURL(allowedExternalHref);
     } catch (error) {
       if (__DEV__) {
-        // eslint-disable-next-line no-console
         console.warn("[NitroMarkdown] Link press handler failed:", error);
       }
     }

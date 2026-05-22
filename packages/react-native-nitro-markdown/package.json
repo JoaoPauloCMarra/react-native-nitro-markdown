@@ -1,6 +1,6 @@
 {
   "name": "react-native-nitro-markdown",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "description": "High-performance Markdown parser for React Native using Nitro Modules and md4c",
   "main": "lib/commonjs/index.js",
   "module": "lib/module/index.js",
@@ -93,17 +93,17 @@
   },
   "devDependencies": {
     "@size-limit/preset-small-lib": "^11.0.0",
-    "@types/react": "~19.2.14",
+    "@types/react": "~19.2.15",
     "@types/react-test-renderer": "^19.1.0",
     "react-native-builder-bob": "^0.41.0",
-    "react-test-renderer": "19.2.0",
+    "react-test-renderer": "19.2.3",
     "size-limit": "^11.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "~6.0.3"
   },
   "peerDependencies": {
     "react": "*",
     "react-native": ">=0.75.0",
-    "react-native-nitro-modules": ">=0.35.6",
+    "react-native-nitro-modules": ">=0.35.7",
     "ratex-react-native": ">=0.1.4"
   },
   "codegenConfig": {
