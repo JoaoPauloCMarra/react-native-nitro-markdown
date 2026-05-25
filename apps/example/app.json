@@ -39,6 +39,7 @@
       "./plugins/with-ios-linker-cleanup"
     ],
     "experiments": {
+      "reactCompiler": true,
       "typedRoutes": true,
       "autolinkingModuleResolution": true
     }

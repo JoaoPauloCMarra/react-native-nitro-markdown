@@ -11,6 +11,7 @@
     "publish-package:dry-run": "node scripts/publish.js --dry-run --yes",
     "audit:package": "node scripts/publish.js --dry-run --skip-preflight --skip-checks --skip-docs --yes",
     "harness": "node scripts/harness.js",
+    "dev": "bun run example:start",
     "check": "bun run lint && bun run typecheck && bun run test && bun run test:cpp",
     "check:ci": "bun run harness",
     "release:preflight": "bun run check:ci && bun run example:check && bun run audit:package && bun run publish-package:dry-run",
@@ -40,7 +41,7 @@
     "example:smoke:ios": "node scripts/example-smoke.js --ios"
   },
   "devDependencies": {
-    "@swc/core": "^1.15.33",
+    "@swc/core": "^1.15.40",
     "@swc/jest": "^0.2.39",
     "@types/commonmark": "^0.27.10",
     "@types/jest": "^29.5.14",
@@ -67,7 +68,10 @@
     "react-native-nitro-modules": "0.35.7",
     "react-native": "0.85.3",
     "react-native-safe-area-context": "5.7.0",
-    "react-native-screens": "4.25.1"
+    "react-native-screens": "4.25.2",
+    "expo": "~56.0.4",
+    "expo-constants": "56.0.15",
+    "expo-linking": "~56.0.11"
   },
   "dependencies": {
     "react-native-nitro-modules": "0.35.7"

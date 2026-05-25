@@ -1,66 +1,57 @@
 # react-native-nitro-markdown
 
-[![npm](https://img.shields.io/npm/v/react-native-nitro-markdown?style=flat-square&color=orange)](https://www.npmjs.com/package/react-native-nitro-markdown)
-[![license](https://img.shields.io/npm/l/react-native-nitro-markdown?style=flat-square&color=blue)](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/LICENSE)
-[![react-native](https://img.shields.io/badge/react--native-%3E%3D0.75-1677a4?style=flat-square)](https://reactnative.dev/docs/environment-setup)
-[![nitro-modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.35.7-black?style=flat-square)](https://nitro.margelo.com/)
+[![npm version](https://img.shields.io/npm/v/react-native-nitro-markdown?color=f97316&label=npm)](https://www.npmjs.com/package/react-native-nitro-markdown)
+[![license](https://img.shields.io/npm/l/react-native-nitro-markdown?color=007ec6)](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/LICENSE)
+[![React Native](https://img.shields.io/badge/react--native-%3E%3D0.75-61dafb)](https://reactnative.dev/)
+[![Expo](https://img.shields.io/badge/expo-SDK%2056-000020)](https://expo.dev/)
+[![Nitro Modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.35.7-black)](https://nitro.margelo.com/)
+
+Markdown parsing, rendering, streaming, and headless AST access for React
+Native, powered by md4c and Nitro Modules.
+
+Use it when you need GitHub-flavored Markdown, custom renderers, streaming
+chat/LLM output, syntax highlighting, math rendering, or native headless parsing
+without building your own renderer pipeline.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/JoaoPauloCMarra/react-native-nitro-markdown/main/readme/demo.gif" alt="react-native-nitro-markdown demo" width="400" />
 </p>
 
-Native Markdown parsing and rendering for React Native, powered by [md4c](https://github.com/mity/md4c) (C++) through [Nitro Modules](https://github.com/mrousavy/nitro) (JSI).
+## Install
 
-## Features
-
-- **Native C++ parser** -- synchronous parsing via JSI with minimal JS thread overhead
-- **Full rendering pipeline** -- parser + renderer + streaming session in one package
-- **GFM support** -- tables, strikethrough, task lists, autolinks
-- **Math rendering** -- inline and block LaTeX via native RaTeX
-- **Opt-in HTML AST nodes** -- preserve raw HTML as `html_inline` / `html_block` for custom renderers
-- **Large document support** -- top-level block virtualization and cached renderer styles
-- **Code highlighting** -- built-in JS/TS, Python, and Bash tokenizer with custom highlighter support
-- **Headless API** -- parse markdown and extract text without any UI
-- **Streaming** -- incremental rendering for chat/LLM token streams
-- **Customizable** -- themes, per-node style overrides, custom renderers, AST transforms, plugin pipeline
-
-## Requirements
-
-| Dependency | Version |
-|---|---|
-| React Native | `>=0.75.0` |
-| react-native-nitro-modules | `>=0.35.7` |
-| ratex-react-native | `>=0.1.4` |
-
-## Installation
-
-With npm:
-
-```bash
-npm install react-native-nitro-markdown react-native-nitro-modules ratex-react-native
-cd ios && pod install
-```
-
-With Bun:
-
-```bash
+```sh
 bun add react-native-nitro-markdown react-native-nitro-modules ratex-react-native
-cd ios && pod install
 ```
 
-**Expo** (development build):
+For Expo development builds:
 
-```bash
+```sh
 bunx expo install react-native-nitro-markdown react-native-nitro-modules ratex-react-native
 bunx expo prebuild
 ```
+
+For bare React Native apps:
+
+```sh
+cd ios && pod install
+```
+
+Expo Go cannot load Nitro native modules. Use an Expo development build or a
+bare app.
+
+## Expo Config
+
+No package config plugin is required for `react-native-nitro-markdown`.
+
+Use your normal Expo app config, install the native dependencies, then run
+`bunx expo prebuild` after adding or upgrading the package.
 
 ## Quick Start
 
 ```tsx
 import { Markdown } from "react-native-nitro-markdown";
 
-export function Example() {
+export function Article() {
   return (
     <Markdown options={{ gfm: true }}>
       {"# Hello\nThis is **native** markdown."}
@@ -69,538 +60,149 @@ export function Example() {
 }
 ```
 
-## API Reference
-
-### Parser Options
-
-`ParserOptions` controls native parser extensions. Defaults are conservative for HTML and feature-complete for Markdown extensions.
-
-| Option | Default | Enables | Notes |
-|---|---:|---|---|
-| `gfm` | `true` | Tables, strikethrough, task lists, permissive autolinks | Set `false` for stricter CommonMark-style parsing |
-| `math` | `true` | Inline and display LaTeX spans | Rendered with RaTeX; falls back to styled plain text if the peer dependency is unavailable at runtime |
-| `html` | `false` | `html_inline` and `html_block` AST nodes | Raw HTML is not rendered by default; provide custom renderers |
+## Streaming
 
 ```tsx
-<Markdown options={{ gfm: true, math: true, html: false }}>
-  {content}
-</Markdown>
-```
-
-### `<Markdown>`
-
-The main component. Parses a markdown string and renders it.
-
-```tsx
-import { Markdown } from "react-native-nitro-markdown";
-```
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `children` | `string` | required | Markdown input string |
-| `options` | `ParserOptions` | -- | Parser flags (`gfm`, `math`, `html`) |
-| `plugins` | `MarkdownPlugin[]` | -- | Plugin hooks (`beforeParse`, `afterParse`) |
-| `sourceAst` | `MarkdownNode` | -- | Pre-parsed AST; skips native parse when provided |
-| `parseCache` | `boolean` | `true` | Enable internal parse result caching for repeated inputs |
-| `astTransform` | `AstTransform` | -- | Post-parse AST rewrite before render |
-| `renderers` | `CustomRenderers` | `{}` | Per-node custom renderer overrides |
-| `theme` | `PartialMarkdownTheme` | `defaultMarkdownTheme` | Theme token overrides |
-| `styles` | `NodeStyleOverrides` | -- | Per-node style overrides |
-| `stylingStrategy` | `"opinionated" \| "minimal"` | `"opinionated"` | Base styling preset |
-| `style` | `StyleProp<ViewStyle>` | -- | Container style |
-| `onLinkPress` | `LinkPressHandler` | -- | Intercept link presses; return `false` to block default open |
-| `onParsingInProgress` | `() => void` | -- | Called when parse inputs change |
-| `onParseComplete` | `(result) => void` | -- | Called with `{ raw, ast, text }` after parse |
-| `onError` | `(error, phase, pluginName?) => void` | -- | Error handler for parse/plugin failures |
-| `highlightCode` | `boolean \| CodeHighlighter` | -- | Enable syntax highlighting for code blocks |
-| `tableOptions` | `{ minColumnWidth?; measurementStabilizeMs? }` | -- | Table layout tuning |
-| `imageOptions` | `UrlSafetyOptions` | `{ allowedProtocols: ["http:", "https:"] }` | Built-in image URL allowlist |
-| `virtualize` | `boolean \| "auto"` | `false` | Top-level block virtualization |
-| `virtualizationMinBlocks` | `number` | `40` | Block threshold for `"auto"` virtualization |
-| `virtualization` | `MarkdownVirtualizationOptions` | -- | FlatList tuning (windowSize, batching, etc.) |
-
-**Pipeline order:** `beforeParse` plugins (by priority desc) -> parse/sourceAst -> `afterParse` plugins (by priority desc) -> `astTransform` -> render.
-
-When `sourceAst` is provided, `beforeParse` plugins are skipped because no source string is parsed. `afterParse` plugins still run on the provided AST.
-
-`parseCache` defaults to `true` and caches parse results for repeated markdown inputs. Set `parseCache={false}` to force a fresh native parse on each input change. This flag has no effect when `sourceAst` is provided.
-
-### `<MarkdownStream>`
-
-Renders markdown from a streaming session. Extends `MarkdownProps` (minus `children`).
-
-```tsx
-import { MarkdownStream } from "react-native-nitro-markdown";
-```
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `session` | `MarkdownSession` | required | Session supplying streamed text |
-| `updateIntervalMs` | `number` | `50` | Flush interval for `"interval"` strategy; ignored by `"raf"` |
-| `updateStrategy` | `"interval" \| "raf"` | `"interval"` | `"interval"` uses `updateIntervalMs`; `"raf"` schedules at most once per animation frame |
-| `useTransitionUpdates` | `boolean` | `false` | Wrap updates in `startTransition` |
-| `incrementalParsing` | `boolean` | `true` | Append-optimized AST updates; disabled automatically when a `beforeParse` plugin is present |
-
-### `MarkdownSession`
-
-A native text buffer with change listeners, used for streaming.
-
-```tsx
-import { createMarkdownSession } from "react-native-nitro-markdown";
-
-const session = createMarkdownSession();
-session.append("# Hello\n");
-session.append("Streaming content...");
-```
-
-| Method | Signature | Description |
-|---|---|---|
-| `append` | `(chunk: string) => number` | Append text, returns new UTF-16 length |
-| `clear` | `() => void` | Clear buffer, emit reset event |
-| `reset` | `(text: string) => void` | Replace full buffer content |
-| `replace` | `(from, to, text) => number` | Partial buffer mutation; out-of-bounds ranges are clamped and invalid ranges throw |
-| `getAllText` | `() => string` | Get full session text |
-| `getLength` | `() => number` | Get UTF-16 length without copy |
-| `getTextRange` | `(from, to) => string` | Get substring range |
-| `addListener` | `(listener) => () => void` | Subscribe to mutation events; returns unsubscribe |
-| `highlightPosition` | `number` | Mutable cursor for stream highlight |
-| `dispose` | `() => void` | Release native listener and buffer storage; called automatically by `useMarkdownSession` on unmount |
-
-### `useMarkdownSession()`
-
-Creates and owns a `MarkdownSession` for a component lifecycle.
-
-```tsx
-import { useMarkdownSession } from "react-native-nitro-markdown";
-
-const { getSession, isStreaming, setIsStreaming, stop, clear, setHighlight } =
-  useMarkdownSession();
-```
-
-### `useStream(timestamps?)`
-
-Extends `useMarkdownSession` with timeline sync for timed playback.
-
-```tsx
-import { useStream } from "react-native-nitro-markdown";
-
-const stream = useStream({ 0: 0, 1: 500, 2: 1000 });
-stream.sync(currentTimeMs);
-
-<MarkdownStream session={stream.getSession()} />;
-```
-
-### Headless API
-
-Parse markdown without any UI. Available from both entry points.
-
-```tsx
-import {
-  parseMarkdown,
-  parseMarkdownWithOptions,
-  extractPlainText,
-  getTextContent,
-  getFlattenedText,
-  stripSourceOffsets,
-} from "react-native-nitro-markdown/headless";
-```
-
-| Function | Description |
-|---|---|
-| `parseMarkdown(text, options?)` | Parse to AST (options: `{ gfm?, math?, html? }`) |
-| `parseMarkdownWithOptions(text, options)` | Parse with explicit options |
-| `extractPlainText(text)` | Parse and return plain text from native parser |
-| `extractPlainTextWithOptions(text, options)` | Same with parser flags |
-| `getTextContent(node)` | Concatenate text recursively (no normalization) |
-| `getFlattenedText(node)` | Normalized plain text with block separators |
-| `stripSourceOffsets(node)` | Remove `beg`/`end` fields from AST |
-
-### Custom Renderers
-
-Override rendering for specific node types:
-
-```tsx
-import {
-  Markdown,
-  type HeadingRendererProps,
-  type CodeBlockRendererProps,
-} from "react-native-nitro-markdown";
-
-<Markdown
-  renderers={{
-    heading: ({ level, children }: HeadingRendererProps) => (
-      <MyHeading level={level}>{children}</MyHeading>
-    ),
-    code_block: ({ language, content }: CodeBlockRendererProps) => (
-      <MyCode language={language} content={content} />
-    ),
-  }}
->
-  {content}
-</Markdown>;
-```
-
-Renderers receive `EnhancedRendererProps` with `node`, `children`, and `Renderer` (for recursive rendering). Node-specific props are mapped automatically:
-
-| Node type | Extra props |
-|---|---|
-| `heading` | `level` |
-| `link` | `href`, `title` |
-| `image` | `url`, `alt`, `title` |
-| `code_block` | `content`, `language` |
-| `code_inline` | `content` |
-| `list` | `ordered`, `start` |
-| `task_list_item` | `checked` |
-| `html_inline`, `html_block` | Read raw HTML from `node.content` |
-
-Return `undefined` to fall back to the built-in renderer, or `null` to render nothing.
-
-TypeScript users can import specific renderer props for stronger IDE feedback:
-
-```tsx
-import type {
-  CustomRenderers,
-  ImageRendererProps,
-  LinkRendererProps,
-  MathRendererProps,
-} from "react-native-nitro-markdown";
-
-const renderers: CustomRenderers = {
-  link: ({ href, children }: LinkRendererProps) => (
-    <MyLink href={href}>{children}</MyLink>
-  ),
-  image: ({ url, alt }: ImageRendererProps) => (
-    <MyImage source={{ uri: url }} accessibilityLabel={alt} />
-  ),
-  math_block: ({ content }: MathRendererProps) => (
-    <MyMathBlock latex={content} />
-  ),
-};
-```
-
-Use `satisfies CustomRenderers` when you want excess-property checking while preserving the exact function types for each renderer:
-
-```tsx
-import type { CustomRenderers } from "react-native-nitro-markdown";
-
-const renderers = {
-  heading: ({ level, children }) => (
-    <MyHeading variant={`h${level}`}>{children}</MyHeading>
-  ),
-  code_block: ({ language, content }) => (
-    <MyCodeBlock language={language ?? "text"} code={content} />
-  ),
-} satisfies CustomRenderers;
-```
-
-#### Rendering HTML Nodes
-
-HTML parsing is opt-in and produces raw AST nodes. The built-in renderer intentionally renders nothing for `html_inline` and `html_block`; applications decide what is safe to display.
-
-```tsx
-import { Text, View } from "react-native";
-import { Markdown } from "react-native-nitro-markdown";
-
-<Markdown
-  options={{ html: true }}
-  renderers={{
-    html_inline: ({ node }) => {
-      if (node.content === "<br>") return <Text>{"\n"}</Text>;
-      return null;
-    },
-    html_block: ({ node }) => {
-      if (!node.content?.includes('data-kind="release-note"')) return null;
-      return (
-        <View>
-          <Text>Release note</Text>
-        </View>
-      );
-    },
-  }}
->
-  {content}
-</Markdown>;
-```
-
-Do not pass untrusted HTML directly into a WebView from a renderer. Sanitize or map known tags/attributes to native components.
-
-### Math Rendering
-
-Math parsing is enabled by default. Rendering LaTeX uses the native RaTeX renderer:
-
-```bash
-bun add ratex-react-native
-```
-
-If `ratex-react-native` is unavailable at runtime, `math_inline` and `math_block` render as styled plain text fallback.
-
-Inline math (`$...$`) stays inside text flow. Use block math (`$$...$$`) for large formulas; the default `math_block` renderer is horizontally scrollable when the equation is wider than the screen. Custom `math_block` renderers should preserve the same behavior for long display equations.
-
-### Theme API
-
-```tsx
-import {
-  Markdown,
-  defaultMarkdownTheme,
-  minimalMarkdownTheme,
-  mergeThemes,
-} from "react-native-nitro-markdown";
-
-const theme = mergeThemes(defaultMarkdownTheme, {
-  colors: { text: "#0f172a", link: "#1d4ed8" },
-  fontSizes: { m: 16 },
-});
-
-<Markdown theme={theme}>{content}</Markdown>;
-```
-
-`MarkdownTheme` includes:
-- **colors** -- `text`, `heading`, `link`, `code`, `codeBackground`, `blockquote`, `border`, `surface`, table colors, and optional `codeTokenColors` for syntax highlighting
-- **spacing** -- `xs`, `s`, `m`, `l`, `xl`
-- **fontSizes** -- `xs` through `xl`, plus `h1`-`h6`
-- **fontFamilies** -- `regular`, `heading`, `mono`
-- **borderRadius** -- `s`, `m`, `l`
-- **headingWeight** -- optional font weight override
-- **showCodeLanguage** -- show/hide language label on code blocks
-
-Use `stylingStrategy="minimal"` for a bare baseline, or `NodeStyleOverrides` for per-node style overrides (text nodes accept `TextStyle`, container nodes accept `ViewStyle`).
-
-## Examples
-
-### Streaming
-
-```tsx
-import { useEffect } from "react";
 import {
   MarkdownStream,
   useMarkdownSession,
 } from "react-native-nitro-markdown";
 
-export function StreamingExample() {
-  const session = useMarkdownSession();
-
-  useEffect(() => {
-    const s = session.getSession();
-    s.append("# Streaming\n");
-    s.append("This text arrives in chunks.");
-    return () => session.clear();
-  }, [session]);
+export function ChatMessage({ text }: { text: string }) {
+  const session = useMarkdownSession(text);
 
   return (
-    <MarkdownStream
-      session={session.getSession()}
-      options={{ gfm: true }}
-      updateStrategy="raf"
-    />
+    <MarkdownStream session={session} updateStrategy="raf" incrementalParsing />
   );
 }
 ```
 
-### AST Transform
+`MarkdownStream` batches updates for append-only text. If any plugin uses
+`beforeParse`, incremental AST optimization is disabled so the full pipeline can
+run correctly.
 
-```tsx
-import { useCallback } from "react";
-import { Markdown, type AstTransform } from "react-native-nitro-markdown";
+## Headless Parsing
 
-const transform = useCallback<AstTransform>((ast) => {
-  const visit = (node: Parameters<AstTransform>[0]): typeof node => ({
-    ...node,
-    content:
-      node.type === "text"
-        ? (node.content ?? "").replace(/:wink:/g, "😉")
-        : node.content,
-    children: node.children?.map(visit),
-  });
-  return visit(ast);
-}, []);
+```ts
+import {
+  extractPlainText,
+  parseMarkdown,
+  parseMarkdownWithOptions,
+} from "react-native-nitro-markdown/headless";
 
-<Markdown astTransform={transform}>{"Hello :wink:"}</Markdown>;
+const ast = parseMarkdown("# Title");
+const astWithOffsets = parseMarkdownWithOptions("# Title", {
+  sourceAst: true,
+});
+const text = extractPlainText("Hello **world**");
 ```
 
-### Plugin Pipeline
+Use the `react-native-nitro-markdown/headless` export when you need AST data,
+plain text extraction, indexing, validation, or tests without rendering UI.
+
+## Common Options
+
+| Option          | Default           | What it does                                              |
+| --------------- | ----------------- | --------------------------------------------------------- |
+| `gfm`           | `true`            | Enables tables, strikethrough, task lists, and autolinks. |
+| `parseCache`    | `true`            | Reuses parsed ASTs for repeated content.                  |
+| `sourceAst`     | `false`           | Includes source offsets for tooling and editor features.  |
+| `allowHtml`     | `false`           | Preserves raw HTML nodes for custom renderers.            |
+| `highlightCode` | `false`           | Enables built-in syntax highlighting.                     |
+| `tableOptions`  | Built-in defaults | Controls table measurement and minimum widths.            |
+
+## Custom Rendering
 
 ```tsx
-import { Markdown, type MarkdownPlugin } from "react-native-nitro-markdown";
+import type { MarkdownRenderers } from "react-native-nitro-markdown";
+import { Markdown } from "react-native-nitro-markdown";
+
+const renderers: MarkdownRenderers = {
+  paragraph({ children }) {
+    return <Text style={{ lineHeight: 22 }}>{children}</Text>;
+  },
+};
+
+<Markdown renderers={renderers}>{"Custom paragraph renderer"}</Markdown>;
+```
+
+Custom renderers receive parsed nodes and pre-mapped props for common node
+types. For `html_inline` and `html_block`, read `node.content` directly.
+
+## Plugin Pipeline
+
+```ts
+import type { MarkdownPlugin } from "react-native-nitro-markdown";
 
 const plugins: MarkdownPlugin[] = [
   {
-    name: "rewrite-before-parse",
+    name: "mentions",
     priority: 10,
-    beforeParse: (input) => input.replace(/:rocket:/g, "ROCKET_TOKEN"),
-  },
-  {
-    name: "rewrite-after-parse",
-    afterParse: (ast) => {
-      const visit = (node: typeof ast): typeof ast => ({
-        ...node,
-        content:
-          node.type === "text"
-            ? (node.content ?? "").replace(/ROCKET_TOKEN/g, "🚀")
-            : node.content,
-        children: node.children?.map(visit),
-      });
-      return visit(ast);
+    beforeParse(source) {
+      return source.replaceAll("@team", "**@team**");
     },
   },
 ];
-
-<Markdown plugins={plugins}>{"Launch :rocket:"}</Markdown>;
 ```
 
-### Pre-parsed AST
+Pipeline order: `beforeParse` plugins, parse or `sourceAst`, `afterParse`
+plugins, `astTransform`, then render. Higher `priority` values run first, and
+sorting is stable.
 
-```tsx
-import { Markdown, parseMarkdownWithOptions } from "react-native-nitro-markdown";
+## API
 
-const ast = parseMarkdownWithOptions(content, {
-  gfm: true,
-  math: true,
-  html: false,
-});
+Main export:
 
-<Markdown sourceAst={ast}>{"ignored when sourceAst is provided"}</Markdown>;
-```
+- `Markdown` for rendering complete markdown strings.
+- `MarkdownStream` for incremental rendering.
+- `MarkdownSession` and `useMarkdownSession()` for append/replace/reset flows.
+- `useStream()` for timestamped stream state.
+- `defaultMarkdownTheme` and theme types.
+- Renderer components such as `Paragraph`, `Heading`, `Link`, `CodeBlock`,
+  `List`, `Table`, and `Image`.
+- Types including `MarkdownNode`, `MarkdownPlugin`, `MarkdownRenderers`,
+  `ParserOptions`, `MarkdownTheme`, and `MarkdownStreamProps`.
 
-With `sourceAst`, `beforeParse` plugins are skipped, while `afterParse` and `astTransform` still apply.
+Headless export:
 
-### Virtualization (large documents)
+- `parseMarkdown`.
+- `parseMarkdownWithOptions`.
+- `extractPlainText`.
+- `extractPlainTextWithOptions`.
+- AST helpers such as `getTextContent`, `getFlattenedText`, and
+  `stripSourceOffsets`.
 
-```tsx
-<Markdown
-  virtualize="auto"
-  virtualizationMinBlocks={30}
-  virtualization={{
-    initialNumToRender: 10,
-    maxToRenderPerBatch: 10,
-    windowSize: 8,
-  }}
->
-  {content}
-</Markdown>
-```
+## Platform Support
 
-Keep `Markdown` as the primary vertical scroller when virtualization is enabled -- avoid nesting inside another `ScrollView`.
-
-### Syntax Highlighting
-
-```tsx
-import type { CodeHighlighter } from "react-native-nitro-markdown";
-
-// Built-in highlighter (JS/TS, Python, Bash)
-<Markdown highlightCode>{"```typescript\nconst x: number = 42;\n```"}</Markdown>
-
-// Custom highlighter
-const myHighlighter: CodeHighlighter = (language, code) => {
-  return [{ text: code, type: "default" }];
-};
-
-<Markdown highlightCode={myHighlighter}>{content}</Markdown>
-```
-
-### Link Interception
-
-```tsx
-<Markdown
-  onLinkPress={(href) => {
-    if (href.startsWith("/")) {
-      router.push(href);
-      return false;
-    }
-  }}
->
-  {content}
-</Markdown>
-```
-
-Default link behavior: trims href, calls `onLinkPress`, validates scheme (`http:`, `https:`, `mailto:`, `tel:`, `sms:`), then opens via `Linking.openURL`. Relative URLs and anchors are ignored unless handled in `onLinkPress`.
-
-### Image URL Safety
-
-Built-in image rendering only loads `http:` and `https:` URLs by default. Use `imageOptions` to narrow the allowed hosts or, when your app owns the source content, add another protocol explicitly.
-
-```tsx
-import { Markdown, type UrlSafetyOptions } from "react-native-nitro-markdown";
-
-const imageOptions: UrlSafetyOptions = {
-  allowedProtocols: ["https:"],
-  allowedHosts: ["cdn.example.com", "images.example.com"],
-};
-
-<Markdown imageOptions={imageOptions}>{content}</Markdown>;
-```
-
-Relative image URLs are not loaded by the default renderer. Map them in a custom `image` renderer when your app has a trusted asset resolver.
-
-### TypeScript Surface
-
-The package exports public types for every commonly customized surface:
-
-- `MarkdownProps`, `MarkdownStreamProps`, `MarkdownParseCompleteResult`, `MarkdownErrorPhase`
-- `MarkdownNode`, `MarkdownNodeType`, `HeadingLevel`, `TableCellAlign`, `ParserOptions`, `AstTransform`, `MarkdownPlugin`
-- `CustomRenderers`, `CustomRendererPropsByNode`, and node-specific renderer props
-- `MarkdownTheme`, `PartialMarkdownTheme`, `NodeStyleOverrides`, `TableOptions`, `UrlSafetyOptions`
-- `MarkdownSession`, `CodeHighlighter`, `HighlightedToken`, `TokenType`
-
-Prefer typing shared `renderers`, `plugins`, `theme`, `tableOptions`, and `imageOptions` constants instead of relying on inference from inline JSX props. That keeps mistakes visible in IDEs and gives AI-assisted edits a stricter contract to follow.
-
-## Supported Node Types
-
-`document`, `heading`, `paragraph`, `text`, `bold`, `italic`, `strikethrough`, `link`, `image`, `code_inline`, `code_block`, `blockquote`, `horizontal_rule`, `line_break`, `soft_break`, `table`, `table_head`, `table_body`, `table_row`, `table_cell`, `list`, `list_item`, `task_list_item`, `math_inline`, `math_block`, `html_block`, `html_inline`
-
-`html_inline` and `html_block` are parsed only when `options.html` is `true`; they are not rendered by default. Use a custom renderer to handle them, and read raw HTML from `node.content`.
-
-## Package Exports
-
-### Main (`react-native-nitro-markdown`)
-
-Components, hooks, sessions, themes, built-in renderers, syntax highlighting, and all headless APIs.
-
-### Headless (`react-native-nitro-markdown/headless`)
-
-Parser and text utilities only -- no React dependencies. Use this for server-side processing, search indexing, or custom renderers.
-
-## Performance Tips
-
-- Use `updateStrategy="raf"` for frame-aligned streaming UI updates; `updateIntervalMs` is ignored by `"raf"`.
-- Batch `session.append()` calls at 50-100ms intervals rather than per-character.
-- Enable `virtualize="auto"` for long documents and keep `Markdown` as the primary vertical scroller.
-- Memoize custom `plugins`, `renderers`, `theme`, and `styles` objects when they are created inside a component.
-- Use the headless API when you only need parsing, plain text extraction, search indexing, or a custom renderer.
+| Platform | Status                                     |
+| -------- | ------------------------------------------ |
+| iOS      | Native parser through Nitro and md4c.      |
+| Android  | Native parser through Nitro and md4c.      |
+| Expo     | Development builds.                        |
+| Web      | Not the primary target for native parsing. |
 
 ## Troubleshooting
 
-| Problem | Solution |
-|---|---|
-| Math renders as code-style fallback | Install `ratex-react-native` |
-| Large inline math overflows text | Use block math (`$$...$$`) for wide formulas; inline math intentionally stays in text flow |
-| iOS build fails after install | Run `pod install` in your iOS directory |
-| Expo app doesn't load native module | Use a development build (`expo prebuild` + `expo run`), not Expo Go |
-| Android heading font weight looks wrong | Set `theme.headingWeight` explicitly |
+- **Expo Go error:** build a dev client; Expo Go cannot load Nitro modules.
+- **Streaming updates too often:** use `updateStrategy="raf"` or an interval
+  around 50-100ms.
+- **Plugin changes do not appear incremental:** `beforeParse` plugins force a
+  full parse by design.
+- **Math does not render:** ensure `ratex-react-native` is installed and native
+  code has been rebuilt.
 
-## Example App
+## Development
 
-The `apps/example` directory contains a full demo app with these screens:
+```sh
+bun install
+bun run check
+bun run release:preflight
+bun run example:android
+bun run example:ios
+```
 
-| Screen | File | Demonstrates |
-|---|---|---|
-| Bench | `app/index.tsx` | Smoke tests + benchmark vs JS parsers |
-| Default | `app/render-default.tsx` | Built-in renderer defaults |
-| Styles | `app/render-default-styles.tsx` | Theme and style overrides |
-| Custom | `app/render-custom.tsx` | HTML AST rendering, custom renderers, AST transform |
-| Stream | `app/render-stream.tsx` | Live streaming with token append |
-
-## Release Checks
-
-- `bun run check` runs the package lint, typecheck, unit tests, and C++ tests.
-- `bun run check:ci` runs the full harness: lint, typecheck, JS coverage, benchmark checks, and C++ coverage.
-- `bun run example:check` runs Expo Doctor, example lint, and example typecheck.
-- `bun run release:preflight` runs CI checks, example checks, package audit, and publish dry-run.
-- `bun run example:prebuild`, `bun run example:android:assemble`, and `bun run example:ios:build` verify generated native example projects.
-- `bun run example:smoke:android` and `bun run example:smoke:ios` launch the native example app smoke paths.
-
-## Contributing
-
-See [CONTRIBUTING.md](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/CONTRIBUTING.md).
+Run native example builds before release when changing native, Nitro, rendering,
+or packaging files.
 
 ## License
 
