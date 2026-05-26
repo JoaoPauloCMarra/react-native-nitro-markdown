@@ -146,7 +146,8 @@ const plugins: MarkdownPlugin[] = [
 ```
 
 Pipeline order: `beforeParse` plugins, parse or `sourceAst`, `afterParse`
-plugins, `astTransform`, then render. Higher `priority` values run first, and
+plugins, `astTransform`, then render. When `sourceAst` is provided, `beforeParse` plugins are skipped
+because parsing already happened. Higher `priority` values run first, and
 sorting is stable.
 
 ## API
