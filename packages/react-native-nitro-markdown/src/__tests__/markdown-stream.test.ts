@@ -3,6 +3,7 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { MarkdownStream } from "../markdown-stream";
 import type { MarkdownSession } from "../specs/MarkdownSession.nitro";
+import type { MarkdownSessionController } from "../use-markdown-stream";
 
 const markdownMock = jest.fn(() => null);
 
@@ -91,6 +92,35 @@ describe("MarkdownStream", () => {
 
     expect(session.getTextRange).toHaveBeenCalledWith(5, 11);
     expect(session.getAllText).toHaveBeenCalled();
+    expect(markdownMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ children: "hello world" }),
+    );
+  });
+
+  it("accepts the controller returned by useMarkdownSession", () => {
+    const session = createSession({
+      allText: "hello",
+      rangeText: " world",
+    });
+    const controller = {
+      getSession: () => session,
+    } as unknown as MarkdownSessionController;
+
+    act(() => {
+      TestRenderer.create(
+        React.createElement(MarkdownStream, {
+          session: controller,
+          updateIntervalMs: 1,
+        }),
+      );
+    });
+
+    act(() => {
+      session.setAllText("hello world");
+      session.emit(5, 11);
+      jest.runOnlyPendingTimers();
+    });
+
     expect(markdownMock).toHaveBeenLastCalledWith(
       expect.objectContaining({ children: "hello world" }),
     );

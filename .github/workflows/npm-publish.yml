@@ -8,7 +8,7 @@ on:
       release_tag:
         description: Release tag to validate against package.json
         required: false
-        default: v0.7.0
+        default: v0.7.1
       npm_dist_tag:
         description: npm dist-tag to use for dry-run validation
         required: false

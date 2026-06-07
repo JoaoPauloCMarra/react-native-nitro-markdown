@@ -12,6 +12,20 @@ function SessionOwner() {
   return null;
 }
 
+function TextSessionOwner({
+  onSessionText,
+  text,
+}: {
+  onSessionText: (text: string) => void;
+  text: string;
+}) {
+  const session = useMarkdownSession(text);
+  React.useEffect(() => {
+    onSessionText(session.getSession().getAllText());
+  }, [onSessionText, session, text]);
+  return null;
+}
+
 describe("createMarkdownSession", () => {
   let consoleErrorSpy: jest.SpyInstance;
 
@@ -29,6 +43,12 @@ describe("createMarkdownSession", () => {
 
   it("returns a defined object", () => {
     expect(createMarkdownSession()).toBeDefined();
+  });
+
+  it("initializes a session with text", () => {
+    const session = createMarkdownSession("hello");
+
+    expect(session.getAllText()).toBe("hello");
   });
 
   it("reports clamped replace ranges for out-of-bounds inserts", () => {
@@ -70,6 +90,33 @@ describe("createMarkdownSession", () => {
 
     expect(session.clear).toHaveBeenCalled();
     expect(session.dispose).toHaveBeenCalled();
+  });
+
+  it("keeps hook-owned sessions in sync with initial text changes", () => {
+    const onSessionText = jest.fn();
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+
+    act(() => {
+      renderer = TestRenderer.create(
+        React.createElement(TextSessionOwner, {
+          onSessionText,
+          text: "hello",
+        }),
+      );
+    });
+
+    expect(onSessionText).toHaveBeenLastCalledWith("hello");
+
+    act(() => {
+      renderer!.update(
+        React.createElement(TextSessionOwner, {
+          onSessionText,
+          text: "updated",
+        }),
+      );
+    });
+
+    expect(onSessionText).toHaveBeenLastCalledWith("updated");
   });
 
   it("rejects session use after dispose", () => {

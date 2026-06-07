@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState, useEffect } from "react";
+import { useRef, useCallback, useState, useEffect, useMemo } from "react";
 import { createMarkdownSession } from "./MarkdownSession";
 import {
   createTimestampTimeline,
@@ -8,10 +8,11 @@ import {
 
 export type MarkdownSession = ReturnType<typeof createMarkdownSession>;
 
-export function useMarkdownSession() {
+export function useMarkdownSession(initialText?: string) {
   const sessionRef = useRef<MarkdownSession | null>(null);
+  const initialTextRef = useRef(initialText);
   if (sessionRef.current === null) {
-    sessionRef.current = createMarkdownSession();
+    sessionRef.current = createMarkdownSession(initialText);
   }
 
   const [isStreaming, setIsStreaming] = useState(false);
@@ -30,6 +31,15 @@ export function useMarkdownSession() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (initialText === undefined || initialTextRef.current === initialText) {
+      return;
+    }
+
+    initialTextRef.current = initialText;
+    sessionRef.current!.reset(initialText);
+  }, [initialText]);
 
   const stop = useCallback(() => {
     setIsStreaming(false);
@@ -55,16 +65,46 @@ export function useMarkdownSession() {
     return sessionRef.current!.replace(from, to, text);
   }, []);
 
-  return {
-    getSession,
-    isStreaming,
-    setIsStreaming,
-    stop,
-    clear,
-    setHighlight,
-    reset,
-    replace,
-  };
+  return useMemo(
+    () => ({
+      getSession,
+      isStreaming,
+      setIsStreaming,
+      stop,
+      clear,
+      setHighlight,
+      reset,
+      replace,
+    }),
+    [
+      clear,
+      getSession,
+      isStreaming,
+      replace,
+      reset,
+      setHighlight,
+      setIsStreaming,
+      stop,
+    ],
+  );
+}
+
+export type MarkdownSessionController = ReturnType<typeof useMarkdownSession>;
+
+export function isMarkdownSessionController(
+  value: MarkdownSession | MarkdownSessionController,
+): value is MarkdownSessionController {
+  return typeof Reflect.get(value, "getSession") === "function";
+}
+
+export function resolveMarkdownSession(
+  session: MarkdownSession | MarkdownSessionController,
+): MarkdownSession {
+  if (isMarkdownSessionController(session)) {
+    return session.getSession();
+  }
+
+  return session;
 }
 
 export function useStream(timestamps?: Record<number, number>) {

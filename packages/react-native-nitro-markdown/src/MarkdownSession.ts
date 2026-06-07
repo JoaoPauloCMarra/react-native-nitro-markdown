@@ -3,6 +3,13 @@ import type { MarkdownSession as MarkdownSessionSpec } from "./specs/MarkdownSes
 
 export type MarkdownSession = MarkdownSessionSpec;
 
-export function createMarkdownSession(): MarkdownSession {
-  return NitroModules.createHybridObject<MarkdownSession>("MarkdownSession");
+export function createMarkdownSession(initialText?: string): MarkdownSession {
+  const session =
+    NitroModules.createHybridObject<MarkdownSession>("MarkdownSession");
+
+  if (initialText !== undefined) {
+    session.reset(initialText);
+  }
+
+  return session;
 }

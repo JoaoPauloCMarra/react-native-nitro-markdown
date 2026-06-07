@@ -79,7 +79,9 @@ export function ChatMessage({ text }: { text: string }) {
 
 `MarkdownStream` batches updates for append-only text. If any plugin uses
 `beforeParse`, incremental AST optimization is disabled so the full pipeline can
-run correctly.
+run correctly. `MarkdownStream` accepts the controller returned by
+`useMarkdownSession()`. Pass `session.getSession()` only when another API needs
+direct access to the native session object.
 
 ## Headless Parsing
 
@@ -162,7 +164,8 @@ Main export:
 - Renderer components such as `Paragraph`, `Heading`, `Link`, `CodeBlock`,
   `List`, `Table`, and `Image`.
 - Types including `MarkdownNode`, `MarkdownPlugin`, `MarkdownRenderers`,
-  `ParserOptions`, `MarkdownTheme`, and `MarkdownStreamProps`.
+  `ParserOptions`, `MarkdownTheme`, `MarkdownSessionController`, and
+  `MarkdownStreamProps`.
 
 Headless export:
 
