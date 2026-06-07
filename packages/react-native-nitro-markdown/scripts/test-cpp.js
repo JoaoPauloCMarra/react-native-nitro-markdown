@@ -42,12 +42,20 @@ function commandExists(command) {
   }
 }
 
+function shellQuote(value) {
+  return JSON.stringify(String(value));
+}
+
 function commandPath(command) {
   try {
-    return execSync(`command -v ${command}`, { encoding: "utf8" }).trim();
+    return execSync(`command -v ${shellQuote(command)}`, {
+      encoding: "utf8",
+    }).trim();
   } catch {
     try {
-      return execSync(`xcrun --find ${command}`, { encoding: "utf8" }).trim();
+      return execSync(`xcrun --find ${shellQuote(command)}`, {
+        encoding: "utf8",
+      }).trim();
     } catch {
       return null;
     }
@@ -90,7 +98,16 @@ function main() {
 
   const llvmCov = collectCoverage ? commandPath("llvm-cov") : null;
   const llvmProfdata = collectCoverage ? commandPath("llvm-profdata") : null;
-  if (collectCoverage && (!llvmCov || !llvmProfdata || isWindows)) {
+  const cCompiler = collectCoverage
+    ? commandPath(process.env.CC || "clang")
+    : null;
+  const cxxCompiler = collectCoverage
+    ? commandPath(process.env.CXX || "clang++")
+    : null;
+  if (
+    collectCoverage &&
+    (!llvmCov || !llvmProfdata || !cCompiler || !cxxCompiler || isWindows)
+  ) {
     log("C++ coverage requires llvm-cov and llvm-profdata on macOS/Linux", "red");
     process.exit(1);
   }
@@ -109,6 +126,8 @@ function main() {
   const coverageFlags = collectCoverage
     ? [
         "-DCMAKE_BUILD_TYPE=Debug",
+        `-DCMAKE_C_COMPILER=${shellQuote(cCompiler)}`,
+        `-DCMAKE_CXX_COMPILER=${shellQuote(cxxCompiler)}`,
         '-DCMAKE_C_FLAGS="-fprofile-instr-generate -fcoverage-mapping -O0 -g"',
         '-DCMAKE_CXX_FLAGS="-fprofile-instr-generate -fcoverage-mapping -O0 -g"',
         '-DCMAKE_EXE_LINKER_FLAGS="-fprofile-instr-generate -fcoverage-mapping"',
