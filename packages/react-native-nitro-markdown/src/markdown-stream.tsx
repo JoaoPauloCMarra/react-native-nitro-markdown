@@ -9,6 +9,10 @@ import {
 import type { MarkdownNode } from "./headless";
 import { Markdown, type MarkdownProps } from "./markdown";
 import type { MarkdownSession } from "./specs/MarkdownSession.nitro";
+import {
+  resolveMarkdownSession,
+  type MarkdownSessionController,
+} from "./use-markdown-stream";
 import { getNextStreamAst, parseMarkdownAst } from "./utils/incremental-ast";
 
 const normalizeOffset = (value: number): number | null => {
@@ -71,7 +75,7 @@ export type MarkdownStreamProps = {
   /**
    * The active MarkdownSession to stream content from.
    */
-  session: MarkdownSession;
+  session: MarkdownSession | MarkdownSessionController;
   /**
    * Throttle UI updates when updateStrategy is "interval".
    * Ignored when updateStrategy is "raf".
@@ -110,6 +114,7 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
   plugins,
   ...props
 }) => {
+  const activeSession = resolveMarkdownSession(session);
   const parseText = useCallback(
     (text: string): MarkdownNode => parseMarkdownAst(text, options),
     [options],
@@ -118,7 +123,7 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
     type: "document",
     children: [],
   });
-  const initialText = session.getAllText();
+  const initialText = activeSession.getAllText();
   const hasBeforeParsePlugins =
     plugins?.some((plugin) => typeof plugin.beforeParse === "function") ??
     false;
@@ -148,7 +153,7 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
   }, []);
 
   useEffect(() => {
-    const initialText = session.getAllText();
+    const initialText = activeSession.getAllText();
     const initialState = {
       text: initialText,
       ast: hasBeforeParsePlugins ? createEmptyAst() : parseText(initialText),
@@ -159,7 +164,7 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
     forceFullSyncRef.current = false;
     renderStateRef.current = initialState;
     setRenderState(initialState);
-  }, [hasBeforeParsePlugins, parseText, session]);
+  }, [activeSession, hasBeforeParsePlugins, parseText]);
 
   useEffect(() => {
     const flushUpdate = () => {
@@ -184,7 +189,7 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
         pendingFrom,
         pendingTo,
         previousText: previousState.text,
-        session,
+        session: activeSession,
       });
       if (latest === previousState.text) return;
 
@@ -230,7 +235,7 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
     let unsubscribe: (() => void) | null = null;
 
     try {
-      unsubscribe = session.addListener((from, to) => {
+      unsubscribe = activeSession.addListener((from, to) => {
         const nextFrom = normalizeOffset(from);
         const nextTo = normalizeOffset(to);
 
@@ -276,7 +281,7 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
     hasBeforeParsePlugins,
     options,
     plugins,
-    session,
+    activeSession,
     updateIntervalMs,
     updateStrategy,
     useTransitionUpdates,
