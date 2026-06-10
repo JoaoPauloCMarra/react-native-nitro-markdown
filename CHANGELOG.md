@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2026-06-10
+
+### Added
+
+- Exported `MarkdownRenderers` as a public alias for `CustomRenderers` so custom renderer examples and IDE completions use a stable package type.
+
+### Fixed
+
+- `MarkdownStream` no longer throws when a pending stream update races with hook-owned session disposal during navigation.
+- `MarkdownStream` now reuses stable parsed AST nodes across full-parse stream updates to reduce rerenders during markdown-heavy streams.
+- `MarkdownStream` now keeps parser option identity stable by value, preventing unnecessary session resubscriptions when callers pass inline parser options.
+- The example stream screen now keeps the native stream session alive across tab switches while deferring expensive markdown rendering until the screen is focused again.
+- The example stream screen now isolates and caps raw text preview updates, reducing React commits and retained preview memory during active token streaming.
+- README usage examples now match the exported TypeScript API for parser options, source AST rendering, HTML parsing, and custom renderers.
+
 ## [0.7.1] - 2026-06-07
 
 ### Fixed

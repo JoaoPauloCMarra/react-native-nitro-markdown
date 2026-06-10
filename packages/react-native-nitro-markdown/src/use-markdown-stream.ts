@@ -21,13 +21,9 @@ export function useMarkdownSession(initialText?: string) {
     const session = sessionRef.current!;
     return () => {
       try {
-        session.clear();
+        session.dispose();
       } finally {
-        try {
-          session.dispose();
-        } finally {
-          sessionRef.current = null;
-        }
+        sessionRef.current = null;
       }
     };
   }, []);

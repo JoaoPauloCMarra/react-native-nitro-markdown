@@ -48,6 +48,7 @@ export type {
   LinkPressHandler,
   MarkdownContextValue,
   CustomRendererPropsByNode,
+  MarkdownRenderers,
   TableOptions,
 } from "./MarkdownContext";
 

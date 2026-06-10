@@ -3,10 +3,12 @@ import {
   useEffect,
   useRef,
   useCallback,
+  useMemo,
   startTransition,
   type FC,
 } from "react";
 import type { MarkdownNode } from "./headless";
+import type { ParserOptions } from "./Markdown.nitro";
 import { Markdown, type MarkdownProps } from "./markdown";
 import type { MarkdownSession } from "./specs/MarkdownSession.nitro";
 import {
@@ -19,6 +21,22 @@ const normalizeOffset = (value: number): number | null => {
   if (!Number.isFinite(value)) return null;
   if (value <= 0) return 0;
   return Math.floor(value);
+};
+
+const normalizeParserOptions = (
+  options?: ParserOptions,
+): ParserOptions | undefined => {
+  if (!options) return undefined;
+
+  const gfm = options.gfm;
+  const math = options.math;
+  const html = options.html;
+
+  if (gfm === undefined && math === undefined && html === undefined) {
+    return undefined;
+  }
+
+  return { gfm, math, html };
 };
 
 const resolveStreamText = ({
@@ -115,9 +133,21 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
   ...props
 }) => {
   const activeSession = resolveMarkdownSession(session);
+  const parserOptionGfm = options?.gfm;
+  const parserOptionMath = options?.math;
+  const parserOptionHtml = options?.html;
+  const parserOptions = useMemo(
+    () =>
+      normalizeParserOptions({
+        gfm: parserOptionGfm,
+        math: parserOptionMath,
+        html: parserOptionHtml,
+      }),
+    [parserOptionGfm, parserOptionMath, parserOptionHtml],
+  );
   const parseText = useCallback(
-    (text: string): MarkdownNode => parseMarkdownAst(text, options),
-    [options],
+    (text: string): MarkdownNode => parseMarkdownAst(text, parserOptions),
+    [parserOptions],
   );
   const createEmptyAst = (): MarkdownNode => ({
     type: "document",
@@ -184,13 +214,19 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
       pendingToRef.current = null;
       forceFullSyncRef.current = false;
 
-      const latest = resolveStreamText({
-        forceFullSync,
-        pendingFrom,
-        pendingTo,
-        previousText: previousState.text,
-        session: activeSession,
-      });
+      let latest: string;
+      try {
+        latest = resolveStreamText({
+          forceFullSync,
+          pendingFrom,
+          pendingTo,
+          previousText: previousState.text,
+          session: activeSession,
+        });
+      } catch (error) {
+        warnStreamError("[NitroMarkdown] Failed to read stream session:", error);
+        return;
+      }
       if (latest === previousState.text) return;
 
       const nextAst = hasBeforeParsePlugins
@@ -198,7 +234,7 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
         : getNextStreamAst({
             allowIncremental,
             nextText: latest,
-            options,
+            options: parserOptions,
             previousAst: previousState.ast,
             previousText: previousState.text,
           });
@@ -236,6 +272,8 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
 
     try {
       unsubscribe = activeSession.addListener((from, to) => {
+        if (!mountedRef.current) return;
+
         const nextFrom = normalizeOffset(from);
         const nextTo = normalizeOffset(to);
 
@@ -259,6 +297,10 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
     }
 
     return () => {
+      pendingUpdateRef.current = false;
+      pendingFromRef.current = null;
+      pendingToRef.current = null;
+      forceFullSyncRef.current = false;
       try {
         unsubscribe?.();
       } catch (error) {
@@ -279,8 +321,7 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
   }, [
     allowIncremental,
     hasBeforeParsePlugins,
-    options,
-    plugins,
+    parserOptions,
     activeSession,
     updateIntervalMs,
     updateStrategy,

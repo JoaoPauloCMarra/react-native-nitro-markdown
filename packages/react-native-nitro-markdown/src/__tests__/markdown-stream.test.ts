@@ -126,6 +126,38 @@ describe("MarkdownStream", () => {
     );
   });
 
+  it("keeps the stream subscription stable when parser option values do not change", () => {
+    const session = createSession({
+      allText: "hello",
+      rangeText: " world",
+    });
+
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+    act(() => {
+      renderer = TestRenderer.create(
+        React.createElement(MarkdownStream, {
+          session,
+          options: { gfm: true, math: true },
+          updateIntervalMs: 1,
+        }),
+      );
+    });
+
+    expect(session.addListener).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      renderer!.update(
+        React.createElement(MarkdownStream, {
+          session,
+          options: { gfm: true, math: true },
+          updateIntervalMs: 1,
+        }),
+      );
+    });
+
+    expect(session.addListener).toHaveBeenCalledTimes(1);
+  });
+
   it("falls back to full session text when reset-like range reads fail", () => {
     const session = createSession({
       allText: "old",
@@ -220,5 +252,40 @@ describe("MarkdownStream", () => {
       });
     }).not.toThrow();
     expect(unsubscribe).toHaveBeenCalled();
+  });
+
+  it("does not throw when a pending flush reads a disposed session", () => {
+    const session = createSession({
+      allText: "hello",
+      rangeText: " world",
+    });
+
+    act(() => {
+      TestRenderer.create(
+        React.createElement(MarkdownStream, {
+          session,
+          updateIntervalMs: 1,
+        }),
+      );
+    });
+
+    act(() => {
+      session.setAllText("hello world");
+      session.emit(5, 11);
+      session.getTextRange = jest.fn(() => {
+        throw new Error("NativeState is null");
+      });
+      session.getAllText = jest.fn(() => {
+        throw new Error("NativeState is null");
+      });
+
+      expect(() => {
+        jest.runOnlyPendingTimers();
+      }).not.toThrow();
+    });
+
+    expect(markdownMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ children: "hello" }),
+    );
   });
 });

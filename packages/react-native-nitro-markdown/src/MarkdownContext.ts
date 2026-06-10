@@ -123,6 +123,8 @@ export type CustomRenderers = Partial<{
   >;
 }>;
 
+export type MarkdownRenderers = CustomRenderers;
+
 export type TableOptions = {
   minColumnWidth?: number;
   measurementStabilizeMs?: number;

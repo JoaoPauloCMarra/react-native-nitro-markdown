@@ -1,11 +1,13 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { memo, useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Platform,
+  InteractionManager,
 } from "react-native";
+import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
   useMarkdownSession,
@@ -23,6 +25,7 @@ import { EXAMPLE_COLORS } from "../theme";
 
 const TOKEN_DELAY_MS = 150;
 const RAW_PREVIEW_SYNC_INTERVAL_MS = 60;
+const RAW_PREVIEW_MAX_CHARS = 3000;
 const CHARS_PER_TICK = 12;
 const DEMO_TEXT = `
 ### 🚀 High-Performance Markdown
@@ -95,17 +98,183 @@ We hope you enjoy using **Nitro Markdown**. It is designed to be the *definitive
 Happy Coding! 
 `;
 
+type MarkdownRendererPanelProps = {
+  session: ReturnType<typeof useMarkdownSession>;
+  hasContent: boolean;
+};
+
+type RawPreviewPanelProps = {
+  session: ReturnType<typeof useMarkdownSession>;
+};
+
+function getRawPreviewText(text: string): string {
+  if (text.length <= RAW_PREVIEW_MAX_CHARS) return text;
+  return text.slice(text.length - RAW_PREVIEW_MAX_CHARS);
+}
+
+function readSessionText(
+  session: ReturnType<typeof useMarkdownSession>,
+  fallback = "",
+): string {
+  try {
+    return session.getSession().getAllText();
+  } catch {
+    return fallback;
+  }
+}
+
+const RawPreviewPanel = memo(function RawPreviewPanel({
+  session,
+}: RawPreviewPanelProps) {
+  const rawScrollViewRef = useRef<ScrollView>(null);
+  const [rawText, setRawText] = useState(() =>
+    getRawPreviewText(readSessionText(session)),
+  );
+  const rawTextRef = useRef(rawText);
+
+  const getSessionText = useCallback(
+    (fallback: string) => {
+      return readSessionText(session, fallback);
+    },
+    [session],
+  );
+
+  const handleRawContentSizeChange = useCallback(() => {
+    rawScrollViewRef.current?.scrollToEnd({ animated: false });
+  }, []);
+
+  useEffect(() => {
+    rawTextRef.current = rawText;
+  }, [rawText]);
+
+  useEffect(() => {
+    const pendingRef = { current: false };
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const flush = () => {
+      timer = null;
+      if (!pendingRef.current) return;
+      pendingRef.current = false;
+
+      const nextText = getRawPreviewText(getSessionText(rawTextRef.current));
+      if (nextText !== rawTextRef.current) {
+        rawTextRef.current = nextText;
+        setRawText(nextText);
+      }
+    };
+
+    let unsubscribe: (() => void) | null = null;
+
+    try {
+      unsubscribe = session.getSession().addListener(() => {
+        pendingRef.current = true;
+        if (!timer) {
+          timer = setTimeout(flush, RAW_PREVIEW_SYNC_INTERVAL_MS);
+        }
+      });
+    } catch {
+      return () => {
+        if (timer) clearTimeout(timer);
+      };
+    }
+
+    return () => {
+      pendingRef.current = false;
+      unsubscribe?.();
+      if (timer) clearTimeout(timer);
+    };
+  }, [session, getSessionText]);
+
+  return (
+    <ExamplePanel style={styles.card}>
+      <ScrollView
+        ref={rawScrollViewRef}
+        style={styles.cardScroll}
+        nestedScrollEnabled
+        bounces={false}
+        alwaysBounceVertical={false}
+        overScrollMode="never"
+        contentContainerStyle={styles.scrollContent}
+        onContentSizeChange={handleRawContentSizeChange}
+      >
+        {rawText.length === 0 ? (
+          <Text style={styles.placeholderText}>Waiting for input...</Text>
+        ) : (
+          <Text style={styles.rawText}>{rawText}</Text>
+        )}
+      </ScrollView>
+    </ExamplePanel>
+  );
+});
+
+const MarkdownRendererPanel = memo(function MarkdownRendererPanel({
+  session,
+  hasContent,
+}: MarkdownRendererPanelProps) {
+  const markdownScrollViewRef = useRef<ScrollView>(null);
+
+  const handleContentSizeChange = useCallback(() => {
+    markdownScrollViewRef.current?.scrollToEnd({ animated: false });
+  }, []);
+
+  return (
+    <ExamplePanel style={[styles.card, styles.markdownCard]}>
+      <ScrollView
+        ref={markdownScrollViewRef}
+        style={styles.cardScroll}
+        nestedScrollEnabled
+        bounces={false}
+        alwaysBounceVertical={false}
+        overScrollMode="never"
+        contentContainerStyle={styles.scrollContent}
+        onContentSizeChange={handleContentSizeChange}
+      >
+        {!hasContent ? (
+          <View style={styles.placeholder}>
+            <Ionicons
+              name="code-slash-outline"
+              size={32}
+              color={EXAMPLE_COLORS.textMuted}
+            />
+            <Text style={styles.placeholderText}>Waiting for tokens...</Text>
+          </View>
+        ) : (
+          <MarkdownStream
+            session={session}
+            updateStrategy="raf"
+            useTransitionUpdates
+          />
+        )}
+      </ScrollView>
+    </ExamplePanel>
+  );
+});
+
 export default function TokenStreamScreen() {
   const tabHeight = useBottomTabHeight();
 
   const [isStreamMode, setIsStreamMode] = useState(false);
   const [streamOffset, setStreamOffset] = useState(0);
-  const [rawText, setRawText] = useState("");
+  const [hasStreamContent, setHasStreamContent] = useState(false);
+  const [isUiActive, setIsUiActive] = useState(true);
+  const [rawPreviewResetKey, setRawPreviewResetKey] = useState(0);
 
   const session = useMarkdownSession();
   const streamIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const streamOffsetRef = useRef(0);
-  const rawTextRef = useRef(rawText);
+  const hasStreamContentRef = useRef(false);
+
+  const appendToSession = useCallback(
+    (chunk: string) => {
+      try {
+        session.getSession().append(chunk);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [session],
+  );
 
   const stopStream = useCallback(() => {
     if (streamIntervalRef.current) {
@@ -114,14 +283,13 @@ export default function TokenStreamScreen() {
     }
     setIsStreamMode(false);
     setStreamOffset(streamOffsetRef.current);
-    const snapshotText = session.getSession().getAllText();
-    rawTextRef.current = snapshotText;
-    setRawText(snapshotText);
-  }, [session]);
+  }, []);
 
   const startStream = useCallback(() => {
     if (!isStreamMode && streamOffsetRef.current === 0) {
       session.clear();
+      hasStreamContentRef.current = false;
+      setHasStreamContent(false);
     }
 
     setIsStreamMode(true);
@@ -140,17 +308,25 @@ export default function TokenStreamScreen() {
         return;
       }
 
-      session.getSession().append(chunk);
+      if (!appendToSession(chunk)) {
+        stopStream();
+        return;
+      }
+      if (!hasStreamContentRef.current) {
+        hasStreamContentRef.current = true;
+        setHasStreamContent(true);
+      }
       streamOffsetRef.current += chunk.length;
     }, TOKEN_DELAY_MS);
-  }, [session, stopStream, isStreamMode]);
+  }, [session, stopStream, isStreamMode, appendToSession]);
 
   const clearStream = useCallback(() => {
     stopStream();
     streamOffsetRef.current = 0;
+    hasStreamContentRef.current = false;
     setStreamOffset(0);
-    setRawText("");
-    rawTextRef.current = "";
+    setHasStreamContent(false);
+    setRawPreviewResetKey((key) => key + 1);
     session.clear();
   }, [stopStream, session]);
 
@@ -160,65 +336,19 @@ export default function TokenStreamScreen() {
     };
   }, []);
 
-  const rawScrollViewRef = useRef<ScrollView>(null);
-  const markdownScrollViewRef = useRef<ScrollView>(null);
-  const autoScrollFrameRef = useRef<number | null>(null);
-
-  const scheduleAutoScroll = useCallback(() => {
-    if (autoScrollFrameRef.current !== null) return;
-
-    autoScrollFrameRef.current = requestAnimationFrame(() => {
-      autoScrollFrameRef.current = null;
-      rawScrollViewRef.current?.scrollToEnd({ animated: false });
-      markdownScrollViewRef.current?.scrollToEnd({ animated: false });
-    });
-  }, []);
-
-  useEffect(() => {
-    rawTextRef.current = rawText;
-  }, [rawText]);
-
-  useEffect(() => {
-    return () => {
-      if (autoScrollFrameRef.current !== null) {
-        cancelAnimationFrame(autoScrollFrameRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    const pendingRef = { current: false };
-    let timer: ReturnType<typeof setTimeout> | null = null;
-
-    const flush = () => {
-      timer = null;
-      if (!pendingRef.current) return;
-      pendingRef.current = false;
-
-      const nextText = session.getSession().getAllText();
-      if (nextText !== rawTextRef.current) {
-        rawTextRef.current = nextText;
-        setRawText(nextText);
-      }
-      setStreamOffset(streamOffsetRef.current);
-
-      if (isStreamMode) {
-        scheduleAutoScroll();
-      }
-    };
-
-    const unsubscribe = session.getSession().addListener(() => {
-      pendingRef.current = true;
-      if (!timer) {
-        timer = setTimeout(flush, RAW_PREVIEW_SYNC_INTERVAL_MS);
-      }
-    });
-
-    return () => {
-      unsubscribe();
-      if (timer) clearTimeout(timer);
-    };
-  }, [session, isStreamMode, scheduleAutoScroll]);
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      const task = InteractionManager.runAfterInteractions(() => {
+        if (!cancelled) setIsUiActive(true);
+      });
+      return () => {
+        cancelled = true;
+        task.cancel();
+        setIsUiActive(false);
+      };
+    }, []),
+  );
 
   return (
     <ExampleScreen paddingBottom={0} style={styles.screenContent}>
@@ -275,55 +405,17 @@ export default function TokenStreamScreen() {
           </Text>
         </ExamplePanel>
         <ExampleSectionLabel>Raw Token Data</ExampleSectionLabel>
-        <ExamplePanel style={styles.card}>
-          <ScrollView
-            ref={rawScrollViewRef}
-            style={styles.cardScroll}
-            nestedScrollEnabled
-            bounces={false}
-            alwaysBounceVertical={false}
-            overScrollMode="never"
-            contentContainerStyle={styles.scrollContent}
-          >
-            {rawText.length === 0 ? (
-              <Text style={styles.placeholderText}>Waiting for input...</Text>
-            ) : (
-              <Text style={styles.rawText}>{rawText}</Text>
-            )}
-          </ScrollView>
-        </ExamplePanel>
+        {isUiActive ? (
+          <RawPreviewPanel key={rawPreviewResetKey} session={session} />
+        ) : null}
 
         <ExampleSectionLabel>Markdown Renderer</ExampleSectionLabel>
-        <ExamplePanel style={[styles.card, styles.markdownCard]}>
-          <ScrollView
-            ref={markdownScrollViewRef}
-            style={styles.cardScroll}
-            nestedScrollEnabled
-            bounces={false}
-            alwaysBounceVertical={false}
-            overScrollMode="never"
-            contentContainerStyle={styles.scrollContent}
-          >
-            {rawText.length === 0 ? (
-              <View style={styles.placeholder}>
-                <Ionicons
-                  name="code-slash-outline"
-                  size={32}
-                  color={EXAMPLE_COLORS.textMuted}
-                />
-                <Text style={styles.placeholderText}>
-                  Waiting for tokens...
-                </Text>
-              </View>
-            ) : (
-              <MarkdownStream
-                session={session.getSession()}
-                updateStrategy="raf"
-                useTransitionUpdates
-              />
-            )}
-          </ScrollView>
-        </ExamplePanel>
+        {isUiActive ? (
+          <MarkdownRendererPanel
+            session={session}
+            hasContent={hasStreamContent}
+          />
+        ) : null}
       </ScrollView>
     </ExampleScreen>
   );
