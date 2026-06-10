@@ -1,6 +1,10 @@
 import { mockParser } from "./setup";
 import type { MarkdownNode } from "../headless";
-import { getNextStreamAst, parseMarkdownAst } from "../utils/incremental-ast";
+import {
+  getNextStreamAst,
+  parseMarkdownAst,
+  reuseStableAstNodes,
+} from "../utils/incremental-ast";
 import { getTextContent } from "../headless";
 
 const setTrailingPathEnd = (ast: MarkdownNode, end: number): MarkdownNode => {
@@ -79,6 +83,75 @@ describe("incremental AST", () => {
     });
 
     expect(mockParser.parse).toHaveBeenCalledTimes(1);
+  });
+
+  it("reuses stable nodes after a full parse fallback", () => {
+    const stableParagraph: MarkdownNode = {
+      type: "paragraph",
+      children: [{ type: "text", content: "Stable" }],
+    };
+    const previousAst: MarkdownNode = {
+      type: "document",
+      beg: 0,
+      end: 15,
+      children: [
+        stableParagraph,
+        {
+          type: "paragraph",
+          children: [{ type: "text", content: "Before" }],
+        },
+      ],
+    };
+
+    const nextAst = getNextStreamAst({
+      previousAst,
+      previousText: "Stable\n\nBefore\n",
+      nextText: "Stable\n\nBefore\nAfter",
+    });
+
+    expect(mockParser.parse).toHaveBeenCalledTimes(1);
+    expect(nextAst).not.toBe(previousAst);
+    expect(nextAst.children?.[0]).toBe(stableParagraph);
+  });
+
+  it("keeps changed nodes from the parsed AST", () => {
+    const previousStableChild: MarkdownNode = {
+      type: "paragraph",
+      children: [{ type: "text", content: "Stable" }],
+    };
+    const previousAst: MarkdownNode = {
+      type: "document",
+      children: [
+        previousStableChild,
+        {
+          type: "paragraph",
+          children: [{ type: "text", content: "Before" }],
+        },
+      ],
+    };
+    const nextChangedChild: MarkdownNode = {
+      type: "paragraph",
+      children: [{ type: "text", content: "After" }],
+    };
+    const nextAst: MarkdownNode = {
+      type: "document",
+      children: [
+        {
+          type: "paragraph",
+          children: [{ type: "text", content: "Stable" }],
+        },
+        nextChangedChild,
+      ],
+    };
+
+    const result = reuseStableAstNodes(previousAst, nextAst);
+
+    expect(result).not.toBe(previousAst);
+    expect(result.children?.[0]).toBe(previousStableChild);
+    expect(result.children?.[1]).not.toBe(previousAst.children?.[1]);
+    expect(result.children?.[1]?.children?.[0]).toBe(
+      nextChangedChild.children?.[0],
+    );
   });
 
   it("falls back to full parse when incremental disabled", () => {

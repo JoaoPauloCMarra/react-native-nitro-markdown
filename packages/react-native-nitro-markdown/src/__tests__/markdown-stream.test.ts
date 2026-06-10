@@ -221,4 +221,39 @@ describe("MarkdownStream", () => {
     }).not.toThrow();
     expect(unsubscribe).toHaveBeenCalled();
   });
+
+  it("does not throw when a pending flush reads a disposed session", () => {
+    const session = createSession({
+      allText: "hello",
+      rangeText: " world",
+    });
+
+    act(() => {
+      TestRenderer.create(
+        React.createElement(MarkdownStream, {
+          session,
+          updateIntervalMs: 1,
+        }),
+      );
+    });
+
+    act(() => {
+      session.setAllText("hello world");
+      session.emit(5, 11);
+      session.getTextRange = jest.fn(() => {
+        throw new Error("NativeState is null");
+      });
+      session.getAllText = jest.fn(() => {
+        throw new Error("NativeState is null");
+      });
+
+      expect(() => {
+        jest.runOnlyPendingTimers();
+      }).not.toThrow();
+    });
+
+    expect(markdownMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ children: "hello" }),
+    );
+  });
 });

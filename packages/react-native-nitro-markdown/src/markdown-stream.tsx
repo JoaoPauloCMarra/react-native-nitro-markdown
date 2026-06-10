@@ -184,13 +184,19 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
       pendingToRef.current = null;
       forceFullSyncRef.current = false;
 
-      const latest = resolveStreamText({
-        forceFullSync,
-        pendingFrom,
-        pendingTo,
-        previousText: previousState.text,
-        session: activeSession,
-      });
+      let latest: string;
+      try {
+        latest = resolveStreamText({
+          forceFullSync,
+          pendingFrom,
+          pendingTo,
+          previousText: previousState.text,
+          session: activeSession,
+        });
+      } catch (error) {
+        warnStreamError("[NitroMarkdown] Failed to read stream session:", error);
+        return;
+      }
       if (latest === previousState.text) return;
 
       const nextAst = hasBeforeParsePlugins
@@ -236,6 +242,8 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
 
     try {
       unsubscribe = activeSession.addListener((from, to) => {
+        if (!mountedRef.current) return;
+
         const nextFrom = normalizeOffset(from);
         const nextTo = normalizeOffset(to);
 
@@ -259,6 +267,10 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
     }
 
     return () => {
+      pendingUpdateRef.current = false;
+      pendingFromRef.current = null;
+      pendingToRef.current = null;
+      forceFullSyncRef.current = false;
       try {
         unsubscribe?.();
       } catch (error) {

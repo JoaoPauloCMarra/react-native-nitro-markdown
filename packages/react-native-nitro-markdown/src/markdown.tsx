@@ -483,8 +483,14 @@ export const Markdown: FC<MarkdownProps> = ({
         math: parserOptionMath,
         html: parserOptionHtml,
       });
+      const shouldCloneSourceAst =
+        sourceAst &&
+        (Boolean(astTransform) ||
+          sortedPlugins?.some((plugin) => plugin.afterParse) === true);
       let parsedAst = sourceAst
-        ? cloneMarkdownNode(sourceAst)
+        ? shouldCloneSourceAst
+          ? cloneMarkdownNode(sourceAst)
+          : sourceAst
         : parseCache
           ? getCachedParsedAst(markdownToParse, parserOptions)
           : parseWithNativeParser(markdownToParse, parserOptions);

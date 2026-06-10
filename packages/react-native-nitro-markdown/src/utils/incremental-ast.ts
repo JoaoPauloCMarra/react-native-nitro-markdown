@@ -152,6 +152,83 @@ const endsAtBlockBoundary = (text: string): boolean => {
   return text.endsWith("\n") || text.endsWith("\r");
 };
 
+const nodesHaveMatchingMetadata = (
+  previousNode: MarkdownNode,
+  nextNode: MarkdownNode,
+): boolean => {
+  return (
+    previousNode.type === nextNode.type &&
+    previousNode.content === nextNode.content &&
+    previousNode.level === nextNode.level &&
+    previousNode.href === nextNode.href &&
+    previousNode.title === nextNode.title &&
+    previousNode.alt === nextNode.alt &&
+    previousNode.language === nextNode.language &&
+    previousNode.ordered === nextNode.ordered &&
+    previousNode.start === nextNode.start &&
+    previousNode.checked === nextNode.checked &&
+    previousNode.isHeader === nextNode.isHeader &&
+    previousNode.align === nextNode.align &&
+    previousNode.beg === nextNode.beg &&
+    previousNode.end === nextNode.end
+  );
+};
+
+export const reuseStableAstNodes = (
+  previousNode: MarkdownNode,
+  nextNode: MarkdownNode,
+): MarkdownNode => {
+  if (previousNode.type !== nextNode.type) {
+    return nextNode;
+  }
+
+  const hasMatchingMetadata = nodesHaveMatchingMetadata(previousNode, nextNode);
+  const previousChildren = previousNode.children;
+  const nextChildren = nextNode.children;
+
+  if (!previousChildren || !nextChildren) {
+    return hasMatchingMetadata && previousChildren === nextChildren
+      ? previousNode
+      : nextNode;
+  }
+
+  if (previousChildren.length !== nextChildren.length) {
+    return {
+      ...nextNode,
+      children: nextChildren.map((nextChild, index) => {
+        const previousChild = previousChildren[index];
+        return previousChild
+          ? reuseStableAstNodes(previousChild, nextChild)
+          : nextChild;
+      }),
+    };
+  }
+
+  let hasChildChange = false;
+  const children = nextChildren.map((nextChild, index) => {
+    const child = reuseStableAstNodes(previousChildren[index], nextChild);
+    hasChildChange ||= child !== previousChildren[index];
+    return child;
+  });
+
+  if (hasMatchingMetadata && !hasChildChange) {
+    return previousNode;
+  }
+
+  return {
+    ...nextNode,
+    children,
+  };
+};
+
+const parseAstWithStableNodes = (
+  previousAst: MarkdownNode,
+  text: string,
+  options?: ParserOptions,
+): MarkdownNode => {
+  return reuseStableAstNodes(previousAst, parseAst(text, options));
+};
+
 export type IncrementalAstInput = {
   allowIncremental?: boolean;
   nextText: string;
@@ -168,7 +245,7 @@ export const getNextStreamAst = ({
   previousText,
 }: IncrementalAstInput): MarkdownNode => {
   if (!allowIncremental || !nextText.startsWith(previousText)) {
-    return parseAst(nextText, options);
+    return parseAstWithStableNodes(previousAst, nextText, options);
   }
 
   const appendedChunk = nextText.slice(previousText.length);
@@ -194,7 +271,7 @@ export const getNextStreamAst = ({
 
   if (!PLAIN_TEXT_APPEND_PATTERN.test(appendedChunk)) {
     if (endsAtBlockBoundary(previousText)) {
-      return parseAst(nextText, options);
+      return parseAstWithStableNodes(previousAst, nextText, options);
     }
 
     const textAppendedAst = appendPlainTextToAst(
@@ -208,12 +285,12 @@ export const getNextStreamAst = ({
   }
 
   if (insideFencedCodeBlock) {
-    return parseAst(nextText, options);
+    return parseAstWithStableNodes(previousAst, nextText, options);
   }
 
   // Correctness-first fallback: full reparse for all non-trivial appends.
   // Incremental append is only used for plain text chunks at the true trailing leaf.
-  return parseAst(nextText, options);
+  return parseAstWithStableNodes(previousAst, nextText, options);
 };
 
 export const parseMarkdownAst = (

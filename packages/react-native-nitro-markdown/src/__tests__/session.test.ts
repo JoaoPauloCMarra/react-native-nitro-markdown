@@ -74,7 +74,7 @@ describe("createMarkdownSession", () => {
     expect(session.getAllText()).toBe("hello");
   });
 
-  it("disposes hook-owned sessions on unmount", () => {
+  it("disposes hook-owned sessions on unmount without emitting clear updates", () => {
     createHybridObjectMock.mockClear();
 
     let renderer: TestRenderer.ReactTestRenderer | null = null;
@@ -88,7 +88,7 @@ describe("createMarkdownSession", () => {
       renderer!.unmount();
     });
 
-    expect(session.clear).toHaveBeenCalled();
+    expect(session.clear).not.toHaveBeenCalled();
     expect(session.dispose).toHaveBeenCalled();
   });
 

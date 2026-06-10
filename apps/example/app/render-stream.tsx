@@ -107,6 +107,29 @@ export default function TokenStreamScreen() {
   const streamOffsetRef = useRef(0);
   const rawTextRef = useRef(rawText);
 
+  const getSessionText = useCallback(
+    (fallback: string) => {
+      try {
+        return session.getSession().getAllText();
+      } catch {
+        return fallback;
+      }
+    },
+    [session],
+  );
+
+  const appendToSession = useCallback(
+    (chunk: string) => {
+      try {
+        session.getSession().append(chunk);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [session],
+  );
+
   const stopStream = useCallback(() => {
     if (streamIntervalRef.current) {
       clearInterval(streamIntervalRef.current);
@@ -114,10 +137,10 @@ export default function TokenStreamScreen() {
     }
     setIsStreamMode(false);
     setStreamOffset(streamOffsetRef.current);
-    const snapshotText = session.getSession().getAllText();
+    const snapshotText = getSessionText(rawTextRef.current);
     rawTextRef.current = snapshotText;
     setRawText(snapshotText);
-  }, [session]);
+  }, [getSessionText]);
 
   const startStream = useCallback(() => {
     if (!isStreamMode && streamOffsetRef.current === 0) {
@@ -140,10 +163,13 @@ export default function TokenStreamScreen() {
         return;
       }
 
-      session.getSession().append(chunk);
+      if (!appendToSession(chunk)) {
+        stopStream();
+        return;
+      }
       streamOffsetRef.current += chunk.length;
     }, TOKEN_DELAY_MS);
-  }, [session, stopStream, isStreamMode]);
+  }, [session, stopStream, isStreamMode, appendToSession]);
 
   const clearStream = useCallback(() => {
     stopStream();
@@ -195,7 +221,7 @@ export default function TokenStreamScreen() {
       if (!pendingRef.current) return;
       pendingRef.current = false;
 
-      const nextText = session.getSession().getAllText();
+      const nextText = getSessionText(rawTextRef.current);
       if (nextText !== rawTextRef.current) {
         rawTextRef.current = nextText;
         setRawText(nextText);
@@ -207,18 +233,27 @@ export default function TokenStreamScreen() {
       }
     };
 
-    const unsubscribe = session.getSession().addListener(() => {
-      pendingRef.current = true;
-      if (!timer) {
-        timer = setTimeout(flush, RAW_PREVIEW_SYNC_INTERVAL_MS);
-      }
-    });
+    let unsubscribe: (() => void) | null = null;
+
+    try {
+      unsubscribe = session.getSession().addListener(() => {
+        pendingRef.current = true;
+        if (!timer) {
+          timer = setTimeout(flush, RAW_PREVIEW_SYNC_INTERVAL_MS);
+        }
+      });
+    } catch {
+      return () => {
+        if (timer) clearTimeout(timer);
+      };
+    }
 
     return () => {
-      unsubscribe();
+      pendingRef.current = false;
+      unsubscribe?.();
       if (timer) clearTimeout(timer);
     };
-  }, [session, isStreamMode, scheduleAutoScroll]);
+  }, [session, isStreamMode, scheduleAutoScroll, getSessionText]);
 
   return (
     <ExampleScreen paddingBottom={0} style={styles.screenContent}>
@@ -317,7 +352,7 @@ export default function TokenStreamScreen() {
               </View>
             ) : (
               <MarkdownStream
-                session={session.getSession()}
+                session={session}
                 updateStrategy="raf"
                 useTransitionUpdates
               />

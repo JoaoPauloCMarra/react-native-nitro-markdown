@@ -2,6 +2,7 @@ import {
   useState,
   useEffect,
   useMemo,
+  useRef,
   type ReactNode,
   type FC,
   type ComponentType,
@@ -47,6 +48,7 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [aspectRatio, setAspectRatio] = useState<number | undefined>(undefined);
+  const mountedRef = useRef(true);
   const { theme, imageOptions } = useMarkdownContext();
   const allowedImageHref = useMemo(
     () => getAllowedImageHref(url, imageOptions),
@@ -114,6 +116,13 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
       }),
     [theme, aspectRatio],
   );
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -236,9 +245,11 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
         accessibilityRole={accessibilityLabel ? "image" : undefined}
         accessibilityLabel={accessibilityLabel}
         onLoad={() => {
+          if (!mountedRef.current) return;
           setLoading(false);
         }}
         onError={() => {
+          if (!mountedRef.current) return;
           setLoading(false);
           setError(true);
         }}

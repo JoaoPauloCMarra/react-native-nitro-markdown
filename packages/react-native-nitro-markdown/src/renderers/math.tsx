@@ -247,6 +247,14 @@ export const MathInline: FC<MathInlineProps> = ({ content, style }) => {
   const { theme } = useMarkdownContext();
   const styles = getCachedStyles(mathStylesCache, theme, createMathStyles);
   const [hasRenderError, setHasRenderError] = useState(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   if (!content) return null;
 
@@ -260,6 +268,7 @@ export const MathInline: FC<MathInlineProps> = ({ content, style }) => {
           color={theme.colors.text}
           style={styles.ratexInline}
           onError={() => {
+            if (!mountedRef.current) return;
             setHasRenderError(true);
           }}
         />
@@ -283,6 +292,14 @@ export const MathBlock: FC<MathBlockProps> = ({ content, style }) => {
   const { theme } = useMarkdownContext();
   const styles = getCachedStyles(mathStylesCache, theme, createMathStyles);
   const [hasRenderError, setHasRenderError] = useState(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   if (!content) return null;
 
@@ -300,6 +317,7 @@ export const MathBlock: FC<MathBlockProps> = ({ content, style }) => {
             color={theme.colors.text}
             style={styles.ratexBlock}
             onError={() => {
+              if (!mountedRef.current) return;
               setHasRenderError(true);
             }}
           />
