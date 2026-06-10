@@ -51,7 +51,9 @@ export function ExamplePanel({ children, style }: PanelProps) {
 type ActionButtonProps = {
   children: ReactNode;
   active?: boolean;
+  accessibilityLabel?: string;
   icon?: ReactNode;
+  testID?: string;
   tone?: "primary" | "danger" | "neutral";
   style?: StyleProp<ViewStyle>;
   onPress: () => void;
@@ -60,13 +62,22 @@ type ActionButtonProps = {
 export function ExampleActionButton({
   children,
   active,
+  accessibilityLabel,
   icon,
+  testID,
   tone = "primary",
   style,
   onPress,
 }: ActionButtonProps) {
+  const label =
+    accessibilityLabel ?? (typeof children === "string" ? children : undefined);
+
   return (
     <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      accessibilityState={active ? { selected: true } : undefined}
+      testID={testID}
       style={[
         styles.button,
         tone === "primary" && styles.primaryButton,

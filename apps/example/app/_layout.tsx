@@ -20,6 +20,7 @@ function RootTabs() {
       <Tabs
         screenOptions={{
           headerShown: false,
+          freezeOnBlur: true,
           tabBarStyle: {
             position: "absolute",
             left: 0,
