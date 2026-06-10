@@ -9,9 +9,9 @@
 Markdown parsing, rendering, streaming, and headless AST access for React
 Native, powered by md4c and Nitro Modules.
 
-Use it when you need GitHub-flavored Markdown, custom renderers, streaming
-chat/LLM output, syntax highlighting, math rendering, or native headless parsing
-without building your own renderer pipeline.
+Use it when you need GitHub-flavored Markdown, custom native renderers,
+streaming chat or LLM output, syntax highlighting, math rendering, or headless
+AST access without building your own parser pipeline.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/JoaoPauloCMarra/react-native-nitro-markdown/main/readme/demo.gif" alt="react-native-nitro-markdown demo" width="400" />
@@ -53,7 +53,7 @@ import { Markdown } from "react-native-nitro-markdown";
 
 export function Article() {
   return (
-    <Markdown options={{ gfm: true }}>
+    <Markdown options={{ gfm: true, math: true }}>
       {"# Hello\nThis is **native** markdown."}
     </Markdown>
   );
@@ -63,13 +63,18 @@ export function Article() {
 ## Streaming
 
 ```tsx
+import { useEffect } from "react";
 import {
   MarkdownStream,
   useMarkdownSession,
 } from "react-native-nitro-markdown";
 
 export function ChatMessage({ text }: { text: string }) {
-  const session = useMarkdownSession(text);
+  const session = useMarkdownSession();
+
+  useEffect(() => {
+    session.reset(text);
+  }, [session, text]);
 
   return (
     <MarkdownStream session={session} updateStrategy="raf" incrementalParsing />
@@ -77,7 +82,19 @@ export function ChatMessage({ text }: { text: string }) {
 }
 ```
 
-`MarkdownStream` batches updates for append-only text. If any plugin uses
+For token-by-token output, append to the hook-owned session and let
+`MarkdownStream` subscribe to range updates:
+
+```tsx
+const session = useMarkdownSession();
+
+session.getSession().append("Hello ");
+session.getSession().append("**world**");
+```
+
+`MarkdownStream` batches updates for append-only text. Use
+`updateStrategy="raf"` for visual streaming, or `updateStrategy="interval"` with
+`updateIntervalMs={50}` to bound update frequency. If any plugin uses
 `beforeParse`, incremental AST optimization is disabled so the full pipeline can
 run correctly. `MarkdownStream` accepts the controller returned by
 `useMarkdownSession()`. Pass `session.getSession()` only when another API needs
@@ -93,8 +110,8 @@ import {
 } from "react-native-nitro-markdown/headless";
 
 const ast = parseMarkdown("# Title");
-const astWithOffsets = parseMarkdownWithOptions("# Title", {
-  sourceAst: true,
+const astWithMath = parseMarkdownWithOptions("Inline $x^2$", {
+  math: true,
 });
 const text = extractPlainText("Hello **world**");
 ```
@@ -102,22 +119,43 @@ const text = extractPlainText("Hello **world**");
 Use the `react-native-nitro-markdown/headless` export when you need AST data,
 plain text extraction, indexing, validation, or tests without rendering UI.
 
+## Source AST Rendering
+
+If you already have a `MarkdownNode`, pass it through the `sourceAst` prop to
+skip native parsing during render:
+
+```tsx
+import {
+  Markdown,
+  parseMarkdown,
+  type MarkdownNode,
+} from "react-native-nitro-markdown";
+
+const ast: MarkdownNode = parseMarkdown("# Cached AST", { gfm: true });
+
+<Markdown sourceAst={ast}>{"# Cached AST"}</Markdown>;
+```
+
+When `sourceAst` is provided, `beforeParse` plugins are skipped because parsing
+already happened. `afterParse` plugins and `astTransform` still run.
+
 ## Common Options
 
-| Option          | Default           | What it does                                              |
-| --------------- | ----------------- | --------------------------------------------------------- |
-| `gfm`           | `true`            | Enables tables, strikethrough, task lists, and autolinks. |
-| `parseCache`    | `true`            | Reuses parsed ASTs for repeated content.                  |
-| `sourceAst`     | `false`           | Includes source offsets for tooling and editor features.  |
-| `allowHtml`     | `false`           | Preserves raw HTML nodes for custom renderers.            |
-| `highlightCode` | `false`           | Enables built-in syntax highlighting.                     |
-| `tableOptions`  | Built-in defaults | Controls table measurement and minimum widths.            |
+| Prop or parser option | Default           | What it does                                              |
+| --------------------- | ----------------- | --------------------------------------------------------- |
+| `options.gfm`         | `true`            | Enables tables, strikethrough, task lists, and autolinks. |
+| `options.math`        | `true`            | Parses inline and block math nodes.                       |
+| `options.html`        | `false`           | Preserves raw HTML nodes for custom renderers.            |
+| `parseCache`          | `true`            | Reuses parsed ASTs for repeated content.                  |
+| `sourceAst`           | `undefined`       | Renders a pre-parsed AST instead of parsing `children`.   |
+| `highlightCode`       | `false`           | Enables built-in syntax highlighting.                     |
+| `tableOptions`        | Built-in defaults | Controls table measurement and minimum widths.            |
 
 ## Custom Rendering
 
 ```tsx
-import type { MarkdownRenderers } from "react-native-nitro-markdown";
-import { Markdown } from "react-native-nitro-markdown";
+import { Text } from "react-native";
+import { Markdown, type MarkdownRenderers } from "react-native-nitro-markdown";
 
 const renderers: MarkdownRenderers = {
   paragraph({ children }) {
@@ -130,6 +168,16 @@ const renderers: MarkdownRenderers = {
 
 Custom renderers receive parsed nodes and pre-mapped props for common node
 types. For `html_inline` and `html_block`, read `node.content` directly.
+
+For stronger component-local typing, use the node-specific renderer props:
+
+```tsx
+import type { CodeBlockRendererProps } from "react-native-nitro-markdown";
+
+function CodeBlock({ content, language }: CodeBlockRendererProps) {
+  return <Text>{`${language ?? "text"}: ${content}`}</Text>;
+}
+```
 
 ## Plugin Pipeline
 
@@ -148,9 +196,51 @@ const plugins: MarkdownPlugin[] = [
 ```
 
 Pipeline order: `beforeParse` plugins, parse or `sourceAst`, `afterParse`
-plugins, `astTransform`, then render. When `sourceAst` is provided, `beforeParse` plugins are skipped
-because parsing already happened. Higher `priority` values run first, and
-sorting is stable.
+plugins, `astTransform`, then render. Higher `priority` values run first, and
+sorting is stable. `onError` receives `(error, phase, pluginName?)` for parser
+and plugin failures.
+
+## TypeScript Guidance
+
+The public types are exported from the root package and the headless subpath.
+Prefer package types over local object shapes so editors and AI tools can catch
+invalid parser options, node names, renderer props, and stream session usage.
+
+```tsx
+import { Text } from "react-native";
+import type {
+  CustomRendererPropsByNode,
+  MarkdownNode,
+  MarkdownPlugin,
+  MarkdownRenderers,
+  MarkdownStreamProps,
+  ParserOptions,
+} from "react-native-nitro-markdown";
+
+const options: ParserOptions = { gfm: true, math: true, html: false };
+
+function HeadingRenderer({
+  children,
+  level,
+}: CustomRendererPropsByNode["heading"]) {
+  return <Text accessibilityRole="header">{`${level}. ${children}`}</Text>;
+}
+
+const renderers: MarkdownRenderers = {
+  heading: HeadingRenderer,
+};
+
+const plugin: MarkdownPlugin = {
+  name: "strip-tracking",
+  afterParse(ast: MarkdownNode) {
+    return ast;
+  },
+};
+
+const streamProps: Pick<MarkdownStreamProps, "updateStrategy"> = {
+  updateStrategy: "raf",
+};
+```
 
 ## API
 
@@ -163,9 +253,9 @@ Main export:
 - `defaultMarkdownTheme` and theme types.
 - Renderer components such as `Paragraph`, `Heading`, `Link`, `CodeBlock`,
   `List`, `Table`, and `Image`.
-- Types including `MarkdownNode`, `MarkdownPlugin`, `MarkdownRenderers`,
-  `ParserOptions`, `MarkdownTheme`, `MarkdownSessionController`, and
-  `MarkdownStreamProps`.
+- Types including `MarkdownNode`, `MarkdownPlugin`, `CustomRenderers`,
+  `MarkdownRenderers`, `CustomRendererPropsByNode`, `ParserOptions`,
+  `MarkdownTheme`, `MarkdownSessionController`, and `MarkdownStreamProps`.
 
 Headless export:
 

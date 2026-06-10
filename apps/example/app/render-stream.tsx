@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { memo, useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -95,6 +95,54 @@ We hope you enjoy using **Nitro Markdown**. It is designed to be the *definitive
 Happy Coding! 
 `;
 
+type MarkdownRendererPanelProps = {
+  session: ReturnType<typeof useMarkdownSession>;
+  hasContent: boolean;
+};
+
+const MarkdownRendererPanel = memo(function MarkdownRendererPanel({
+  session,
+  hasContent,
+}: MarkdownRendererPanelProps) {
+  const markdownScrollViewRef = useRef<ScrollView>(null);
+
+  const handleContentSizeChange = useCallback(() => {
+    markdownScrollViewRef.current?.scrollToEnd({ animated: false });
+  }, []);
+
+  return (
+    <ExamplePanel style={[styles.card, styles.markdownCard]}>
+      <ScrollView
+        ref={markdownScrollViewRef}
+        style={styles.cardScroll}
+        nestedScrollEnabled
+        bounces={false}
+        alwaysBounceVertical={false}
+        overScrollMode="never"
+        contentContainerStyle={styles.scrollContent}
+        onContentSizeChange={handleContentSizeChange}
+      >
+        {!hasContent ? (
+          <View style={styles.placeholder}>
+            <Ionicons
+              name="code-slash-outline"
+              size={32}
+              color={EXAMPLE_COLORS.textMuted}
+            />
+            <Text style={styles.placeholderText}>Waiting for tokens...</Text>
+          </View>
+        ) : (
+          <MarkdownStream
+            session={session}
+            updateStrategy="raf"
+            useTransitionUpdates
+          />
+        )}
+      </ScrollView>
+    </ExamplePanel>
+  );
+});
+
 export default function TokenStreamScreen() {
   const tabHeight = useBottomTabHeight();
 
@@ -187,30 +235,13 @@ export default function TokenStreamScreen() {
   }, []);
 
   const rawScrollViewRef = useRef<ScrollView>(null);
-  const markdownScrollViewRef = useRef<ScrollView>(null);
-  const autoScrollFrameRef = useRef<number | null>(null);
-
-  const scheduleAutoScroll = useCallback(() => {
-    if (autoScrollFrameRef.current !== null) return;
-
-    autoScrollFrameRef.current = requestAnimationFrame(() => {
-      autoScrollFrameRef.current = null;
-      rawScrollViewRef.current?.scrollToEnd({ animated: false });
-      markdownScrollViewRef.current?.scrollToEnd({ animated: false });
-    });
+  const handleRawContentSizeChange = useCallback(() => {
+    rawScrollViewRef.current?.scrollToEnd({ animated: false });
   }, []);
 
   useEffect(() => {
     rawTextRef.current = rawText;
   }, [rawText]);
-
-  useEffect(() => {
-    return () => {
-      if (autoScrollFrameRef.current !== null) {
-        cancelAnimationFrame(autoScrollFrameRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     const pendingRef = { current: false };
@@ -228,9 +259,6 @@ export default function TokenStreamScreen() {
       }
       setStreamOffset(streamOffsetRef.current);
 
-      if (isStreamMode) {
-        scheduleAutoScroll();
-      }
     };
 
     let unsubscribe: (() => void) | null = null;
@@ -253,7 +281,7 @@ export default function TokenStreamScreen() {
       unsubscribe?.();
       if (timer) clearTimeout(timer);
     };
-  }, [session, isStreamMode, scheduleAutoScroll, getSessionText]);
+  }, [session, getSessionText]);
 
   return (
     <ExampleScreen paddingBottom={0} style={styles.screenContent}>
@@ -319,6 +347,7 @@ export default function TokenStreamScreen() {
             alwaysBounceVertical={false}
             overScrollMode="never"
             contentContainerStyle={styles.scrollContent}
+            onContentSizeChange={handleRawContentSizeChange}
           >
             {rawText.length === 0 ? (
               <Text style={styles.placeholderText}>Waiting for input...</Text>
@@ -329,36 +358,10 @@ export default function TokenStreamScreen() {
         </ExamplePanel>
 
         <ExampleSectionLabel>Markdown Renderer</ExampleSectionLabel>
-        <ExamplePanel style={[styles.card, styles.markdownCard]}>
-          <ScrollView
-            ref={markdownScrollViewRef}
-            style={styles.cardScroll}
-            nestedScrollEnabled
-            bounces={false}
-            alwaysBounceVertical={false}
-            overScrollMode="never"
-            contentContainerStyle={styles.scrollContent}
-          >
-            {rawText.length === 0 ? (
-              <View style={styles.placeholder}>
-                <Ionicons
-                  name="code-slash-outline"
-                  size={32}
-                  color={EXAMPLE_COLORS.textMuted}
-                />
-                <Text style={styles.placeholderText}>
-                  Waiting for tokens...
-                </Text>
-              </View>
-            ) : (
-              <MarkdownStream
-                session={session}
-                updateStrategy="raf"
-                useTransitionUpdates
-              />
-            )}
-          </ScrollView>
-        </ExamplePanel>
+        <MarkdownRendererPanel
+          session={session}
+          hasContent={rawText.length > 0}
+        />
       </ScrollView>
     </ExampleScreen>
   );

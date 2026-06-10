@@ -126,6 +126,38 @@ describe("MarkdownStream", () => {
     );
   });
 
+  it("keeps the stream subscription stable when parser option values do not change", () => {
+    const session = createSession({
+      allText: "hello",
+      rangeText: " world",
+    });
+
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+    act(() => {
+      renderer = TestRenderer.create(
+        React.createElement(MarkdownStream, {
+          session,
+          options: { gfm: true, math: true },
+          updateIntervalMs: 1,
+        }),
+      );
+    });
+
+    expect(session.addListener).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      renderer!.update(
+        React.createElement(MarkdownStream, {
+          session,
+          options: { gfm: true, math: true },
+          updateIntervalMs: 1,
+        }),
+      );
+    });
+
+    expect(session.addListener).toHaveBeenCalledTimes(1);
+  });
+
   it("falls back to full session text when reset-like range reads fail", () => {
     const session = createSession({
       allText: "old",
