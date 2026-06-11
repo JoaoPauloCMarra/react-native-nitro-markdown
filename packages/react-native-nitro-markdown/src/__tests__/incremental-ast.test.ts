@@ -234,6 +234,23 @@ describe("incremental AST", () => {
     expect(mockParser.parse).toHaveBeenCalledTimes(1);
   });
 
+  it("allows incremental append after a closed fenced code block", () => {
+    const previousText = "Intro\n\n```ts\nconst a = 1;\n```\n\nAfter";
+    const previousAst = setTrailingPathEnd(
+      parseMarkdownAst(previousText),
+      previousText.length,
+    );
+    jest.clearAllMocks();
+
+    getNextStreamAst({
+      previousAst,
+      previousText,
+      nextText: `${previousText} text`,
+    });
+
+    expect(mockParser.parse).not.toHaveBeenCalled();
+  });
+
   it("keeps p95 latency within budget for append-only updates", () => {
     let previousText = "Hello";
     let previousAst = setTrailingPathEnd(parseMarkdownAst(previousText), previousText.length);

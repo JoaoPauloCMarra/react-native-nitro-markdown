@@ -26,8 +26,15 @@ export type {
   MarkdownParseCompleteResult,
   MarkdownVirtualizationOptions,
 } from "./markdown";
-export { MarkdownStream } from "./markdown-stream";
-export type { MarkdownStreamProps } from "./markdown-stream";
+export { MarkdownStream, useMarkdownStreamState } from "./markdown-stream";
+export type {
+  MarkdownStreamProps,
+  MarkdownStreamRenderProps,
+  MarkdownStreamState,
+  MarkdownStreamSourceAstDisabledReason,
+  MarkdownStreamSourceAstStatus,
+  UseMarkdownStreamStateOptions,
+} from "./markdown-stream";
 
 export { useMarkdownContext, MarkdownContext } from "./MarkdownContext";
 export type {

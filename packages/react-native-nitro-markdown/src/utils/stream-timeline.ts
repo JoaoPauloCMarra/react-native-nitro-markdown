@@ -19,15 +19,17 @@ export const createTimestampTimeline = (
     .map(Number)
     .filter((index) => Number.isFinite(index))
     .sort((a, b) => a - b)
-    .map((index) => ({
-      index,
-      time: timestamps[index],
-    }))
+    .flatMap((index) => {
+      const time = timestamps[index];
+      return time === undefined ? [] : [{ index, time }];
+    })
     .filter((entry) => Number.isFinite(entry.time));
 
   let monotonic = true;
   for (let i = 1; i < entries.length; i += 1) {
-    if (entries[i].time < entries[i - 1].time) {
+    const current = entries[i];
+    const previous = entries[i - 1];
+    if (current && previous && current.time < previous.time) {
       monotonic = false;
       break;
     }
@@ -59,7 +61,8 @@ export const resolveHighlightPosition = (
 
   while (left <= right) {
     const mid = (left + right) >> 1;
-    if (entries[mid].time <= currentTimeMs) {
+    const entry = entries[mid];
+    if (entry !== undefined && entry.time <= currentTimeMs) {
       resolvedIndex = mid;
       left = mid + 1;
     } else {
@@ -68,5 +71,5 @@ export const resolveHighlightPosition = (
   }
 
   if (resolvedIndex === -1) return 0;
-  return entries[resolvedIndex].index + 1;
+  return (entries[resolvedIndex]?.index ?? 0) + 1;
 };

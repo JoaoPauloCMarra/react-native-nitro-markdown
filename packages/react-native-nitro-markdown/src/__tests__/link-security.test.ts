@@ -82,4 +82,25 @@ describe("getAllowedImageHref", () => {
       }),
     ).toBeNull();
   });
+
+  it("normalizes credentials and IPv6 brackets before host filtering", () => {
+    expect(
+      getAllowedImageHref("https://user:pass@assets.example.com/image.png", {
+        allowedHosts: ["assets.example.com"],
+      }),
+    ).toBe("https://user:pass@assets.example.com/image.png");
+    expect(
+      getAllowedImageHref("https://[2001:db8::1]/image.png", {
+        allowedHosts: ["2001"],
+      }),
+    ).toBe("https://[2001:db8::1]/image.png");
+  });
+
+  it("rejects hostless absolute image URLs when hosts are restricted", () => {
+    expect(
+      getAllowedImageHref("https:image.png", {
+        allowedHosts: ["assets.example.com"],
+      }),
+    ).toBeNull();
+  });
 });

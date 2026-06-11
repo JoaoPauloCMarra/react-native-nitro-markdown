@@ -265,8 +265,8 @@ export const MathInline: FC<MathInlineProps> = ({ content, style }) => {
           latex={content}
           fontSize={getInlineMathFontSize(content, theme)}
           displayMode={false}
-          color={theme.colors.text}
           style={styles.ratexInline}
+          {...(theme.colors.text ? { color: theme.colors.text } : {})}
           onError={() => {
             if (!mountedRef.current) return;
             setHasRenderError(true);
@@ -314,8 +314,8 @@ export const MathBlock: FC<MathBlockProps> = ({ content, style }) => {
             latex={content}
             fontSize={theme.fontSizes.xl}
             displayMode
-            color={theme.colors.text}
             style={styles.ratexBlock}
+            {...(theme.colors.text ? { color: theme.colors.text } : {})}
             onError={() => {
               if (!mountedRef.current) return;
               setHasRenderError(true);

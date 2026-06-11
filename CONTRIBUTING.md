@@ -4,7 +4,7 @@ First off, thank you for considering contributing to Nitro Markdown! It's people
 
 ## Development Workflow
 
-This is a monorepo using [Turbo](https://turbo.build/) and [Bun](https://bun.sh/).
+This is a monorepo using [Bun](https://bun.sh/) workspaces.
 
 ### Prerequisites
 

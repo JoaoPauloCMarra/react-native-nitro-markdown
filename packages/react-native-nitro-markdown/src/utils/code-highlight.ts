@@ -182,7 +182,7 @@ export function defaultHighlighter(
   const lines = code.split("\n");
   const result: HighlightedToken[] = [];
   for (let i = 0; i < lines.length; i++) {
-    result.push(...tokenizeLine(lines[i], language));
+    result.push(...tokenizeLine(lines[i] ?? "", language));
     if (i < lines.length - 1) {
       result.push({ text: "\n", type: "default" });
     }
