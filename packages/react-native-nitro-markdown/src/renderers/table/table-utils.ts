@@ -59,7 +59,7 @@ export const estimateColumnWidths = (
     let maxChars = headerChars;
 
     for (let row = 0; row < rows.length; row++) {
-      const cell = rows[row][col];
+      const cell = rows[row]?.[col];
       if (!cell) continue;
       const cellChars = Math.min(
         getTextContent(cell).trim().length,

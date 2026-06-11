@@ -26,14 +26,14 @@ const parseAbsoluteHref = (
   const protocolMatch = href.match(/^([a-z][a-z0-9+.-]*):/i);
   if (!protocolMatch) return null;
 
-  const protocol = normalizeProtocol(protocolMatch[1]);
+  const protocol = normalizeProtocol(protocolMatch[1] ?? "");
   const rest = href.slice(protocolMatch[0].length);
   const authorityMatch = rest.match(/^\/\/([^/?#]*)/);
   const rawHost = authorityMatch?.[1] ?? "";
-  const hostname = rawHost
+  const hostname = (rawHost
     .replace(/^[^@]*@/, "")
     .replace(/^\[|\]$/g, "")
-    .split(":")[0]
+    .split(":")[0] ?? "")
     .toLowerCase();
 
   return { protocol, hostname };

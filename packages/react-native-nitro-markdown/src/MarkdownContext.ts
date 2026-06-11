@@ -144,9 +144,7 @@ export type MarkdownContextValue = {
 export const MarkdownContext = createContext<MarkdownContextValue>({
   renderers: {},
   theme: defaultMarkdownTheme,
-  styles: undefined,
   stylingStrategy: "opinionated",
-  onLinkPress: undefined,
 });
 
 export const useMarkdownContext = () => useContext(MarkdownContext);

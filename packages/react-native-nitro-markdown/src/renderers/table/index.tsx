@@ -181,19 +181,19 @@ export const TableRenderer: FC<TableRendererProps> = ({
       for (let col = 0; col < columnCount; col++) {
         const headerWidth = measuredWidths.current.get(`header-${col}`);
         if (headerWidth && headerWidth > 0) {
-          maxWidths[col] = Math.max(maxWidths[col], headerWidth);
+          maxWidths[col] = Math.max(maxWidths[col] ?? 0, headerWidth);
         }
 
         for (let row = 0; row < rows.length; row++) {
-          if (col >= rows[row].length) continue;
+          if (col >= (rows[row]?.length ?? 0)) continue;
           const cellWidth = measuredWidths.current.get(`cell-${row}-${col}`);
           if (cellWidth && cellWidth > 0) {
-            maxWidths[col] = Math.max(maxWidths[col], cellWidth);
+            maxWidths[col] = Math.max(maxWidths[col] ?? 0, cellWidth);
           }
         }
 
         maxWidths[col] = Math.max(
-          maxWidths[col] + COLUMN_MEASUREMENT_PADDING,
+          (maxWidths[col] ?? 0) + COLUMN_MEASUREMENT_PADDING,
           minColumnWidth,
         );
       }

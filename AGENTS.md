@@ -14,7 +14,7 @@
 
 - Package manager: `bun`.
 - Repo scripts live in `package.json` (root) and per-package `package.json`.
-- Turbo is used for repo-wide tasks (`bun run build`, `bun run typecheck`, `bun run test`).
+- Bun workspaces are the only orchestration layer; root scripts delegate with `bun run --cwd ...` (no Turborepo).
 - Dependency updates should run from monorepo root, sequentially. Running `bun update` in multiple workspaces at once can race on the shared lockfile/node_modules and trigger `EEXIST` link errors.
 - Lint config uses `eslint-config-expo-magic` via root `eslint.config.js`; formatting is handled by lint (no separate prettier).
 - Generated outputs (`lib/**`, `nitrogen/generated/**`) are excluded from lint.
@@ -87,3 +87,7 @@
 - Update `CHANGELOG.md` when bumping versions or fixing bugs.
 - Keep `README.md` paths repo-relative (never absolute local filesystem paths).
 - Do not add `## Test` sections to PR descriptions or release notes.
+
+## Web Stance
+
+- Web is not supported: every entrypoint (including `./headless`) requires Nitro Modules (JSI). Do not add a `browser` field or web entry without adding a real web implementation and a smoke proof.

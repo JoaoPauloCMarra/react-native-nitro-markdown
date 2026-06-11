@@ -55,6 +55,13 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
         return (value as NSString).length
     }
 
+    private func clampedIndex(_ value: Double, upperBound: Int) -> Int {
+        if value <= 0 { return 0 }
+        let upper = Double(upperBound)
+        if value >= upper { return upperBound }
+        return Int(value)
+    }
+
     private func validateBufferSize(_ size: Int) throws {
         if size > Self.maxBufferSize {
             throw NSError(
@@ -120,8 +127,8 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
 
         let text = buffer as NSString
         let length = text.length
-        let start = max(0, min(Int(from), length))
-        let end = max(start, min(Int(to), length))
+        let start = clampedIndex(from, upperBound: length)
+        let end = max(start, clampedIndex(to, upperBound: length))
         return text.substring(with: NSRange(location: start, length: end - start))
     }
 
@@ -179,8 +186,8 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
             }
             let nsBuffer = NSMutableString(string: buffer)
             let length = nsBuffer.length
-            start = max(0, min(Int(from), length))
-            end = max(start, min(Int(to), length))
+            start = clampedIndex(from, upperBound: length)
+            end = max(start, clampedIndex(to, upperBound: length))
             try validateBufferSize(length - (end - start) + utf16Length(text))
             nsBuffer.replaceCharacters(in: NSRange(location: start, length: end - start), with: text)
             buffer = nsBuffer as String

@@ -34,6 +34,7 @@ import {
   type CustomRenderer,
   type CustomRenderers,
   type LinkPressHandler,
+  type MarkdownContextValue,
   type NodeRendererProps,
   type TableOptions,
 } from "./MarkdownContext";
@@ -174,10 +175,8 @@ const warnInDev = (message: string, error?: unknown): void => {
 };
 
 const cloneMarkdownNode = (node: MarkdownNode): MarkdownNode => {
-  return {
-    ...node,
-    children: node.children?.map(cloneMarkdownNode),
-  };
+  const children = node.children?.map(cloneMarkdownNode);
+  return children ? { ...node, children } : { ...node };
 };
 
 const getParserOptionsKey = (options?: ParserOptions): string => {
@@ -204,11 +203,11 @@ const normalizeParserOptions = (
     return undefined;
   }
 
-  return {
-    gfm,
-    math,
-    html,
-  };
+  const normalized: ParserOptions = {};
+  if (gfm !== undefined) normalized.gfm = gfm;
+  if (math !== undefined) normalized.math = math;
+  if (html !== undefined) normalized.html = html;
+  return normalized;
 };
 
 const parseWithNativeParser = (
@@ -478,11 +477,14 @@ export const Markdown: FC<MarkdownProps> = ({
       const markdownToParse = sourceAst
         ? children
         : applyBeforeParsePlugins(children, sortedPlugins, onErrorRef.current);
-      const parserOptions = normalizeParserOptions({
-        gfm: parserOptionGfm,
-        math: parserOptionMath,
-        html: parserOptionHtml,
-      });
+      const parserOptions = normalizeParserOptions(
+        Object.assign(
+          {},
+          parserOptionGfm === undefined ? null : { gfm: parserOptionGfm },
+          parserOptionMath === undefined ? null : { math: parserOptionMath },
+          parserOptionHtml === undefined ? null : { html: parserOptionHtml },
+        ),
+      );
       const shouldCloneSourceAst =
         sourceAst &&
         (Boolean(astTransform) ||
@@ -566,16 +568,16 @@ export const Markdown: FC<MarkdownProps> = ({
   }, [userTheme, stylingStrategy]);
 
   const baseStyles = getBaseStyles(theme);
-  const contextValue = useMemo(
+  const contextValue = useMemo<MarkdownContextValue>(
     () => ({
       renderers,
       theme,
-      styles: nodeStyles,
       stylingStrategy,
-      onLinkPress,
-      tableOptions,
-      imageOptions,
-      highlightCode,
+      ...(nodeStyles ? { styles: nodeStyles } : {}),
+      ...(onLinkPress ? { onLinkPress } : {}),
+      ...(tableOptions ? { tableOptions } : {}),
+      ...(imageOptions ? { imageOptions } : {}),
+      ...(highlightCode === undefined ? {} : { highlightCode }),
     }),
     [
       renderers,
@@ -779,15 +781,18 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
       ...(node.type === "heading" && {
         level: (node.level ?? 1) as 1 | 2 | 3 | 4 | 5 | 6,
       }),
-      ...(node.type === "link" && { href: node.href ?? "", title: node.title }),
+      ...(node.type === "link" && {
+        href: node.href ?? "",
+        ...(node.title ? { title: node.title } : {}),
+      }),
       ...(node.type === "image" && {
         url: node.href ?? "",
-        alt: node.alt,
-        title: node.title,
+        ...(node.alt ? { alt: node.alt } : {}),
+        ...(node.title ? { title: node.title } : {}),
       }),
       ...(node.type === "code_block" && {
         content: getTextContent(node),
-        language: node.language,
+        ...(node.language ? { language: node.language } : {}),
       }),
       ...(node.type === "code_inline" && { content: node.content ?? "" }),
       ...((node.type === "math_inline" || node.type === "math_block") && {
@@ -795,7 +800,7 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
       }),
       ...(node.type === "list" && {
         ordered: node.ordered ?? false,
-        start: node.start,
+        ...(node.start === undefined ? {} : { start: node.start }),
       }),
       ...(node.type === "task_list_item" && { checked: node.checked ?? false }),
     };
@@ -816,7 +821,10 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
 
     case "heading":
       return (
-        <Heading level={node.level ?? 1} style={nodeStyles?.heading}>
+        <Heading
+          level={node.level ?? 1}
+          {...(nodeStyles?.heading ? { style: nodeStyles.heading } : {})}
+        >
           {renderChildren(node.children, inListItem, true)}
         </Heading>
       );
@@ -859,7 +867,10 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
 
     case "link":
       return (
-        <Link href={node.href ?? ""} style={nodeStyles?.link}>
+        <Link
+          href={node.href ?? ""}
+          {...(nodeStyles?.link ? { style: nodeStyles.link } : {})}
+        >
           {renderChildren(node.children, inListItem, true)}
         </Link>
       );
@@ -868,36 +879,52 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
       return (
         <Image
           url={node.href ?? ""}
-          title={node.title}
-          alt={node.alt}
           Renderer={NodeRenderer}
-          style={nodeStyles?.image}
+          {...(node.title ? { title: node.title } : {})}
+          {...(node.alt ? { alt: node.alt } : {})}
+          {...(nodeStyles?.image ? { style: nodeStyles.image } : {})}
         />
       );
 
     case "code_inline":
       return (
-        <InlineCode style={nodeStyles?.code_inline}>{node.content}</InlineCode>
+        <InlineCode
+          {...(nodeStyles?.code_inline
+            ? { style: nodeStyles.code_inline }
+            : {})}
+        >
+          {node.content}
+        </InlineCode>
       );
 
     case "code_block":
       return (
         <CodeBlock
-          language={node.language}
           content={getTextContent(node)}
-          style={nodeStyles?.code_block}
+          {...(node.language ? { language: node.language } : {})}
+          {...(nodeStyles?.code_block ? { style: nodeStyles.code_block } : {})}
         />
       );
 
     case "blockquote":
       return (
-        <Blockquote style={nodeStyles?.blockquote}>
+        <Blockquote
+          {...(nodeStyles?.blockquote
+            ? { style: nodeStyles.blockquote }
+            : {})}
+        >
           {renderChildren(node.children, inListItem, false)}
         </Blockquote>
       );
 
     case "horizontal_rule":
-      return <HorizontalRule style={nodeStyles?.horizontal_rule} />;
+      return (
+        <HorizontalRule
+          {...(nodeStyles?.horizontal_rule
+            ? { style: nodeStyles.horizontal_rule }
+            : {})}
+        />
+      );
 
     case "line_break":
       return <Text>{"\n"}</Text>;
@@ -910,7 +937,12 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
       if (!mathContent) return null;
       mathContent = mathContent.replace(/^\$+|\$+$/g, "").trim();
       return (
-        <MathInline content={mathContent} style={nodeStyles?.math_inline} />
+        <MathInline
+          content={mathContent}
+          {...(nodeStyles?.math_inline
+            ? { style: nodeStyles.math_inline }
+            : {})}
+        />
       );
     }
 
@@ -918,7 +950,7 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
       return (
         <MathBlock
           content={getTextContent(node)}
-          style={nodeStyles?.math_block}
+          {...(nodeStyles?.math_block ? { style: nodeStyles.math_block } : {})}
         />
       );
 
@@ -926,9 +958,9 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
       return (
         <List
           ordered={node.ordered ?? false}
-          start={node.start}
           depth={depth}
-          style={nodeStyles?.list}
+          {...(node.start === undefined ? {} : { start: node.start })}
+          {...(nodeStyles?.list ? { style: nodeStyles.list } : {})}
         >
           {node.children?.map((child, index) => {
             if (child.type === "task_list_item") {
@@ -968,7 +1000,9 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
       return (
         <TaskListItem
           checked={node.checked ?? false}
-          style={nodeStyles?.task_list_item}
+          {...(nodeStyles?.task_list_item
+            ? { style: nodeStyles.task_list_item }
+            : {})}
         >
           {renderChildren(node.children, true, false)}
         </TaskListItem>
@@ -979,7 +1013,7 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
         <TableRenderer
           node={node}
           Renderer={NodeRenderer}
-          style={nodeStyles?.table}
+          {...(nodeStyles?.table ? { style: nodeStyles.table } : {})}
         />
       );
 

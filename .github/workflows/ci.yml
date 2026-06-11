@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      run_native_examples:
+        description: Run Android and iOS example build jobs
+        required: false
+        default: false
+        type: boolean
 
 env:
   TZ: UTC
@@ -37,3 +43,58 @@ jobs:
 
       - name: Release preflight
         run: bun run release:preflight
+
+  example-android:
+    name: Example Android Build
+    if: ${{ vars.RUN_NATIVE_EXAMPLE_CI == 'true' || (github.event_name == 'workflow_dispatch' && inputs.run_native_examples) }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Setup Java
+        uses: actions/setup-java@v5.0.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android
+        uses: android-actions/setup-android@v3.2.2
+
+      - uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - run: bun install --frozen-lockfile
+
+      - name: Check example app
+        run: bun run example:check
+
+      - name: Prebuild Android example
+        run: CI=1 bun run --cwd apps/example prebuild -- --platform android
+
+      - name: Build Android example
+        run: bun run example:android:assemble
+
+  example-ios:
+    name: Example iOS Build
+    if: ${{ vars.RUN_NATIVE_EXAMPLE_CI == 'true' || (github.event_name == 'workflow_dispatch' && inputs.run_native_examples) }}
+    runs-on: macos-26
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - run: bun install --frozen-lockfile
+
+      - name: Check example app
+        run: bun run example:check
+
+      - name: Prebuild iOS example
+        run: CI=1 bun run --cwd apps/example prebuild -- --platform ios
+
+      - name: Build iOS example
+        run: bun run example:ios:build

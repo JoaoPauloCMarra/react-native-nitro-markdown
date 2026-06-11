@@ -1,7 +1,10 @@
 import "./setup";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
-import { MarkdownStream } from "../markdown-stream";
+import {
+  MarkdownStream,
+  type MarkdownStreamRenderProps,
+} from "../markdown-stream";
 import type { MarkdownSession } from "../specs/MarkdownSession.nitro";
 import type { MarkdownSessionController } from "../use-markdown-stream";
 
@@ -158,6 +161,36 @@ describe("MarkdownStream", () => {
     expect(session.addListener).toHaveBeenCalledTimes(1);
   });
 
+  it("does not reread the full session text on stable parent renders", () => {
+    const session = createSession({
+      allText: "hello",
+      rangeText: " world",
+    });
+
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+    act(() => {
+      renderer = TestRenderer.create(
+        React.createElement(MarkdownStream, {
+          session,
+          updateIntervalMs: 1,
+        }),
+      );
+    });
+
+    expect(session.getAllText).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      renderer!.update(
+        React.createElement(MarkdownStream, {
+          session,
+          updateIntervalMs: 1,
+        }),
+      );
+    });
+
+    expect(session.getAllText).toHaveBeenCalledTimes(1);
+  });
+
   it("falls back to full session text when reset-like range reads fail", () => {
     const session = createSession({
       allText: "old",
@@ -287,5 +320,82 @@ describe("MarkdownStream", () => {
     expect(markdownMock).toHaveBeenLastCalledWith(
       expect.objectContaining({ children: "hello" }),
     );
+  });
+
+  it("passes stream state to a custom render function", () => {
+    const session = createSession({
+      allText: "hello",
+      rangeText: " world",
+    });
+    const renderMarkdown = jest.fn(() => null);
+
+    act(() => {
+      TestRenderer.create(
+        React.createElement(MarkdownStream, {
+          session,
+          updateIntervalMs: 1,
+          renderMarkdown,
+        }),
+      );
+    });
+
+    expect(markdownMock).not.toHaveBeenCalled();
+    expect(renderMarkdown).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        text: "hello",
+        sourceAstStatus: "available",
+        sourceAst: expect.objectContaining({ type: "document" }),
+        markdownProps: expect.objectContaining({
+          children: "hello",
+          sourceAst: expect.objectContaining({ type: "document" }),
+        }),
+      }),
+    );
+
+    act(() => {
+      session.setAllText("hello world");
+      session.emit(5, 11);
+      jest.runOnlyPendingTimers();
+    });
+
+    expect(renderMarkdown).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        text: "hello world",
+        markdownProps: expect.objectContaining({ children: "hello world" }),
+      }),
+    );
+  });
+
+  it("keeps sourceAst disabled when beforeParse plugins are present", () => {
+    const session = createSession({
+      allText: "hello",
+      rangeText: " world",
+    });
+    const renderMarkdown = jest.fn(() => null);
+
+    act(() => {
+      TestRenderer.create(
+        React.createElement(MarkdownStream, {
+          session,
+          updateIntervalMs: 1,
+          plugins: [{ name: "prefix", beforeParse: (text: string) => text }],
+          renderMarkdown,
+        }),
+      );
+    });
+
+    const lastProps = renderMarkdown.mock.lastCall?.[0] as
+      | MarkdownStreamRenderProps
+      | undefined;
+
+    expect(lastProps).toEqual(
+      expect.objectContaining({
+        text: "hello",
+        sourceAstStatus: "disabled",
+        sourceAstDisabledReason: "beforeParse-plugin",
+      }),
+    );
+    expect(lastProps).not.toHaveProperty("sourceAst");
+    expect(lastProps?.markdownProps.sourceAst).toBeUndefined();
   });
 });

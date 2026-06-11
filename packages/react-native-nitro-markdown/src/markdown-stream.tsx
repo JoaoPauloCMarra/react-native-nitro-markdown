@@ -6,10 +6,11 @@ import {
   useMemo,
   startTransition,
   type FC,
+  type ReactNode,
 } from "react";
 import type { MarkdownNode } from "./headless";
 import type { ParserOptions } from "./Markdown.nitro";
-import { Markdown, type MarkdownProps } from "./markdown";
+import { Markdown, type MarkdownPlugin, type MarkdownProps } from "./markdown";
 import type { MarkdownSession } from "./specs/MarkdownSession.nitro";
 import {
   resolveMarkdownSession,
@@ -36,7 +37,11 @@ const normalizeParserOptions = (
     return undefined;
   }
 
-  return { gfm, math, html };
+  const normalized: ParserOptions = {};
+  if (gfm !== undefined) normalized.gfm = gfm;
+  if (math !== undefined) normalized.math = math;
+  if (html !== undefined) normalized.html = html;
+  return normalized;
 };
 
 const resolveStreamText = ({
@@ -89,7 +94,11 @@ function warnStreamError(message: string, error: unknown): void {
   }
 }
 
-export type MarkdownStreamProps = {
+export type MarkdownStreamSourceAstStatus = "available" | "disabled";
+
+export type MarkdownStreamSourceAstDisabledReason = "beforeParse-plugin";
+
+export type UseMarkdownStreamStateOptions = {
   /**
    * The active MarkdownSession to stream content from.
    */
@@ -116,13 +125,32 @@ export type MarkdownStreamProps = {
    * Automatically falls back to full parse when updates are not safely mergeable.
    */
   incrementalParsing?: boolean;
+  /**
+   * Parser options used for the stream source AST.
+   */
+  options?: ParserOptions;
+  /**
+   * Plugins determine whether an optimized source AST can be passed through.
+   */
+  plugins?: MarkdownPlugin[];
+};
+
+export type MarkdownStreamState = {
+  text: string;
+  sourceAst?: MarkdownNode;
+  sourceAstStatus: MarkdownStreamSourceAstStatus;
+  sourceAstDisabledReason?: MarkdownStreamSourceAstDisabledReason;
+};
+
+export type MarkdownStreamRenderProps = MarkdownStreamState & {
+  markdownProps: MarkdownProps;
+};
+
+export type MarkdownStreamProps = UseMarkdownStreamStateOptions & {
+  renderMarkdown?: (props: MarkdownStreamRenderProps) => ReactNode;
 } & Omit<MarkdownProps, "children" | "sourceAst">;
 
-/**
- * A component that renders streaming Markdown from a MarkdownSession.
- * It efficiently subscribes to session updates to minimize parent re-renders.
- */
-export const MarkdownStream: FC<MarkdownStreamProps> = ({
+export function useMarkdownStreamState({
   session,
   updateIntervalMs = 50,
   updateStrategy = "interval",
@@ -130,19 +158,21 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
   incrementalParsing = true,
   options,
   plugins,
-  ...props
-}) => {
+}: UseMarkdownStreamStateOptions): MarkdownStreamState {
   const activeSession = resolveMarkdownSession(session);
   const parserOptionGfm = options?.gfm;
   const parserOptionMath = options?.math;
   const parserOptionHtml = options?.html;
   const parserOptions = useMemo(
     () =>
-      normalizeParserOptions({
-        gfm: parserOptionGfm,
-        math: parserOptionMath,
-        html: parserOptionHtml,
-      }),
+      normalizeParserOptions(
+        Object.assign(
+          {},
+          parserOptionGfm === undefined ? null : { gfm: parserOptionGfm },
+          parserOptionMath === undefined ? null : { math: parserOptionMath },
+          parserOptionHtml === undefined ? null : { html: parserOptionHtml },
+        ),
+      ),
     [parserOptionGfm, parserOptionMath, parserOptionHtml],
   );
   const parseText = useCallback(
@@ -153,15 +183,18 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
     type: "document",
     children: [],
   });
-  const initialText = activeSession.getAllText();
   const hasBeforeParsePlugins =
     plugins?.some((plugin) => typeof plugin.beforeParse === "function") ??
     false;
-  const [renderState, setRenderState] = useState(() => ({
-    text: initialText,
-    ast: hasBeforeParsePlugins ? createEmptyAst() : parseText(initialText),
-  }));
+  const [renderState, setRenderState] = useState(() => {
+    const initialText = activeSession.getAllText();
+    return {
+      text: initialText,
+      ast: hasBeforeParsePlugins ? createEmptyAst() : parseText(initialText),
+    };
+  });
   const renderStateRef = useRef(renderState);
+  const didMountRef = useRef(false);
   const pendingUpdateRef = useRef(false);
   const pendingFromRef = useRef<number | null>(null);
   const pendingToRef = useRef<number | null>(null);
@@ -183,6 +216,11 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
   }, []);
 
   useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
+
     const initialText = activeSession.getAllText();
     const initialState = {
       text: initialText,
@@ -234,9 +272,9 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
         : getNextStreamAst({
             allowIncremental,
             nextText: latest,
-            options: parserOptions,
             previousAst: previousState.ast,
             previousText: previousState.text,
+            ...(parserOptions ? { options: parserOptions } : {}),
           });
       const nextState = {
         text: latest,
@@ -328,14 +366,52 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
     useTransitionUpdates,
   ]);
 
-  return (
-    <Markdown
-      {...props}
-      options={options}
-      plugins={plugins}
-      sourceAst={hasBeforeParsePlugins ? undefined : renderState.ast}
-    >
-      {renderState.text}
-    </Markdown>
-  );
+  const streamState: MarkdownStreamState = {
+    text: renderState.text,
+    sourceAstStatus: hasBeforeParsePlugins ? "disabled" : "available",
+  };
+  if (hasBeforeParsePlugins) {
+    streamState.sourceAstDisabledReason = "beforeParse-plugin";
+  } else {
+    streamState.sourceAst = renderState.ast;
+  }
+  return streamState;
+}
+
+export const MarkdownStream: FC<MarkdownStreamProps> = ({
+  session,
+  updateIntervalMs = 50,
+  updateStrategy = "interval",
+  useTransitionUpdates = false,
+  incrementalParsing = true,
+  options,
+  plugins,
+  renderMarkdown,
+  ...props
+}) => {
+  const streamState = useMarkdownStreamState({
+    session,
+    updateIntervalMs,
+    updateStrategy,
+    useTransitionUpdates,
+    incrementalParsing,
+    ...(options ? { options } : {}),
+    ...(plugins ? { plugins } : {}),
+  });
+  const markdownProps: MarkdownProps = {
+    ...props,
+    children: streamState.text,
+  };
+  if (options) markdownProps.options = options;
+  if (plugins) markdownProps.plugins = plugins;
+  if (streamState.sourceAst) markdownProps.sourceAst = streamState.sourceAst;
+
+  if (renderMarkdown) {
+    return renderMarkdown({
+      ...streamState,
+      markdownProps,
+    });
+  }
+
+  return <Markdown {...markdownProps} />;
 };

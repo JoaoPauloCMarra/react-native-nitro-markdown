@@ -1,4 +1,4 @@
-{
+module.exports = {
   "expo": {
     "name": "Nitro Markdown",
     "slug": "nitro-markdown-example",
@@ -44,4 +44,4 @@
       "autolinkingModuleResolution": true
     }
   }
-}
+};

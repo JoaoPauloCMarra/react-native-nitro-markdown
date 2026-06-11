@@ -1,17 +1,19 @@
-import { memo, useState, useEffect, useRef, useCallback } from "react";
+import { memo, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Platform,
-  InteractionManager,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
   useMarkdownSession,
   MarkdownStream,
+  useMarkdownStreamState,
+  type MarkdownNode,
+  type MarkdownStreamRenderProps,
 } from "react-native-nitro-markdown";
 import {
   ExampleActionButton,
@@ -101,15 +103,56 @@ Happy Coding!
 type MarkdownRendererPanelProps = {
   session: ReturnType<typeof useMarkdownSession>;
   hasContent: boolean;
+  mode: StreamRenderMode;
 };
 
 type RawPreviewPanelProps = {
   session: ReturnType<typeof useMarkdownSession>;
 };
 
+type StreamRenderMode = "builtIn" | "custom" | "headless";
+
+type ModeOption = {
+  key: StreamRenderMode;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+};
+
+type ExternalPreviewProps = {
+  text: string;
+  sourceAst?: MarkdownNode;
+  sourceAstStatus: string;
+};
+
+const MODE_OPTIONS: ModeOption[] = [
+  { key: "builtIn", label: "Built-in", icon: "document-text-outline" },
+  { key: "custom", label: "Custom", icon: "swap-horizontal-outline" },
+  { key: "headless", label: "Hook", icon: "git-branch-outline" },
+];
+
 function getRawPreviewText(text: string): string {
   if (text.length <= RAW_PREVIEW_MAX_CHARS) return text;
   return text.slice(text.length - RAW_PREVIEW_MAX_CHARS);
+}
+
+function countNodes(node: MarkdownNode | undefined): number {
+  if (!node) return 0;
+  return 1 + (node.children?.reduce((total, child) => total + countNodes(child), 0) ?? 0);
+}
+
+function getPreviewLines(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(-8);
+}
+
+function getLineStyle(line: string) {
+  if (line.startsWith("#")) return styles.externalHeading;
+  if (line.startsWith("-") || /^\d+\./.test(line)) return styles.externalListItem;
+  if (line.startsWith(">")) return styles.externalQuote;
+  return styles.externalParagraph;
 }
 
 function readSessionText(
@@ -210,12 +253,24 @@ const RawPreviewPanel = memo(function RawPreviewPanel({
 const MarkdownRendererPanel = memo(function MarkdownRendererPanel({
   session,
   hasContent,
+  mode,
 }: MarkdownRendererPanelProps) {
   const markdownScrollViewRef = useRef<ScrollView>(null);
 
   const handleContentSizeChange = useCallback(() => {
     markdownScrollViewRef.current?.scrollToEnd({ animated: false });
   }, []);
+
+  const renderCustomMarkdown = useCallback(
+    ({ text, sourceAst, sourceAstStatus }: MarkdownStreamRenderProps) => (
+      <ExternalPreview
+        text={text}
+        sourceAst={sourceAst}
+        sourceAstStatus={sourceAstStatus}
+      />
+    ),
+    [],
+  );
 
   return (
     <ExamplePanel style={[styles.card, styles.markdownCard]}>
@@ -238,15 +293,111 @@ const MarkdownRendererPanel = memo(function MarkdownRendererPanel({
             />
             <Text style={styles.placeholderText}>Waiting for tokens...</Text>
           </View>
-        ) : (
+        ) : mode === "builtIn" ? (
           <MarkdownStream
             session={session}
             updateStrategy="raf"
             useTransitionUpdates
           />
+        ) : mode === "custom" ? (
+          <MarkdownStream
+            session={session}
+            updateStrategy="raf"
+            useTransitionUpdates
+            renderMarkdown={renderCustomMarkdown}
+          />
+        ) : (
+          <HeadlessStreamPreview session={session} />
         )}
       </ScrollView>
     </ExamplePanel>
+  );
+});
+
+const ExternalPreview = memo(function ExternalPreview({
+  text,
+  sourceAst,
+  sourceAstStatus,
+}: ExternalPreviewProps) {
+  const lines = useMemo(() => getPreviewLines(text), [text]);
+  const nodeCount = useMemo(() => countNodes(sourceAst), [sourceAst]);
+
+  return (
+    <View style={styles.externalPreview}>
+      <View style={styles.externalHeader}>
+        <View style={styles.externalHeaderIcon}>
+          <Ionicons name="swap-horizontal" size={16} color={EXAMPLE_COLORS.accentDeep} />
+        </View>
+        <View style={styles.externalHeaderText}>
+          <Text style={styles.externalTitle}>External Renderer Adapter</Text>
+          <Text style={styles.externalSubtitle}>
+            {sourceAstStatus === "available"
+              ? `${nodeCount} AST nodes available`
+              : "Text-only stream state"}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.externalBody}>
+        {lines.map((line, index) => (
+          <Text key={`${index}-${line}`} style={getLineStyle(line)} numberOfLines={2}>
+            {line}
+          </Text>
+        ))}
+      </View>
+    </View>
+  );
+});
+
+const HeadlessStreamPreview = memo(function HeadlessStreamPreview({
+  session,
+}: {
+  session: ReturnType<typeof useMarkdownSession>;
+}) {
+  const streamState = useMarkdownStreamState({
+    session,
+    updateStrategy: "raf",
+    useTransitionUpdates: true,
+  });
+  const lines = useMemo(() => getPreviewLines(streamState.text), [streamState.text]);
+  const nodeCount = useMemo(() => countNodes(streamState.sourceAst), [streamState.sourceAst]);
+
+  return (
+    <View style={styles.externalPreview}>
+      <View style={styles.externalHeader}>
+        <View style={[styles.externalHeaderIcon, styles.hookHeaderIcon]}>
+          <Ionicons name="git-branch" size={16} color={EXAMPLE_COLORS.info} />
+        </View>
+        <View style={styles.externalHeaderText}>
+          <Text style={styles.externalTitle}>Headless Hook Consumer</Text>
+          <Text style={styles.externalSubtitle}>
+            {streamState.text.length} chars, {nodeCount} AST nodes
+          </Text>
+        </View>
+      </View>
+      <View style={styles.headlessGrid}>
+        <View style={styles.metricCell}>
+          <Text style={styles.metricValue}>{streamState.text.length}</Text>
+          <Text style={styles.metricLabel}>chars</Text>
+        </View>
+        <View style={styles.metricCell}>
+          <Text style={styles.metricValue}>{nodeCount}</Text>
+          <Text style={styles.metricLabel}>nodes</Text>
+        </View>
+        <View style={styles.metricCell}>
+          <Text style={styles.metricValue}>
+            {streamState.sourceAstStatus === "available" ? "AST" : "Text"}
+          </Text>
+          <Text style={styles.metricLabel}>mode</Text>
+        </View>
+      </View>
+      <View style={styles.externalBody}>
+        {lines.slice(-4).map((line, index) => (
+          <Text key={`${index}-${line}`} style={styles.externalParagraph} numberOfLines={2}>
+            {line}
+          </Text>
+        ))}
+      </View>
+    </View>
   );
 });
 
@@ -258,6 +409,7 @@ export default function TokenStreamScreen() {
   const [hasStreamContent, setHasStreamContent] = useState(false);
   const [isUiActive, setIsUiActive] = useState(true);
   const [rawPreviewResetKey, setRawPreviewResetKey] = useState(0);
+  const [renderMode, setRenderMode] = useState<StreamRenderMode>("builtIn");
 
   const session = useMarkdownSession();
   const streamIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -338,13 +490,9 @@ export default function TokenStreamScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
-      const task = InteractionManager.runAfterInteractions(() => {
-        if (!cancelled) setIsUiActive(true);
-      });
+      const timer = setTimeout(() => setIsUiActive(true), 0);
       return () => {
-        cancelled = true;
-        task.cancel();
+        clearTimeout(timer);
         setIsUiActive(false);
       };
     }, []),
@@ -404,6 +552,29 @@ export default function TokenStreamScreen() {
             Compare raw token input with rendered markdown in real time.
           </Text>
         </ExamplePanel>
+        <View style={styles.modeTabs}>
+          {MODE_OPTIONS.map((option) => {
+            const active = renderMode === option.key;
+            return (
+              <ExampleActionButton
+                key={option.key}
+                active={active}
+                tone="neutral"
+                style={styles.modeButton}
+                onPress={() => setRenderMode(option.key)}
+                icon={
+                  <Ionicons
+                    name={option.icon}
+                    size={15}
+                    color={active ? EXAMPLE_COLORS.accent : EXAMPLE_COLORS.textMuted}
+                  />
+                }
+              >
+                {option.label}
+              </ExampleActionButton>
+            );
+          })}
+        </View>
         <ExampleSectionLabel>Raw Token Data</ExampleSectionLabel>
         {isUiActive ? (
           <RawPreviewPanel key={rawPreviewResetKey} session={session} />
@@ -414,6 +585,7 @@ export default function TokenStreamScreen() {
           <MarkdownRendererPanel
             session={session}
             hasContent={hasStreamContent}
+            mode={renderMode}
           />
         ) : null}
       </ScrollView>
@@ -458,6 +630,16 @@ const styles = StyleSheet.create({
 
   scrollContainer: { paddingHorizontal: 16, paddingTop: 10, gap: 10 },
 
+  modeTabs: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  modeButton: {
+    flex: 1,
+    minHeight: 36,
+    paddingHorizontal: 8,
+  },
+
   card: {
     height: 200,
     overflow: "hidden",
@@ -487,5 +669,95 @@ const styles = StyleSheet.create({
     color: EXAMPLE_COLORS.textMuted,
     fontSize: 13,
     fontWeight: "500",
+  },
+  externalPreview: {
+    gap: 12,
+  },
+  externalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+    backgroundColor: EXAMPLE_COLORS.surfaceMuted,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: EXAMPLE_COLORS.border,
+  },
+  externalHeaderIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: EXAMPLE_COLORS.accentSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  hookHeaderIcon: {
+    backgroundColor: EXAMPLE_COLORS.infoSoft,
+  },
+  externalHeaderText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  externalTitle: {
+    color: EXAMPLE_COLORS.text,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  externalSubtitle: {
+    color: EXAMPLE_COLORS.textMuted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  externalBody: {
+    gap: 8,
+  },
+  externalHeading: {
+    color: EXAMPLE_COLORS.accentDeep,
+    fontSize: 16,
+    fontWeight: "800",
+    lineHeight: 22,
+  },
+  externalListItem: {
+    color: EXAMPLE_COLORS.text,
+    fontSize: 13,
+    lineHeight: 19,
+    paddingLeft: 8,
+  },
+  externalQuote: {
+    color: EXAMPLE_COLORS.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
+    paddingLeft: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: EXAMPLE_COLORS.accent,
+  },
+  externalParagraph: {
+    color: EXAMPLE_COLORS.text,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  headlessGrid: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  metricCell: {
+    flex: 1,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: EXAMPLE_COLORS.surfaceMuted,
+    borderWidth: 1,
+    borderColor: EXAMPLE_COLORS.border,
+  },
+  metricValue: {
+    color: EXAMPLE_COLORS.text,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  metricLabel: {
+    color: EXAMPLE_COLORS.textMuted,
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 2,
+    textTransform: "uppercase",
   },
 });

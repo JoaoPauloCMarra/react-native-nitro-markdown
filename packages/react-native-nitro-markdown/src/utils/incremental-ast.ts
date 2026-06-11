@@ -24,7 +24,7 @@ const isInsideFencedCodeBlock = (text: string): boolean => {
     const fenceMatch = line.match(FENCE_LINE_PATTERN);
     if (!fenceMatch) continue;
 
-    const marker = fenceMatch[1];
+    const marker = fenceMatch[1] ?? "";
     const markerChar = marker[0] as "`" | "~";
     const markerLength = marker.length;
 
@@ -94,7 +94,11 @@ const findTrailingLeafPath = (
   }
 
   const lastIndex = children.length - 1;
-  return findTrailingLeafPath(children[lastIndex], [...path, lastIndex]);
+  const lastChild = children[lastIndex];
+  if (lastChild === undefined) {
+    return path;
+  }
+  return findTrailingLeafPath(lastChild, [...path, lastIndex]);
 };
 
 const getNodeAtPath = (
@@ -126,11 +130,14 @@ const appendPlainTextToAst = (
   const delta = appendedChunk.length;
   const update = (node: MarkdownNode, depth: number): MarkdownNode => {
     if (depth === path.length) {
-      return {
+      const updatedNode: MarkdownNode = {
         ...node,
         content: (node.content ?? "") + appendedChunk,
-        end: typeof node.end === "number" ? node.end + delta : node.end,
       };
+      if (typeof node.end === "number") {
+        updatedNode.end = node.end + delta;
+      }
+      return updatedNode;
     }
 
     const childIndex = path[depth];
@@ -138,11 +145,16 @@ const appendPlainTextToAst = (
       index === childIndex ? update(child, depth + 1) : child,
     );
 
-    return {
+    const updatedNode: MarkdownNode = {
       ...node,
-      end: typeof node.end === "number" ? node.end + delta : node.end,
-      children,
     };
+    if (typeof node.end === "number") {
+      updatedNode.end = node.end + delta;
+    }
+    if (children) {
+      updatedNode.children = children;
+    }
+    return updatedNode;
   };
 
   return update(ast, 0);
@@ -206,8 +218,12 @@ export const reuseStableAstNodes = (
 
   let hasChildChange = false;
   const children = nextChildren.map((nextChild, index) => {
-    const child = reuseStableAstNodes(previousChildren[index], nextChild);
-    hasChildChange ||= child !== previousChildren[index];
+    const previousChild = previousChildren[index];
+    const child =
+      previousChild === undefined
+        ? nextChild
+        : reuseStableAstNodes(previousChild, nextChild);
+    hasChildChange ||= child !== previousChild;
     return child;
   });
 

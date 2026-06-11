@@ -25,6 +25,18 @@ describe("createTimestampTimeline", () => {
     expect(result.entries).toEqual([{ index: 0, time: 100 }]);
   });
 
+  it("filters sparse or undefined timestamp entries", () => {
+    const timestamps = { 0: 100, 1: undefined, 2: 250 } as unknown as Record<
+      number,
+      number
+    >;
+    const result = createTimestampTimeline(timestamps);
+    expect(result.entries).toEqual([
+      { index: 0, time: 100 },
+      { index: 2, time: 250 },
+    ]);
+  });
+
   it("returns empty timeline for undefined input", () => {
     const result = createTimestampTimeline();
     expect(result.entries).toHaveLength(0);

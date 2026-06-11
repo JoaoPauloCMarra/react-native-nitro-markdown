@@ -6,25 +6,25 @@
     "packages/*"
   ],
   "scripts": {
-    "setup": "node scripts/setup.js",
-    "publish-package": "node scripts/publish.js",
-    "publish-package:dry-run": "node scripts/publish.js --dry-run --yes",
-    "audit:package": "node scripts/publish.js --dry-run --skip-preflight --skip-checks --skip-docs --yes",
-    "harness": "node scripts/harness.js",
+    "setup": "bun scripts/setup.js",
+    "publish-package": "bun scripts/publish.js",
+    "publish-package:dry-run": "bun scripts/publish.js --dry-run --yes",
+    "audit:package": "bun run build && bun scripts/publish.js --dry-run --skip-preflight --skip-checks --skip-docs --yes",
+    "harness": "bun scripts/harness.js",
     "dev": "bun run example:start",
     "check": "bun run lint && bun run typecheck && bun run test && bun run test:cpp",
     "check:ci": "bun run harness",
-    "release:preflight": "bun run check:ci && bun run example:check && bun run audit:package && bun run publish-package:dry-run",
-    "build": "turbo run build",
+    "release:preflight": "bun run check:ci && bun run example:check && bun run publish-package:dry-run",
+    "build": "bun run codegen && bun run --cwd packages/react-native-nitro-markdown build",
     "lint": "bun run --cwd packages/react-native-nitro-markdown lint",
-    "clean": "turbo run clean",
-    "codegen": "turbo run codegen",
-    "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
-    "test:coverage": "turbo run test -- --coverage",
-    "test:cpp": "turbo run test:cpp --filter=react-native-nitro-markdown",
-    "test:cpp:coverage": "turbo run test:cpp:coverage --filter=react-native-nitro-markdown",
-    "benchmark": "node scripts/benchmark-comparison.js",
+    "clean": "bun run --cwd packages/react-native-nitro-markdown clean",
+    "codegen": "bun run --cwd packages/react-native-nitro-markdown codegen",
+    "typecheck": "bun run --cwd packages/react-native-nitro-markdown typecheck",
+    "test": "bun run --cwd packages/react-native-nitro-markdown test",
+    "test:coverage": "bun run --cwd packages/react-native-nitro-markdown test:coverage",
+    "test:cpp": "bun run --cwd packages/react-native-nitro-markdown test:cpp",
+    "test:cpp:coverage": "bun run --cwd packages/react-native-nitro-markdown test:cpp:coverage",
+    "benchmark": "bun scripts/benchmark-comparison.js",
     "example:start": "bun run --cwd apps/example start",
     "example:ios": "bun run --cwd apps/example ios",
     "example:android": "bun run --cwd apps/example android",
@@ -36,9 +36,9 @@
     "example:check": "bun run example:doctor && bun run example:lint && bun run example:typecheck",
     "example:android:assemble": "bun run --cwd apps/example android:assemble",
     "example:ios:build": "bun run --cwd apps/example ios:build",
-    "example:smoke": "node scripts/example-smoke.js",
-    "example:smoke:android": "node scripts/example-smoke.js --android",
-    "example:smoke:ios": "node scripts/example-smoke.js --ios"
+    "example:smoke": "bun scripts/example-smoke.js",
+    "example:smoke:android": "bun scripts/example-smoke.js --android",
+    "example:smoke:ios": "bun scripts/example-smoke.js --ios"
   },
   "devDependencies": {
     "@swc/core": "^1.15.40",
@@ -59,7 +59,6 @@
     "react-native": "0.85.3",
     "react-native-builder-bob": "^0.41.0",
     "rimraf": "^6.1.3",
-    "turbo": "^2.9.14",
     "typescript": "~6.0.3"
   },
   "overrides": {
@@ -69,9 +68,10 @@
     "react-native": "0.85.3",
     "react-native-safe-area-context": "5.7.0",
     "react-native-screens": "4.25.2",
-    "expo": "~56.0.9",
-    "expo-constants": "~56.0.17",
-    "expo-linking": "~56.0.13"
+    "expo": "~56.0.11",
+    "expo-constants": "~56.0.18",
+    "expo-linking": "~56.0.14",
+    "expo-font": "~56.0.6"
   },
   "dependencies": {
     "react-native-nitro-modules": "0.35.7"

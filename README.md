@@ -1,10 +1,13 @@
 # react-native-nitro-markdown
 
 [![npm version](https://img.shields.io/npm/v/react-native-nitro-markdown?color=f97316&label=npm)](https://www.npmjs.com/package/react-native-nitro-markdown)
+[![npm downloads](https://img.shields.io/npm/dm/react-native-nitro-markdown?color=22c55e&label=downloads)](https://www.npmjs.com/package/react-native-nitro-markdown)
+[![CI](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/actions/workflows/ci.yml/badge.svg)](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/react-native-nitro-markdown?color=007ec6)](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/LICENSE)
 [![React Native](https://img.shields.io/badge/react--native-%3E%3D0.75-61dafb)](https://reactnative.dev/)
-[![Expo](https://img.shields.io/badge/expo-SDK%2056-000020)](https://expo.dev/)
-[![Nitro Modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.35.7-black)](https://nitro.margelo.com/)
+[![Expo](https://img.shields.io/badge/expo-SDK%2056-000020)](https://docs.expo.dev/versions/v56.0.0/)
+[![Nitro Modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.35.7-black)](https://www.npmjs.com/package/react-native-nitro-modules)
+[![TypeScript](https://img.shields.io/badge/typescript-6.0-3178c6)](https://www.typescriptlang.org/)
 
 Markdown parsing, rendering, streaming, and headless AST access for React
 Native, powered by md4c and Nitro Modules.
@@ -22,6 +25,9 @@ AST access without building your own parser pipeline.
 ```sh
 bun add react-native-nitro-markdown react-native-nitro-modules ratex-react-native
 ```
+
+`react-native-nitro-modules` and `ratex-react-native` are peer dependencies
+because parsing and math rendering use native code.
 
 For Expo development builds:
 
@@ -100,6 +106,47 @@ run correctly. `MarkdownStream` accepts the controller returned by
 `useMarkdownSession()`. Pass `session.getSession()` only when another API needs
 direct access to the native session object.
 
+### Custom stream rendering
+
+Use `renderMarkdown` when you want `MarkdownStream` to keep the session
+subscription, batching, and incremental AST updates while another component owns
+the rendering. The callback receives the current text, the reusable source AST
+when available, and `markdownProps` that match the built-in `Markdown`
+component:
+
+```tsx
+<MarkdownStream
+  session={session}
+  renderMarkdown={({ text, sourceAst, markdownProps }) => (
+    <MyMarkdownRenderer
+      markdown={text}
+      ast={sourceAst}
+      fallbackProps={markdownProps}
+    />
+  )}
+/>
+```
+
+Use `useMarkdownStreamState` when you want the streaming state without the
+`MarkdownStream` wrapper:
+
+```tsx
+const { text, sourceAst, sourceAstStatus } = useMarkdownStreamState({
+  session,
+  updateStrategy: "raf",
+});
+```
+
+`sourceAst` is available when the stream can safely reuse Nitro's parsed AST.
+When a `beforeParse` plugin is present, `sourceAstStatus` becomes `"disabled"`
+and `sourceAstDisabledReason` is `"beforeParse-plugin"`. In that state,
+`sourceAst` is omitted; render from `text` so the full plugin pipeline can run.
+
+`MarkdownStream` avoids full-buffer reads on stable parent renders. It uses
+native range reads for append-only updates, then falls back to a full session
+read only for reset-like changes, replacements inside existing text, or native
+range-read failures.
+
 ## Headless Parsing
 
 ```ts
@@ -150,6 +197,16 @@ already happened. `afterParse` plugins and `astTransform` still run.
 | `sourceAst`           | `undefined`       | Renders a pre-parsed AST instead of parsing `children`.   |
 | `highlightCode`       | `false`           | Enables built-in syntax highlighting.                     |
 | `tableOptions`        | Built-in defaults | Controls table measurement and minimum widths.            |
+
+## Compatibility
+
+| Dependency | Supported range or baseline |
+| ---------- | --------------------------- |
+| [React Native](https://reactnative.dev/) | `>=0.75.0` |
+| [Nitro Modules](https://www.npmjs.com/package/react-native-nitro-modules) | `>=0.35.7` |
+| [RaTeX React Native](https://www.npmjs.com/package/ratex-react-native) | `>=0.1.4` |
+| [Expo](https://docs.expo.dev/versions/v56.0.0/) | SDK 56 development builds |
+| [TypeScript](https://www.typescriptlang.org/) | 6.0 in this package workspace |
 
 ## Custom Rendering
 
@@ -249,13 +306,18 @@ Main export:
 - `Markdown` for rendering complete markdown strings.
 - `MarkdownStream` for incremental rendering.
 - `MarkdownSession` and `useMarkdownSession()` for append/replace/reset flows.
+- `useMarkdownStreamState()` for headless streaming text and AST state.
 - `useStream()` for timestamped stream state.
 - `defaultMarkdownTheme` and theme types.
 - Renderer components such as `Paragraph`, `Heading`, `Link`, `CodeBlock`,
   `List`, `Table`, and `Image`.
 - Types including `MarkdownNode`, `MarkdownPlugin`, `CustomRenderers`,
   `MarkdownRenderers`, `CustomRendererPropsByNode`, `ParserOptions`,
-  `MarkdownTheme`, `MarkdownSessionController`, and `MarkdownStreamProps`.
+  `MarkdownTheme`, `MarkdownSessionController`, `MarkdownStreamProps`,
+  `MarkdownStreamRenderProps`, `MarkdownStreamState`,
+  `MarkdownStreamSourceAstStatus`, `MarkdownStreamSourceAstDisabledReason`,
+  `UseMarkdownStreamStateOptions`, `CodeHighlighter`, `HighlightedToken`,
+  `TokenType`, and `UrlSafetyOptions`.
 
 Headless export:
 
@@ -273,7 +335,7 @@ Headless export:
 | iOS      | Native parser through Nitro and md4c.      |
 | Android  | Native parser through Nitro and md4c.      |
 | Expo     | Development builds.                        |
-| Web      | Not the primary target for native parsing. |
+| Web      | Not supported. The parser requires Nitro Modules (JSI); there is no web entrypoint and imports on web fail deterministically. |
 
 ## Troubleshooting
 
