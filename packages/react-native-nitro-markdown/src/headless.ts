@@ -297,6 +297,10 @@ export const getFlattenedText = (node: MarkdownNode): string => {
 /**
  * Recursively removes `beg`/`end` source offset fields from an AST.
  * Useful to reduce memory in environments that don't need source mapping.
+ *
+ * Prefer `parseMarkdownWithOptions(text, { sourceOffsets: false })` when you can:
+ * it skips emitting the offsets natively, avoiding this post-hoc tree walk and
+ * the JSON cost of serializing/parsing them in the first place.
  */
 export function stripSourceOffsets(node: MarkdownNode): MarkdownNode {
   const { beg: _beg, end: _end, children, ...rest } = node;

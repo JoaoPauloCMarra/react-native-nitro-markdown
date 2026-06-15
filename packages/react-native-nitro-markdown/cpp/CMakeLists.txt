@@ -10,7 +10,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CPP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # Collect source files
-file(GLOB MD4C_SOURCES "${CPP_ROOT}/md4c/*.c")
+file(GLOB MD4C_SOURCES "${CPP_ROOT}/nitromd/*.c")
 file(GLOB CORE_SOURCES "${CPP_ROOT}/core/*.cpp")
 # Exclude the test file from the library sources
 list(FILTER CORE_SOURCES EXCLUDE REGEX ".*Test\.cpp$")
@@ -23,7 +23,7 @@ add_library(MD4CCore STATIC
 
 # Include directories for the library
 target_include_directories(MD4CCore PUBLIC
-    "${CPP_ROOT}/md4c"
+    "${CPP_ROOT}/nitromd"
     "${CPP_ROOT}/core"
 )
 
@@ -35,7 +35,7 @@ target_compile_definitions(MD4CCore PRIVATE
 
 # Create the test executable
 add_executable(MD4CParserTest
-    core/MD4CParserTest.cpp
+    core/NitroMD4CParserTest.cpp
 )
 
 # Link the test executable to the core library

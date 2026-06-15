@@ -19,6 +19,7 @@ import {
   type FlatListProps,
   type StyleProp,
   type ViewStyle,
+  type TextStyle,
 } from "react-native";
 import {
   parseMarkdown,
@@ -670,6 +671,11 @@ const isInline = (type: MarkdownNode["type"]): boolean => {
   );
 };
 
+const containsInlineMath = (nodes?: MarkdownNode[]): boolean =>
+  nodes?.some(
+    (node) => node.type === "math_inline" || containsInlineMath(node.children),
+  ) ?? false;
+
 const NodeRendererComponent: FC<NodeRendererProps> = ({
   node,
   depth,
@@ -830,10 +836,23 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
       );
 
     case "paragraph":
+      if (containsInlineMath(node.children)) {
+        return (
+          <Paragraph inListItem={inListItem} style={nodeStyles?.paragraph}>
+            {renderChildren(node.children, inListItem, false)}
+          </Paragraph>
+        );
+      }
       return (
-        <Paragraph inListItem={inListItem} style={nodeStyles?.paragraph}>
-          {renderChildren(node.children, inListItem, false)}
-        </Paragraph>
+        <Text
+          style={[
+            baseStyles.text,
+            inListItem ? undefined : { marginBottom: theme.spacing.l },
+            nodeStyles?.paragraph as StyleProp<TextStyle>,
+          ]}
+        >
+          {renderChildren(node.children, inListItem, true)}
+        </Text>
       );
 
     case "text":

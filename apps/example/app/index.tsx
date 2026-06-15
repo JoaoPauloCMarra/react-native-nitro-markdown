@@ -27,6 +27,7 @@ import {
   type MarkdownNode,
 } from "react-native-nitro-markdown";
 import {
+  BenchBar,
   ExampleActionButton,
   ExamplePanel,
   ExampleScreen,
@@ -47,6 +48,77 @@ Inline energy $E = mc^2$ and quadratic roots $x = \\frac{-b \\pm \\sqrt{b^2 - 4a
 $$\\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{6} \\qquad \\int_0^1 x^${index + 2}\\,dx = \\frac{1}{${index + 3}}$$
   `,
 ).join("\n");
+
+const RENDER_BENCH_MARKDOWN = Array.from(
+  { length: 3 },
+  (_, index) => `
+# Section ${index + 1} Heading
+
+## Subheading with \`inline code\`
+
+### Third-level heading
+
+A paragraph with **bold**, *italic*, ***bold italic***, \`inline code\`, ~~strikethrough~~ and a [link](https://swmansion.com). It is long enough to wrap across several lines so layout work is non-trivial for both renderers.
+
+> A blockquote with **bold**, *italic* and a [link](https://example.com).
+
+- Unordered item with **emphasis**
+- Unordered item with \`code\`
+  - Nested item one
+  - Nested item two
+- Unordered item with a [link](https://example.com)
+
+1. Ordered first
+2. Ordered second
+3. Ordered third
+
+- [x] Completed task item
+- [ ] Pending task item
+
+| Feature | Status | Notes |
+| --- | :---: | --- |
+| Tables | yes | column alignment |
+| Math | yes | inline and block |
+| Lists | yes | nested supported |
+
+\`\`\`ts
+function render(value: number): string {
+  return \`Section \${value}\`;
+}
+\`\`\`
+
+![sample image](https://picsum.photos/seed/nitro${index}/240/120)
+
+---
+`,
+).join("\n");
+
+const LONG_RENDER_BENCH_MARKDOWN = Array.from(
+  { length: 60 },
+  (_, index) => `## Section ${index + 1}
+
+Paragraph ${index + 1} with **bold**, *italic* and a [link](https://swmansion.com) that is long enough to wrap across multiple lines for realistic layout work.
+
+- First point with \`code\`
+- Second point with **emphasis**`,
+).join("\n\n");
+
+const MEASURE_SETTLE_MS = 120;
+const MEASURE_TIMEOUT_MS = 3500;
+const RENDER_SAMPLE_COUNT = 5;
+
+const formatMs = (value: number | null): string =>
+  value === null || Number.isNaN(value) ? "—" : `${value.toFixed(2)}ms`;
+
+const formatRatio = (slow: number | null, fast: number | null): string =>
+  slow === null ||
+  fast === null ||
+  Number.isNaN(slow) ||
+  Number.isNaN(fast) ||
+  fast === 0
+    ? "—"
+    : `${(slow / fast).toFixed(1)}x`;
+
 type LogEntry = {
   text: string;
   type: "header" | "pass" | "fail" | "info" | "skip" | "spacer";
@@ -54,6 +126,12 @@ type LogEntry = {
 
 type LatexBenchmarkTarget = {
   renderer: "ratex" | "legacy-mathjax";
+  startedAt: number;
+  token: number;
+};
+
+type RenderBenchmarkTarget = {
+  kind: "nitro" | "nitro-long";
   startedAt: number;
   token: number;
 };
@@ -66,8 +144,10 @@ type BenchmarkResults = {
   commonmarkTime: number;
   markdownItTime: number;
   markedTime: number;
-  mathjaxTime: number;
-  ratexTime: number;
+  mathjaxTime: number | null;
+  ratexTime: number | null;
+  nitroRenderTime: number | null;
+  nitroFirstScreenTime: number | null;
 };
 
 let LegacyMathJaxComponent: ComponentType<{
@@ -254,6 +334,32 @@ async function runSmokeTests(): Promise<LogEntry[]> {
     }
   } catch (e) {
     fail("parseMarkdown + math disabled", String(e));
+  }
+
+  try {
+    const hasOffsets = (node: MarkdownNode): boolean =>
+      node.beg !== undefined ||
+      node.end !== undefined ||
+      (node.children?.some(hasOffsets) ?? false);
+    const withOffsets = parseMarkdown("# Hello\n\nWorld");
+    const leanAst = parseMarkdownWithOptions("# Hello\n\nWorld", {
+      sourceOffsets: false,
+    });
+    if (hasOffsets(withOffsets) && !hasOffsets(leanAst)) {
+      pass(
+        "parseMarkdown + sourceOffsets:false",
+        "beg/end omitted natively",
+      );
+    } else {
+      fail(
+        "parseMarkdown + sourceOffsets:false",
+        hasOffsets(leanAst)
+          ? "offsets still present"
+          : "default missing offsets",
+      );
+    }
+  } catch (e) {
+    fail("parseMarkdown + sourceOffsets:false", String(e));
   }
 
   try {
@@ -703,9 +809,10 @@ export default function BenchmarkScreen() {
   const [latexBenchmarkTarget, setLatexBenchmarkTarget] =
     useState<LatexBenchmarkTarget | null>(null);
   const tabHeight = useBottomTabHeight();
-  const latexBenchmarkResolverRef = useRef<((duration: number) => void) | null>(
-    null,
-  );
+  const latexBenchmarkResolverRef = useRef<(() => void) | null>(null);
+  const [renderBenchmarkTarget, setRenderBenchmarkTarget] =
+    useState<RenderBenchmarkTarget | null>(null);
+  const renderBenchmarkResolverRef = useRef<(() => void) | null>(null);
 
   const wait = (ms: number) =>
     new Promise((resolve) => setTimeout(resolve, ms));
@@ -732,27 +839,71 @@ export default function BenchmarkScreen() {
 
   const measureLatexRenderer = (
     renderer: LatexBenchmarkTarget["renderer"],
-  ): Promise<number> => {
+  ): Promise<number | null> => {
     const startedAt = global.performance.now();
-    const token = Math.random();
 
     return new Promise((resolve) => {
-      latexBenchmarkResolverRef.current = resolve;
-      setLatexBenchmarkTarget({ renderer, startedAt, token });
+      let settled = false;
+      const finish = (value: number | null) => {
+        if (settled) return;
+        settled = true;
+        latexBenchmarkResolverRef.current = null;
+        setLatexBenchmarkTarget(null);
+        resolve(value);
+      };
+      latexBenchmarkResolverRef.current = () =>
+        finish(global.performance.now() - startedAt);
+      setTimeout(() => finish(null), MEASURE_TIMEOUT_MS);
+      setLatexBenchmarkTarget({ renderer, startedAt, token: Math.random() });
     });
   };
 
   const handleLatexBenchmarkLayout = useCallback(() => {
-    const target = latexBenchmarkTarget;
     const resolve = latexBenchmarkResolverRef.current;
-    if (!target || !resolve) return;
+    if (!resolve) return;
+    setTimeout(resolve, MEASURE_SETTLE_MS);
+  }, []);
 
-    setTimeout(() => {
-      latexBenchmarkResolverRef.current = null;
-      setLatexBenchmarkTarget(null);
-      resolve(global.performance.now() - target.startedAt);
-    }, 250);
-  }, [latexBenchmarkTarget]);
+  const measureRender = (
+    kind: RenderBenchmarkTarget["kind"],
+  ): Promise<number | null> => {
+    const startedAt = global.performance.now();
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (value: number | null) => {
+        if (settled) return;
+        settled = true;
+        renderBenchmarkResolverRef.current = null;
+        setRenderBenchmarkTarget(null);
+        resolve(value);
+      };
+      renderBenchmarkResolverRef.current = () =>
+        finish(global.performance.now() - startedAt);
+      setTimeout(() => finish(null), MEASURE_TIMEOUT_MS);
+      setRenderBenchmarkTarget({ kind, startedAt, token: Math.random() });
+    });
+  };
+
+  const handleRenderBenchmarkLayout = useCallback(() => {
+    const resolve = renderBenchmarkResolverRef.current;
+    if (!resolve) return;
+    setTimeout(resolve, MEASURE_SETTLE_MS);
+  }, []);
+
+  const measureRenderMedian = async (
+    kind: RenderBenchmarkTarget["kind"],
+  ): Promise<number | null> => {
+    const samples: number[] = [];
+    for (let index = 0; index < RENDER_SAMPLE_COUNT; index++) {
+      const result = await measureRender(kind);
+      if (result !== null) samples.push(result);
+      await wait(80);
+    }
+    if (samples.length === 0) return null;
+    samples.sort((a, b) => a - b);
+    return samples[Math.floor(samples.length / 2)] ?? null;
+  };
 
   const runSmoke = async () => {
     setMode("smoke");
@@ -774,55 +925,79 @@ export default function BenchmarkScreen() {
     setError(null);
     setIsBenchmarkRunning(true);
 
-    try {
-      await wait(100);
+    const isolate = async <T,>(
+      run: () => T | Promise<T>,
+      fallback: T,
+    ): Promise<T> => {
+      try {
+        return await run();
+      } catch {
+        return fallback;
+      } finally {
+        await wait(60);
+      }
+    };
 
-      const nitroBenchmark = runNitroBenchmark();
-      await wait(100);
+    await wait(60);
 
-      const commonmarkParser = new Parser();
-      commonmarkParser.parse("warmup");
-      const startCommonMark = global.performance.now();
-      commonmarkParser.parse(REPEATED_MARKDOWN);
-      const endCommonMark = global.performance.now();
-      const commonmarkTime = endCommonMark - startCommonMark;
-      await wait(100);
+    const nitroBenchmark = await isolate(runNitroBenchmark, {
+      average: NaN,
+      p50: NaN,
+      p95: NaN,
+      iterations: 0,
+    });
 
-      const markdownItParser = new MarkdownIt();
-      markdownItParser.render("warmup");
-      const startMarkdownIt = global.performance.now();
-      markdownItParser.render(REPEATED_MARKDOWN);
-      const endMarkdownIt = global.performance.now();
-      const markdownItTime = endMarkdownIt - startMarkdownIt;
-      await wait(100);
+    const commonmarkTime = await isolate(() => {
+      const parser = new Parser();
+      parser.parse("warmup");
+      const start = global.performance.now();
+      parser.parse(REPEATED_MARKDOWN);
+      return global.performance.now() - start;
+    }, NaN);
 
+    const markdownItTime = await isolate(() => {
+      const parser = new MarkdownIt();
+      parser.render("warmup");
+      const start = global.performance.now();
+      parser.render(REPEATED_MARKDOWN);
+      return global.performance.now() - start;
+    }, NaN);
+
+    const markedTime = await isolate(async () => {
       await marked.parse("warmup");
-      const startMarked = global.performance.now();
+      const start = global.performance.now();
       await marked.parse(REPEATED_MARKDOWN);
-      const endMarked = global.performance.now();
-      const markedTime = endMarked - startMarked;
-      await wait(100);
+      return global.performance.now() - start;
+    }, NaN);
 
-      const mathjaxTime = await measureLatexRenderer("legacy-mathjax");
-      await wait(100);
+    const mathjaxTime = await isolate(
+      () => measureLatexRenderer("legacy-mathjax"),
+      null,
+    );
+    const ratexTime = await isolate(() => measureLatexRenderer("ratex"), null);
+    const nitroRenderTime = await isolate(
+      () => measureRenderMedian("nitro"),
+      null,
+    );
+    const nitroFirstScreenTime = await isolate(
+      () => measureRenderMedian("nitro-long"),
+      null,
+    );
 
-      const ratexTime = await measureLatexRenderer("ratex");
-      setBenchmarkResults({
-        nitroTime: nitroBenchmark.average,
-        nitroP50: nitroBenchmark.p50,
-        nitroP95: nitroBenchmark.p95,
-        nitroIterations: nitroBenchmark.iterations,
-        commonmarkTime,
-        markdownItTime,
-        markedTime,
-        mathjaxTime,
-        ratexTime,
-      });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unknown error");
-    } finally {
-      setIsBenchmarkRunning(false);
-    }
+    setBenchmarkResults({
+      nitroTime: nitroBenchmark.average,
+      nitroP50: nitroBenchmark.p50,
+      nitroP95: nitroBenchmark.p95,
+      nitroIterations: nitroBenchmark.iterations,
+      commonmarkTime,
+      markdownItTime,
+      markedTime,
+      mathjaxTime,
+      ratexTime,
+      nitroRenderTime,
+      nitroFirstScreenTime,
+    });
+    setIsBenchmarkRunning(false);
   };
 
   return (
@@ -888,90 +1063,84 @@ export default function BenchmarkScreen() {
             </View>
 
             <View style={styles.resultGroup}>
-              <Text style={styles.resultGroupTitle}>Parser</Text>
-              <View style={styles.metricRow}>
-                <Text style={styles.metricName}>Nitro C++</Text>
-                <Text style={[styles.metricValue, styles.metricPrimary]}>
-                  {benchmarkResults.nitroTime.toFixed(2)}ms avg
-                </Text>
-              </View>
-              <View style={styles.metricRow}>
-                <Text style={styles.metricName}>
-                  Nitro p50 / p95 ({benchmarkResults.nitroIterations}x)
-                </Text>
-                <Text style={styles.metricValue}>
-                  {benchmarkResults.nitroP50.toFixed(2)} /{" "}
-                  {benchmarkResults.nitroP95.toFixed(2)}ms
-                </Text>
-              </View>
-              <View style={styles.metricRow}>
-                <Text style={styles.metricName}>CommonMark</Text>
-                <View style={styles.metricValueGroup}>
-                  <Text style={styles.metricValue}>
-                    {benchmarkResults.commonmarkTime.toFixed(2)}ms
-                  </Text>
-                  <Text style={styles.inlineSpeedTag}>
-                    {(
-                      benchmarkResults.commonmarkTime /
-                      benchmarkResults.nitroTime
-                    ).toFixed(1)}
-                    x
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.metricRow}>
-                <Text style={styles.metricName}>Markdown-It</Text>
-                <View style={styles.metricValueGroup}>
-                  <Text style={styles.metricValue}>
-                    {benchmarkResults.markdownItTime.toFixed(2)}ms
-                  </Text>
-                  <Text style={styles.inlineSpeedTag}>
-                    {(
-                      benchmarkResults.markdownItTime /
-                      benchmarkResults.nitroTime
-                    ).toFixed(1)}
-                    x
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.metricRow}>
-                <Text style={styles.metricName}>Marked</Text>
-                <View style={styles.metricValueGroup}>
-                  <Text style={styles.metricValue}>
-                    {benchmarkResults.markedTime.toFixed(2)}ms
-                  </Text>
-                  <Text style={styles.inlineSpeedTag}>
-                    {(
-                      benchmarkResults.markedTime / benchmarkResults.nitroTime
-                    ).toFixed(1)}
-                    x
-                  </Text>
-                </View>
-              </View>
+              <Text style={styles.resultGroupTitle}>
+                Parse · {(REPEATED_MARKDOWN.length / 1024).toFixed(0)}KB document
+              </Text>
+              <BenchBar
+                label="Nitro C++"
+                ms={benchmarkResults.nitroTime}
+                maxMs={benchmarkResults.markedTime}
+                highlight
+              />
+              <BenchBar
+                label="CommonMark"
+                ms={benchmarkResults.commonmarkTime}
+                maxMs={benchmarkResults.markedTime}
+                ratio={`${formatRatio(benchmarkResults.commonmarkTime, benchmarkResults.nitroTime)}`}
+              />
+              <BenchBar
+                label="Markdown-It"
+                ms={benchmarkResults.markdownItTime}
+                maxMs={benchmarkResults.markedTime}
+                ratio={`${formatRatio(benchmarkResults.markdownItTime, benchmarkResults.nitroTime)}`}
+              />
+              <BenchBar
+                label="Marked"
+                ms={benchmarkResults.markedTime}
+                maxMs={benchmarkResults.markedTime}
+                ratio={`${formatRatio(benchmarkResults.markedTime, benchmarkResults.nitroTime)}`}
+              />
+              <Text style={styles.metricNote}>
+                Nitro p50 / p95 over {benchmarkResults.nitroIterations} runs:{" "}
+                {benchmarkResults.nitroP50.toFixed(1)} /{" "}
+                {benchmarkResults.nitroP95.toFixed(1)}ms.
+              </Text>
             </View>
 
             <View style={styles.resultGroup}>
               <Text style={styles.resultGroupTitle}>Math renderer</Text>
+              <BenchBar
+                label="RaTeX"
+                ms={benchmarkResults.ratexTime ?? 0}
+                maxMs={benchmarkResults.mathjaxTime ?? 1}
+                highlight
+              />
+              <BenchBar
+                label="Legacy MathJax/SVG"
+                ms={benchmarkResults.mathjaxTime ?? 0}
+                maxMs={benchmarkResults.mathjaxTime ?? 1}
+                ratio={`${formatRatio(benchmarkResults.mathjaxTime, benchmarkResults.ratexTime)}`}
+              />
+            </View>
+
+            <View style={styles.resultGroup}>
+              <Text style={styles.resultGroupTitle}>Render · mount → layout</Text>
               <View style={styles.metricRow}>
-                <Text style={styles.metricName}>Legacy MathJax/SVG</Text>
-                <Text style={styles.metricValue}>
-                  {benchmarkResults.mathjaxTime.toFixed(2)}ms
-                </Text>
-              </View>
-              <View style={styles.metricRow}>
-                <Text style={styles.metricName}>RaTeX</Text>
+                <Text style={styles.metricName}>Nitro Markdown</Text>
                 <Text style={[styles.metricValue, styles.metricPrimary]}>
-                  {benchmarkResults.ratexTime.toFixed(2)}ms
+                  {formatMs(benchmarkResults.nitroRenderTime)}
                 </Text>
               </View>
-              <View style={styles.speedBadge}>
-                <Text style={styles.speedBadgeText}>
-                  {(
-                    benchmarkResults.mathjaxTime / benchmarkResults.ratexTime
-                  ).toFixed(1)}
-                  x faster
+              <Text style={styles.metricNote}>
+                Real React components, themeable and overridable per node —
+                rendered synchronously on mount.
+              </Text>
+            </View>
+
+            <View style={styles.resultGroup}>
+              <Text style={styles.resultGroupTitle}>
+                First screen · long doc (60 sections)
+              </Text>
+              <View style={styles.metricRow}>
+                <Text style={styles.metricName}>Nitro (virtualized)</Text>
+                <Text style={[styles.metricValue, styles.metricPrimary]}>
+                  {formatMs(benchmarkResults.nitroFirstScreenTime)}
                 </Text>
               </View>
+              <Text style={styles.metricNote}>
+                Nitro virtualizes long documents, mounting only the visible
+                screen so first-paint stays fast regardless of length.
+              </Text>
             </View>
           </ExamplePanel>
         ) : mode === "bench" && isBenchmarkRunning ? (
@@ -1008,6 +1177,27 @@ export default function BenchmarkScreen() {
           </Markdown>
         </View>
       ) : null}
+
+      {renderBenchmarkTarget ? (
+        <View
+          key={`${renderBenchmarkTarget.kind}-${renderBenchmarkTarget.token}`}
+          pointerEvents="none"
+          style={styles.latexBenchmarkHost}
+          onLayout={handleRenderBenchmarkLayout}
+        >
+          {renderBenchmarkTarget.kind === "nitro" ? (
+            <Markdown options={{ gfm: true }}>{RENDER_BENCH_MARKDOWN}</Markdown>
+          ) : (
+            <Markdown
+              options={{ gfm: true }}
+              virtualize={true}
+              style={styles.renderViewport}
+            >
+              {LONG_RENDER_BENCH_MARKDOWN}
+            </Markdown>
+          )}
+        </View>
+      ) : null}
     </ExampleScreen>
   );
 }
@@ -1033,6 +1223,9 @@ const styles = StyleSheet.create({
     top: 0,
     width: 360,
     opacity: 0,
+  },
+  renderViewport: {
+    height: 640,
   },
   transparent: {
     backgroundColor: "transparent",
@@ -1154,39 +1347,14 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }),
   },
-  metricValueGroup: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
   metricPrimary: {
     color: EXAMPLE_COLORS.accentDeep,
   },
-  inlineSpeedTag: {
-    minWidth: 44,
-    textAlign: "center",
-    color: EXAMPLE_COLORS.accentDeep,
-    backgroundColor: EXAMPLE_COLORS.accentSoft,
-    borderRadius: 6,
-    overflow: "hidden",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    fontSize: 12,
-    fontWeight: "800",
-    fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }),
-  },
-  speedBadge: {
-    alignSelf: "flex-start",
-    backgroundColor: EXAMPLE_COLORS.accentSoft,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  metricNote: {
+    color: EXAMPLE_COLORS.textMuted,
+    fontSize: 11,
+    lineHeight: 15,
     marginTop: 8,
-  },
-  speedBadgeText: {
-    color: EXAMPLE_COLORS.accentDeep,
-    fontSize: 13,
-    fontWeight: "800",
   },
   errorBox: {
     backgroundColor: EXAMPLE_COLORS.dangerSoft,

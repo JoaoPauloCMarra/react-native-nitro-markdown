@@ -61,6 +61,7 @@ export type {
 
 export {
   defaultMarkdownTheme,
+  darkMarkdownTheme,
   minimalMarkdownTheme,
   mergeThemes,
 } from "./theme";

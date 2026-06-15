@@ -299,6 +299,37 @@ describe("getFlattenedText", () => {
   });
 });
 
+describe("sourceOffsets option", () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it("includes beg/end by default", () => {
+    const ast = parseMarkdown("# Title");
+    const heading = ast.children?.[0];
+    expect(heading?.beg).toBeDefined();
+    expect(heading?.end).toBeDefined();
+  });
+
+  it("forwards sourceOffsets:false to the native parser", () => {
+    parseMarkdownWithOptions("# Title", { sourceOffsets: false });
+    expect(mockParser.parseWithOptions).toHaveBeenCalledWith("# Title", {
+      sourceOffsets: false,
+    });
+  });
+
+  it("omits beg/end when sourceOffsets is false", () => {
+    const ast = parseMarkdownWithOptions("# Title", { sourceOffsets: false });
+    const heading = ast.children?.[0];
+    expect(heading?.beg).toBeUndefined();
+    expect(heading?.end).toBeUndefined();
+  });
+
+  it("keeps beg/end when sourceOffsets is omitted from options", () => {
+    const ast = parseMarkdownWithOptions("# Title", { gfm: true });
+    const heading = ast.children?.[0];
+    expect(heading?.beg).toBeDefined();
+  });
+});
+
 describe("stripSourceOffsets", () => {
   it("removes beg and end from a single node", () => {
     const result = stripSourceOffsets({ type: "text", content: "hello", beg: 0, end: 5 });

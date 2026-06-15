@@ -6,7 +6,26 @@ type MockParserOptions = {
   gfm?: boolean;
   math?: boolean;
   html?: boolean;
+  sourceOffsets?: boolean;
 };
+
+let offsetCursor = 0;
+function stampOffsets(node: MarkdownNode): MarkdownNode {
+  node.beg = offsetCursor;
+  offsetCursor += (node.content?.length ?? 1) + 1;
+  node.end = offsetCursor;
+  node.children?.forEach(stampOffsets);
+  return node;
+}
+
+function serializeMockAst(text: string, includeOffsets: boolean): string {
+  const ast = createMockAst(text);
+  if (includeOffsets) {
+    offsetCursor = 0;
+    stampOffsets(ast);
+  }
+  return JSON.stringify(ast);
+}
 
 function createMockAst(text: string): MarkdownNode {
   if (text.length === 0) {
@@ -91,9 +110,9 @@ function createMockAst(text: string): MarkdownNode {
 }
 
 const mockParser = {
-  parse: jest.fn((text: string) => JSON.stringify(createMockAst(text))),
-  parseWithOptions: jest.fn((text: string, _options: MockParserOptions) =>
-    JSON.stringify(createMockAst(text)),
+  parse: jest.fn((text: string) => serializeMockAst(text, true)),
+  parseWithOptions: jest.fn((text: string, options: MockParserOptions) =>
+    serializeMockAst(text, options.sourceOffsets !== false),
   ),
   extractPlainText: jest.fn((text: string) => text),
   extractPlainTextWithOptions: jest.fn((text: string, _options: MockParserOptions) => text),

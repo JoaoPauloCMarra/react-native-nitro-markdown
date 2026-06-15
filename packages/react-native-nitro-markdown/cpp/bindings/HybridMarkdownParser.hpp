@@ -1,7 +1,7 @@
 #pragma once
 
 #include "HybridMarkdownParserSpec.hpp"
-#include "../core/MD4CParser.hpp"
+#include "../core/NitroMD4CParser.hpp"
 #include <memory>
 
 namespace margelo::nitro::Markdown {
@@ -24,7 +24,7 @@ public:
 
 private:
     std::unique_ptr<::NitroMarkdown::MD4CParser> parser_;
-    std::string nodeToJson(const std::shared_ptr<InternalMarkdownNode>& node);
+    std::string nodeToJson(const std::shared_ptr<InternalMarkdownNode>& node, bool includeOffsets);
 };
 
 } // namespace margelo::nitro::Markdown

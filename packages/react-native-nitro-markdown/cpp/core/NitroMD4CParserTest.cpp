@@ -1,7 +1,7 @@
 #define NITRO_MARKDOWN_TESTING
-#include "MD4CParser.hpp"
+#include "NitroMD4CParser.hpp"
 #include "MarkdownTypes.hpp"
-#include "../md4c/md4c.h"
+#include "../nitromd/nitromd.h"
 #include <iostream>
 #include <cassert>
 #include <string>
