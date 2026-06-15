@@ -6,7 +6,7 @@
 #include <cstddef>
 
 #ifdef NITRO_MARKDOWN_TESTING
-#include "../md4c/md4c.h"
+#include "../nitromd/nitromd.h"
 #include <limits>
 #endif
 
@@ -44,7 +44,6 @@ private:
         const ParserOptions& options,
         unsigned int extraFlags
     );
-    std::unique_ptr<Impl> impl_;
 };
 
 } // namespace NitroMarkdown

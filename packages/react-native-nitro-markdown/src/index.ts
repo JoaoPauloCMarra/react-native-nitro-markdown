@@ -61,6 +61,7 @@ export type {
 
 export {
   defaultMarkdownTheme,
+  darkMarkdownTheme,
   minimalMarkdownTheme,
   mergeThemes,
 } from "./theme";
@@ -72,6 +73,7 @@ export type {
 } from "./theme";
 
 export { Heading } from "./renderers/heading";
+export { HtmlBlock, HtmlInline } from "./renderers/html";
 export { Paragraph } from "./renderers/paragraph";
 export { Link } from "./renderers/link";
 export { Blockquote } from "./renderers/blockquote";

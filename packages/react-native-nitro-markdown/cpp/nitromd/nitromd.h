@@ -26,6 +26,8 @@
 #ifndef MD4C_H
 #define MD4C_H
 
+#define md_parse nitromd_parse
+
 #ifdef __cplusplus
     extern "C" {
 #endif

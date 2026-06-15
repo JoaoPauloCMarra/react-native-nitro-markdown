@@ -4,6 +4,7 @@ export interface ParserOptions {
   gfm?: boolean;
   math?: boolean;
   html?: boolean;
+  sourceOffsets?: boolean;
 }
 
 export interface MarkdownParser extends HybridObject<{

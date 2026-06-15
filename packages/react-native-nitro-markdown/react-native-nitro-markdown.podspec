@@ -21,14 +21,17 @@ Pod::Spec.new do |s|
   s.exclude_files = [
     "cpp/core/*Test.cpp"
   ]
+  s.private_header_files = "cpp/**/*.{h,hpp}"
 
   s.pod_target_xcconfig = {
     "CLANG_CXX_LANGUAGE_STANDARD" => "c++20",
     "CLANG_CXX_LIBRARY" => "libc++",
-    "GCC_PREPROCESSOR_DEFINITIONS" => "$(inherited) MD4C_USE_UTF8=1",
+    "GCC_PREPROCESSOR_DEFINITIONS" => "$(inherited) MD4C_USE_UTF8=1 _FORTIFY_SOURCE=2",
+    "OTHER_CFLAGS" => "$(inherited) -Wall -Wextra -fstack-protector-strong -Werror=format-security",
+    "OTHER_CPLUSPLUS_FLAGS" => "$(inherited) -Wall -Wextra -fstack-protector-strong -Werror=format-security",
     "HEADER_SEARCH_PATHS" => [
       "$(PODS_ROOT)/Headers/Private/Yoga",
-      "$(PODS_TARGET_SRCROOT)/cpp/md4c",
+      "$(PODS_TARGET_SRCROOT)/cpp/nitromd",
       "$(PODS_TARGET_SRCROOT)/cpp/core",
       "$(PODS_TARGET_SRCROOT)/cpp/bindings",
       "$(PODS_TARGET_SRCROOT)/nitrogen/generated/shared/c++",

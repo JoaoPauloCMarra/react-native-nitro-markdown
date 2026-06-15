@@ -19,6 +19,7 @@ import {
   type FlatListProps,
   type StyleProp,
   type ViewStyle,
+  type TextStyle,
 } from "react-native";
 import {
   parseMarkdown,
@@ -42,6 +43,7 @@ import { Blockquote } from "./renderers/blockquote";
 import { CodeBlock, InlineCode } from "./renderers/code";
 import { Heading } from "./renderers/heading";
 import { HorizontalRule } from "./renderers/horizontal-rule";
+import { HtmlBlock, HtmlInline } from "./renderers/html";
 import { Image } from "./renderers/image";
 import { Link } from "./renderers/link";
 import { List, ListItem, TaskListItem } from "./renderers/list";
@@ -670,6 +672,11 @@ const isInline = (type: MarkdownNode["type"]): boolean => {
   );
 };
 
+const containsInlineMath = (nodes?: MarkdownNode[]): boolean =>
+  nodes?.some(
+    (node) => node.type === "math_inline" || containsInlineMath(node.children),
+  ) ?? false;
+
 const NodeRendererComponent: FC<NodeRendererProps> = ({
   node,
   depth,
@@ -830,10 +837,23 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
       );
 
     case "paragraph":
+      if (containsInlineMath(node.children)) {
+        return (
+          <Paragraph inListItem={inListItem} style={nodeStyles?.paragraph}>
+            {renderChildren(node.children, inListItem, false)}
+          </Paragraph>
+        );
+      }
       return (
-        <Paragraph inListItem={inListItem} style={nodeStyles?.paragraph}>
-          {renderChildren(node.children, inListItem, false)}
-        </Paragraph>
+        <Text
+          style={[
+            baseStyles.text,
+            inListItem ? undefined : { marginBottom: theme.spacing.l },
+            nodeStyles?.paragraph as StyleProp<TextStyle>,
+          ]}
+        >
+          {renderChildren(node.children, inListItem, true)}
+        </Text>
       );
 
     case "text":
@@ -951,6 +971,22 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
         <MathBlock
           content={getTextContent(node)}
           {...(nodeStyles?.math_block ? { style: nodeStyles.math_block } : {})}
+        />
+      );
+
+    case "html_inline":
+      return (
+        <HtmlInline
+          {...(node.content ? { content: node.content } : {})}
+          {...(nodeStyles?.html_inline ? { style: nodeStyles.html_inline } : {})}
+        />
+      );
+
+    case "html_block":
+      return (
+        <HtmlBlock
+          {...(node.content ? { content: node.content } : {})}
+          {...(nodeStyles?.html_block ? { style: nodeStyles.html_block } : {})}
         />
       );
 

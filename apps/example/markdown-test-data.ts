@@ -224,6 +224,146 @@ The goal is to ensure that performance remains consistent regardless of content 
 
 This comprehensive test suite validates that the parser maintains high performance and accuracy across all supported markdown features and edge cases.`;
 
+// Per-renderer edge cases — rendered after COMPLEX_MARKDOWN on the Default tab
+// to exercise tricky paths for every renderer (a visual regression surface).
+export const EDGE_CASE_MARKDOWN = `## Renderer Edge Cases
+
+### Headings — all levels
+# Heading 1
+## Heading 2
+### Heading 3
+#### Heading 4
+##### Heading 5
+###### Heading 6
+
+## Heading with **bold**, \`code\`, and a [link](https://example.com)
+
+### Emphasis combinations
+Nested ***bold italic***, **bold with \`code\` inside**, and *italic with a [link](https://example.com)*.
+
+Adjacent **one****two**, mid-word un**believ**able, and ~~strikethrough with **bold**~~.
+
+### Links
+- Bare autolink: https://github.com/JoaoPauloCMarra/react-native-nitro-markdown
+- Titled link: [hover for a title](https://example.com "A tooltip title")
+- Long URL should not break layout: [reference](https://example.com/a/very/long/path/segment/that/keeps/going?query=value&another=thing#anchor)
+
+### Inline HTML (html_inline)
+The default renderer shows inline tags as literal text (safe): <strong>strong</strong>, <em>em</em>, and <code>inline()</code>. A custom \`html_inline\` renderer can map them to native components.
+
+### HTML block (html_block)
+<div class="callout">
+  <strong>Raw HTML block</strong>
+  <p>The default renderer prints it as escaped text. Provide a custom html_block renderer to map safe content into native UI.</p>
+</div>
+
+### Images
+Broken image falls back to its alt text and error state:
+
+![This image cannot load](https://invalid.example.invalid/missing.png "Broken image")
+
+Image without alt text:
+
+![](https://fastly.picsum.photos/id/237/240/140.jpg?hmac=Wd_Nm07W4nq1rTzG7n8a2yqXqkqRtq3y_AvqkY4kT1k)
+
+### Inline code
+A long inline token to test wrapping: \`const aLongIdentifierNameThatKeepsGoingToTestInlineCodeWrapping = true\` inside a sentence.
+
+### Code blocks
+Fenced block with no language:
+
+\`\`\`
+plain code, no syntax highlighting
+second line
+\`\`\`
+
+Long line to test horizontal scroll (should not wrap):
+
+\`\`\`ts
+const message = "a deliberately long single line of code that exceeds the viewport width to verify horizontal scrolling instead of wrapping";
+\`\`\`
+
+### Blockquotes — nested
+> Level one
+>
+> > Level two nested
+> >
+> > > Level three nested with **bold** and \`code\`
+
+### Lists
+Ordered list starting at 5:
+
+5. fifth item
+6. sixth item
+7. seventh item
+
+Mixed nesting:
+
+1. Ordered parent
+   - unordered child
+   - another child
+     1. deep ordered
+2. Back to top level
+
+Task list (checked + unchecked):
+
+- [x] done item
+- [ ] pending item with **bold** and \`code\`
+
+### Tables — alignment and overflow
+| Left | Center | Right |
+| :--- | :----: | ----: |
+| a | b | 1 |
+| a longer left cell | centered text | 1234 |
+
+Wide table (horizontal scroll):
+
+| Col 1 | Col 2 | Col 3 | Col 4 | Col 5 | Col 6 |
+| ----- | ----- | ----- | ----- | ----- | ----- |
+| alpha | beta | gamma | delta | epsilon | zeta |
+
+### Math — inline (simple to complex)
+Simple inline: $a + b = c$, $x^2$, $\\pi r^2$, and $\\alpha\\beta\\gamma$.
+
+Complex inline flows with the text: $\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}$, $\\int_0^1 x^2\\,dx$, and $\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1$.
+
+### Math — block (single-line)
+$$E = mc^2$$
+
+$$\\int_{-\\infty}^{\\infty} e^{-x^2}\\,dx = \\sqrt{\\pi}$$
+
+### Math — block (multi-line)
+Piecewise (cases):
+
+$$f(x) = \\begin{cases} x & \\text{if } x \\ge 0 \\\\ -x & \\text{if } x < 0 \\end{cases}$$
+
+Aligned derivation:
+
+$$\\begin{aligned} (a+b)^2 &= a^2 + 2ab + b^2 \\\\ &= a^2 + b^2 + 2ab \\end{aligned}$$
+
+### Math — tall and wide
+Nested fraction (tall):
+
+$$\\frac{1}{1 + \\frac{1}{1 + \\frac{1}{x}}}$$
+
+Wave equation:
+
+$$\\frac{\\partial^2 u}{\\partial t^2} = c^2 \\frac{\\partial^2 u}{\\partial x^2}$$
+
+Wide matrix (horizontal scroll):
+
+$$\\begin{bmatrix} 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 \\\\ 9 & 10 & 11 & 12 & 13 & 14 & 15 & 16 \\end{bmatrix}$$
+
+### Line breaks
+First line with a hard break\\
+second line after the hard break.
+Soft-wrapped line continues on the next source line.
+
+### Horizontal rule
+
+---
+`;
+
 export const HTML_PARSER_MARKDOWN = `# HTML Parser Demo
 
 Raw HTML parsing is opt-in with \`options={{ html: true }}\`.

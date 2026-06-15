@@ -1,7 +1,8 @@
-#include "MD4CParser.hpp"
-#include "../md4c/md4c.h"
+#include "NitroMD4CParser.hpp"
+#include "../nitromd/nitromd.h"
 
 #include <stack>
+#include <vector>
 #include <cstring>
 #include <limits>
 
@@ -32,7 +33,7 @@ static MD_OFFSET safeOffset(const char* text, const char* base, size_t baseSize)
 class MD4CParser::Impl {
 public:
     std::shared_ptr<MarkdownNode> root;
-    std::stack<std::shared_ptr<MarkdownNode>> nodeStack;
+    std::stack<std::shared_ptr<MarkdownNode>, std::vector<std::shared_ptr<MarkdownNode>>> nodeStack;
     std::string currentText;
     const char* inputText = nullptr;
     size_t inputTextSize = 0;
@@ -484,7 +485,7 @@ public:
     }
 };
 
-MD4CParser::MD4CParser() : impl_(std::make_unique<Impl>()) {}
+MD4CParser::MD4CParser() = default;
 
 MD4CParser::~MD4CParser() = default;
 
@@ -497,11 +498,12 @@ std::shared_ptr<MarkdownNode> MD4CParser::parseWithFlags(
     const ParserOptions& options,
     unsigned int extraFlags
 ) {
-    impl_->reset();
-    impl_->inputText = markdown.c_str();
+    Impl impl;
+    impl.reset();
+    impl.inputText = markdown.c_str();
     size_t inputSize = clampInputSize(markdown.size());
-    impl_->inputTextSize = inputSize;
-    
+    impl.inputTextSize = inputSize;
+
     unsigned int flags = options.html ? 0 : MD_FLAG_NOHTML;
     
     if (options.gfm) {
@@ -531,15 +533,15 @@ std::shared_ptr<MarkdownNode> MD4CParser::parseWithFlags(
     int result = md_parse(markdown.c_str(),
                           static_cast<MD_SIZE>(inputSize),
                           &parser,
-                          impl_.get());
+                          &impl);
     if (result != 0) {
         // md_parse failed (callback aborted or runtime error).
         // The AST may be partial but is still a valid tree rooted at Document,
         // so we continue rather than throw — callers can use whatever was parsed.
     }
 
-    impl_->flushText();
-    return impl_->root;
+    impl.flushText();
+    return impl.root;
 }
 
 #ifdef NITRO_MARKDOWN_TESTING

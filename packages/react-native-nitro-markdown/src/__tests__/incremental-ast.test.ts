@@ -86,26 +86,14 @@ describe("incremental AST", () => {
   });
 
   it("reuses stable nodes after a full parse fallback", () => {
-    const stableParagraph: MarkdownNode = {
-      type: "paragraph",
-      children: [{ type: "text", content: "Stable" }],
-    };
-    const previousAst: MarkdownNode = {
-      type: "document",
-      beg: 0,
-      end: 15,
-      children: [
-        stableParagraph,
-        {
-          type: "paragraph",
-          children: [{ type: "text", content: "Before" }],
-        },
-      ],
-    };
+    const previousText = "Stable\n\nBefore\n";
+    const previousAst = parseMarkdownAst(previousText);
+    const stableParagraph = previousAst.children?.[0];
+    jest.clearAllMocks();
 
     const nextAst = getNextStreamAst({
       previousAst,
-      previousText: "Stable\n\nBefore\n",
+      previousText,
       nextText: "Stable\n\nBefore\nAfter",
     });
 

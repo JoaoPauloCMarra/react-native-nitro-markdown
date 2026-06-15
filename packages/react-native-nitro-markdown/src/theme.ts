@@ -139,6 +139,30 @@ export const defaultMarkdownTheme: MarkdownTheme = {
   showCodeLanguage: false,
 };
 
+export const darkMarkdownTheme: MarkdownTheme = {
+  ...defaultMarkdownTheme,
+  colors: {
+    ...defaultMarkdownTheme.colors,
+    text: "#e2e8f0",
+    textMuted: "#94a3b8",
+    heading: "#f8fafc",
+    link: "#60a5fa",
+    code: "#e2e8f0",
+    codeBackground: "#1e293b",
+    codeLanguage: "#64748b",
+    blockquote: "#475569",
+    border: "#334155",
+    surface: "#0f172a",
+    surfaceLight: "#1e293b",
+    accent: "#60a5fa",
+    tableBorder: "#334155",
+    tableHeader: "#1e293b",
+    tableHeaderText: "#94a3b8",
+    tableRowEven: "transparent",
+    tableRowOdd: "#1e293b",
+  },
+};
+
 export type PartialMarkdownTheme = {
   [K in keyof MarkdownTheme]?: K extends "showCodeLanguage" | "headingWeight"
     ? MarkdownTheme[K]

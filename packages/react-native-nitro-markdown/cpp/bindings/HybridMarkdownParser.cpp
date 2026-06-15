@@ -81,9 +81,9 @@ inline void appendBoolField(std::string& output, const char* key, bool value) {
 
 static constexpr size_t kMaxEstimatedSize = 64 * 1024 * 1024; // 64 MB cap
 
-static size_t estimateJsonSize(const std::shared_ptr<InternalMarkdownNode>& node) noexcept {
+static size_t estimateJsonSize(const std::shared_ptr<InternalMarkdownNode>& node, bool includeOffsets) noexcept {
     if (!node) return 0;
-    size_t size = 64; // base overhead per node (type, beg, end, braces)
+    size_t size = includeOffsets ? 64 : 44; // base overhead per node (type[, beg, end], braces)
     auto safeAdd = [](size_t a, size_t b) -> size_t {
         return (b > kMaxEstimatedSize - a) ? kMaxEstimatedSize : a + b;
     };
@@ -104,21 +104,23 @@ static size_t estimateJsonSize(const std::shared_ptr<InternalMarkdownNode>& node
     }
     for (const auto& child : node->children) {
         if (size >= kMaxEstimatedSize) break;
-        size_t childSize = estimateJsonSize(child);
+        size_t childSize = estimateJsonSize(child, includeOffsets);
         size = safeAdd(size, childSize);
     }
     return size;
 }
 
-void appendNodeJson(std::string& output, const std::shared_ptr<InternalMarkdownNode>& node) {
+void appendNodeJson(std::string& output, const std::shared_ptr<InternalMarkdownNode>& node, bool includeOffsets) {
     output.push_back('{');
 
     output += "\"type\":\"";
     output += ::NitroMarkdown::nodeTypeToString(node->type);
     output.push_back('"');
 
-    appendOffsetField(output, "beg", node->beg);
-    appendOffsetField(output, "end", node->end);
+    if (includeOffsets) {
+        appendOffsetField(output, "beg", node->beg);
+        appendOffsetField(output, "end", node->end);
+    }
 
     if (node->content.has_value()) {
         appendStringField(output, "content", node->content.value());
@@ -173,7 +175,7 @@ void appendNodeJson(std::string& output, const std::shared_ptr<InternalMarkdownN
             if (i > 0) {
                 output.push_back(',');
             }
-            appendNodeJson(output, node->children[i]);
+            appendNodeJson(output, node->children[i], includeOffsets);
         }
         output.push_back(']');
     }
@@ -252,7 +254,7 @@ std::string HybridMarkdownParser::parse(const std::string& text) {
     InternalParserOptions opts{.gfm = true, .math = true, .html = false};
 
     auto ast = parser_->parse(text, opts);
-    return nodeToJson(ast);
+    return nodeToJson(ast, true);
 }
 
 std::string HybridMarkdownParser::parseWithOptions(const std::string& text, const ParserOptions& options) {
@@ -260,9 +262,10 @@ std::string HybridMarkdownParser::parseWithOptions(const std::string& text, cons
     internalOpts.gfm = options.gfm.value_or(true);
     internalOpts.math = options.math.value_or(true);
     internalOpts.html = options.html.value_or(false);
-    
+
+    bool includeOffsets = options.sourceOffsets.value_or(true);
     auto ast = parser_->parse(text, internalOpts);
-    return nodeToJson(ast);
+    return nodeToJson(ast, includeOffsets);
 }
 
 std::string HybridMarkdownParser::extractPlainText(const std::string& text) {
@@ -282,10 +285,10 @@ std::string HybridMarkdownParser::extractPlainTextWithOptions(const std::string&
     return flattenNodeText(ast);
 }
 
-std::string HybridMarkdownParser::nodeToJson(const std::shared_ptr<InternalMarkdownNode>& node) {
+std::string HybridMarkdownParser::nodeToJson(const std::shared_ptr<InternalMarkdownNode>& node, bool includeOffsets) {
     std::string json;
-    json.reserve(estimateJsonSize(node));
-    appendNodeJson(json, node);
+    json.reserve(estimateJsonSize(node, includeOffsets));
+    appendNodeJson(json, node, includeOffsets);
     return json;
 }
 

@@ -1,5 +1,40 @@
 import "./setup";
-import { mergeThemes, defaultMarkdownTheme, minimalMarkdownTheme } from "../theme";
+import {
+  mergeThemes,
+  defaultMarkdownTheme,
+  darkMarkdownTheme,
+  minimalMarkdownTheme,
+} from "../theme";
+
+describe("darkMarkdownTheme", () => {
+  it("is a complete theme with the same shape as the default", () => {
+    expect(Object.keys(darkMarkdownTheme).sort()).toEqual(
+      Object.keys(defaultMarkdownTheme).sort(),
+    );
+    expect(Object.keys(darkMarkdownTheme.colors).sort()).toEqual(
+      Object.keys(defaultMarkdownTheme.colors).sort(),
+    );
+  });
+
+  it("uses dark surfaces and light text", () => {
+    expect(darkMarkdownTheme.colors.surface).toBe("#0f172a");
+    expect(darkMarkdownTheme.colors.text).toBe("#e2e8f0");
+    expect(darkMarkdownTheme.colors.text).not.toBe(
+      defaultMarkdownTheme.colors.text,
+    );
+  });
+
+  it("inherits non-color tokens (spacing, fonts) from the default", () => {
+    expect(darkMarkdownTheme.spacing).toEqual(defaultMarkdownTheme.spacing);
+    expect(darkMarkdownTheme.fontSizes).toEqual(defaultMarkdownTheme.fontSizes);
+  });
+
+  it("works as a base for mergeThemes", () => {
+    const result = mergeThemes(darkMarkdownTheme, { colors: { link: "#fff" } });
+    expect(result.colors.link).toBe("#fff");
+    expect(result.colors.surface).toBe("#0f172a");
+  });
+});
 
 describe("mergeThemes", () => {
   it("returns base theme when partial is undefined", () => {

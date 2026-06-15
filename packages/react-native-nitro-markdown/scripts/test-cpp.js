@@ -188,7 +188,7 @@ function main() {
       .map((file) => `"${path.join(buildDir, file)}"`)
       .join(" ");
     const profilePath = path.join(buildDir, "coverage.profdata");
-    const parserSource = path.join(cppDir, "core", "MD4CParser.cpp");
+    const parserSource = path.join(cppDir, "core", "NitroMD4CParser.cpp");
 
     if (!rawProfiles) {
       log("No coverage profiles were produced", "red");

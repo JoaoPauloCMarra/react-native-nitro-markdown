@@ -111,6 +111,49 @@ export function ExampleSectionLabel({ children }: SectionLabelProps) {
   return <Text style={styles.sectionLabel}>{children}</Text>;
 }
 
+type BenchBarProps = {
+  label: string;
+  ms: number;
+  maxMs: number;
+  highlight?: boolean;
+  ratio?: string;
+};
+
+export function BenchBar({ label, ms, maxMs, highlight, ratio }: BenchBarProps) {
+  const fraction = maxMs > 0 ? ms / maxMs : 0;
+  const widthPercent = `${Math.max(4, Math.min(100, fraction * 100))}%` as const;
+
+  return (
+    <View style={styles.benchRow}>
+      <View style={styles.benchHead}>
+        <Text
+          style={[styles.benchLabel, highlight && styles.benchLabelHighlight]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+        <View style={styles.benchValueGroup}>
+          <Text
+            style={[styles.benchValue, highlight && styles.benchValueHighlight]}
+          >
+            {ms < 100 ? ms.toFixed(1) : ms.toFixed(0)}ms
+          </Text>
+          {ratio ? <Text style={styles.benchRatio}>{ratio}</Text> : null}
+        </View>
+      </View>
+      <View style={styles.benchTrack}>
+        <View
+          style={[
+            styles.benchFill,
+            { width: widthPercent },
+            highlight && styles.benchFillHighlight,
+          ]}
+        />
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -192,5 +235,64 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 1,
     marginLeft: 4,
+  },
+  benchRow: {
+    marginTop: 12,
+    gap: 6,
+  },
+  benchHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  benchLabel: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "600",
+    color: EXAMPLE_COLORS.textMuted,
+  },
+  benchLabelHighlight: {
+    color: EXAMPLE_COLORS.text,
+    fontWeight: "800",
+  },
+  benchValueGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  benchValue: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: EXAMPLE_COLORS.textMuted,
+    fontVariant: ["tabular-nums"],
+  },
+  benchValueHighlight: {
+    color: EXAMPLE_COLORS.accentDeep,
+  },
+  benchRatio: {
+    minWidth: 42,
+    textAlign: "center",
+    overflow: "hidden",
+    fontSize: 12,
+    fontWeight: "800",
+    color: EXAMPLE_COLORS.textMuted,
+    backgroundColor: EXAMPLE_COLORS.surfaceMuted,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  benchTrack: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: EXAMPLE_COLORS.surfaceMuted,
+    overflow: "hidden",
+  },
+  benchFill: {
+    height: "100%",
+    borderRadius: 4,
+    backgroundColor: EXAMPLE_COLORS.border,
+  },
+  benchFillHighlight: {
+    backgroundColor: EXAMPLE_COLORS.accent,
   },
 });

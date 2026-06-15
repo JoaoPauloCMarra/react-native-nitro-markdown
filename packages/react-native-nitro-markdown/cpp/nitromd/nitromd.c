@@ -23,7 +23,7 @@
  * IN THE SOFTWARE.
  */
 
-#include "md4c.h"
+#include "nitromd.h"
 
 #include <limits.h>
 #include <stdint.h>

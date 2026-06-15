@@ -1,9 +1,55 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to the **`react-native-nitro-markdown` package** are documented
+in this file — API, behavior, types, and native/runtime changes that affect
+consumers. Repo tooling, examples, and docs-only changes are intentionally left out.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+**Breaking changes are always listed first under a `### Breaking changes` heading**
+so upgrades stay safe.
+
+## [0.8.1] - 2026-06-15
+
+_No breaking changes._
+
+### Added
+
+- `darkMarkdownTheme` — a ready-made dark theme preset (slate palette with
+  dark-friendly syntax tokens) alongside `defaultMarkdownTheme` and
+  `minimalMarkdownTheme`. Pass it via `<Markdown theme={darkMarkdownTheme}>` or
+  compose with `mergeThemes`.
+- `ParserOptions.sourceOffsets` (default `true`): pass `false` to
+  `parseMarkdownWithOptions` to skip emitting per-node `beg`/`end` source offsets.
+  For one-shot headless parses (search, indexing, validation) this yields a
+  smaller AST and a faster native parse → JSI → `JSON.parse` round trip (~39%
+  smaller JSON / ~35% faster on a 53 KB sample). Keep the default for
+  streaming/incremental rendering, which relies on offsets to reuse stable nodes.
+
+### Changed
+
+- The native Markdown parser is now **reentrant** — each parse uses isolated
+  state instead of a shared instance, so concurrent or nested `parseMarkdown` /
+  `parseMarkdownWithOptions` calls can no longer interfere with each other.
+- Block math (`math_block`) now renders without a surrounding card/surface —
+  it's transparent and centered, so it blends with any background or theme
+  instead of imposing its own surface color.
+
+### Fixed
+
+- The default renderer no longer silently drops raw HTML: with `options.html`,
+  `html_block` and `html_inline` now render through dedicated, exported
+  `HtmlBlock` / `HtmlInline` components (escaped monospace text by default) —
+  themeable via `styles`, replaceable via `renderers`, and importable like every
+  other built-in renderer.
+- Block math no longer clips tall content (fractions, superscripts, matrices) —
+  the math container reserves vertical headroom for the rendered glyphs.
+
+### Security
+
+- iOS now compiles the native parser with the same hardening flags as Android
+  (`-fstack-protector-strong`, `-Werror=format-security`, `_FORTIFY_SOURCE=2`),
+  adding defense-in-depth when parsing untrusted Markdown.
 
 ## [0.8.0] - 2026-06-11
 

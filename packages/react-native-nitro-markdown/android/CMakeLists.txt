@@ -10,7 +10,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CPP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../cpp")
 
 # Collect source files
-file(GLOB MD4C_SOURCES "${CPP_ROOT}/md4c/*.c")
+file(GLOB MD4C_SOURCES "${CPP_ROOT}/nitromd/*.c")
 file(GLOB CORE_SOURCES "${CPP_ROOT}/core/*.cpp")
 file(GLOB BINDING_SOURCES "${CPP_ROOT}/bindings/*.cpp")
 list(FILTER CORE_SOURCES EXCLUDE REGEX ".*Test\\.cpp$")
@@ -26,7 +26,7 @@ add_library(${PROJECT_NAME} SHARED
 
 # Include directories
 target_include_directories(${PROJECT_NAME} PRIVATE
-    "${CPP_ROOT}/md4c"
+    "${CPP_ROOT}/nitromd"
     "${CPP_ROOT}/core"
     "${CPP_ROOT}/bindings"
 )
