@@ -11,7 +11,13 @@ type HorizontalRuleProps = {
 export const HorizontalRule: FC<HorizontalRuleProps> = ({ style }) => {
   const { theme } = useMarkdownContext();
   const styles = getCachedStyles(stylesCache, theme, createStyles);
-  return <View style={[styles.horizontalRule, style]} />;
+  return (
+    <View
+      style={[styles.horizontalRule, style]}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    />
+  );
 };
 
 type HorizontalRuleStyles = ReturnType<typeof createStyles>;

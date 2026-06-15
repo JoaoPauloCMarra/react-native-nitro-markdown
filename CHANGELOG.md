@@ -31,6 +31,19 @@ _No breaking changes._
 - The native Markdown parser is now **reentrant** — each parse uses isolated
   state instead of a shared instance, so concurrent or nested `parseMarkdown` /
   `parseMarkdownWithOptions` calls can no longer interfere with each other.
+- Block math (`math_block`) now renders without a surrounding card/surface —
+  it's transparent and centered, so it blends with any background or theme
+  instead of imposing its own surface color.
+
+### Fixed
+
+- The default renderer no longer silently drops raw HTML: with `options.html`,
+  `html_block` and `html_inline` now render through dedicated, exported
+  `HtmlBlock` / `HtmlInline` components (escaped monospace text by default) —
+  themeable via `styles`, replaceable via `renderers`, and importable like every
+  other built-in renderer.
+- Block math no longer clips tall content (fractions, superscripts, matrices) —
+  the math container reserves vertical headroom for the rendered glyphs.
 
 ### Security
 

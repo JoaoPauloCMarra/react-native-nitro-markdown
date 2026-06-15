@@ -80,6 +80,12 @@ describe("MathBlock renderer", () => {
           }),
         ]),
       );
+
+      const mathContainer = contentViewport?.parent?.parent;
+      expect(mathContainer?.props.accessible).toBe(true);
+      expect(mathContainer?.props.accessibilityLabel).toBe(
+        "\\frac{\\partial}{\\partial y}(x^2 + y^2) = 2y \\qquad \\text{and more}",
+      );
     } finally {
       consoleErrorSpy.mockRestore();
     }

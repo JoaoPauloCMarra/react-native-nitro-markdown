@@ -194,14 +194,6 @@ const createMathStyles = (theme: MarkdownTheme) =>
       maxWidth: "100%",
       alignSelf: "stretch",
       marginVertical: theme.spacing.m,
-      paddingVertical: theme.spacing.l,
-      paddingHorizontal: theme.spacing.l,
-      backgroundColor: theme.colors.surface,
-      borderRadius: theme.borderRadius.l,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      minHeight: 48,
-      overflow: "hidden",
     },
     mathBlockScroll: {
       width: "100%",
@@ -213,6 +205,7 @@ const createMathStyles = (theme: MarkdownTheme) =>
       alignSelf: "flex-start",
       alignItems: "center",
       justifyContent: "center",
+      paddingVertical: theme.spacing.s,
     },
     ratexBlock: {
       backgroundColor: "transparent",
@@ -260,7 +253,11 @@ export const MathInline: FC<MathInlineProps> = ({ content, style }) => {
 
   if (RaTeXViewComponent && !hasRenderError) {
     return (
-      <View style={[styles.mathInlineContainer, style]}>
+      <View
+        style={[styles.mathInlineContainer, style]}
+        accessible
+        accessibilityLabel={content}
+      >
         <RaTeXViewComponent
           latex={content}
           fontSize={getInlineMathFontSize(content, theme)}
@@ -305,7 +302,11 @@ export const MathBlock: FC<MathBlockProps> = ({ content, style }) => {
 
   if (RaTeXViewComponent && !hasRenderError) {
     return (
-      <View style={[styles.mathBlockContainer, style]}>
+      <View
+        style={[styles.mathBlockContainer, style]}
+        accessible
+        accessibilityLabel={content}
+      >
         <HorizontalMathViewport
           style={styles.mathBlockScroll}
           contentStyle={styles.mathBlockScrollContent}

@@ -42,6 +42,9 @@ const sourceAst: MarkdownNode = {
       href: "javascript:alert(1)",
       alt: "Unsafe image",
     },
+    {
+      type: "horizontal_rule",
+    },
   ],
 };
 
@@ -89,6 +92,14 @@ describe("Markdown renderer accessibility", () => {
           node.type === "View" &&
           node.props.accessibilityRole === "image" &&
           node.props.accessibilityLabel === "Unsafe image",
+      ),
+    ).toHaveLength(1);
+    expect(
+      renderer.root.findAll(
+        (node) =>
+          node.type === "View" &&
+          node.props.accessibilityElementsHidden === true &&
+          node.props.importantForAccessibility === "no-hide-descendants",
       ),
     ).toHaveLength(1);
   });

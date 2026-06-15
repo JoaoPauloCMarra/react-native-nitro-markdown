@@ -43,6 +43,7 @@ import { Blockquote } from "./renderers/blockquote";
 import { CodeBlock, InlineCode } from "./renderers/code";
 import { Heading } from "./renderers/heading";
 import { HorizontalRule } from "./renderers/horizontal-rule";
+import { HtmlBlock, HtmlInline } from "./renderers/html";
 import { Image } from "./renderers/image";
 import { Link } from "./renderers/link";
 import { List, ListItem, TaskListItem } from "./renderers/list";
@@ -970,6 +971,22 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
         <MathBlock
           content={getTextContent(node)}
           {...(nodeStyles?.math_block ? { style: nodeStyles.math_block } : {})}
+        />
+      );
+
+    case "html_inline":
+      return (
+        <HtmlInline
+          {...(node.content ? { content: node.content } : {})}
+          {...(nodeStyles?.html_inline ? { style: nodeStyles.html_inline } : {})}
+        />
+      );
+
+    case "html_block":
+      return (
+        <HtmlBlock
+          {...(node.content ? { content: node.content } : {})}
+          {...(nodeStyles?.html_block ? { style: nodeStyles.html_block } : {})}
         />
       );
 
