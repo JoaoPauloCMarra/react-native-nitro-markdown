@@ -76,18 +76,13 @@ export type MarkdownNode = {
   isHeader?: boolean;
   /** Text alignment for table cells: 'left', 'center', or 'right'. */
   align?: TableCellAlign;
-  /** Source start offset in original markdown text (when provided by native parser). */
+  /** Source start offset as a JavaScript UTF-16 index in the original markdown text. */
   beg?: number;
-  /** Source end offset in original markdown text (when provided by native parser). */
+  /** Source end offset as a JavaScript UTF-16 index in the original markdown text. */
   end?: number;
   /** Nested child nodes for hierarchical elements like paragraphs, lists, and tables. */
   children?: MarkdownNode[];
 };
-
-const createEmptyDocument = (): MarkdownNode => ({
-  type: "document",
-  children: [],
-});
 
 function reportNativeParserFailure(methodName: string, error?: unknown): void {
   if (__DEV__) {
@@ -96,6 +91,10 @@ function reportNativeParserFailure(methodName: string, error?: unknown): void {
       error,
     );
   }
+}
+
+function toError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
 }
 
 let MarkdownParserModule: MarkdownParser | null = null;
@@ -141,16 +140,13 @@ export function parseMarkdown(
       return JSON.parse(jsonStr) as MarkdownNode;
     } catch (error) {
       reportNativeParserFailure("parseMarkdown", error);
-      return createEmptyDocument();
+      throw toError(error);
     }
   }
 
-  if (__DEV__) {
-    console.error(
-      "[NitroMarkdown] parseMarkdown: native parser unavailable — check installation.",
-    );
-  }
-  return createEmptyDocument();
+  throw new Error(
+    "[NitroMarkdown] parseMarkdown: native parser unavailable — check installation.",
+  );
 }
 
 /**
@@ -172,16 +168,13 @@ export function parseMarkdownWithOptions(
       return JSON.parse(jsonStr) as MarkdownNode;
     } catch (error) {
       reportNativeParserFailure("parseMarkdownWithOptions", error);
-      return createEmptyDocument();
+      throw toError(error);
     }
   }
 
-  if (__DEV__) {
-    console.error(
-      "[NitroMarkdown] parseMarkdownWithOptions: native parser unavailable — check installation.",
-    );
-  }
-  return createEmptyDocument();
+  throw new Error(
+    "[NitroMarkdown] parseMarkdownWithOptions: native parser unavailable — check installation.",
+  );
 }
 
 /**

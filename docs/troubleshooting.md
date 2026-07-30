@@ -21,6 +21,12 @@ Use `updateStrategy="raf"`, or `updateStrategy="interval"` with
 A `beforeParse` plugin forces a full parse by design, which disables incremental
 AST reuse. `sourceAstStatus` becomes `"disabled"` in that state.
 
+### Streaming parse failed
+
+`MarkdownStream` reports parser failures through `onError(error, "parse")`.
+Failed updates preserve the last valid stream state. An initial failure exposes
+`sourceAstStatus: "disabled"` with `sourceAstDisabledReason: "parse-error"`.
+
 ### Long document feels heavy
 
 Enable [virtualization](./usage.md#long-documents-virtualization):

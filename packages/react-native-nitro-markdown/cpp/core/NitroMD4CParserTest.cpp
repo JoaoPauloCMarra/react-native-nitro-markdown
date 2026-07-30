@@ -98,6 +98,7 @@ public:
         testEntityText();
         testTestOnlyExtensionFlags();
         testCallbackNullUserdataGuards();
+        testParserFailureThrows();
 
         // Safety and crash prevention tests
         testMemoryLeaks();
@@ -112,6 +113,7 @@ public:
         testLinkAttributes();
         testOversizedInputClamp();
         testOffsets();
+        testUtf16Offsets();
         testParseLatencyBudgets();
         testLargeDocumentMemoryBudget();
 
@@ -280,6 +282,54 @@ private:
                 TestRunner::assertEqual("14", std::to_string(bold2->end), "Bold end");
             }
         }
+    }
+
+    static void testUtf16Offsets() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+        auto result = parser.parse("Olá 👋", options);
+        auto paragraph = findFirstNode(result, NodeType::Paragraph);
+        auto text = findFirstNode(result, NodeType::Text);
+
+        TestRunner::assertEqual("6", std::to_string(result->end), "UTF16Offsets: document end");
+        TestRunner::assertNotNull(paragraph.get(), "UTF16Offsets: paragraph");
+        TestRunner::assertNotNull(text.get(), "UTF16Offsets: text");
+        if (paragraph) {
+            TestRunner::assertEqual("6", std::to_string(paragraph->end), "UTF16Offsets: paragraph end");
+        }
+        if (text) {
+            TestRunner::assertEqual("0", std::to_string(text->beg), "UTF16Offsets: text beg");
+            TestRunner::assertEqual("6", std::to_string(text->end), "UTF16Offsets: text end");
+        }
+
+        auto formattedResult = parser.parse("Olá 👋 **café**", options);
+        auto bold = findFirstNode(formattedResult, NodeType::Bold);
+        TestRunner::assertEqual("15", std::to_string(formattedResult->end), "UTF16Offsets: formatted document end");
+        TestRunner::assertNotNull(bold.get(), "UTF16Offsets: bold");
+        if (bold) {
+            TestRunner::assertEqual("7", std::to_string(bold->beg), "UTF16Offsets: bold beg");
+            TestRunner::assertEqual("15", std::to_string(bold->end), "UTF16Offsets: bold end");
+            auto boldText = findFirstNode(bold, NodeType::Text);
+            TestRunner::assertNotNull(boldText.get(), "UTF16Offsets: bold text");
+            if (boldText) {
+                TestRunner::assertEqual("9", std::to_string(boldText->beg), "UTF16Offsets: bold text beg");
+                TestRunner::assertEqual("13", std::to_string(boldText->end), "UTF16Offsets: bold text end");
+            }
+        }
+    }
+
+    static void testParserFailureThrows() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+        bool threw = false;
+
+        try {
+            parser.parseWithForcedFailureForTest("partial document", options);
+        } catch (const std::runtime_error& error) {
+            threw = std::string(error.what()).find("7") != std::string::npos;
+        }
+
+        TestRunner::assertTrue(threw, "ParserFailure: nonzero md_parse result throws");
     }
 
     static void testNullCharOffsets() {

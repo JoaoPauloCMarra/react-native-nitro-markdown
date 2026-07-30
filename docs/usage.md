@@ -37,6 +37,7 @@ CommonMark plus GitHub Flavored Markdown:
 | `options.gfm` | `true` | Tables, strikethrough, task lists, autolinks. |
 | `options.math` | `true` | Parse inline and block math nodes. |
 | `options.html` | `false` | Preserve raw HTML nodes for custom renderers. |
+| `options.sourceOffsets` | `true` | Emit `beg`/`end` as JavaScript UTF-16 indices. |
 | `parseCache` | `true` | Reuse parsed ASTs for repeated content (set `false` to force re-parse). |
 | `sourceAst` | `undefined` | Render a pre-parsed AST instead of parsing `children`. |
 | `highlightCode` | `false` | Enable built-in code syntax highlighting (or pass a custom highlighter). |
@@ -50,6 +51,11 @@ CommonMark plus GitHub Flavored Markdown:
 
 `parseCache` keeps an internal AST cache keyed by content + parser options, so
 re-rendering the same Markdown avoids re-parsing.
+
+Native parse failures do not produce an empty document. `<Markdown>` renders
+nothing for that parse and calls `onError(error, "parse")`. Plugin failures use
+the `"before-plugin"` or `"after-plugin"` phase and include the plugin name when
+available.
 
 ## Long documents (virtualization)
 

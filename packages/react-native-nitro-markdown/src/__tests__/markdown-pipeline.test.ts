@@ -116,6 +116,71 @@ describe("Markdown plugin pipeline", () => {
     }
   });
 
+  it("reports native parser failures through onError", () => {
+    const parseError = new Error("native parse failed");
+    const onError = jest.fn();
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+    mockParser.parse.mockImplementationOnce(() => {
+      throw parseError;
+    });
+
+    try {
+      act(() => {
+        create(
+          createElement(
+            Markdown,
+            { onError, parseCache: false },
+            "native parser failure input",
+          ),
+        );
+      });
+
+      expect(onError).toHaveBeenCalledWith(parseError, "parse", undefined);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it("preserves sourceOffsets through normalization and cache keys", () => {
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+    let renderer: ReactTestRenderer | undefined;
+
+    try {
+      act(() => {
+        renderer = create(
+          createElement(
+            Markdown,
+            { options: { sourceOffsets: false } },
+            "source offset cache input",
+          ),
+        );
+      });
+
+      act(() => {
+        renderer!.update(
+          createElement(
+            Markdown,
+            { options: { sourceOffsets: true } },
+            "source offset cache input",
+          ),
+        );
+      });
+
+      expect(mockParser.parseWithOptions).toHaveBeenNthCalledWith(
+        1,
+        "source offset cache input",
+        { sourceOffsets: false },
+      );
+      expect(mockParser.parseWithOptions).toHaveBeenNthCalledWith(
+        2,
+        "source offset cache input",
+        { sourceOffsets: true },
+      );
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
   it("does not run beforeParse plugins when sourceAst is provided", () => {
     const beforeParse = jest.fn((text: string) => `${text} changed`);
     const sourceAst: MarkdownNode = {

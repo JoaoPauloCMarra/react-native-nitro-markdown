@@ -73,7 +73,7 @@ describe("headless native fallback", () => {
     jest.resetModules();
   };
 
-  it("returns empty fallback values when the native parser cannot be created", () => {
+  it("throws when the native parser cannot be created", () => {
     const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
 
     runWithParserMock(
@@ -81,16 +81,18 @@ describe("headless native fallback", () => {
         throw new Error("native module missing");
       },
       (headless) => {
-        expect(headless.parseMarkdown("# Missing")).toEqual({
-          type: "document",
-          children: [],
-        });
-        expect(headless.parseMarkdownWithOptions("# Missing", { gfm: true })).toEqual({
-          type: "document",
-          children: [],
-        });
-        expect(headless.extractPlainText("# Missing")).toBe("");
-        expect(headless.extractPlainTextWithOptions("# Missing", { math: true })).toBe("");
+        expect(() => headless.parseMarkdown("# Missing")).toThrow(
+          "native parser unavailable",
+        );
+        expect(() =>
+          headless.parseMarkdownWithOptions("# Missing", { gfm: true }),
+        ).toThrow("native parser unavailable");
+        expect(() => headless.extractPlainText("# Missing")).toThrow(
+          "native parser unavailable",
+        );
+        expect(() =>
+          headless.extractPlainTextWithOptions("# Missing", { math: true }),
+        ).toThrow("native parser unavailable");
       },
     );
 
@@ -135,7 +137,7 @@ describe("headless native fallback", () => {
     );
   });
 
-  it("returns fallback values when native parser methods throw or return invalid JSON", () => {
+  it("propagates native parser and invalid JSON failures", () => {
     const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
 
     runWithParserMock(
@@ -152,16 +154,14 @@ describe("headless native fallback", () => {
         }),
       }),
       (headless) => {
-        expect(headless.parseMarkdown("# Broken")).toEqual({
-          type: "document",
-          children: [],
-        });
-        expect(headless.parseMarkdownWithOptions("# Broken", { gfm: true })).toEqual({
-          type: "document",
-          children: [],
-        });
-        expect(headless.extractPlainText("# Broken")).toBe("");
-        expect(headless.extractPlainTextWithOptions("# Broken", { gfm: true })).toBe("");
+        expect(() => headless.parseMarkdown("# Broken")).toThrow("parse failed");
+        expect(() =>
+          headless.parseMarkdownWithOptions("# Broken", { gfm: true }),
+        ).toThrow(SyntaxError);
+        expect(() => headless.extractPlainText("# Broken")).toThrow("parse failed");
+        expect(() =>
+          headless.extractPlainTextWithOptions("# Broken", { gfm: true }),
+        ).toThrow(SyntaxError);
       },
     );
 

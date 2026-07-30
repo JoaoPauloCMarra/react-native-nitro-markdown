@@ -8,8 +8,10 @@ const bunBin = process.platform === "win32" ? "bun.cmd" : "bun";
 const dryRun = process.argv.includes("--dry-run");
 
 const steps = [
+  "codegen:check",
   "lint",
   "typecheck",
+  "typecheck:public",
   "test:coverage",
   "benchmark",
   "test:cpp:coverage",

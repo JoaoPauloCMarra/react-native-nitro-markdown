@@ -5,7 +5,7 @@
 [![CI](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/actions/workflows/ci.yml/badge.svg)](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/react-native-nitro-markdown?color=007ec6)](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/LICENSE)
 [![React Native](https://img.shields.io/badge/react--native-%3E%3D0.75-61dafb)](https://reactnative.dev/)
-[![Nitro Modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.35.7-black)](https://www.npmjs.com/package/react-native-nitro-modules)
+[![Nitro Modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.36.4%20%3C0.37.0-black)](https://www.npmjs.com/package/react-native-nitro-modules)
 
 **The fast Markdown engine for React Native.** Native **C++ parsing** (CommonMark
 + GitHub Flavored Markdown), real React Native rendering, first-class
@@ -41,12 +41,12 @@ Native components — so you get native parse speed *and* component flexibility.
 ## Install
 
 ```sh
-bun add react-native-nitro-markdown react-native-nitro-modules ratex-react-native
+bun add react-native-nitro-markdown react-native-nitro-modules@0.36.4 ratex-react-native@0.1.14
 ```
 
 ```sh
 # Expo development build
-bunx expo install react-native-nitro-markdown react-native-nitro-modules ratex-react-native
+bunx expo install react-native-nitro-markdown react-native-nitro-modules@0.36.4 ratex-react-native@0.1.14
 bunx expo prebuild
 ```
 
@@ -71,17 +71,39 @@ export function Article() {
 ## Streaming (LLM / chat)
 
 ```tsx
+import { useEffect } from "react";
 import { MarkdownStream, useMarkdownSession } from "react-native-nitro-markdown";
 
-const session = useMarkdownSession();
-session.getSession().append("Hello ");
-session.getSession().append("**world**");
+type StreamingMessageProps = {
+  subscribe: (onToken: (token: string) => void) => () => void;
+  onError: (error: Error) => void;
+};
 
-<MarkdownStream session={session} updateStrategy="raf" incrementalParsing />;
+export function StreamingMessage({
+  subscribe,
+  onError,
+}: StreamingMessageProps) {
+  const session = useMarkdownSession();
+
+  useEffect(
+    () => subscribe((token) => session.getSession().append(token)),
+    [session, subscribe],
+  );
+
+  return (
+    <MarkdownStream
+      session={session}
+      updateStrategy="raf"
+      incrementalParsing
+      onError={onError}
+    />
+  );
+}
 ```
 
-`MarkdownStream` subscribes to native range updates and re-renders only what
-changed. Full guide: **[Streaming](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/streaming.md)**.
+`MarkdownStream` batches native range updates and reuses stable AST nodes.
+Failed updates call `onError(error, "parse")` and retain the last valid render.
+Full guide: **[Streaming](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/streaming.md)**.
 
 ## Headless parsing
 
@@ -101,7 +123,10 @@ const lean = parseMarkdownWithOptions(doc, { sourceOffsets: false });
 ```
 
 Use the `/headless` export for AST data, plain-text extraction, indexing, or
-tests without rendering UI. Full guide: **[Headless](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/headless.md)**.
+tests without rendering UI. Parser functions throw when the native module is
+unavailable, parsing fails, or native output is invalid; catch errors at your
+application boundary. The headless entry still requires an iOS or Android native
+runtime. Full guide: **[Headless](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/headless.md)**.
 
 ## Source AST rendering
 
@@ -146,9 +171,10 @@ Presets: `defaultMarkdownTheme`, `darkMarkdownTheme`, `minimalMarkdownTheme` (or
 | `options.gfm` | `true` | Tables, strikethrough, task lists, autolinks. |
 | `options.math` | `true` | Inline and block math nodes. |
 | `options.html` | `false` | Preserve raw HTML nodes for custom renderers. |
-| `options.sourceOffsets` | `true` | Emit per-node `beg`/`end` source offsets. Set `false` for one-shot headless parses to shrink the AST and speed up the round trip. |
+| `options.sourceOffsets` | `true` | Emit per-node `beg`/`end` source offsets as JavaScript UTF-16 indices, matching `String.length` and `String.slice`. Set `false` for one-shot headless parses to shrink the AST and speed up the round trip. |
 | `parseCache` | `true` | Reuse parsed ASTs for repeated content. |
 | `sourceAst` | `undefined` | Render a pre-parsed AST instead of parsing `children`. |
+| `onError` | `undefined` | Receive parser and plugin failures as `(error, phase, pluginName?)`. |
 | `highlightCode` | `false` | Built-in code syntax highlighting. |
 | `virtualize` | `false` | Virtualize top-level blocks for long documents. |
 
@@ -186,9 +212,9 @@ full capability matrix: **[Comparison & benchmarks](https://github.com/JoaoPaulo
 | Dependency | Supported |
 | ---------- | --------- |
 | [React Native](https://reactnative.dev/) | `>=0.75` (New Architecture) |
-| [Nitro Modules](https://www.npmjs.com/package/react-native-nitro-modules) | `>=0.35.7` |
-| [RaTeX React Native](https://www.npmjs.com/package/ratex-react-native) | `>=0.1.4` |
-| [Expo](https://docs.expo.dev/) | SDK 56 development builds |
+| [Nitro Modules](https://www.npmjs.com/package/react-native-nitro-modules) | `>=0.36.4 <0.37.0` |
+| [RaTeX React Native](https://www.npmjs.com/package/ratex-react-native) | `>=0.1.4` (example validated with `0.1.14`) |
+| [Expo](https://docs.expo.dev/) | SDK 57 development builds |
 | Platforms | iOS, Android (Web not supported) |
 
 ## Contributing

@@ -24,6 +24,10 @@ public:
         const ParserOptions& options,
         unsigned int extraFlags
     );
+    std::shared_ptr<MarkdownNode> parseWithForcedFailureForTest(
+        const std::string& markdown,
+        const ParserOptions& options
+    );
     static int enterBlockNullUserdataForTest();
     static int leaveBlockNullUserdataForTest();
     static int enterSpanNullUserdataForTest();
@@ -42,7 +46,8 @@ private:
     std::shared_ptr<MarkdownNode> parseWithFlags(
         const std::string& markdown,
         const ParserOptions& options,
-        unsigned int extraFlags
+        unsigned int extraFlags,
+        bool forceCallbackFailure = false
     );
 };
 

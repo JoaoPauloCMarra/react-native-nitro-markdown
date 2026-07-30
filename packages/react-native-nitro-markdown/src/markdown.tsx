@@ -182,14 +182,22 @@ const cloneMarkdownNode = (node: MarkdownNode): MarkdownNode => {
 };
 
 const getParserOptionsKey = (options?: ParserOptions): string => {
-  if (!options) return "gfm:default|math:default|html:default";
+  if (!options) {
+    return "gfm:default|math:default|html:default|sourceOffsets:default";
+  }
 
   const gfm = options.gfm === undefined ? "default" : options.gfm ? "1" : "0";
   const math =
     options.math === undefined ? "default" : options.math ? "1" : "0";
   const html =
     options.html === undefined ? "default" : options.html ? "1" : "0";
-  return `gfm:${gfm}|math:${math}|html:${html}`;
+  const sourceOffsets =
+    options.sourceOffsets === undefined
+      ? "default"
+      : options.sourceOffsets
+        ? "1"
+        : "0";
+  return `gfm:${gfm}|math:${math}|html:${html}|sourceOffsets:${sourceOffsets}`;
 };
 
 const normalizeParserOptions = (
@@ -200,8 +208,14 @@ const normalizeParserOptions = (
   const gfm = options.gfm;
   const math = options.math;
   const html = options.html;
+  const sourceOffsets = options.sourceOffsets;
 
-  if (gfm === undefined && math === undefined && html === undefined) {
+  if (
+    gfm === undefined &&
+    math === undefined &&
+    html === undefined &&
+    sourceOffsets === undefined
+  ) {
     return undefined;
   }
 
@@ -209,6 +223,9 @@ const normalizeParserOptions = (
   if (gfm !== undefined) normalized.gfm = gfm;
   if (math !== undefined) normalized.math = math;
   if (html !== undefined) normalized.html = html;
+  if (sourceOffsets !== undefined) {
+    normalized.sourceOffsets = sourceOffsets;
+  }
   return normalized;
 };
 
@@ -468,6 +485,7 @@ export const Markdown: FC<MarkdownProps> = ({
   const parserOptionGfm = options?.gfm;
   const parserOptionMath = options?.math;
   const parserOptionHtml = options?.html;
+  const parserOptionSourceOffsets = options?.sourceOffsets;
 
   /* eslint-disable react-hooks/refs -- Refs updated/read intentionally to avoid re-parsing on callback identity changes */
   const onErrorRef = useRef(onError);
@@ -485,6 +503,9 @@ export const Markdown: FC<MarkdownProps> = ({
           parserOptionGfm === undefined ? null : { gfm: parserOptionGfm },
           parserOptionMath === undefined ? null : { math: parserOptionMath },
           parserOptionHtml === undefined ? null : { html: parserOptionHtml },
+          parserOptionSourceOffsets === undefined
+            ? null
+            : { sourceOffsets: parserOptionSourceOffsets },
         ),
       );
       const shouldCloneSourceAst =
@@ -534,6 +555,7 @@ export const Markdown: FC<MarkdownProps> = ({
     parserOptionGfm,
     parserOptionMath,
     parserOptionHtml,
+    parserOptionSourceOffsets,
     sourceAst,
     parseCache,
     astTransform,
@@ -548,6 +570,7 @@ export const Markdown: FC<MarkdownProps> = ({
     parserOptionGfm,
     parserOptionMath,
     parserOptionHtml,
+    parserOptionSourceOffsets,
     onParsingInProgress,
   ]);
 

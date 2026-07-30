@@ -6,16 +6,13 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      run_native_examples:
-        description: Run Android and iOS example build jobs
-        required: false
-        default: false
-        type: boolean
 
 env:
   TZ: UTC
   BUN_VERSION: "1.3.14"
+
+permissions:
+  contents: read
 
 jobs:
   quality:
@@ -23,13 +20,13 @@ jobs:
     runs-on: macos-26
 
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
-      - uses: oven-sh/setup-bun@v2.2.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - uses: actions/cache@v5.0.5
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
         with:
           path: |
             ~/.bun/install/cache
@@ -46,22 +43,21 @@ jobs:
 
   example-android:
     name: Example Android Build
-    if: ${{ vars.RUN_NATIVE_EXAMPLE_CI == 'true' || (github.event_name == 'workflow_dispatch' && inputs.run_native_examples) }}
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
       - name: Setup Java
-        uses: actions/setup-java@v5.0.0
+        uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Setup Android
-        uses: android-actions/setup-android@v3.2.2
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
 
-      - uses: oven-sh/setup-bun@v2.2.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
@@ -78,13 +74,12 @@ jobs:
 
   example-ios:
     name: Example iOS Build
-    if: ${{ vars.RUN_NATIVE_EXAMPLE_CI == 'true' || (github.event_name == 'workflow_dispatch' && inputs.run_native_examples) }}
     runs-on: macos-26
 
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
-      - uses: oven-sh/setup-bun@v2.2.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
           bun-version: ${{ env.BUN_VERSION }}
 

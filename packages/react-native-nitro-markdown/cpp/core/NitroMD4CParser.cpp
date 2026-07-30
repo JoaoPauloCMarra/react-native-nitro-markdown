@@ -5,6 +5,8 @@
 #include <vector>
 #include <cstring>
 #include <limits>
+#include <stdexcept>
+#include <utility>
 
 namespace NitroMarkdown {
 
@@ -28,6 +30,73 @@ static MD_OFFSET safeOffset(const char* text, const char* base, size_t baseSize)
     if (static_cast<size_t>(diff) > static_cast<size_t>(std::numeric_limits<MD_OFFSET>::max())) return 0;
     return static_cast<MD_OFFSET>(diff);
 }
+
+static size_t utf8SequenceLength(
+    const unsigned char* bytes,
+    size_t remaining
+) noexcept {
+    const unsigned char first = bytes[0];
+    const auto isContinuation = [](unsigned char value) {
+        return (value & 0xC0) == 0x80;
+    };
+
+    if (first <= 0x7F) return 1;
+    if (
+        first >= 0xC2 &&
+        first <= 0xDF &&
+        remaining >= 2 &&
+        isContinuation(bytes[1])
+    ) {
+        return 2;
+    }
+    if (
+        first >= 0xE0 &&
+        first <= 0xEF &&
+        remaining >= 3 &&
+        isContinuation(bytes[1]) &&
+        isContinuation(bytes[2]) &&
+        !(first == 0xE0 && bytes[1] < 0xA0) &&
+        !(first == 0xED && bytes[1] >= 0xA0)
+    ) {
+        return 3;
+    }
+    if (
+        first >= 0xF0 &&
+        first <= 0xF4 &&
+        remaining >= 4 &&
+        isContinuation(bytes[1]) &&
+        isContinuation(bytes[2]) &&
+        isContinuation(bytes[3]) &&
+        !(first == 0xF0 && bytes[1] < 0x90) &&
+        !(first == 0xF4 && bytes[1] >= 0x90)
+    ) {
+        return 4;
+    }
+    return 1;
+}
+
+static std::vector<OFF> createUtf16OffsetMap(
+    const char* text,
+    size_t size
+) {
+    std::vector<OFF> offsets(size + 1, 0);
+    const auto* bytes = reinterpret_cast<const unsigned char*>(text);
+    size_t byteIndex = 0;
+    OFF utf16Index = 0;
+
+    while (byteIndex < size) {
+        const size_t sequenceLength =
+            utf8SequenceLength(bytes + byteIndex, size - byteIndex);
+        for (size_t index = 0; index < sequenceLength; index++) {
+            offsets[byteIndex + index] = utf16Index;
+        }
+        byteIndex += sequenceLength;
+        utf16Index += sequenceLength == 4 ? 2 : 1;
+        offsets[byteIndex] = utf16Index;
+    }
+
+    return offsets;
+}
 } // namespace
 
 class MD4CParser::Impl {
@@ -37,8 +106,11 @@ public:
     std::string currentText;
     const char* inputText = nullptr;
     size_t inputTextSize = 0;
+    std::vector<OFF> sourceOffsets;
     OFF currentTextBeg = 0;
     OFF lastTextEnd = 0;
+    size_t lastTextByteEnd = 0;
+    bool forceCallbackFailure = false;
     
     void reset() {
         root = std::make_shared<MarkdownNode>(NodeType::Document);
@@ -48,6 +120,37 @@ public:
         currentText.reserve(256);
         currentTextBeg = 0;
         lastTextEnd = 0;
+        lastTextByteEnd = 0;
+        forceCallbackFailure = false;
+    }
+
+    void setInput(const char* text, size_t size) {
+        inputText = text;
+        inputTextSize = size;
+        sourceOffsets = createUtf16OffsetMap(text, size);
+    }
+
+    OFF sourceOffset(size_t byteOffset) const {
+        if (sourceOffsets.empty()) return 0;
+        const size_t index =
+            byteOffset > inputTextSize ? inputTextSize : byteOffset;
+        return sourceOffsets[index];
+    }
+
+    std::pair<OFF, OFF> sourceRange(const char* text, MD_SIZE size) {
+        size_t byteBeg = static_cast<size_t>(
+            safeOffset(text, inputText, inputTextSize)
+        );
+        if (byteBeg == 0 && text != inputText) {
+            byteBeg = lastTextByteEnd;
+        }
+        size_t byteEnd = byteBeg + static_cast<size_t>(size);
+        if (byteEnd > inputTextSize) {
+            byteEnd = inputTextSize;
+        }
+        lastTextByteEnd = byteEnd;
+        lastTextEnd = sourceOffset(byteEnd);
+        return {sourceOffset(byteBeg), lastTextEnd};
     }
     
     void flushText() {
@@ -130,6 +233,8 @@ public:
         try {
         auto* impl = static_cast<Impl*>(userdata);
         if (impl == nullptr) return 1; // Signal error to md4c
+        if (impl->forceCallbackFailure) return 7;
+        off = impl->sourceOffset(off);
 
         switch (type) {
             case MD_BLOCK_DOC:
@@ -260,6 +365,7 @@ public:
         try {
         auto* impl = static_cast<Impl*>(userdata);
         if (impl == nullptr) return 1; // Signal error to md4c
+        off = impl->sourceOffset(off);
 
         switch (type) {
             case MD_BLOCK_DOC:
@@ -283,6 +389,7 @@ public:
         try {
         auto* impl = static_cast<Impl*>(userdata);
         if (impl == nullptr) return 1; // Signal error to md4c
+        off = impl->sourceOffset(off);
 
         switch (type) {
             case MD_SPAN_EM: {
@@ -363,6 +470,7 @@ public:
         try {
         auto* impl = static_cast<Impl*>(userdata);
         if (impl == nullptr) return 1; // Signal error to md4c
+        off = impl->sourceOffset(off);
 
         if (!impl->nodeStack.empty()) {
             auto currentNode = impl->nodeStack.top();
@@ -399,11 +507,10 @@ public:
 
         switch (type) {
             case MD_TEXT_NULLCHAR: {
-                MD_OFFSET off = safeOffset(text, impl->inputText, impl->inputTextSize);
-                if (off == 0 && text != impl->inputText) off = impl->lastTextEnd;
-                if (impl->currentText.empty()) impl->currentTextBeg = off;
+                const auto [beg, end] = impl->sourceRange(text, 1);
+                if (impl->currentText.empty()) impl->currentTextBeg = beg;
                 impl->currentText += '\0';
-                impl->lastTextEnd = off + 1;
+                impl->lastTextEnd = end;
                 break;
             }
 
@@ -426,8 +533,7 @@ public:
             case MD_TEXT_HTML:
                 impl->flushText();
                 if (!impl->nodeStack.empty() && text && size > 0) {
-                    MD_OFFSET off = safeOffset(text, impl->inputText, impl->inputTextSize);
-                    if (off == 0 && text != impl->inputText) off = impl->lastTextEnd;
+                    const auto [beg, end] = impl->sourceRange(text, size);
 
                     if (impl->nodeStack.top()->type == NodeType::HtmlBlock) {
                         auto htmlBlock = impl->nodeStack.top();
@@ -436,27 +542,26 @@ public:
                         } else {
                             htmlBlock->content = std::string(text, size);
                         }
-                        htmlBlock->end = off + size;
-                        impl->lastTextEnd = off + size;
+                        htmlBlock->end = end;
+                        impl->lastTextEnd = end;
                         break;
                     }
 
                     auto node = std::make_shared<MarkdownNode>(NodeType::HtmlInline);
                     node->content = std::string(text, size);
-                    node->beg = off;
-                    node->end = off + size;
+                    node->beg = beg;
+                    node->end = end;
                     impl->nodeStack.top()->addChild(node);
-                    impl->lastTextEnd = off + size;
+                    impl->lastTextEnd = end;
                 }
                 break;
 
             case MD_TEXT_ENTITY:
                 if (text && size > 0) {
-                    MD_OFFSET off = safeOffset(text, impl->inputText, impl->inputTextSize);
-                    if (off == 0 && text != impl->inputText) off = impl->lastTextEnd;
-                    if (impl->currentText.empty()) impl->currentTextBeg = off;
+                    const auto [beg, end] = impl->sourceRange(text, size);
+                    if (impl->currentText.empty()) impl->currentTextBeg = beg;
                     impl->currentText.append(text, size);
-                    impl->lastTextEnd = off + size;
+                    impl->lastTextEnd = end;
                 }
                 break;
 
@@ -465,14 +570,13 @@ public:
             case MD_TEXT_LATEXMATH:
             default: {
                 if (text && size > 0) {
-                    MD_OFFSET off = safeOffset(text, impl->inputText, impl->inputTextSize);
-                    if (off == 0 && text != impl->inputText) off = impl->lastTextEnd;
+                    const auto [beg, end] = impl->sourceRange(text, size);
 
                     if (impl->currentText.empty()) {
-                        impl->currentTextBeg = off;
+                        impl->currentTextBeg = beg;
                     }
                     impl->currentText.append(text, size);
-                    impl->lastTextEnd = off + size;
+                    impl->lastTextEnd = end;
                 }
                 break;
             }
@@ -496,13 +600,14 @@ std::shared_ptr<MarkdownNode> MD4CParser::parse(const std::string& markdown, con
 std::shared_ptr<MarkdownNode> MD4CParser::parseWithFlags(
     const std::string& markdown,
     const ParserOptions& options,
-    unsigned int extraFlags
+    unsigned int extraFlags,
+    bool forceCallbackFailure
 ) {
     Impl impl;
     impl.reset();
-    impl.inputText = markdown.c_str();
     size_t inputSize = clampInputSize(markdown.size());
-    impl.inputTextSize = inputSize;
+    impl.setInput(markdown.c_str(), inputSize);
+    impl.forceCallbackFailure = forceCallbackFailure;
 
     unsigned int flags = options.html ? 0 : MD_FLAG_NOHTML;
     
@@ -535,9 +640,9 @@ std::shared_ptr<MarkdownNode> MD4CParser::parseWithFlags(
                           &parser,
                           &impl);
     if (result != 0) {
-        // md_parse failed (callback aborted or runtime error).
-        // The AST may be partial but is still a valid tree rooted at Document,
-        // so we continue rather than throw — callers can use whatever was parsed.
+        throw std::runtime_error(
+            "Markdown parsing failed with code " + std::to_string(result)
+        );
     }
 
     impl.flushText();
@@ -551,6 +656,13 @@ std::shared_ptr<MarkdownNode> MD4CParser::parseWithExtraFlagsForTest(
     unsigned int extraFlags
 ) {
     return parseWithFlags(markdown, options, extraFlags);
+}
+
+std::shared_ptr<MarkdownNode> MD4CParser::parseWithForcedFailureForTest(
+    const std::string& markdown,
+    const ParserOptions& options
+) {
+    return parseWithFlags(markdown, options, 0, true);
 }
 
 int MD4CParser::enterBlockNullUserdataForTest() {
