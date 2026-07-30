@@ -57,6 +57,26 @@ describe("incremental AST", () => {
     expect(getTextContent(nextAst)).toContain("Hello world");
   });
 
+  it("uses JavaScript UTF-16 lengths for accented and emoji appends", () => {
+    const previousText = "Olá 👋";
+    const previousAst = setTrailingPathEnd(
+      parseMarkdownAst(previousText),
+      previousText.length,
+    );
+    jest.clearAllMocks();
+
+    const nextText = `${previousText} mundo`;
+    const nextAst = getNextStreamAst({
+      previousAst,
+      previousText,
+      nextText,
+    });
+
+    expect(mockParser.parse).not.toHaveBeenCalled();
+    expect(nextAst.end).toBe(nextText.length);
+    expect(getTextContent(nextAst)).toContain(nextText);
+  });
+
   it("forces full parse when append starts after a line boundary", () => {
     const previousText = "> Quote\n\n";
     const previousAst = setTrailingPathEnd(parseMarkdownAst(previousText), previousText.length);

@@ -18,6 +18,8 @@ import {
 } from "./use-markdown-stream";
 import { getNextStreamAst, parseMarkdownAst } from "./utils/incremental-ast";
 
+type MarkdownOnError = NonNullable<MarkdownProps["onError"]>;
+
 const normalizeOffset = (value: number): number | null => {
   if (!Number.isFinite(value)) return null;
   if (value <= 0) return 0;
@@ -32,8 +34,14 @@ const normalizeParserOptions = (
   const gfm = options.gfm;
   const math = options.math;
   const html = options.html;
+  const sourceOffsets = options.sourceOffsets;
 
-  if (gfm === undefined && math === undefined && html === undefined) {
+  if (
+    gfm === undefined &&
+    math === undefined &&
+    html === undefined &&
+    sourceOffsets === undefined
+  ) {
     return undefined;
   }
 
@@ -41,6 +49,9 @@ const normalizeParserOptions = (
   if (gfm !== undefined) normalized.gfm = gfm;
   if (math !== undefined) normalized.math = math;
   if (html !== undefined) normalized.html = html;
+  if (sourceOffsets !== undefined) {
+    normalized.sourceOffsets = sourceOffsets;
+  }
   return normalized;
 };
 
@@ -94,9 +105,29 @@ function warnStreamError(message: string, error: unknown): void {
   }
 }
 
+function notifyStreamParseError(
+  onError: MarkdownOnError | undefined,
+  error: unknown,
+): void {
+  try {
+    onError?.(
+      error instanceof Error ? error : new Error(String(error)),
+      "parse",
+      undefined,
+    );
+  } catch (callbackError) {
+    warnStreamError(
+      "[NitroMarkdown] onError callback threw an exception:",
+      callbackError,
+    );
+  }
+}
+
 export type MarkdownStreamSourceAstStatus = "available" | "disabled";
 
-export type MarkdownStreamSourceAstDisabledReason = "beforeParse-plugin";
+export type MarkdownStreamSourceAstDisabledReason =
+  | "beforeParse-plugin"
+  | "parse-error";
 
 export type UseMarkdownStreamStateOptions = {
   /**
@@ -129,6 +160,7 @@ export type UseMarkdownStreamStateOptions = {
    * Parser options used for the stream source AST.
    */
   options?: ParserOptions;
+  onError?: MarkdownOnError;
   /**
    * Plugins determine whether an optimized source AST can be passed through.
    */
@@ -157,12 +189,14 @@ export function useMarkdownStreamState({
   useTransitionUpdates = false,
   incrementalParsing = true,
   options,
+  onError,
   plugins,
 }: UseMarkdownStreamStateOptions): MarkdownStreamState {
   const activeSession = resolveMarkdownSession(session);
   const parserOptionGfm = options?.gfm;
   const parserOptionMath = options?.math;
   const parserOptionHtml = options?.html;
+  const parserOptionSourceOffsets = options?.sourceOffsets;
   const parserOptions = useMemo(
     () =>
       normalizeParserOptions(
@@ -171,9 +205,17 @@ export function useMarkdownStreamState({
           parserOptionGfm === undefined ? null : { gfm: parserOptionGfm },
           parserOptionMath === undefined ? null : { math: parserOptionMath },
           parserOptionHtml === undefined ? null : { html: parserOptionHtml },
+          parserOptionSourceOffsets === undefined
+            ? null
+            : { sourceOffsets: parserOptionSourceOffsets },
         ),
       ),
-    [parserOptionGfm, parserOptionMath, parserOptionHtml],
+    [
+      parserOptionGfm,
+      parserOptionMath,
+      parserOptionHtml,
+      parserOptionSourceOffsets,
+    ],
   );
   const parseText = useCallback(
     (text: string): MarkdownNode => parseMarkdownAst(text, parserOptions),
@@ -186,14 +228,27 @@ export function useMarkdownStreamState({
   const hasBeforeParsePlugins =
     plugins?.some((plugin) => typeof plugin.beforeParse === "function") ??
     false;
-  const [renderState, setRenderState] = useState(() => {
+  const [renderState, setRenderState] = useState<{
+    text: string;
+    ast: MarkdownNode | null;
+  }>(() => {
     const initialText = activeSession.getAllText();
+    let initialAst: MarkdownNode | null = createEmptyAst();
+    if (!hasBeforeParsePlugins) {
+      try {
+        initialAst = parseText(initialText);
+      } catch (error) {
+        notifyStreamParseError(onError, error);
+        initialAst = null;
+      }
+    }
     return {
       text: initialText,
-      ast: hasBeforeParsePlugins ? createEmptyAst() : parseText(initialText),
+      ast: initialAst,
     };
   });
   const renderStateRef = useRef(renderState);
+  const onErrorRef = useRef(onError);
   const didMountRef = useRef(false);
   const pendingUpdateRef = useRef(false);
   const pendingFromRef = useRef<number | null>(null);
@@ -209,6 +264,10 @@ export function useMarkdownStreamState({
   }, [renderState]);
 
   useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+
+  useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
@@ -222,9 +281,18 @@ export function useMarkdownStreamState({
     }
 
     const initialText = activeSession.getAllText();
+    let initialAst: MarkdownNode | null = createEmptyAst();
+    if (!hasBeforeParsePlugins) {
+      try {
+        initialAst = parseText(initialText);
+      } catch (error) {
+        notifyStreamParseError(onErrorRef.current, error);
+        initialAst = null;
+      }
+    }
     const initialState = {
       text: initialText,
-      ast: hasBeforeParsePlugins ? createEmptyAst() : parseText(initialText),
+      ast: initialAst,
     };
     pendingUpdateRef.current = false;
     pendingFromRef.current = null;
@@ -267,15 +335,25 @@ export function useMarkdownStreamState({
       }
       if (latest === previousState.text) return;
 
-      const nextAst = hasBeforeParsePlugins
-        ? previousState.ast
-        : getNextStreamAst({
+      let nextAst: MarkdownNode | null;
+      try {
+        if (hasBeforeParsePlugins) {
+          nextAst = previousState.ast;
+        } else if (previousState.ast) {
+          nextAst = getNextStreamAst({
             allowIncremental,
             nextText: latest,
             previousAst: previousState.ast,
             previousText: previousState.text,
             ...(parserOptions ? { options: parserOptions } : {}),
           });
+        } else {
+          nextAst = parseText(latest);
+        }
+      } catch (error) {
+        notifyStreamParseError(onErrorRef.current, error);
+        return;
+      }
       const nextState = {
         text: latest,
         ast: nextAst,
@@ -359,6 +437,7 @@ export function useMarkdownStreamState({
   }, [
     allowIncremental,
     hasBeforeParsePlugins,
+    parseText,
     parserOptions,
     activeSession,
     updateIntervalMs,
@@ -366,12 +445,16 @@ export function useMarkdownStreamState({
     useTransitionUpdates,
   ]);
 
+  const sourceAstAvailable =
+    !hasBeforeParsePlugins && renderState.ast !== null;
   const streamState: MarkdownStreamState = {
     text: renderState.text,
-    sourceAstStatus: hasBeforeParsePlugins ? "disabled" : "available",
+    sourceAstStatus: sourceAstAvailable ? "available" : "disabled",
   };
   if (hasBeforeParsePlugins) {
     streamState.sourceAstDisabledReason = "beforeParse-plugin";
+  } else if (renderState.ast === null) {
+    streamState.sourceAstDisabledReason = "parse-error";
   } else {
     streamState.sourceAst = renderState.ast;
   }
@@ -385,6 +468,7 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
   useTransitionUpdates = false,
   incrementalParsing = true,
   options,
+  onError,
   plugins,
   renderMarkdown,
   ...props
@@ -395,6 +479,7 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
     updateStrategy,
     useTransitionUpdates,
     incrementalParsing,
+    ...(onError ? { onError } : {}),
     ...(options ? { options } : {}),
     ...(plugins ? { plugins } : {}),
   });
@@ -402,6 +487,7 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
     ...props,
     children: streamState.text,
   };
+  if (onError) markdownProps.onError = onError;
   if (options) markdownProps.options = options;
   if (plugins) markdownProps.plugins = plugins;
   if (streamState.sourceAst) markdownProps.sourceAst = streamState.sourceAst;
@@ -411,6 +497,10 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
       ...streamState,
       markdownProps,
     });
+  }
+
+  if (streamState.sourceAstDisabledReason === "parse-error") {
+    return null;
   }
 
   return <Markdown {...markdownProps} />;

@@ -60,4 +60,4 @@ example **Bench** tab tracks Nitro's render and first-screen times directly.
 
 - **Chat / LLM / AI apps** → Nitro Markdown (streaming + native parse).
 - **Long documents / feeds** → Nitro Markdown (virtualization).
-- **Search / indexing / server-shared logic** → Nitro Markdown headless API.
+- **Native search / indexing pipelines** → Nitro Markdown headless API.

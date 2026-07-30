@@ -1,4 +1,4 @@
-import "./setup";
+import { mockParser } from "./setup";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import {
@@ -61,6 +61,8 @@ describe("MarkdownStream", () => {
   beforeEach(() => {
     jest.useFakeTimers();
     markdownMock.mockClear();
+    mockParser.parse.mockClear();
+    mockParser.parseWithOptions.mockClear();
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
   });
@@ -69,6 +71,134 @@ describe("MarkdownStream", () => {
     consoleErrorSpy.mockRestore();
     consoleWarnSpy.mockRestore();
     jest.useRealTimers();
+  });
+
+  it("preserves sourceOffsets in stream parser options", () => {
+    const session = createSession({
+      allText: "Olá 👋",
+      rangeText: "",
+    });
+
+    act(() => {
+      TestRenderer.create(
+        React.createElement(MarkdownStream, {
+          session,
+          options: { sourceOffsets: false },
+        }),
+      );
+    });
+
+    expect(mockParser.parseWithOptions).toHaveBeenCalledWith("Olá 👋", {
+      sourceOffsets: false,
+    });
+  });
+
+  it("reports initial parser failures through onError", () => {
+    const session = createSession({
+      allText: "broken",
+      rangeText: "",
+    });
+    const parseError = new Error("initial stream parse failed");
+    const onError = jest.fn();
+    mockParser.parse.mockImplementationOnce(() => {
+      throw parseError;
+    });
+
+    expect(() => {
+      act(() => {
+        TestRenderer.create(
+          React.createElement(MarkdownStream, {
+            session,
+            onError,
+          }),
+        );
+      });
+    }).not.toThrow();
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(parseError, "parse", undefined);
+    expect(markdownMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ children: "broken" }),
+    );
+  });
+
+  it("reports reset parser failures once without rendering failed text", () => {
+    const initialSession = createSession({
+      allText: "valid",
+      rangeText: "",
+    });
+    const replacementSession = createSession({
+      allText: "broken",
+      rangeText: "",
+    });
+    const parseError = new Error("reset stream parse failed");
+    const onError = jest.fn();
+    let renderer: ReturnType<typeof TestRenderer.create>;
+
+    act(() => {
+      renderer = TestRenderer.create(
+        React.createElement(MarkdownStream, {
+          session: initialSession,
+          onError,
+        }),
+      );
+    });
+
+    markdownMock.mockClear();
+    mockParser.parse.mockImplementationOnce(() => {
+      throw parseError;
+    });
+
+    act(() => {
+      renderer.update(
+        React.createElement(MarkdownStream, {
+          session: replacementSession,
+          onError,
+        }),
+      );
+    });
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(parseError, "parse", undefined);
+    expect(markdownMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ children: "broken" }),
+    );
+  });
+
+  it("reports update parser failures without replacing the last valid state", () => {
+    const session = createSession({
+      allText: "hello",
+      rangeText: "\n# broken",
+    });
+    const parseError = new Error("stream update parse failed");
+    const onError = jest.fn();
+
+    act(() => {
+      TestRenderer.create(
+        React.createElement(MarkdownStream, {
+          session,
+          onError,
+          updateIntervalMs: 1,
+        }),
+      );
+    });
+
+    mockParser.parse.mockImplementationOnce(() => {
+      throw parseError;
+    });
+
+    expect(() => {
+      act(() => {
+        session.setAllText("hello\n# broken");
+        session.emit(5, 14);
+        jest.runOnlyPendingTimers();
+      });
+    }).not.toThrow();
+
+    expect(onError).toHaveBeenCalledWith(parseError, "parse", undefined);
+    expect(markdownMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ children: "hello" }),
+    );
   });
 
   it("falls back to full session text when append range reads fail", () => {

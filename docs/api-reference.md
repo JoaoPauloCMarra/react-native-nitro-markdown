@@ -46,6 +46,10 @@ Two entry points:
 `extractPlainTextWithOptions`, `getTextContent`, `getFlattenedText`,
 `stripSourceOffsets`. See [headless](./headless.md).
 
+`parseMarkdown` and `parseMarkdownWithOptions` throw when native parsing cannot
+produce a complete valid AST. `<Markdown>` and `<MarkdownStream>` surface the
+same failures through `onError(error, "parse")`.
+
 ## `ParserOptions`
 
 ```ts
@@ -53,7 +57,7 @@ type ParserOptions = {
   gfm?: boolean;           // default true — tables, strikethrough, task lists, autolinks
   math?: boolean;          // default true — inline $..$ and block $$..$$
   html?: boolean;          // default false — keep raw HTML nodes
-  sourceOffsets?: boolean; // default true — emit beg/end source offsets per node
+  sourceOffsets?: boolean; // default true — emit beg/end JavaScript UTF-16 indices
 };
 ```
 
@@ -64,6 +68,8 @@ smaller and `JSON.parse` does less work — cheaper than the post-hoc
 `stripSourceOffsets` helper, which walks and rebuilds the tree after the cost is
 paid. Keep the default (`true`) for streaming/incremental rendering, which uses
 offsets to reuse stable nodes between reparses.
+Enabled offsets match JavaScript `String.length` and `String.slice`, including
+for accented text and emoji.
 
 ## Key types
 

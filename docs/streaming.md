@@ -83,6 +83,11 @@ When a `beforeParse` plugin is present, `sourceAstStatus` becomes `"disabled"`,
 `sourceAstDisabledReason` is `"beforeParse-plugin"`, and `sourceAst` is omitted —
 render from `text` so the full plugin pipeline can run.
 
+Parser failures call `onError(error, "parse")`. A failed update retains the last
+valid text and AST. If the initial parse fails, `sourceAstStatus` is `"disabled"`,
+`sourceAstDisabledReason` is `"parse-error"`, and `sourceAst` is omitted. The
+default `<MarkdownStream>` renderer renders nothing until a later update parses.
+
 ## See also
 
 - [Usage](./usage.md) — the static `<Markdown>` component.

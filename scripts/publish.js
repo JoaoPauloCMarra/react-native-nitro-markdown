@@ -253,6 +253,11 @@ function validatePackedFiles() {
     "lib/typescript/module/index.d.ts",
     "nitrogen/generated/ios/NitroMarkdown+autolinking.rb",
     "nitrogen/generated/android/NitroMarkdown+autolinking.gradle",
+    "nitrogen/generated/android/NitroMarkdownOnLoad.cpp",
+    "nitrogen/generated/android/NitroMarkdownOnLoad.hpp",
+    "nitrogen/generated/shared/c++/HybridMarkdownParserSpec.cpp",
+    "nitrogen/generated/shared/c++/HybridMarkdownParserSpec.hpp",
+    "nitrogen/generated/shared/c++/ParserOptions.hpp",
     "src/index.ts",
     `${PACKAGE_NAME}.podspec`,
   ];

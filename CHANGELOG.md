@@ -6,8 +6,27 @@ consumers. Repo tooling, examples, and docs-only changes are intentionally left 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-**Breaking changes are always listed first under a `### Breaking changes` heading**
-so upgrades stay safe.
+**Breaking changes are always listed first in each release section** so upgrades
+stay safe.
+
+## [0.9.0] - 2026-07-30
+
+### Changes
+
+- **Breaking changes:** `parseMarkdown` and `parseMarkdownWithOptions` now throw
+  when the Nitro module is unavailable, native parsing fails, or native output
+  is invalid JSON. Headless consumers that relied on an empty-document fallback
+  must migrate to `try`/`catch` and handle these errors explicitly.
+- `<Markdown>` and `<MarkdownStream>` report native parse failures through
+  `onError(error, "parse")`; failed stream updates retain the last valid state
+  instead of rendering partial or empty content.
+- A nonzero native parser result now throws instead of returning a partial AST.
+- `beg` and `end` source offsets now use JavaScript UTF-16 indices, matching
+  `String.length` and `String.slice` for accented text and emoji.
+- `sourceOffsets` now survives `<Markdown>` and `<MarkdownStream>` option
+  normalization and participates in the parse-cache key.
+- Nitro Modules compatibility is now `>=0.36.4 <0.37.0`; the example baseline
+  is Expo SDK 57, React Native 0.86.2, React 19.2.3, and RaTeX 0.1.14.
 
 ## [0.8.1] - 2026-06-15
 
