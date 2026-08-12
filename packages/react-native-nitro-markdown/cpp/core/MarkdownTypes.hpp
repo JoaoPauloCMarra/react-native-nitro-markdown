@@ -119,6 +119,8 @@ struct ParserOptions {
     bool gfm = true;
     bool math = true;
     bool html = false;
+    bool sourceOffsets = true;
+    size_t maxInputLength = 0; // bytes; 0 = default hard cap
 };
 
 } // namespace NitroMarkdown

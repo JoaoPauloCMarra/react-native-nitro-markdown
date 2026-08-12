@@ -7,10 +7,7 @@ import {
   type TextStyle,
 } from "react-native";
 import { useMarkdownContext } from "../MarkdownContext";
-import {
-  getAllowedExternalHref,
-  normalizeLinkHref,
-} from "../utils/link-security";
+import { getAllowedExternalHref } from "../utils/link-security";
 
 type LinkProps = {
   href: string;
@@ -35,16 +32,12 @@ export const Link: FC<LinkProps> = ({ href, children, style }) => {
   );
 
   const handlePress = async () => {
-    const normalizedHref = normalizeLinkHref(href);
-    if (!normalizedHref) return;
+    const allowedExternalHref = getAllowedExternalHref(href);
 
     try {
       const shouldOpen =
-        (await Promise.resolve(onLinkPress?.(normalizedHref))) !== false;
-      if (!shouldOpen) return;
-
-      const allowedExternalHref = getAllowedExternalHref(normalizedHref);
-      if (!allowedExternalHref) return;
+        (await Promise.resolve(onLinkPress?.(href))) !== false;
+      if (!shouldOpen || !allowedExternalHref) return;
 
       const canOpen = await Linking.canOpenURL(allowedExternalHref);
       if (!canOpen) return;

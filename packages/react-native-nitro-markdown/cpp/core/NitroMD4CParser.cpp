@@ -4,6 +4,7 @@
 #include <stack>
 #include <vector>
 #include <cstring>
+#include <algorithm>
 #include <limits>
 #include <stdexcept>
 #include <utility>
@@ -11,6 +12,11 @@
 namespace NitroMarkdown {
 
 namespace {
+
+// Hard input cap: oversized documents fail deterministically instead of
+// exhausting memory. The JavaScript boundary enforces the same cap earlier.
+static constexpr size_t kMaxInputBytes = 10 * 1024 * 1024;
+
 size_t clampInputSize(size_t inputSize) {
     size_t maxSize = static_cast<size_t>(std::numeric_limits<MD_SIZE>::max());
     if (inputSize > maxSize) {
@@ -124,10 +130,14 @@ public:
         forceCallbackFailure = false;
     }
 
-    void setInput(const char* text, size_t size) {
+    void setInput(const char* text, size_t size, bool trackOffsets) {
         inputText = text;
         inputTextSize = size;
-        sourceOffsets = createUtf16OffsetMap(text, size);
+        if (trackOffsets) {
+            sourceOffsets = createUtf16OffsetMap(text, size);
+        } else {
+            sourceOffsets.clear();
+        }
     }
 
     OFF sourceOffset(size_t byteOffset) const {
@@ -453,11 +463,8 @@ public:
                 break;
             }
 
-            case MD_SPAN_WIKILINK: {
-                auto node = std::make_shared<MarkdownNode>(NodeType::Link);
-                impl->pushNode(node, off);
-                break;
-            }
+            case MD_SPAN_WIKILINK:
+                return 0;
         }
 
         return 0;
@@ -471,6 +478,8 @@ public:
         auto* impl = static_cast<Impl*>(userdata);
         if (impl == nullptr) return 1; // Signal error to md4c
         off = impl->sourceOffset(off);
+
+        if (type == MD_SPAN_WIKILINK) return 0;
 
         if (!impl->nodeStack.empty()) {
             auto currentNode = impl->nodeStack.top();
@@ -605,9 +614,22 @@ std::shared_ptr<MarkdownNode> MD4CParser::parseWithFlags(
 ) {
     Impl impl;
     impl.reset();
+    size_t maxInputBytes = options.maxInputLength > 0
+        ? std::min(options.maxInputLength, kMaxInputBytes)
+        : kMaxInputBytes;
+    if (markdown.size() > maxInputBytes) {
+        throw std::runtime_error(
+            "Markdown input size " + std::to_string(markdown.size()) +
+            " bytes exceeds the maximum of " + std::to_string(maxInputBytes) +
+            " bytes"
+        );
+    }
     size_t inputSize = clampInputSize(markdown.size());
-    impl.setInput(markdown.c_str(), inputSize);
+    impl.setInput(markdown.c_str(), inputSize, options.sourceOffsets);
     impl.forceCallbackFailure = forceCallbackFailure;
+#ifdef NITRO_MARKDOWN_TESTING
+    lastParseTrackedOffsets = options.sourceOffsets;
+#endif
 
     unsigned int flags = options.html ? 0 : MD_FLAG_NOHTML;
     

@@ -118,6 +118,7 @@ temp/
 !README.md
 !CONTRIBUTING.md
 !CHANGELOG.md
+!SECURITY.md
 !.github/release-*.md
 !docs/**/*.md
 !**/UPSTREAM.md

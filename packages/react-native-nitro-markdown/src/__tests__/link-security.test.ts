@@ -103,4 +103,32 @@ describe("getAllowedImageHref", () => {
       }),
     ).toBeNull();
   });
+
+  it("rejects all remote images when remoteImages is deny", () => {
+    expect(
+      getAllowedImageHref("https://example.com/image.png", {
+        remoteImages: "deny",
+      }),
+    ).toBeNull();
+    expect(
+      getAllowedImageHref("http://example.com/image.png", {
+        remoteImages: "deny",
+      }),
+    ).toBeNull();
+  });
+
+  it("allows remote images by default for compatibility", () => {
+    expect(
+      getAllowedImageHref("https://example.com/image.png"),
+    ).toBe("https://example.com/image.png");
+  });
+
+  it("remoteImages deny wins over configured allowlists", () => {
+    expect(
+      getAllowedImageHref("https://assets.example.com/image.png", {
+        allowedHosts: ["assets.example.com"],
+        remoteImages: "deny",
+      }),
+    ).toBeNull();
+  });
 });

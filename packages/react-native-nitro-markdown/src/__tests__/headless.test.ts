@@ -100,7 +100,9 @@ describe("headless native fallback", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it("derives plain text from parse output when native extract methods are unavailable", () => {
+  it("falls back through the native AST when extract methods are unavailable", () => {
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+
     runWithParserMock(
       () => ({
         parse: jest.fn(() =>
@@ -127,17 +129,21 @@ describe("headless native fallback", () => {
         ),
       }),
       (headless) => {
-        expect(headless.extractPlainText("```ts\nconst fallback = true;\n```").trim()).toBe(
-          "const fallback = true;",
-        );
-        expect(headless.extractPlainTextWithOptions("# Fallback title", { gfm: true }).trim()).toBe(
-          "Fallback title",
-        );
+        expect(
+          headless.extractPlainText("```ts\nconst fallback = true;\n```"),
+        ).toBe("const fallback = true;\n\n");
+        expect(
+          headless.extractPlainTextWithOptions("# Fallback title", {
+            gfm: true,
+          }),
+        ).toBe("Fallback title\n\n");
       },
     );
+
+    consoleErrorSpy.mockRestore();
   });
 
-  it("propagates native parser and invalid JSON failures", () => {
+  it("propagates native parser and invalid JSON failures as typed errors", () => {
     const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
 
     runWithParserMock(
@@ -154,19 +160,106 @@ describe("headless native fallback", () => {
         }),
       }),
       (headless) => {
-        expect(() => headless.parseMarkdown("# Broken")).toThrow("parse failed");
-        expect(() =>
-          headless.parseMarkdownWithOptions("# Broken", { gfm: true }),
-        ).toThrow(SyntaxError);
-        expect(() => headless.extractPlainText("# Broken")).toThrow("parse failed");
-        expect(() =>
-          headless.extractPlainTextWithOptions("# Broken", { gfm: true }),
-        ).toThrow(SyntaxError);
+        const expectCode = (
+          fn: () => unknown,
+          code: string,
+          source: string,
+        ) => {
+          let caught: unknown;
+          try {
+            fn();
+          } catch (error) {
+            caught = error;
+          }
+          expect(caught).toBeInstanceOf(headless.MarkdownError);
+          const markdownError = caught as InstanceType<
+            typeof headless.MarkdownError
+          >;
+          expect(markdownError.code).toBe(code);
+          expect(markdownError.source).toBe(source);
+        };
+
+        expectCode(() => headless.parseMarkdown("# Broken"), "parse_failed", "parse");
+        expectCode(
+          () => headless.parseMarkdownWithOptions("# Broken", { gfm: true }),
+          "invalid_json",
+          "parse",
+        );
+        expectCode(
+          () => headless.extractPlainText("# Broken"),
+          "parse_failed",
+          "parse",
+        );
+        expectCode(
+          () =>
+            headless.extractPlainTextWithOptions("# Broken", { gfm: true }),
+          "invalid_json",
+          "parse",
+        );
       },
     );
 
     expect(consoleErrorSpy).toHaveBeenCalled();
     consoleErrorSpy.mockRestore();
+  });
+
+  it("rejects inputs above the maximum length with a typed error", () => {
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+
+    runWithParserMock(
+      () => ({
+        parse: jest.fn(() => "{}"),
+        parseWithOptions: jest.fn(() => "{}"),
+        extractPlainText: jest.fn(() => ""),
+        extractPlainTextWithOptions: jest.fn(() => ""),
+      }),
+      (headless) => {
+        const oversized = "x".repeat(headless.MAX_PARSE_INPUT_LENGTH + 1);
+        const expectInputTooLarge = (fn: () => unknown) => {
+          let caught: unknown;
+          try {
+            fn();
+          } catch (error) {
+            caught = error;
+          }
+          expect(caught).toBeInstanceOf(headless.MarkdownError);
+          const markdownError = caught as InstanceType<
+            typeof headless.MarkdownError
+          >;
+          expect(markdownError.code).toBe("input_too_large");
+          expect(markdownError.source).toBe("parse");
+        };
+        expectInputTooLarge(() => headless.parseMarkdown(oversized));
+        expectInputTooLarge(() =>
+          headless.parseMarkdownWithOptions(oversized, { gfm: true }),
+        );
+        expectInputTooLarge(() => headless.extractPlainText(oversized));
+        expectInputTooLarge(() =>
+          headless.extractPlainTextWithOptions(oversized, { gfm: true }),
+        );
+        expect(headless.parseMarkdown("ok")).toEqual({});
+      },
+    );
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("honors a custom maxInputLength lower than the hard cap", () => {
+    runWithParserMock(
+      () => ({
+        parseWithOptions: jest.fn(() => "{}"),
+      }),
+      (headless) => {
+        expect(() =>
+          headless.parseMarkdownWithOptions("123456789", {
+            maxInputLength: 8,
+          }),
+        ).toThrow(headless.MarkdownError);
+        expect(headless.parseMarkdownWithOptions("1234567", {
+          maxInputLength: 8,
+        })).toEqual({});
+      },
+    );
   });
 });
 

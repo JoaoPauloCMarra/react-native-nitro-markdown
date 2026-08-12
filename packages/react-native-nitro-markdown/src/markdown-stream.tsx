@@ -127,7 +127,8 @@ export type MarkdownStreamSourceAstStatus = "available" | "disabled";
 
 export type MarkdownStreamSourceAstDisabledReason =
   | "beforeParse-plugin"
-  | "parse-error";
+  | "parse-error"
+  | "initializing";
 
 export type UseMarkdownStreamStateOptions = {
   /**
@@ -156,6 +157,15 @@ export type UseMarkdownStreamStateOptions = {
    * Automatically falls back to full parse when updates are not safely mergeable.
    */
   incrementalParsing?: boolean;
+  /**
+   * When to parse the initial session content.
+   * - "sync" (default): parse during the first render. Large initial documents
+   *   block the first frame.
+   * - "async": parse after the first render so large initial content does not
+   *   block first paint. Until the parse completes, `sourceAstStatus` is
+   *   `"disabled"` with `sourceAstDisabledReason: "initializing"`.
+   */
+  initialParseMode?: "sync" | "async";
   /**
    * Parser options used for the stream source AST.
    */
@@ -188,6 +198,7 @@ export function useMarkdownStreamState({
   updateStrategy = "interval",
   useTransitionUpdates = false,
   incrementalParsing = true,
+  initialParseMode = "sync",
   options,
   onError,
   plugins,
@@ -228,11 +239,20 @@ export function useMarkdownStreamState({
   const hasBeforeParsePlugins =
     plugins?.some((plugin) => typeof plugin.beforeParse === "function") ??
     false;
+  const [initialParsePending, setInitialParsePending] = useState(
+    () => initialParseMode === "async",
+  );
   const [renderState, setRenderState] = useState<{
     text: string;
     ast: MarkdownNode | null;
   }>(() => {
     const initialText = activeSession.getAllText();
+    if (initialParseMode === "async") {
+      return {
+        text: initialText,
+        ast: null,
+      };
+    }
     let initialAst: MarkdownNode | null = createEmptyAst();
     if (!hasBeforeParsePlugins) {
       try {
@@ -275,8 +295,10 @@ export function useMarkdownStreamState({
   }, []);
 
   useEffect(() => {
-    if (!didMountRef.current) {
-      didMountRef.current = true;
+    const isFirstRun = !didMountRef.current;
+    didMountRef.current = true;
+    if (isFirstRun && initialParseMode === "sync") {
+      setInitialParsePending(false);
       return;
     }
 
@@ -290,6 +312,7 @@ export function useMarkdownStreamState({
         initialAst = null;
       }
     }
+    setInitialParsePending(false);
     const initialState = {
       text: initialText,
       ast: initialAst,
@@ -300,7 +323,7 @@ export function useMarkdownStreamState({
     forceFullSyncRef.current = false;
     renderStateRef.current = initialState;
     setRenderState(initialState);
-  }, [activeSession, hasBeforeParsePlugins, parseText]);
+  }, [activeSession, hasBeforeParsePlugins, parseText, initialParseMode]);
 
   useEffect(() => {
     const flushUpdate = () => {
@@ -453,6 +476,8 @@ export function useMarkdownStreamState({
   };
   if (hasBeforeParsePlugins) {
     streamState.sourceAstDisabledReason = "beforeParse-plugin";
+  } else if (renderState.ast === null && initialParsePending) {
+    streamState.sourceAstDisabledReason = "initializing";
   } else if (renderState.ast === null) {
     streamState.sourceAstDisabledReason = "parse-error";
   } else {
@@ -467,6 +492,7 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
   updateStrategy = "interval",
   useTransitionUpdates = false,
   incrementalParsing = true,
+  initialParseMode = "sync",
   options,
   onError,
   plugins,
@@ -479,6 +505,7 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
     updateStrategy,
     useTransitionUpdates,
     incrementalParsing,
+    initialParseMode,
     ...(onError ? { onError } : {}),
     ...(options ? { options } : {}),
     ...(plugins ? { plugins } : {}),
@@ -500,6 +527,10 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
   }
 
   if (streamState.sourceAstDisabledReason === "parse-error") {
+    return null;
+  }
+
+  if (streamState.sourceAstDisabledReason === "initializing") {
     return null;
   }
 

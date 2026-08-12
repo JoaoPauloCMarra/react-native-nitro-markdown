@@ -310,4 +310,88 @@ describe("Markdown plugin pipeline", () => {
       consoleErrorSpy.mockRestore();
     }
   });
+
+  it("scopes the parse cache per Markdown instance", () => {
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+    const markdown = "instance-scoped cache input";
+
+    try {
+      act(() => {
+        create(createElement(Markdown, {}, markdown));
+      });
+      act(() => {
+        create(createElement(Markdown, {}, markdown));
+      });
+
+      expect(mockParser.parse).toHaveBeenCalledTimes(2);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it("reuses cached ASTs within an instance and reports bounded cache stats", () => {
+    const onParseComplete = jest.fn();
+    let renderer: ReactTestRenderer | undefined;
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+
+    try {
+      act(() => {
+        renderer = create(
+          createElement(Markdown, { onParseComplete }, "cached input"),
+        );
+      });
+      act(() => {
+        renderer!.update(
+          createElement(
+            Markdown,
+            { onParseComplete, astTransform: (ast) => ast },
+            "cached input",
+          ),
+        );
+      });
+
+      expect(mockParser.parse).toHaveBeenCalledTimes(1);
+      const lastResult = onParseComplete.mock.lastCall?.[0] as {
+        cacheStats?: { hits: number; misses: number; evictions: number; size: number };
+      };
+      expect(lastResult.cacheStats).toEqual({
+        hits: 1,
+        misses: 1,
+        evictions: 0,
+        size: 1,
+      });
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it("evicts the oldest entry when the per-instance cache exceeds its bound", () => {
+    const onParseComplete = jest.fn();
+    let renderer: ReactTestRenderer | undefined;
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+
+    try {
+      act(() => {
+        renderer = create(
+          createElement(Markdown, { onParseComplete }, "seed input"),
+        );
+      });
+
+      for (let index = 0; index < 40; index += 1) {
+        act(() => {
+          renderer!.update(
+            createElement(Markdown, { onParseComplete }, `input ${index}`),
+          );
+        });
+      }
+
+      const lastResult = onParseComplete.mock.lastCall?.[0] as {
+        cacheStats?: { evictions: number; size: number };
+      };
+      expect(lastResult.cacheStats?.size).toBeLessThanOrEqual(32);
+      expect(lastResult.cacheStats?.evictions).toBeGreaterThan(0);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
 });

@@ -6,16 +6,14 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Release tag to validate against package.json
-        required: false
-        default: v0.9.0
+        description: Release tag to validate against package.json (required for manual runs)
+        required: true
       npm_dist_tag:
         description: npm dist-tag to use for dry-run validation
         required: false
         default: latest
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: npm-publish-${{ github.event.release.tag_name || inputs.release_tag || github.ref_name }}
@@ -31,6 +29,9 @@ jobs:
   publish:
     name: Publish react-native-nitro-markdown to npm
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -61,6 +62,10 @@ jobs:
         run: |
           node - <<'NODE'
           const fs = require("fs");
+          if (!process.env.RELEASE_TAG) {
+            console.error("A release tag is required for manual dispatch (release_tag input).");
+            process.exit(1);
+          }
           const pkg = JSON.parse(
             fs.readFileSync("packages/react-native-nitro-markdown/package.json", "utf8"),
           );

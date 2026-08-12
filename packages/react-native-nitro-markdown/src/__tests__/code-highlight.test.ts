@@ -99,4 +99,24 @@ describe("defaultHighlighter", () => {
     const tokens = defaultHighlighter("javascript", code);
     expect(tokens.some((t) => t.text === "\n")).toBe(true);
   });
+
+  it("returns a single default token for unsupported languages", () => {
+    const code = "public class Foo { public static void main(String[] args) {} }";
+    const tokens = defaultHighlighter("java", code);
+    expect(tokens).toEqual([{ text: code, type: "default" }]);
+  });
+
+  it("does not map C/C++ to JavaScript keywords", () => {
+    const tokens = defaultHighlighter("cpp", "int main() { return 0; }");
+    expect(tokens.every((t) => t.type !== "keyword")).toBe(true);
+    expect(tokens).toEqual([
+      { text: "int main() { return 0; }", type: "default" },
+    ]);
+  });
+
+  it("treats language matching as case-insensitive for supported languages", () => {
+    const code = "const x = 1";
+    const tokens = defaultHighlighter("TypeScript", code);
+    expect(tokens.some((t) => t.type === "keyword")).toBe(true);
+  });
 });

@@ -44,4 +44,5 @@ target_link_libraries(MD4CParserTest PRIVATE MD4CCore)
 # Include directories for the test
 target_include_directories(MD4CParserTest PRIVATE
     "${CPP_ROOT}/core"
+    "${CMAKE_BINARY_DIR}/generated"
 )

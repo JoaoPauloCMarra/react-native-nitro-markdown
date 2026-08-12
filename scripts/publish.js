@@ -224,33 +224,45 @@ function validateReleaseDocs(version) {
 function validatePackedFiles() {
   log("Validating packed package contents...", "cyan");
 
-  const result = runQuiet("npm", ["pack", "--dry-run", "--json"], { cwd: packageDir });
+  // Bun-native, auth-free dry-run with lifecycle scripts disabled (X4).
+  const result = runQuiet("bun", ["pm", "pack", "--dry-run", "--ignore-scripts"], {
+    cwd: packageDir,
+  });
   if (result.error || result.status !== 0) {
-    log("npm pack dry-run failed", "red");
+    log("bun pm pack dry-run failed", "red");
     if (result.stderr) console.error(result.stderr);
     process.exit(1);
   }
 
-  let packInfo;
-  try {
-    packInfo = JSON.parse(result.stdout)[0];
-  } catch (error) {
-    log(`Could not parse npm pack output: ${error.message}`, "red");
+  const files = new Set();
+  for (const line of result.stdout.split("\n")) {
+    const match = line.match(/^packed\s+\S+\s+(\S+)$/);
+    if (match && match[1]) {
+      files.add(match[1]);
+    }
+  }
+
+  if (files.size === 0) {
+    log("bun pm pack output did not list any packed files.", "red");
     process.exit(1);
   }
 
-  const files = new Set(packInfo.files.map((file) => file.path));
   const expectedFiles = [
     ".watchmanconfig",
-    "LICENSE",
-    "README.md",
     "android/build.gradle",
+    "android/src/main/java/com/margelo/nitro/com/nitromarkdown/HybridMarkdownSession.kt",
     "cpp/core/NitroMD4CParser.cpp",
+    "cpp/core/flatten.cpp",
     "cpp/nitromd/nitromd.c",
     "ios/HybridMarkdownSession.swift",
     "lib/module/index.js",
+    "lib/module/headless.js",
     "lib/commonjs/index.js",
+    "lib/commonjs/headless.js",
     "lib/typescript/module/index.d.ts",
+    "lib/typescript/module/headless.d.ts",
+    "lib/typescript/commonjs/index.d.ts",
+    "lib/typescript/commonjs/headless.d.ts",
     "nitrogen/generated/ios/NitroMarkdown+autolinking.rb",
     "nitrogen/generated/android/NitroMarkdown+autolinking.gradle",
     "nitrogen/generated/android/NitroMarkdownOnLoad.cpp",
@@ -259,17 +271,25 @@ function validatePackedFiles() {
     "nitrogen/generated/shared/c++/HybridMarkdownParserSpec.hpp",
     "nitrogen/generated/shared/c++/ParserOptions.hpp",
     "src/index.ts",
+    "src/headless.ts",
     `${PACKAGE_NAME}.podspec`,
   ];
 
-  for (const file of expectedFiles) {
-    if (!files.has(file)) {
-      log(`Packed package is missing ${file}`, "red");
-      process.exit(1);
+  // README.md and LICENSE are injected by the prepack lifecycle script from
+  // the repository root, so they are intentionally absent from the
+  // --ignore-scripts pack listing. Their content is validated separately by
+  // validateReleaseDocs (README) and the repository-level release process.
+  const missing = expectedFiles.filter((file) => !files.has(file));
+  if (missing.length > 0) {
+    log(`Packed package is missing ${missing.length} required files:`, "red");
+    for (const file of missing) {
+      log(`  ${file}`, "red");
     }
+    process.exit(1);
   }
 
-  console.log(`  ✓ ${packInfo.name}@${packInfo.version} contains expected package files`);
+  console.log(`  ✓ ${PACKAGE_NAME} pack contains all required package files`);
+  console.log(`  ✓ headless JS, declarations, and source are packed`);
   console.log("");
 }
 
@@ -344,7 +364,11 @@ async function runVerification() {
     cwd: packageDir,
   });
   runStep("Running repo typecheck...", "bun", ["run", "typecheck"], { cwd: projectRoot });
-  runStep("Building package...", "bun", ["run", "build"], { cwd: packageDir });
+  // Root build regenerates Nitro bindings before compiling, so publish
+  // verification can never run against stale generated state.
+  runStep("Building package (with codegen)...", "bun", ["run", "build"], {
+    cwd: projectRoot,
+  });
 }
 
 async function main() {

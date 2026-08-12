@@ -14,6 +14,26 @@ export type CodeHighlighter = (
   code: string,
 ) => HighlightedToken[];
 
+/**
+ * Languages with fixture-backed keyword tables in `defaultHighlighter`.
+ * Any other language falls back to a single default token — the built-in
+ * highlighter does not pretend to understand it.
+ */
+export const SUPPORTED_HIGHLIGHT_LANGUAGES: readonly string[] = [
+  "javascript",
+  "js",
+  "jsx",
+  "typescript",
+  "ts",
+  "tsx",
+  "python",
+  "py",
+  "bash",
+  "sh",
+  "shell",
+  "zsh",
+];
+
 const JS_KEYWORDS = new Set([
   "const",
   "let",
@@ -108,16 +128,26 @@ const SHELL_KEYWORDS = new Set([
   "export",
 ]);
 
-function getKeywords(language: string): Set<string> {
+function getKeywords(language: string): Set<string> | null {
   const lang = language.toLowerCase();
   if (lang === "python" || lang === "py") return PYTHON_KEYWORDS;
   if (lang === "bash" || lang === "sh" || lang === "shell" || lang === "zsh")
     return SHELL_KEYWORDS;
-  return JS_KEYWORDS; // default for js/ts/jsx/tsx/java/c/cpp etc.
+  if (
+    lang === "javascript" ||
+    lang === "js" ||
+    lang === "jsx" ||
+    lang === "typescript" ||
+    lang === "ts" ||
+    lang === "tsx"
+  ) {
+    return JS_KEYWORDS;
+  }
+  return null;
 }
 
 function tokenizeLine(line: string, language: string): HighlightedToken[] {
-  const keywords = getKeywords(language);
+  const keywords = getKeywords(language) ?? new Set<string>();
   const tokens: HighlightedToken[] = [];
 
   // Full-line comment detection
@@ -175,6 +205,10 @@ export function defaultHighlighter(
   code: string,
 ): HighlightedToken[] {
   if (!language || language === "text" || language === "plain") {
+    return [{ text: code, type: "default" }];
+  }
+
+  if (!SUPPORTED_HIGHLIGHT_LANGUAGES.includes(language.toLowerCase())) {
     return [{ text: code, type: "default" }];
   }
 

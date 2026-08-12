@@ -7,6 +7,8 @@ export {
   getTextContent,
   getFlattenedText,
   stripSourceOffsets,
+  MarkdownError,
+  MAX_PARSE_INPUT_LENGTH,
 } from "./headless";
 export type {
   MarkdownNode,
@@ -15,6 +17,8 @@ export type {
   TableCellAlign,
   ParserOptions,
   MarkdownParser,
+  MarkdownErrorCode,
+  MarkdownErrorSource,
 } from "./headless";
 
 export { Markdown } from "./markdown";
@@ -25,6 +29,7 @@ export type {
   MarkdownErrorPhase,
   MarkdownParseCompleteResult,
   MarkdownVirtualizationOptions,
+  ParseCacheStats,
 } from "./markdown";
 export { MarkdownStream, useMarkdownStreamState } from "./markdown-stream";
 export type {
@@ -94,5 +99,8 @@ export type {
   TokenType,
   CodeHighlighter,
 } from "./utils/code-highlight";
-export { defaultHighlighter } from "./utils/code-highlight";
+export {
+  defaultHighlighter,
+  SUPPORTED_HIGHLIGHT_LANGUAGES,
+} from "./utils/code-highlight";
 export type { UrlSafetyOptions } from "./utils/link-security";

@@ -56,6 +56,7 @@ function RootTabs() {
           options={{
             title: "Benchmark",
             tabBarLabel: "Bench",
+            tabBarAccessibilityLabel: "Benchmark",
             tabBarIcon: ({ color, size: _size }) => (
               <Ionicons name="speedometer-outline" size={24} color={color} />
             ),
@@ -66,6 +67,7 @@ function RootTabs() {
           options={{
             title: "Standard Markdown",
             tabBarLabel: "Default",
+            tabBarAccessibilityLabel: "Standard markdown",
             tabBarIcon: ({ color, size: _size }) => (
               <Ionicons name="document-text-outline" size={24} color={color} />
             ),
@@ -76,6 +78,7 @@ function RootTabs() {
           options={{
             title: "Style Overrides",
             tabBarLabel: "Styles",
+            tabBarAccessibilityLabel: "Style overrides",
             tabBarIcon: ({ color, size: _size }) => (
               <Ionicons name="color-palette-outline" size={24} color={color} />
             ),
@@ -86,6 +89,7 @@ function RootTabs() {
           options={{
             title: "Custom Components",
             tabBarLabel: "Custom",
+            tabBarAccessibilityLabel: "Custom components",
             tabBarIcon: ({ color, size: _size }) => (
               <Ionicons name="layers-outline" size={24} color={color} />
             ),
@@ -96,6 +100,7 @@ function RootTabs() {
           options={{
             title: "Token Stream",
             tabBarLabel: "Stream",
+            tabBarAccessibilityLabel: "Token stream",
             tabBarIcon: ({ color, size: _size }) => (
               <Ionicons name="flash-outline" size={24} color={color} />
             ),

@@ -5,6 +5,13 @@ export interface ParserOptions {
   math?: boolean;
   html?: boolean;
   sourceOffsets?: boolean;
+  /**
+   * Maximum accepted input length in characters.
+   * Defaults to a hard cap of 10,000,000 characters. Values above the hard
+   * cap are clamped to it. Oversized inputs fail with a typed error instead
+   * of being parsed.
+   */
+  maxInputLength?: number;
 }
 
 export interface MarkdownParser extends HybridObject<{

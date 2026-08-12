@@ -23,6 +23,13 @@ import {
 } from "./table-reducer";
 import { extractTableData, estimateColumnWidths } from "./table-utils";
 import {
+  areAllCellsMeasured,
+  cellKeyOf,
+  computeMeasuredColumnWidths,
+  expectedCellKeysOf,
+} from "./table-measurement";
+import { getTextContent } from "../../headless";
+import {
   useMarkdownContext,
   type NodeRendererProps,
 } from "../../MarkdownContext";
@@ -72,7 +79,6 @@ export const TableRenderer: FC<TableRendererProps> = ({
   const measuredWidths = useRef<Map<string, number>>(new Map());
   const measuredCells = useRef<Set<string>>(new Set());
   const widthsCalculated = useRef(false);
-  const columnWidthsRef = useRef(columnWidths);
   const lastCellKeySignatureRef = useRef("");
   const measurementTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -82,30 +88,15 @@ export const TableRenderer: FC<TableRendererProps> = ({
     false,
   );
 
-  const expectedCellKeys = useMemo(() => {
-    const keys: string[] = [];
-
-    headers.forEach((_, colIndex) => {
-      keys.push(`header-${colIndex}`);
-    });
-
-    rows.forEach((row, rowIndex) => {
-      row.forEach((_, colIndex) => {
-        keys.push(`cell-${rowIndex}-${colIndex}`);
-      });
-    });
-
-    return keys;
-  }, [headers, rows]);
+  const expectedCellKeys = useMemo(
+    () => expectedCellKeysOf({ headers, rows }),
+    [headers, rows],
+  );
 
   const expectedCellKeySignature = useMemo(
     () => expectedCellKeys.join("|"),
     [expectedCellKeys],
   );
-
-  useEffect(() => {
-    columnWidthsRef.current = columnWidths;
-  }, [columnWidths]);
 
   useEffect(() => {
     const structureChanged =
@@ -165,44 +156,32 @@ export const TableRenderer: FC<TableRendererProps> = ({
       if (width <= 0 || widthsCalculated.current || !needsMeasurement) return;
 
       measuredWidths.current.set(cellKey, width);
-      if (!measuredCells.current.has(cellKey)) {
-        measuredCells.current.add(cellKey);
-      }
+      measuredCells.current.add(cellKey);
 
       if (measuredCells.current.size < expectedCellKeys.length) return;
 
-      const allCellsMeasured = expectedCellKeys.every((key) =>
-        measuredCells.current.has(key),
-      );
-      if (!allCellsMeasured) return;
-
-      const maxWidths: number[] = [...columnWidthsRef.current];
-
-      for (let col = 0; col < columnCount; col++) {
-        const headerWidth = measuredWidths.current.get(`header-${col}`);
-        if (headerWidth && headerWidth > 0) {
-          maxWidths[col] = Math.max(maxWidths[col] ?? 0, headerWidth);
-        }
-
-        for (let row = 0; row < rows.length; row++) {
-          if (col >= (rows[row]?.length ?? 0)) continue;
-          const cellWidth = measuredWidths.current.get(`cell-${row}-${col}`);
-          if (cellWidth && cellWidth > 0) {
-            maxWidths[col] = Math.max(maxWidths[col] ?? 0, cellWidth);
-          }
-        }
-
-        maxWidths[col] = Math.max(
-          (maxWidths[col] ?? 0) + COLUMN_MEASUREMENT_PADDING,
-          minColumnWidth,
-        );
+      if (
+        !areAllCellsMeasured({
+          measuredCells: measuredCells.current,
+          expectedCellKeys,
+        })
+      ) {
+        return;
       }
+
+      const maxWidths = computeMeasuredColumnWidths({
+        measuredWidths: measuredWidths.current,
+        columnCount,
+        rowCount: rows.length,
+        minColumnWidth,
+        padding: COLUMN_MEASUREMENT_PADDING,
+      });
 
       widthsCalculated.current = true;
       setNeedsMeasurement(false);
       dispatch({ type: "RESET_WIDTHS", widths: maxWidths });
     },
-    [columnCount, expectedCellKeys, needsMeasurement, rows, minColumnWidth],
+    [columnCount, expectedCellKeys, needsMeasurement, rows.length, minColumnWidth],
   );
 
   const getAlignment = (
@@ -222,13 +201,23 @@ export const TableRenderer: FC<TableRendererProps> = ({
     [style, theme.colors.surface],
   );
 
+  const tableAccessibilityLabel = useMemo(
+    () => `Table: ${headers.map((cell) => getTextContent(cell).trim()).filter(Boolean).join(", ")}`,
+    [headers],
+  );
+
   if (columnCount === 0) return null;
 
   const hasWidths = columnWidths.length === columnCount;
   const resolvedWidths = hasWidths ? columnWidths : estimatedColumnWidths;
 
   return (
-    <View style={[styles.container, style]}>
+    <View
+      style={[styles.container, style]}
+      accessible
+      role="grid"
+      accessibilityLabel={tableAccessibilityLabel}
+    >
       {needsMeasurement ? (
         <View style={styles.measurementContainer}>
           <View style={styles.measurementRow}>
@@ -238,7 +227,7 @@ export const TableRenderer: FC<TableRendererProps> = ({
                 style={styles.measurementCell}
                 onLayout={(e: LayoutChangeEvent) => {
                   onCellLayout(
-                    `header-${colIndex}`,
+                    cellKeyOf({ row: 0, col: colIndex, isHeader: true }),
                     e.nativeEvent.layout.width,
                   );
                 }}
@@ -255,7 +244,7 @@ export const TableRenderer: FC<TableRendererProps> = ({
                   style={styles.measurementCell}
                   onLayout={(e: LayoutChangeEvent) => {
                     onCellLayout(
-                      `cell-${rowIndex}-${colIndex}`,
+                      cellKeyOf({ row: rowIndex, col: colIndex, isHeader: false }),
                       e.nativeEvent.layout.width,
                     );
                   }}

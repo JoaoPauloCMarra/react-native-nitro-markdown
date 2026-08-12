@@ -1,0 +1,52 @@
+[
+  {
+    "name": "empty-input",
+    "markdown": "",
+    "expected": ""
+  },
+  {
+    "name": "heading",
+    "markdown": "# Title",
+    "expected": "Title\n\n"
+  },
+  {
+    "name": "heading-level-3",
+    "markdown": "### Section",
+    "expected": "Section\n\n"
+  },
+  {
+    "name": "paragraph",
+    "markdown": "Hello world",
+    "expected": "Hello world\n\n"
+  },
+  {
+    "name": "paragraph-multiline",
+    "markdown": "Line one\nLine two",
+    "expected": "Line one Line two\n\n"
+  },
+  {
+    "name": "horizontal-rule",
+    "markdown": "---",
+    "expected": "---\n\n"
+  },
+  {
+    "name": "code-block",
+    "markdown": "```ts\nconst x = 1;\n```",
+    "expected": "const x = 1;\n\n"
+  },
+  {
+    "name": "blockquote",
+    "markdown": "> Quoted",
+    "expected": "Quoted\n\n"
+  },
+  {
+    "name": "blockquote-multiline",
+    "markdown": "> One\n> Two",
+    "expected": "One Two\n\n"
+  },
+  {
+    "name": "multiple-blocks",
+    "markdown": "# Title\n\nBody text",
+    "expected": "Title\n\nBody text\n\n"
+  }
+]

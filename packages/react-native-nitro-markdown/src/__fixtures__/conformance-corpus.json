@@ -1,0 +1,858 @@
+[
+  {
+    "name": "heading-1",
+    "markdown": "# Title",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "heading",
+          "level": 1,
+          "children": [
+            {
+              "type": "text",
+              "content": "Title"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "heading-6",
+    "markdown": "###### Deep",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "heading",
+          "level": 6,
+          "children": [
+            {
+              "type": "text",
+              "content": "Deep"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "paragraph-with-bold",
+    "markdown": "Hello **world**",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "text",
+              "content": "Hello "
+            },
+            {
+              "type": "bold",
+              "children": [
+                {
+                  "type": "text",
+                  "content": "world"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "emphasis",
+    "markdown": "*italic*",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "italic",
+              "children": [
+                {
+                  "type": "text",
+                  "content": "italic"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "strong-and-emphasis",
+    "markdown": "**bold *italic***",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "bold",
+              "children": [
+                {
+                  "type": "text",
+                  "content": "bold "
+                },
+                {
+                  "type": "italic",
+                  "children": [
+                    {
+                      "type": "text",
+                      "content": "italic"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "strikethrough",
+    "markdown": "~~gone~~",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "strikethrough",
+              "children": [
+                {
+                  "type": "text",
+                  "content": "gone"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "inline-code",
+    "markdown": "`code()`",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "code_inline",
+              "content": "code()"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "link",
+    "markdown": "[Example](https://example.com)",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "link",
+              "href": "https://example.com",
+              "children": [
+                {
+                  "type": "text",
+                  "content": "Example"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "link-with-title",
+    "markdown": "[Example](https://example.com \"The title\")",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "link",
+              "href": "https://example.com",
+              "title": "The title",
+              "children": [
+                {
+                  "type": "text",
+                  "content": "Example"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "image",
+    "markdown": "![Alt text](img.png)",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "image",
+              "href": "img.png",
+              "alt": "Alt text"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "image-with-title",
+    "markdown": "![Alt](img.png \"Caption\")",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "image",
+              "href": "img.png",
+              "alt": "Alt",
+              "title": "Caption"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "autolink",
+    "markdown": "<https://example.com>",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "link",
+              "href": "https://example.com",
+              "children": [
+                {
+                  "type": "text",
+                  "content": "https://example.com"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "fenced-code",
+    "markdown": "```js\nvar a = 1;\n```",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "code_block",
+          "language": "js",
+          "children": [
+            {
+              "type": "text",
+              "content": "var a = 1;\n"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "unordered-list",
+    "markdown": "- one\n- two",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "list",
+          "ordered": false,
+          "children": [
+            {
+              "type": "list_item",
+              "children": [
+                {
+                  "type": "text",
+                  "content": "one"
+                }
+              ]
+            },
+            {
+              "type": "list_item",
+              "children": [
+                {
+                  "type": "text",
+                  "content": "two"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "ordered-list",
+    "markdown": "1. first\n2. second",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "list",
+          "ordered": true,
+          "start": 1,
+          "children": [
+            {
+              "type": "list_item",
+              "children": [
+                {
+                  "type": "text",
+                  "content": "first"
+                }
+              ]
+            },
+            {
+              "type": "list_item",
+              "children": [
+                {
+                  "type": "text",
+                  "content": "second"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "task-list",
+    "markdown": "- [x] done\n- [ ] todo",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "list",
+          "ordered": false,
+          "children": [
+            {
+              "type": "task_list_item",
+              "checked": true,
+              "children": [
+                {
+                  "type": "text",
+                  "content": "done"
+                }
+              ]
+            },
+            {
+              "type": "task_list_item",
+              "checked": false,
+              "children": [
+                {
+                  "type": "text",
+                  "content": "todo"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "blockquote",
+    "markdown": "> quote",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "blockquote",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                {
+                  "type": "text",
+                  "content": "quote"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "horizontal-rule",
+    "markdown": "---",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "horizontal_rule"
+        }
+      ]
+    }
+  },
+  {
+    "name": "table",
+    "markdown": "| A | B |\n|---|---|\n| 1 | 2 |",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "table",
+          "children": [
+            {
+              "type": "table_head",
+              "children": [
+                {
+                  "type": "table_row",
+                  "children": [
+                    {
+                      "type": "table_cell",
+                      "isHeader": true,
+                      "children": [
+                        {
+                          "type": "text",
+                          "content": "A"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "table_cell",
+                      "isHeader": true,
+                      "children": [
+                        {
+                          "type": "text",
+                          "content": "B"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "table_body",
+              "children": [
+                {
+                  "type": "table_row",
+                  "children": [
+                    {
+                      "type": "table_cell",
+                      "isHeader": false,
+                      "children": [
+                        {
+                          "type": "text",
+                          "content": "1"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "table_cell",
+                      "isHeader": false,
+                      "children": [
+                        {
+                          "type": "text",
+                          "content": "2"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "table-aligned",
+    "markdown": "| A | B | C |\n|:--|:-:|--:|\n| 1 | 2 | 3 |",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "table",
+          "children": [
+            {
+              "type": "table_head",
+              "children": [
+                {
+                  "type": "table_row",
+                  "children": [
+                    {
+                      "type": "table_cell",
+                      "isHeader": true,
+                      "align": "left",
+                      "children": [
+                        {
+                          "type": "text",
+                          "content": "A"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "table_cell",
+                      "isHeader": true,
+                      "align": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "content": "B"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "table_cell",
+                      "isHeader": true,
+                      "align": "right",
+                      "children": [
+                        {
+                          "type": "text",
+                          "content": "C"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "table_body",
+              "children": [
+                {
+                  "type": "table_row",
+                  "children": [
+                    {
+                      "type": "table_cell",
+                      "isHeader": false,
+                      "align": "left",
+                      "children": [
+                        {
+                          "type": "text",
+                          "content": "1"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "table_cell",
+                      "isHeader": false,
+                      "align": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "content": "2"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "table_cell",
+                      "isHeader": false,
+                      "align": "right",
+                      "children": [
+                        {
+                          "type": "text",
+                          "content": "3"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "math-inline",
+    "markdown": "$x^2$",
+    "options": {
+      "math": true
+    },
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "math_inline",
+              "children": [
+                {
+                  "type": "text",
+                  "content": "x^2"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "math-block",
+    "markdown": "$$x + y$$",
+    "options": {
+      "math": true
+    },
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "math_block",
+              "children": [
+                {
+                  "type": "text",
+                  "content": "x + y"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "soft-break",
+    "markdown": "a\nb",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "text",
+              "content": "a"
+            },
+            {
+              "type": "soft_break"
+            },
+            {
+              "type": "text",
+              "content": "b"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "hard-break",
+    "markdown": "a  \nb",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "text",
+              "content": "a"
+            },
+            {
+              "type": "line_break"
+            },
+            {
+              "type": "text",
+              "content": "b"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "entity",
+    "markdown": "&amp; &lt;tag&gt;",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "text",
+              "content": "&amp; &lt;tag&gt;"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "escaped-punctuation",
+    "markdown": "\\*not italic\\*",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "text",
+              "content": "*not italic*"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "unicode",
+    "markdown": "héllo 🌍",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "text",
+              "content": "héllo 🌍"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "html-inline",
+    "markdown": "before <span>hi</span> after",
+    "options": {
+      "html": true
+    },
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "text",
+              "content": "before "
+            },
+            {
+              "type": "html_inline",
+              "content": "<span>"
+            },
+            {
+              "type": "text",
+              "content": "hi"
+            },
+            {
+              "type": "html_inline",
+              "content": "</span>"
+            },
+            {
+              "type": "text",
+              "content": " after"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "html-block",
+    "markdown": "<div>\nblock\n</div>",
+    "options": {
+      "html": true
+    },
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "html_block",
+          "content": "<div>\nblock\n</div>\n"
+        }
+      ]
+    }
+  },
+  {
+    "name": "html-disabled-default",
+    "markdown": "<span>hi</span>",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "text",
+              "content": "<span>hi</span>"
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

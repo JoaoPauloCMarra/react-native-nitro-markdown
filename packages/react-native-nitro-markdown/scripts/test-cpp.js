@@ -12,6 +12,8 @@ const colors = {
   cyan: (text) => `\x1b[36m${text}\x1b[0m`,
 };
 
+const packageRoot = path.resolve(__dirname, "..");
+
 function log(message, color = "green") {
   console.log(colors[color](message));
 }
@@ -44,6 +46,116 @@ function commandExists(command) {
 
 function shellQuote(value) {
   return JSON.stringify(String(value));
+}
+
+function jsonEscape(value) {
+  return value
+    .replace(/["\\\n\r\t]/g, (ch) => {
+      switch (ch) {
+        case '"':
+          return '\\"';
+        case "\\":
+          return "\\\\";
+        case "\n":
+          return "\\n";
+        case "\r":
+          return "\\r";
+        default:
+          return "\\t";
+      }
+    })
+    .replace(/[\u0000-\u001f\u007f]/g, (ch) => {
+      return `\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`;
+    });
+}
+
+function cLiteral(value) {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\t/g, "\\t");
+}
+
+function canonicalizeNode(node) {
+  if (!node) return "null";
+  const fields = [];
+  if (node.content !== undefined) fields.push(`content=${jsonEscape(node.content)}`);
+  if (node.level !== undefined) fields.push(`level=${node.level}`);
+  if (node.href !== undefined) fields.push(`href=${jsonEscape(node.href)}`);
+  if (node.title !== undefined) fields.push(`title=${jsonEscape(node.title)}`);
+  if (node.alt !== undefined) fields.push(`alt=${jsonEscape(node.alt)}`);
+  if (node.language !== undefined) fields.push(`language=${jsonEscape(node.language)}`);
+  if (node.ordered !== undefined) fields.push(`ordered=${node.ordered}`);
+  if (node.start !== undefined) fields.push(`start=${node.start}`);
+  if (node.checked !== undefined) fields.push(`checked=${node.checked}`);
+  if (node.isHeader !== undefined) fields.push(`isHeader=${node.isHeader}`);
+  if (node.align !== undefined) fields.push(`align=${node.align}`);
+  if (node.children !== undefined && node.children.length > 0) {
+    fields.push(`children=[${node.children.map(canonicalizeNode).join(",")}]`);
+  }
+  return fields.length === 0 ? node.type : `${node.type}{${fields.join(",")}}`;
+}
+
+function generateCorpusHeader(corpusPath, entries) {
+  const lines = entries.map((entry) => {
+    return `  {"${entry.name}", "${cLiteral(entry.markdown)}", "${cLiteral(
+      entry.expected,
+    )}"},`;
+  });
+  return `// Generated from ${corpusPath} by scripts/test-cpp.js. Do not edit.
+#pragma once
+#include <string>
+#include <vector>
+namespace NitroMarkdown {
+struct FlattenCorpusEntry { const char* name; const char* markdown; const char* expected; };
+inline const std::vector<FlattenCorpusEntry> kFlattenCorpus = {
+${lines.join("\n")}
+};
+}
+`;
+}
+
+function generateConformanceHeader(corpusPath, entries) {
+  const lines = entries.map((entry) => {
+    return `  {"${entry.name}", "${cLiteral(entry.markdown)}", "${cLiteral(
+      canonicalizeNode(entry.expected),
+    )}", "${cLiteral(JSON.stringify(entry.options ?? {}))}"},`;
+  });
+  return `// Generated from ${corpusPath} by scripts/test-cpp.js. Do not edit.
+#pragma once
+#include <string>
+#include <vector>
+namespace NitroMarkdown {
+struct ConformanceCorpusEntry { const char* name; const char* markdown; const char* expectedCanonical; const char* optionsJson; };
+inline const std::vector<ConformanceCorpusEntry> kConformanceCorpus = {
+${lines.join("\n")}
+};
+}
+`;
+}
+
+function writeCorpusHeaders(generatedDir) {
+  const flattenPath = path.join(packageRoot, "src", "__fixtures__", "flatten-corpus.json");
+  const conformancePath = path.join(
+    packageRoot,
+    "src",
+    "__fixtures__",
+    "conformance-corpus.json",
+  );
+
+  const flattenCorpus = JSON.parse(fs.readFileSync(flattenPath, "utf8"));
+  const conformanceCorpus = JSON.parse(fs.readFileSync(conformancePath, "utf8"));
+
+  fs.writeFileSync(
+    path.join(generatedDir, "FlattenCorpus.hpp"),
+    generateCorpusHeader(flattenPath, flattenCorpus),
+  );
+  fs.writeFileSync(
+    path.join(generatedDir, "ConformanceCorpus.hpp"),
+    generateConformanceHeader(conformancePath, conformanceCorpus),
+  );
 }
 
 function commandPath(command) {
@@ -81,7 +193,6 @@ function main() {
   const minLineCoverage = minLinesArg
     ? Number(minLinesArg.replace("--min-lines=", ""))
     : 90;
-  const packageRoot = path.resolve(__dirname, "..");
   const buildDir = path.join(packageRoot, "build", "cpp-test");
   const cppDir = path.join(packageRoot, "cpp");
   const isWindows = process.platform === "win32";
@@ -115,6 +226,10 @@ function main() {
   log("Preparing build directory...");
   removeDir(buildDir);
   ensureDir(buildDir);
+
+  const generatedDir = path.join(buildDir, "generated");
+  ensureDir(generatedDir);
+  writeCorpusHeaders(generatedDir);
 
   log("Configuring with CMake...");
 

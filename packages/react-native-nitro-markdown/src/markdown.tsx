@@ -1,16 +1,12 @@
 import {
-  memo,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   type FC,
-  Fragment,
   type ReactElement,
-  type ReactNode,
 } from "react";
 import {
-  StyleSheet,
   View,
   Text,
   FlatList,
@@ -19,101 +15,63 @@ import {
   type FlatListProps,
   type StyleProp,
   type ViewStyle,
-  type TextStyle,
 } from "react-native";
 import {
-  parseMarkdown,
-  parseMarkdownWithOptions,
   getFlattenedText,
-  getTextContent,
   type MarkdownNode,
 } from "./headless";
 import type { ParserOptions } from "./Markdown.nitro";
 import {
   MarkdownContext,
-  useMarkdownContext,
-  type CustomRenderer,
   type CustomRenderers,
   type LinkPressHandler,
   type MarkdownContextValue,
-  type NodeRendererProps,
   type TableOptions,
 } from "./MarkdownContext";
-import { Blockquote } from "./renderers/blockquote";
-import { CodeBlock, InlineCode } from "./renderers/code";
-import { Heading } from "./renderers/heading";
-import { HorizontalRule } from "./renderers/horizontal-rule";
-import { HtmlBlock, HtmlInline } from "./renderers/html";
-import { Image } from "./renderers/image";
-import { Link } from "./renderers/link";
-import { List, ListItem, TaskListItem } from "./renderers/list";
-import { MathInline, MathBlock } from "./renderers/math";
-import { Paragraph } from "./renderers/paragraph";
-import { TableRenderer } from "./renderers/table";
+import { NodeRenderer, getBaseStyles } from "./node-renderer";
 import {
   defaultMarkdownTheme,
   minimalMarkdownTheme,
   mergeThemes,
-  type MarkdownTheme,
   type PartialMarkdownTheme,
   type NodeStyleOverrides,
   type StylingStrategy,
 } from "./theme";
 import type { CodeHighlighter } from "./utils/code-highlight";
 import type { UrlSafetyOptions } from "./utils/link-security";
+import {
+  applyAfterParsePlugins,
+  applyBeforeParsePlugins,
+  cloneMarkdownNode,
+  getParserOptionsKey,
+  hashString,
+  isMarkdownNode,
+  normalizeParserOptions,
+  parseWithNativeParser,
+  safeOnError,
+  sortPluginsByPriority,
+  warnInDev,
+  ERROR_PHASE,
+  type MarkdownErrorPhase,
+} from "./utils/parse-pipeline";
 
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash; // Convert to 32bit int
-  }
-  return hash;
-}
+export type { MarkdownErrorPhase } from "./utils/parse-pipeline";
 
-const ERROR_PHASE = {
-  PARSE: "parse",
-  BEFORE_PLUGIN: "before-plugin",
-  AFTER_PLUGIN: "after-plugin",
-} as const;
-
-/**
- * Safely invoke the onError callback, preventing callback exceptions from
- * propagating and breaking the render cycle.
- */
-function safeOnError<P extends string>(
-  onError: ((error: Error, phase: P, pluginName?: string) => void) | undefined,
-  error: unknown,
-  phase: P,
-  pluginName?: string,
-): void {
-  try {
-    onError?.(
-      error instanceof Error ? error : new Error(String(error)),
-      phase,
-      pluginName,
-    );
-  } catch (callbackError) {
-    if (__DEV__) {
-      console.warn(
-        "[NitroMarkdown] onError callback threw an exception:",
-        callbackError,
-      );
-    }
-  }
-}
-
-const baseStylesCache = new WeakMap<MarkdownTheme, BaseStyles>();
 type ParseAstCacheEntry = {
   text: string;
   ast: MarkdownNode;
 };
 
-const parseAstCache = new Map<string, ParseAstCacheEntry>();
 const MAX_PARSE_CACHE_ENTRIES = 32;
 const MAX_CACHEABLE_TEXT_LENGTH = 24_000;
 const EMPTY_RENDERERS: CustomRenderers = {};
+
+export type ParseCacheStats = {
+  hits: number;
+  misses: number;
+  evictions: number;
+  size: number;
+};
 
 export type AstTransform = (ast: MarkdownNode) => MarkdownNode;
 export type MarkdownVirtualizationOptions = Pick<
@@ -149,197 +107,50 @@ export type MarkdownPlugin = {
   afterParse?: AstTransform;
 };
 
-export type MarkdownErrorPhase = "parse" | "before-plugin" | "after-plugin";
-
 export type MarkdownParseCompleteResult = {
   raw: string;
   ast: MarkdownNode;
   text: string;
-};
-
-const isMarkdownNode = (value: unknown): value is MarkdownNode => {
-  if (typeof value !== "object" || value === null) return false;
-  return typeof Reflect.get(value, "type") === "string";
-};
-
-const warnInDev = (message: string, error?: unknown): void => {
-  if (typeof __DEV__ === "undefined" || !__DEV__) return;
-
-  const runtimeConsole = Reflect.get(globalThis, "console");
-  if (
-    typeof runtimeConsole === "object" &&
-    runtimeConsole !== null &&
-    "warn" in runtimeConsole &&
-    typeof runtimeConsole.warn === "function"
-  ) {
-    runtimeConsole.warn(message, error);
-  }
-};
-
-const cloneMarkdownNode = (node: MarkdownNode): MarkdownNode => {
-  const children = node.children?.map(cloneMarkdownNode);
-  return children ? { ...node, children } : { ...node };
-};
-
-const getParserOptionsKey = (options?: ParserOptions): string => {
-  if (!options) {
-    return "gfm:default|math:default|html:default|sourceOffsets:default";
-  }
-
-  const gfm = options.gfm === undefined ? "default" : options.gfm ? "1" : "0";
-  const math =
-    options.math === undefined ? "default" : options.math ? "1" : "0";
-  const html =
-    options.html === undefined ? "default" : options.html ? "1" : "0";
-  const sourceOffsets =
-    options.sourceOffsets === undefined
-      ? "default"
-      : options.sourceOffsets
-        ? "1"
-        : "0";
-  return `gfm:${gfm}|math:${math}|html:${html}|sourceOffsets:${sourceOffsets}`;
-};
-
-const normalizeParserOptions = (
-  options?: ParserOptions,
-): ParserOptions | undefined => {
-  if (!options) return undefined;
-
-  const gfm = options.gfm;
-  const math = options.math;
-  const html = options.html;
-  const sourceOffsets = options.sourceOffsets;
-
-  if (
-    gfm === undefined &&
-    math === undefined &&
-    html === undefined &&
-    sourceOffsets === undefined
-  ) {
-    return undefined;
-  }
-
-  const normalized: ParserOptions = {};
-  if (gfm !== undefined) normalized.gfm = gfm;
-  if (math !== undefined) normalized.math = math;
-  if (html !== undefined) normalized.html = html;
-  if (sourceOffsets !== undefined) {
-    normalized.sourceOffsets = sourceOffsets;
-  }
-  return normalized;
-};
-
-const parseWithNativeParser = (
-  text: string,
-  options?: ParserOptions,
-): MarkdownNode => {
-  if (options) {
-    return parseMarkdownWithOptions(text, options);
-  }
-  return parseMarkdown(text);
+  /**
+   * Per-instance parse cache counters for the current parse cycle.
+   */
+  cacheStats?: ParseCacheStats;
 };
 
 const getCachedParsedAst = (
   text: string,
-  options?: ParserOptions,
+  options: ParserOptions | undefined,
+  cache: Map<string, ParseAstCacheEntry>,
+  stats: { hits: number; misses: number; evictions: number },
 ): MarkdownNode => {
   if (text.length > MAX_CACHEABLE_TEXT_LENGTH) {
     return parseWithNativeParser(text, options);
   }
 
   const cacheKey = `${getParserOptionsKey(options)}|${text.length}|${hashString(text)}`;
-  const cachedEntry = parseAstCache.get(cacheKey);
+  const cachedEntry = cache.get(cacheKey);
   if (cachedEntry?.text === text) {
-    parseAstCache.delete(cacheKey);
-    parseAstCache.set(cacheKey, cachedEntry);
+    stats.hits += 1;
+    cache.delete(cacheKey);
+    cache.set(cacheKey, cachedEntry);
     return cloneMarkdownNode(cachedEntry.ast);
   }
 
+  stats.misses += 1;
   const parsedNode = parseWithNativeParser(text, options);
-  parseAstCache.set(cacheKey, {
+  cache.set(cacheKey, {
     text,
     ast: parsedNode,
   });
-  if (parseAstCache.size > MAX_PARSE_CACHE_ENTRIES) {
-    const oldestCacheKey = parseAstCache.keys().next().value;
+  if (cache.size > MAX_PARSE_CACHE_ENTRIES) {
+    const oldestCacheKey = cache.keys().next().value;
     if (typeof oldestCacheKey === "string") {
-      parseAstCache.delete(oldestCacheKey);
+      cache.delete(oldestCacheKey);
+      stats.evictions += 1;
     }
   }
 
   return cloneMarkdownNode(parsedNode);
-};
-
-const sortPluginsByPriority = (
-  plugins?: MarkdownPlugin[],
-): MarkdownPlugin[] | undefined => {
-  if (!plugins || plugins.length === 0) {
-    return undefined;
-  }
-
-  return [...plugins].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
-};
-
-const applyBeforeParsePlugins = (
-  markdown: string,
-  sortedPlugins?: MarkdownPlugin[],
-  onError?: (error: Error, phase: "before-plugin", pluginName?: string) => void,
-): string => {
-  if (!sortedPlugins || sortedPlugins.length === 0) {
-    return markdown;
-  }
-
-  let nextMarkdown = markdown;
-  for (const plugin of sortedPlugins) {
-    if (!plugin.beforeParse) continue;
-
-    try {
-      const transformed = plugin.beforeParse(nextMarkdown);
-      if (typeof transformed === "string") {
-        nextMarkdown = transformed;
-      }
-    } catch (error) {
-      const pluginLabel = plugin.name ? ` (${plugin.name})` : "";
-      warnInDev(
-        `[react-native-nitro-markdown] plugin beforeParse${pluginLabel} threw; using previous markdown.`,
-        error,
-      );
-      safeOnError(onError, error, ERROR_PHASE.BEFORE_PLUGIN, plugin.name);
-    }
-  }
-
-  return nextMarkdown;
-};
-
-const applyAfterParsePlugins = (
-  ast: MarkdownNode,
-  sortedPlugins?: MarkdownPlugin[],
-  onError?: (error: Error, phase: "after-plugin", pluginName?: string) => void,
-): MarkdownNode => {
-  if (!sortedPlugins || sortedPlugins.length === 0) {
-    return ast;
-  }
-
-  let nextAst = ast;
-  for (const plugin of sortedPlugins) {
-    if (!plugin.afterParse) continue;
-
-    try {
-      const transformed = plugin.afterParse(nextAst);
-      if (isMarkdownNode(transformed)) {
-        nextAst = transformed;
-      }
-    } catch (error) {
-      const pluginLabel = plugin.name ? ` (${plugin.name})` : "";
-      warnInDev(
-        `[react-native-nitro-markdown] plugin afterParse${pluginLabel} threw; using previous AST.`,
-        error,
-      );
-      safeOnError(onError, error, ERROR_PHASE.AFTER_PLUGIN, plugin.name);
-    }
-  }
-
-  return nextAst;
 };
 
 export type MarkdownProps = {
@@ -372,12 +183,16 @@ export type MarkdownProps = {
    */
   astTransform?: AstTransform;
   /**
+   * @deprecated Parsing is synchronous in `<Markdown>`, so this callback has
+   * no in-progress window: it fires in the `useEffect` commit phase after the
+   * new AST is already rendered. Use `onParseComplete` for post-parse
+   * inspection, and `MarkdownStream` (`sourceAstStatus`, `initialParseMode`)
+   * when you need a real asynchronous parse state.
+   *
    * Callback fired after the current parse cycle completes and the component
    * has re-rendered with new content. Because the native parser runs
    * synchronously inside `useMemo`, there is no observable "in-progress"
-   * window — this callback fires in the `useEffect` commit phase, after the
-   * new AST is already rendered. Use `onParseComplete` for post-parse
-   * inspection of results.
+   * window.
    */
   onParsingInProgress?: () => void;
   /**
@@ -457,6 +272,11 @@ export type MarkdownProps = {
    * Pass `true` to use the built-in tokenizer, or a custom highlighter function.
    */
   highlightCode?: boolean | CodeHighlighter;
+  /**
+   * Localized text shown when parsing fails.
+   * @default "Error parsing markdown"
+   */
+  errorText?: string;
 };
 
 export const Markdown: FC<MarkdownProps> = ({
@@ -481,15 +301,24 @@ export const Markdown: FC<MarkdownProps> = ({
   tableOptions,
   imageOptions,
   highlightCode,
+  errorText = "Error parsing markdown",
 }) => {
   const parserOptionGfm = options?.gfm;
   const parserOptionMath = options?.math;
   const parserOptionHtml = options?.html;
   const parserOptionSourceOffsets = options?.sourceOffsets;
+  const parserOptionMaxInputLength = options?.maxInputLength;
 
   /* eslint-disable react-hooks/refs -- Refs updated/read intentionally to avoid re-parsing on callback identity changes */
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
+
+  const parseAstCacheRef = useRef<Map<string, ParseAstCacheEntry> | null>(null);
+  const cacheStatsRef = useRef({ hits: 0, misses: 0, evictions: 0 });
+  if (parseAstCacheRef.current === null) {
+    parseAstCacheRef.current = new Map();
+    cacheStatsRef.current = { hits: 0, misses: 0, evictions: 0 };
+  }
 
   const parseResult = useMemo(() => {
     try {
@@ -506,6 +335,9 @@ export const Markdown: FC<MarkdownProps> = ({
           parserOptionSourceOffsets === undefined
             ? null
             : { sourceOffsets: parserOptionSourceOffsets },
+          parserOptionMaxInputLength === undefined
+            ? null
+            : { maxInputLength: parserOptionMaxInputLength },
         ),
       );
       const shouldCloneSourceAst =
@@ -517,7 +349,12 @@ export const Markdown: FC<MarkdownProps> = ({
           ? cloneMarkdownNode(sourceAst)
           : sourceAst
         : parseCache
-          ? getCachedParsedAst(markdownToParse, parserOptions)
+          ? getCachedParsedAst(
+              markdownToParse,
+              parserOptions,
+              parseAstCacheRef.current!,
+              cacheStatsRef.current,
+            )
           : parseWithNativeParser(markdownToParse, parserOptions);
       parsedAst = applyAfterParsePlugins(
         parsedAst,
@@ -556,6 +393,7 @@ export const Markdown: FC<MarkdownProps> = ({
     parserOptionMath,
     parserOptionHtml,
     parserOptionSourceOffsets,
+    parserOptionMaxInputLength,
     sourceAst,
     parseCache,
     astTransform,
@@ -571,18 +409,34 @@ export const Markdown: FC<MarkdownProps> = ({
     parserOptionMath,
     parserOptionHtml,
     parserOptionSourceOffsets,
+    parserOptionMaxInputLength,
     onParsingInProgress,
   ]);
 
   useEffect(() => {
     if (!parseResult.ast || !onParseComplete) return;
 
+    const cacheStats: ParseCacheStats = parseCache
+      ? {
+          hits: cacheStatsRef.current.hits,
+          misses: cacheStatsRef.current.misses,
+          evictions: cacheStatsRef.current.evictions,
+          size: parseAstCacheRef.current?.size ?? 0,
+        }
+      : {
+          hits: 0,
+          misses: 0,
+          evictions: 0,
+          size: 0,
+        };
+
     onParseComplete({
       raw: children,
       ast: parseResult.ast,
       text: getFlattenedText(parseResult.ast),
+      ...(parseCache ? { cacheStats } : {}),
     });
-  }, [children, onParseComplete, parseResult.ast]);
+  }, [children, onParseComplete, parseResult.ast, parseCache]);
 
   const theme = useMemo(() => {
     const base =
@@ -644,7 +498,7 @@ export const Markdown: FC<MarkdownProps> = ({
   if (!parseResult.ast) {
     return (
       <View style={[baseStyles.container, style]}>
-        <Text style={baseStyles.errorText}>Error parsing markdown</Text>
+        <Text style={baseStyles.errorText}>{errorText}</Text>
       </View>
     );
   }
@@ -679,472 +533,3 @@ export const Markdown: FC<MarkdownProps> = ({
     </MarkdownContext.Provider>
   );
 };
-
-const isInline = (type: MarkdownNode["type"]): boolean => {
-  return (
-    type === "text" ||
-    type === "bold" ||
-    type === "italic" ||
-    type === "strikethrough" ||
-    type === "link" ||
-    type === "code_inline" ||
-    type === "soft_break" ||
-    type === "line_break" ||
-    type === "html_inline" ||
-    type === "math_inline"
-  );
-};
-
-const containsInlineMath = (nodes?: MarkdownNode[]): boolean =>
-  nodes?.some(
-    (node) => node.type === "math_inline" || containsInlineMath(node.children),
-  ) ?? false;
-
-const NodeRendererComponent: FC<NodeRendererProps> = ({
-  node,
-  depth,
-  inListItem,
-  parentIsText = false,
-}) => {
-  const { renderers, theme, styles: nodeStyles } = useMarkdownContext();
-  const baseStyles = getBaseStyles(theme);
-
-  const renderChildren = (
-    children?: MarkdownNode[],
-    childInListItem = false,
-    childParentIsText = false,
-  ): ReactNode => {
-    if (!children || children.length === 0) return null;
-
-    const elements: ReactNode[] = [];
-    let currentInlineGroup: MarkdownNode[] = [];
-
-    const flushInlineGroup = () => {
-      if (currentInlineGroup.length > 0) {
-        const hasMath = currentInlineGroup.some(
-          (child) => child.type === "math_inline",
-        );
-
-        if (hasMath && !childParentIsText) {
-          elements.push(
-            <View
-              key={`inline-group-${elements.length}`}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                flexWrap: "wrap",
-                flexShrink: 1,
-              }}
-            >
-              {currentInlineGroup.map((n, idx) => (
-                <NodeRenderer
-                  key={`${n.type}-${idx}`}
-                  node={n}
-                  depth={depth + 1}
-                  inListItem={childInListItem}
-                  parentIsText={false}
-                />
-              ))}
-            </View>,
-          );
-        } else {
-          const Wrapper = childParentIsText ? Fragment : Text;
-          const wrapperProps = childParentIsText
-            ? {}
-            : { style: baseStyles.text };
-
-          elements.push(
-            <Wrapper key={`inline-group-${elements.length}`} {...wrapperProps}>
-              {currentInlineGroup.map((n, idx) => (
-                <NodeRenderer
-                  key={`${n.type}-${idx}`}
-                  node={n}
-                  depth={depth + 1}
-                  inListItem={childInListItem}
-                  parentIsText={true}
-                />
-              ))}
-            </Wrapper>,
-          );
-        }
-        currentInlineGroup = [];
-      }
-    };
-
-    children.forEach((child, index) => {
-      if (isInline(child.type)) {
-        currentInlineGroup.push(child);
-      } else {
-        flushInlineGroup();
-        elements.push(
-          <NodeRenderer
-            key={`${child.type}-${index}`}
-            node={child}
-            depth={depth + 1}
-            inListItem={childInListItem}
-            parentIsText={childParentIsText}
-          />,
-        );
-      }
-    });
-
-    flushInlineGroup();
-    return elements;
-  };
-
-  const customRenderer = renderers[node.type] as CustomRenderer | undefined;
-  if (customRenderer) {
-    const childrenRendered = renderChildren(
-      node.children,
-      inListItem,
-      parentIsText,
-    );
-
-    const baseProps = {
-      node,
-      children: childrenRendered,
-      Renderer: NodeRenderer,
-    };
-
-    const enhancedProps = {
-      ...baseProps,
-      ...(node.type === "heading" && {
-        level: (node.level ?? 1) as 1 | 2 | 3 | 4 | 5 | 6,
-      }),
-      ...(node.type === "link" && {
-        href: node.href ?? "",
-        ...(node.title ? { title: node.title } : {}),
-      }),
-      ...(node.type === "image" && {
-        url: node.href ?? "",
-        ...(node.alt ? { alt: node.alt } : {}),
-        ...(node.title ? { title: node.title } : {}),
-      }),
-      ...(node.type === "code_block" && {
-        content: getTextContent(node),
-        ...(node.language ? { language: node.language } : {}),
-      }),
-      ...(node.type === "code_inline" && { content: node.content ?? "" }),
-      ...((node.type === "math_inline" || node.type === "math_block") && {
-        content: getTextContent(node),
-      }),
-      ...(node.type === "list" && {
-        ordered: node.ordered ?? false,
-        ...(node.start === undefined ? {} : { start: node.start }),
-      }),
-      ...(node.type === "task_list_item" && { checked: node.checked ?? false }),
-    };
-
-    const result = customRenderer(enhancedProps);
-    if (result !== undefined) {
-      return result as ReactElement | null;
-    }
-  }
-
-  switch (node.type) {
-    case "document":
-      return (
-        <View style={[baseStyles.document, nodeStyles?.document]}>
-          {renderChildren(node.children, false, false)}
-        </View>
-      );
-
-    case "heading":
-      return (
-        <Heading
-          level={node.level ?? 1}
-          {...(nodeStyles?.heading ? { style: nodeStyles.heading } : {})}
-        >
-          {renderChildren(node.children, inListItem, true)}
-        </Heading>
-      );
-
-    case "paragraph":
-      if (containsInlineMath(node.children)) {
-        return (
-          <Paragraph inListItem={inListItem} style={nodeStyles?.paragraph}>
-            {renderChildren(node.children, inListItem, false)}
-          </Paragraph>
-        );
-      }
-      return (
-        <Text
-          style={[
-            baseStyles.text,
-            inListItem ? undefined : { marginBottom: theme.spacing.l },
-            nodeStyles?.paragraph as StyleProp<TextStyle>,
-          ]}
-        >
-          {renderChildren(node.children, inListItem, true)}
-        </Text>
-      );
-
-    case "text":
-      if (parentIsText) {
-        return <Text>{node.content}</Text>;
-      }
-      return (
-        <Text style={[baseStyles.text, nodeStyles?.text]}>{node.content}</Text>
-      );
-
-    case "bold":
-      return (
-        <Text style={[baseStyles.bold, nodeStyles?.bold]}>
-          {renderChildren(node.children, inListItem, true)}
-        </Text>
-      );
-
-    case "italic":
-      return (
-        <Text style={[baseStyles.italic, nodeStyles?.italic]}>
-          {renderChildren(node.children, inListItem, true)}
-        </Text>
-      );
-
-    case "strikethrough":
-      return (
-        <Text style={[baseStyles.strikethrough, nodeStyles?.strikethrough]}>
-          {renderChildren(node.children, inListItem, true)}
-        </Text>
-      );
-
-    case "link":
-      return (
-        <Link
-          href={node.href ?? ""}
-          {...(nodeStyles?.link ? { style: nodeStyles.link } : {})}
-        >
-          {renderChildren(node.children, inListItem, true)}
-        </Link>
-      );
-
-    case "image":
-      return (
-        <Image
-          url={node.href ?? ""}
-          Renderer={NodeRenderer}
-          {...(node.title ? { title: node.title } : {})}
-          {...(node.alt ? { alt: node.alt } : {})}
-          {...(nodeStyles?.image ? { style: nodeStyles.image } : {})}
-        />
-      );
-
-    case "code_inline":
-      return (
-        <InlineCode
-          {...(nodeStyles?.code_inline
-            ? { style: nodeStyles.code_inline }
-            : {})}
-        >
-          {node.content}
-        </InlineCode>
-      );
-
-    case "code_block":
-      return (
-        <CodeBlock
-          content={getTextContent(node)}
-          {...(node.language ? { language: node.language } : {})}
-          {...(nodeStyles?.code_block ? { style: nodeStyles.code_block } : {})}
-        />
-      );
-
-    case "blockquote":
-      return (
-        <Blockquote
-          {...(nodeStyles?.blockquote
-            ? { style: nodeStyles.blockquote }
-            : {})}
-        >
-          {renderChildren(node.children, inListItem, false)}
-        </Blockquote>
-      );
-
-    case "horizontal_rule":
-      return (
-        <HorizontalRule
-          {...(nodeStyles?.horizontal_rule
-            ? { style: nodeStyles.horizontal_rule }
-            : {})}
-        />
-      );
-
-    case "line_break":
-      return <Text>{"\n"}</Text>;
-
-    case "soft_break":
-      return <Text> </Text>;
-
-    case "math_inline": {
-      let mathContent = getTextContent(node);
-      if (!mathContent) return null;
-      mathContent = mathContent.replace(/^\$+|\$+$/g, "").trim();
-      return (
-        <MathInline
-          content={mathContent}
-          {...(nodeStyles?.math_inline
-            ? { style: nodeStyles.math_inline }
-            : {})}
-        />
-      );
-    }
-
-    case "math_block":
-      return (
-        <MathBlock
-          content={getTextContent(node)}
-          {...(nodeStyles?.math_block ? { style: nodeStyles.math_block } : {})}
-        />
-      );
-
-    case "html_inline":
-      return (
-        <HtmlInline
-          {...(node.content ? { content: node.content } : {})}
-          {...(nodeStyles?.html_inline ? { style: nodeStyles.html_inline } : {})}
-        />
-      );
-
-    case "html_block":
-      return (
-        <HtmlBlock
-          {...(node.content ? { content: node.content } : {})}
-          {...(nodeStyles?.html_block ? { style: nodeStyles.html_block } : {})}
-        />
-      );
-
-    case "list":
-      return (
-        <List
-          ordered={node.ordered ?? false}
-          depth={depth}
-          {...(node.start === undefined ? {} : { start: node.start })}
-          {...(nodeStyles?.list ? { style: nodeStyles.list } : {})}
-        >
-          {node.children?.map((child, index) => {
-            if (child.type === "task_list_item") {
-              return (
-                <NodeRenderer
-                  key={index}
-                  node={child}
-                  depth={depth + 1}
-                  inListItem={true}
-                  parentIsText={false}
-                />
-              );
-            }
-            return (
-              <ListItem
-                key={index}
-                index={index}
-                ordered={node.ordered ?? false}
-                start={node.start ?? 1}
-              >
-                <NodeRenderer
-                  node={child}
-                  depth={depth + 1}
-                  inListItem={true}
-                  parentIsText={false}
-                />
-              </ListItem>
-            );
-          })}
-        </List>
-      );
-
-    case "list_item":
-      return <>{renderChildren(node.children, true, false)}</>;
-
-    case "task_list_item":
-      return (
-        <TaskListItem
-          checked={node.checked ?? false}
-          {...(nodeStyles?.task_list_item
-            ? { style: nodeStyles.task_list_item }
-            : {})}
-        >
-          {renderChildren(node.children, true, false)}
-        </TaskListItem>
-      );
-
-    case "table":
-      return (
-        <TableRenderer
-          node={node}
-          Renderer={NodeRenderer}
-          {...(nodeStyles?.table ? { style: nodeStyles.table } : {})}
-        />
-      );
-
-    case "table_head":
-    case "table_body":
-    case "table_row":
-    case "table_cell":
-      return null;
-
-    default:
-      return null;
-  }
-};
-
-const NodeRenderer = memo(NodeRendererComponent, (previousProps, nextProps) => {
-  return (
-    previousProps.node === nextProps.node &&
-    previousProps.depth === nextProps.depth &&
-    previousProps.inListItem === nextProps.inListItem &&
-    previousProps.parentIsText === nextProps.parentIsText
-  );
-}) as FC<NodeRendererProps>;
-
-type BaseStyles = ReturnType<typeof createBaseStyles>;
-
-const getBaseStyles = (theme: MarkdownTheme): BaseStyles => {
-  const cached = baseStylesCache.get(theme);
-  if (cached) return cached;
-
-  const created = createBaseStyles(theme);
-  baseStylesCache.set(theme, created);
-  return created;
-};
-
-const createBaseStyles = (theme: MarkdownTheme) =>
-  StyleSheet.create({
-    container: {
-      width: "100%",
-      maxWidth: "100%",
-      flexShrink: 1,
-    },
-    virtualizedList: {
-      flex: 1,
-    },
-    document: {
-      width: "100%",
-      maxWidth: "100%",
-      flexShrink: 1,
-    },
-    errorText: {
-      color: "#f87171",
-      fontSize: 14,
-      fontFamily: theme.fontFamilies.mono ?? "monospace",
-      ...(Platform.OS === "android" && { includeFontPadding: false }),
-    },
-    text: {
-      color: theme.colors.text,
-      fontSize: theme.fontSizes.m,
-      lineHeight: theme.fontSizes.m * 1.6,
-      fontFamily: theme.fontFamilies.regular,
-      ...(Platform.OS === "android" && { includeFontPadding: false }),
-    },
-    bold: {
-      fontWeight: "700",
-      ...(Platform.OS === "android" && { includeFontPadding: false }),
-    },
-    italic: {
-      fontStyle: "italic",
-      ...(Platform.OS === "android" && { includeFontPadding: false }),
-    },
-    strikethrough: {
-      textDecorationLine: "line-through",
-      ...(Platform.OS === "android" && { includeFontPadding: false }),
-    },
-  });

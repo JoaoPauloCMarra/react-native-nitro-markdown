@@ -1,5 +1,7 @@
 #include "HybridMarkdownParser.hpp"
-#include <cctype>
+#include "../core/flatten.hpp"
+#include <cmath>
+#include <optional>
 #include <string>
 
 namespace margelo::nitro::Markdown {
@@ -80,6 +82,17 @@ inline void appendBoolField(std::string& output, const char* key, bool value) {
 }
 
 static constexpr size_t kMaxEstimatedSize = 64 * 1024 * 1024; // 64 MB cap
+static constexpr size_t kMaxJsonSize = 64 * 1024 * 1024; // hard JSON output cap
+
+// Converts the optional JS-side maxInputLength (UTF-16 characters) to a byte
+// cap for the C++ parser. Non-finite, negative, fractional, or missing values
+// fall back to the default (0 = default hard cap).
+size_t resolveMaxInputBytes(const std::optional<double>& maxInputLength) {
+    if (!maxInputLength.has_value()) return 0;
+    double value = maxInputLength.value();
+    if (!std::isfinite(value) || value <= 0) return 0;
+    return static_cast<size_t>(value);
+}
 
 static size_t estimateJsonSize(const std::shared_ptr<InternalMarkdownNode>& node, bool includeOffsets) noexcept {
     if (!node) return 0;
@@ -183,71 +196,6 @@ void appendNodeJson(std::string& output, const std::shared_ptr<InternalMarkdownN
     output.push_back('}');
 }
 
-std::string trimCopy(const std::string& input) {
-    size_t start = 0;
-    while (start < input.size() && std::isspace(static_cast<unsigned char>(input[start]))) {
-        start++;
-    }
-
-    size_t end = input.size();
-    while (end > start && std::isspace(static_cast<unsigned char>(input[end - 1]))) {
-        end--;
-    }
-
-    return input.substr(start, end - start);
-}
-
-std::string flattenNodeText(const std::shared_ptr<InternalMarkdownNode>& node) {
-    using ::NitroMarkdown::NodeType;
-
-    if (!node) return "";
-
-    switch (node->type) {
-        case NodeType::Text:
-        case NodeType::CodeInline:
-        case NodeType::MathInline:
-        case NodeType::HtmlInline:
-            return node->content.value_or("");
-        case NodeType::LineBreak:
-            return "\n";
-        case NodeType::SoftBreak:
-            return " ";
-        case NodeType::HorizontalRule:
-            return "---\n\n";
-        case NodeType::Image:
-            return node->alt.value_or(node->title.value_or(""));
-        default:
-            break;
-    }
-
-    std::string childrenText;
-    childrenText.reserve(128);
-    for (const auto& child : node->children) {
-        childrenText += flattenNodeText(child);
-    }
-
-    switch (node->type) {
-        case NodeType::Paragraph:
-        case NodeType::Heading:
-        case NodeType::Blockquote:
-        case NodeType::CodeBlock:
-        case NodeType::MathBlock:
-        case NodeType::HtmlBlock:
-            return trimCopy(childrenText) + "\n\n";
-        case NodeType::ListItem:
-        case NodeType::TaskListItem:
-            return trimCopy(childrenText) + "\n";
-        case NodeType::List:
-            return childrenText + "\n";
-        case NodeType::TableRow:
-            return childrenText + "\n";
-        case NodeType::TableCell:
-            return childrenText + " | ";
-        default:
-            return childrenText;
-    }
-}
-
 } // namespace
 
 std::string HybridMarkdownParser::parse(const std::string& text) {
@@ -262,10 +210,11 @@ std::string HybridMarkdownParser::parseWithOptions(const std::string& text, cons
     internalOpts.gfm = options.gfm.value_or(true);
     internalOpts.math = options.math.value_or(true);
     internalOpts.html = options.html.value_or(false);
+    internalOpts.sourceOffsets = options.sourceOffsets.value_or(true);
+    internalOpts.maxInputLength = resolveMaxInputBytes(options.maxInputLength);
 
-    bool includeOffsets = options.sourceOffsets.value_or(true);
     auto ast = parser_->parse(text, internalOpts);
-    return nodeToJson(ast, includeOffsets);
+    return nodeToJson(ast, internalOpts.sourceOffsets);
 }
 
 std::string HybridMarkdownParser::extractPlainText(const std::string& text) {
@@ -280,6 +229,8 @@ std::string HybridMarkdownParser::extractPlainTextWithOptions(const std::string&
     internalOpts.gfm = options.gfm.value_or(true);
     internalOpts.math = options.math.value_or(true);
     internalOpts.html = options.html.value_or(false);
+    internalOpts.sourceOffsets = options.sourceOffsets.value_or(true);
+    internalOpts.maxInputLength = resolveMaxInputBytes(options.maxInputLength);
 
     auto ast = parser_->parse(text, internalOpts);
     return flattenNodeText(ast);
@@ -289,6 +240,13 @@ std::string HybridMarkdownParser::nodeToJson(const std::shared_ptr<InternalMarkd
     std::string json;
     json.reserve(estimateJsonSize(node, includeOffsets));
     appendNodeJson(json, node, includeOffsets);
+    if (json.size() > kMaxJsonSize) {
+        throw std::runtime_error(
+            "Markdown JSON output size " + std::to_string(json.size()) +
+            " bytes exceeds the maximum of " + std::to_string(kMaxJsonSize) +
+            " bytes"
+        );
+    }
     return json;
 }
 

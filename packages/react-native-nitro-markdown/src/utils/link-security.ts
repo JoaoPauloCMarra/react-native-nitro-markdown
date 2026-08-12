@@ -12,6 +12,14 @@ const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001F\u007F]/;
 export type UrlSafetyOptions = {
   allowedProtocols?: readonly string[];
   allowedHosts?: readonly string[];
+  /**
+   * Remote image loading policy.
+   * - `"allow"` (default): remote http(s) images load, matching legacy behavior.
+   * - `"deny"`: no remote image is ever loaded; image nodes render their
+   *   error/alt state instead. Use this in privacy- or SSRF-sensitive apps
+   *   that render untrusted markdown.
+   */
+  remoteImages?: "allow" | "deny";
 };
 
 export const normalizeLinkHref = (href: string): string | null => {
@@ -62,6 +70,10 @@ export const getAllowedImageHref = (
 ): string | null => {
   const normalizedHref = normalizeLinkHref(href);
   if (!normalizedHref) return null;
+
+  if (options?.remoteImages === "deny") {
+    return null;
+  }
 
   const parsed = parseAbsoluteHref(normalizedHref);
   if (!parsed) return null;

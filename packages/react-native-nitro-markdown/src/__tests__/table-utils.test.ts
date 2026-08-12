@@ -2,6 +2,12 @@ import "./setup";
 import type { MarkdownNode } from "../headless";
 import { extractTableData, estimateColumnWidths } from "../renderers/table/table-utils";
 import { columnWidthsReducer } from "../renderers/table/table-reducer";
+import {
+  areAllCellsMeasured,
+  cellKeyOf,
+  computeMeasuredColumnWidths,
+  expectedCellKeysOf,
+} from "../renderers/table/table-measurement";
 
 const makeTable = (headers: string[], rows: string[][]): MarkdownNode => ({
   type: "table",
@@ -199,5 +205,177 @@ describe("columnWidthsReducer", () => {
     const state = [100];
     const result = columnWidthsReducer(state, { type: "UNKNOWN" } as never);
     expect(result).toBe(state);
+  });
+});
+
+describe("computeMeasuredColumnWidths", () => {
+  it("takes the max measured cell per column plus padding", () => {
+    const measuredWidths = new Map<string, number>([
+      ["header-0", 80],
+      ["cell-0-0", 120],
+      ["cell-1-0", 60],
+      ["header-1", 200],
+      ["cell-0-1", 100],
+    ]);
+    const result = computeMeasuredColumnWidths({
+      measuredWidths,
+      columnCount: 2,
+      rowCount: 2,
+      minColumnWidth: 40,
+      padding: 8,
+    });
+    expect(result).toEqual([128, 208]);
+  });
+
+  it("never goes below the minimum column width", () => {
+    const result = computeMeasuredColumnWidths({
+      measuredWidths: new Map([["header-0", 10]]),
+      columnCount: 1,
+      rowCount: 1,
+      minColumnWidth: 60,
+      padding: 8,
+    });
+    expect(result).toEqual([60]);
+  });
+
+  it("ignores missing cells and zero widths", () => {
+    const measuredWidths = new Map<string, number>([
+      ["header-0", 0],
+      ["header-1", 50],
+    ]);
+    const result = computeMeasuredColumnWidths({
+      measuredWidths,
+      columnCount: 2,
+      rowCount: 3,
+      minColumnWidth: 20,
+      padding: 4,
+    });
+    expect(result).toEqual([20, 54]);
+  });
+
+  it("handles ragged rows without shifting later columns", () => {
+    const measuredWidths = new Map<string, number>([
+      ["header-0", 40],
+      ["header-1", 40],
+      ["header-2", 40],
+      ["cell-0-0", 80],
+      ["cell-0-1", 100],
+      ["cell-0-2", 120],
+      ["cell-1-0", 60],
+    ]);
+    const result = computeMeasuredColumnWidths({
+      measuredWidths,
+      columnCount: 3,
+      rowCount: 2,
+      minColumnWidth: 20,
+      padding: 4,
+    });
+    expect(result).toEqual([84, 104, 124]);
+  });
+});
+
+describe("areAllCellsMeasured", () => {
+  it("is true when every expected key is measured", () => {
+    expect(
+      areAllCellsMeasured({
+        measuredCells: new Set(["header-0", "cell-0-0"]),
+        expectedCellKeys: ["header-0", "cell-0-0"],
+      }),
+    ).toBe(true);
+  });
+
+  it("is false when any expected key is missing", () => {
+    expect(
+      areAllCellsMeasured({
+        measuredCells: new Set(["header-0"]),
+        expectedCellKeys: ["header-0", "cell-0-0"],
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("cellKeyOf and expectedCellKeysOf", () => {
+  it("builds stable measurement keys", () => {
+    expect(cellKeyOf({ row: 3, col: 2, isHeader: false })).toBe("cell-3-2");
+    expect(cellKeyOf({ row: 0, col: 1, isHeader: true })).toBe("header-1");
+  });
+
+  it("enumerates headers then every row cell", () => {
+    const headers = [
+      { type: "table_cell" as const, isHeader: true },
+      { type: "table_cell" as const, isHeader: true },
+    ];
+    const rows = [
+      [
+        { type: "table_cell" as const, isHeader: false },
+        { type: "table_cell" as const, isHeader: false },
+      ],
+      [
+        { type: "table_cell" as const, isHeader: false },
+        { type: "table_cell" as const, isHeader: false },
+      ],
+    ];
+    expect(
+      expectedCellKeysOf({ headers, rows }),
+    ).toEqual([
+      "header-0",
+      "header-1",
+      "cell-0-0",
+      "cell-0-1",
+      "cell-1-0",
+      "cell-1-1",
+    ]);
+  });
+
+  it("enumerates only existing cells for ragged rows", () => {
+    const headers = [
+      { type: "table_cell" as const, isHeader: true },
+      { type: "table_cell" as const, isHeader: true },
+      { type: "table_cell" as const, isHeader: true },
+    ];
+    const rows = [
+      [
+        { type: "table_cell" as const, isHeader: false },
+        { type: "table_cell" as const, isHeader: false },
+        { type: "table_cell" as const, isHeader: false },
+      ],
+      [
+        { type: "table_cell" as const, isHeader: false },
+        { type: "table_cell" as const, isHeader: false },
+      ],
+      [],
+    ];
+    expect(
+      expectedCellKeysOf({ headers, rows }),
+    ).toEqual([
+      "header-0",
+      "header-1",
+      "header-2",
+      "cell-0-0",
+      "cell-0-1",
+      "cell-0-2",
+      "cell-1-0",
+      "cell-1-1",
+    ]);
+  });
+
+  it("measurement gate completes for ragged rows", () => {
+    const headers = [
+      { type: "table_cell" as const, isHeader: true },
+      { type: "table_cell" as const, isHeader: true },
+    ];
+    const rows = [
+      [
+        { type: "table_cell" as const, isHeader: false },
+        { type: "table_cell" as const, isHeader: false },
+      ],
+      [{ type: "table_cell" as const, isHeader: false }],
+    ];
+
+    const expectedKeys = expectedCellKeysOf({ headers, rows });
+    const measured = new Set(expectedKeys);
+
+    expect(areAllCellsMeasured({ measuredCells: measured, expectedCellKeys: expectedKeys })).toBe(true);
+    expect(expectedKeys).not.toContain("cell-1-1");
   });
 });
