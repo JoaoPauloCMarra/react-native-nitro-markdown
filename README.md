@@ -41,7 +41,7 @@ Native components — so you get native parse speed *and* component flexibility.
 - 🔒 **Safe by default** — bounded parse input (default 10M chars, overridable via
   `options.maxInputLength`), a hard C++ cap, seeded fuzzing and a CommonMark/GFM
   conformance corpus in the test gate, and a link/image URL policy
-  ([security policy](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/SECURITY.md)).
+  ([security policy](./SECURITY.md)).
 
 ## Install
 
@@ -219,7 +219,7 @@ full capability matrix: **[Comparison & benchmarks](https://github.com/JoaoPaulo
 - The C++ parser is fuzzed with a seeded, deterministic corpus and checked
   against a CommonMark/GFM conformance corpus in `bun run check`.
 
-See [SECURITY.md](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/SECURITY.md) for supported versions and how to report issues.
+See [SECURITY.md](./SECURITY.md) for supported versions and how to report issues.
 
 ## Documentation
 
@@ -232,7 +232,8 @@ See [SECURITY.md](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown
 | [Customization](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/customization.md) | Themes, dark mode, per-node styles, renderers, plugins. |
 | [Comparison & benchmarks](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/comparison.md) | Why Nitro, parse benchmarks, capability matrix. |
 | [API reference](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/api-reference.md) | Full export and type listing. |
-| [Security policy](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/SECURITY.md) | Supported versions, link/image policy, reporting. |
+| [Security policy](./SECURITY.md) | Supported versions, link/image policy, reporting. |
+| [Changelog](./CHANGELOG.md) | Package changes and migration requirements by version. |
 | [Troubleshooting](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/troubleshooting.md) | Common install and runtime issues. |
 
 ## Compatibility
@@ -257,4 +258,4 @@ See [CONTRIBUTING.md](https://github.com/JoaoPauloCMarra/react-native-nitro-mark
 
 ## License
 
-[MIT](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/LICENSE)
+[MIT](./LICENSE)

@@ -6,7 +6,7 @@
   "scripts": {
     "start": "env -u NO_COLOR expo start -d",
     "ios": "env -u NO_COLOR expo run:ios",
-    "android": "env -u NO_COLOR expo run:android",
+    "android": "bun run android:assemble && env -u NO_COLOR expo run:android --binary android/app/build/outputs/apk/debug/app-debug.apk",
     "prebuild": "env -u NO_COLOR expo prebuild",
     "prebuild:clean": "env -u NO_COLOR expo prebuild --clean",
     "doctor": "env -u NO_COLOR bunx expo-doctor",

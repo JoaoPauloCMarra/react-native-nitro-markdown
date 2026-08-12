@@ -9,6 +9,7 @@
   "source": "src/index.ts",
   "exports": {
     ".": {
+      "react-native": "./src/index.ts",
       "import": {
         "types": "./lib/typescript/module/index.d.ts",
         "default": "./lib/module/index.js"
@@ -16,10 +17,10 @@
       "require": {
         "types": "./lib/typescript/commonjs/index.d.ts",
         "default": "./lib/commonjs/index.js"
-      },
-      "react-native": "./src/index.ts"
+      }
     },
     "./headless": {
+      "react-native": "./src/headless.ts",
       "import": {
         "types": "./lib/typescript/module/headless.d.ts",
         "default": "./lib/module/headless.js"
@@ -27,8 +28,7 @@
       "require": {
         "types": "./lib/typescript/commonjs/headless.d.ts",
         "default": "./lib/commonjs/headless.js"
-      },
-      "react-native": "./src/headless.ts"
+      }
     }
   },
   "files": [
@@ -39,6 +39,10 @@
     "ios",
     "nitrogen",
     "nitro.json",
+    "CHANGELOG.md",
+    "README.md",
+    "SECURITY.md",
+    "LICENSE",
     "*.podspec",
     ".watchmanconfig",
     "!**/__tests__",
@@ -62,8 +66,8 @@
     "test": "jest",
     "test:coverage": "jest --coverage",
     "benchmark": "node ../../scripts/benchmark-comparison.js",
-    "prepack": "node -e \"const fs=require('fs'); fs.copyFileSync('../../README.md','./README.md'); fs.copyFileSync('../../LICENSE','./LICENSE')\"",
-    "postpack": "node -e \"const fs=require('fs'); if(fs.existsSync('./README.md'))fs.unlinkSync('./README.md'); if(fs.existsSync('./LICENSE'))fs.unlinkSync('./LICENSE')\"",
+    "prepack": "node -e \"const fs=require('fs'); for(const name of ['README.md','CHANGELOG.md','SECURITY.md','LICENSE'])fs.copyFileSync('../../'+name,'./'+name)\"",
+    "postpack": "node -e \"const fs=require('fs'); for(const name of ['README.md','CHANGELOG.md','SECURITY.md','LICENSE'])if(fs.existsSync('./'+name))fs.unlinkSync('./'+name)\"",
     "test:cpp": "node scripts/test-cpp.js",
     "test:cpp:coverage": "node scripts/test-cpp.js --coverage --min-lines=90",
     "size": "size-limit"
