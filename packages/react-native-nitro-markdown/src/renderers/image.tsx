@@ -36,6 +36,15 @@ const renderInlineContent = (
   return null;
 };
 
+/**
+ * Strips markdown markers from image alt text so screen readers announce
+ * plain content instead of raw markdown (e.g. `**bold**` -> `bold`).
+ */
+const cleanAccessibilityLabel = (label?: string): string | undefined => {
+  if (!label) return undefined;
+  return label.replace(/[*_`[\]$~#]/g, "").trim();
+};
+
 type ImageProps = {
   url: string;
   title?: string;
@@ -201,7 +210,7 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
     return <Text style={styles.imageErrorText}>{alt}</Text>;
   }, [alt, Renderer, styles.imageErrorText]);
 
-  const accessibilityLabel = alt || title;
+  const accessibilityLabel = cleanAccessibilityLabel(alt || title);
 
   if (error || !allowedImageHref) {
     return (

@@ -1,4 +1,5 @@
 import Foundation
+import NitroMarkdownObjC
 import NitroModules
 
 class HybridMarkdownSession: HybridMarkdownSessionSpec {
@@ -216,13 +217,22 @@ class HybridMarkdownSession: HybridMarkdownSessionSpec {
     /// The `from`/`to` values reflect the buffer state AT THE TIME OF MUTATION.
     /// The buffer may have been further modified by the time listener callbacks execute.
     /// Listeners MUST NOT assume the buffer is stable; they should only use the index parameters.
+    /// Each listener is invoked inside an Objective-C exception barrier so a throwing
+    /// listener cannot escape into the mutation call or break peer listeners.
     private func notifyListeners(from: Double, to: Double) {
         lock.lock()
         let currentListeners = Array(listeners.values)
         lock.unlock()
 
         for listener in currentListeners {
-            listener(from, to)
+            autoreleasepool {
+                NitroMarkdownTryCatch.perform(
+                    { listener(from, to) },
+                    onError: { exception in
+                        NSLog("[NitroMarkdown] Listener callback threw an exception: %@", exception)
+                    }
+                )
+            }
         }
     }
 }

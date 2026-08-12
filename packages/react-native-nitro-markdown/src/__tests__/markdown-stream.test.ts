@@ -528,4 +528,145 @@ describe("MarkdownStream", () => {
     expect(lastProps).not.toHaveProperty("sourceAst");
     expect(lastProps?.markdownProps.sourceAst).toBeUndefined();
   });
+
+  it("uses the incremental fast path for plain-text appends without re-parsing", () => {
+    const session = createSession({
+      allText: "hello",
+      rangeText: " world",
+    });
+
+    const realisticAst = {
+      type: "document",
+      beg: 0,
+      end: 5,
+      children: [
+        {
+          type: "paragraph",
+          beg: 0,
+          end: 5,
+          children: [{ type: "text", beg: 0, end: 5, content: "hello" }],
+        },
+      ],
+    };
+    mockParser.parse.mockImplementationOnce(() => JSON.stringify(realisticAst));
+
+    act(() => {
+      TestRenderer.create(
+        React.createElement(MarkdownStream, {
+          session,
+          updateIntervalMs: 1,
+        }),
+      );
+    });
+
+    mockParser.parse.mockClear();
+    mockParser.parseWithOptions.mockClear();
+
+    act(() => {
+      session.setAllText("hello world");
+      session.emit(5, 11);
+      jest.runOnlyPendingTimers();
+    });
+
+    expect(mockParser.parse).not.toHaveBeenCalled();
+    expect(mockParser.parseWithOptions).not.toHaveBeenCalled();
+    expect(markdownMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ children: "hello world" }),
+    );
+  });
+
+  it("full-parses structural appends", () => {
+    const session = createSession({
+      allText: "hello",
+      rangeText: "\n# Title",
+    });
+
+    act(() => {
+      TestRenderer.create(
+        React.createElement(MarkdownStream, {
+          session,
+          updateIntervalMs: 1,
+        }),
+      );
+    });
+
+    mockParser.parse.mockClear();
+    mockParser.parseWithOptions.mockClear();
+
+    act(() => {
+      session.setAllText("hello\n# Title");
+      session.emit(5, 13);
+      jest.runOnlyPendingTimers();
+    });
+
+    expect(mockParser.parse).toHaveBeenCalledWith("hello\n# Title");
+  });
+
+  it("defers initial parsing after first render in async mode", () => {
+    const session = createSession({
+      allText: "hello",
+      rangeText: "",
+    });
+    const renderMarkdown = jest.fn(() => null);
+
+    act(() => {
+      TestRenderer.create(
+        React.createElement(MarkdownStream, {
+          session,
+          initialParseMode: "async",
+          renderMarkdown,
+        }),
+      );
+    });
+
+    const firstProps = renderMarkdown.mock.calls[0]?.[0] as
+      | MarkdownStreamRenderProps
+      | undefined;
+    expect(firstProps).toEqual(
+      expect.objectContaining({
+        text: "hello",
+        sourceAstStatus: "disabled",
+        sourceAstDisabledReason: "initializing",
+      }),
+    );
+    expect(firstProps).not.toHaveProperty("sourceAst");
+
+    expect(mockParser.parse).toHaveBeenCalledWith("hello");
+    expect(renderMarkdown).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        text: "hello",
+        sourceAstStatus: "available",
+        sourceAst: expect.objectContaining({ type: "document" }),
+      }),
+    );
+  });
+
+  it("reports async initial parse failures with parse-error status", () => {
+    const session = createSession({
+      allText: "broken",
+      rangeText: "",
+    });
+    const renderMarkdown = jest.fn(() => null);
+    const parseError = new Error("async initial parse failed");
+    mockParser.parse.mockImplementationOnce(() => {
+      throw parseError;
+    });
+
+    act(() => {
+      TestRenderer.create(
+        React.createElement(MarkdownStream, {
+          session,
+          initialParseMode: "async",
+          renderMarkdown,
+        }),
+      );
+    });
+
+    expect(renderMarkdown).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        sourceAstStatus: "disabled",
+        sourceAstDisabledReason: "parse-error",
+      }),
+    );
+  });
 });

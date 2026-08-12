@@ -1,8 +1,9 @@
 # Streaming
 
 `MarkdownStream` renders Markdown **as it arrives** — token-by-token LLM output,
-chat messages, or any append-only text — without re-parsing the whole buffer on
-every update. It is the reason this package exists for AI apps.
+chat messages, or any append-only text. Append-only plain text and fenced-code
+content take a fast incremental path; structural changes re-parse with stable
+AST node reuse (see [How incremental parsing works](#how-incremental-parsing-works)).
 
 ```tsx
 import { useEffect } from "react";
@@ -24,7 +25,8 @@ export function ChatMessage({ text }: { text: string }) {
 ## Token-by-token output
 
 Append tokens to the hook-owned session as they stream in; `MarkdownStream`
-subscribes to native range updates and re-renders only what changed:
+subscribes to native range updates, batches them, and renders the growing text
+(the incremental AST keeps stable nodes where safe):
 
 ```tsx
 const session = useMarkdownSession();
@@ -45,13 +47,35 @@ Pass the controller from `useMarkdownSession()` directly. Use
 
 ## How incremental parsing works
 
-`MarkdownStream` avoids full-buffer reads on stable parent renders: it uses
-native range reads for append-only updates and only falls back to a full
-session read for reset-like changes, replacements inside existing text, or a
-native range-read failure.
+`MarkdownStream` avoids full-buffer re-parsing only for the two safe fast paths:
+
+- **Trailing plain text** — appends that only extend the final text node are
+  merged into the existing AST without calling the parser.
+- **Fenced code content** — appends inside an open fenced code block are
+  appended to the code text node.
+
+Everything else (new blocks, emphasis, links, tables, closing fences, …) is
+re-parsed and then diffed so stable nodes keep their identity (`reuseStableAstNodes`).
+The fast paths are covered by deterministic call-count tests in
+`src/__tests__/markdown-stream.test.ts` — a plain-text append never re-parses,
+a structural append always does.
+
+`MarkdownStream` also uses native range reads for append-only updates and only
+falls back to a full session read for reset-like changes, replacements inside
+existing text, or a native range-read failure.
 
 If any plugin defines `beforeParse`, incremental AST reuse is disabled so the
 full pipeline runs correctly (see `sourceAstStatus` below).
+
+## Large initial content
+
+The first render parses the full session content synchronously by default
+(`initialParseMode="sync"`). For very large initial documents, pass
+`initialParseMode="async"`: the first frame renders immediately with
+`sourceAstStatus: "disabled"` and `sourceAstDisabledReason: "initializing"`,
+then parsing happens after mount and the AST becomes available on the next
+render. Parse failures in async mode report `"parse-error"` and the last valid
+state is retained.
 
 ## Custom stream rendering
 

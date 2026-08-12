@@ -4,8 +4,10 @@
 [![npm downloads](https://img.shields.io/npm/dm/react-native-nitro-markdown?color=22c55e&label=downloads)](https://www.npmjs.com/package/react-native-nitro-markdown)
 [![CI](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/actions/workflows/ci.yml/badge.svg)](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/react-native-nitro-markdown?color=007ec6)](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/LICENSE)
-[![React Native](https://img.shields.io/badge/react--native-%3E%3D0.75-61dafb)](https://reactnative.dev/)
-[![Nitro Modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.36.4%20%3C0.37.0-black)](https://www.npmjs.com/package/react-native-nitro-modules)
+[![React Native](https://img.shields.io/badge/react--native-%3E%3D0.75-61dafb)](https://reactnative.dev/docs/0.86/getting-started-without-a-framework)
+[![Expo](https://img.shields.io/badge/expo-SDK%2057-000020)](https://docs.expo.dev/versions/v57.0.0/)
+[![Nitro Modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.36.5%20%3C0.37.0-black)](https://www.npmjs.com/package/react-native-nitro-modules)
+[![TypeScript](https://img.shields.io/badge/typescript-6.0-3178c6)](https://www.typescriptlang.org/)
 
 **The fast Markdown engine for React Native.** Native **C++ parsing** (CommonMark
 + GitHub Flavored Markdown), real React Native rendering, first-class
@@ -18,7 +20,7 @@
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/JoaoPauloCMarra/react-native-nitro-markdown/main/readme/benchmark.png" alt="Benchmark: Nitro C++ parser is 2.8 to 19x faster than JavaScript markdown parsers" width="250" />
+  <img src="https://raw.githubusercontent.com/JoaoPauloCMarra/react-native-nitro-markdown/main/readme/benchmark.png" alt="Benchmark comparing the Nitro C++ parser with JavaScript markdown parsers" width="250" />
   <img src="https://raw.githubusercontent.com/JoaoPauloCMarra/react-native-nitro-markdown/main/readme/streaming.png" alt="Streaming token-by-token markdown for LLM and chat output" width="250" />
   <img src="https://raw.githubusercontent.com/JoaoPauloCMarra/react-native-nitro-markdown/main/readme/tables.png" alt="GitHub Flavored Markdown tables and task lists rendered natively" width="250" />
 </p>
@@ -36,17 +38,20 @@ Native components — so you get native parse speed *and* component flexibility.
 - 📜 **Virtualization** — bounded memory and fast first screen on long docs.
 - 📊 **GFM tables, task lists, inline & block math, syntax highlighting** built in.
 - 🛡️ **Type-safe** — full TypeScript types for nodes, renderers, options.
-- 🔒 **Hardened & reentrant** — native parser built with stack-protection and FORTIFY on iOS & Android, and reentrant for safe concurrent parsing of untrusted LLM / user input.
+- 🔒 **Safe by default** — bounded parse input (default 10M chars, overridable via
+  `options.maxInputLength`), a hard C++ cap, seeded fuzzing and a CommonMark/GFM
+  conformance corpus in the test gate, and a link/image URL policy
+  ([security policy](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/SECURITY.md)).
 
 ## Install
 
 ```sh
-bun add react-native-nitro-markdown react-native-nitro-modules@0.36.4 ratex-react-native@0.1.14
+bun add react-native-nitro-markdown react-native-nitro-modules@0.36.5 ratex-react-native@0.1.14
 ```
 
 ```sh
 # Expo development build
-bunx expo install react-native-nitro-markdown react-native-nitro-modules@0.36.4 ratex-react-native@0.1.14
+bunx expo install react-native-nitro-markdown react-native-nitro-modules@0.36.5 ratex-react-native@0.1.14
 bunx expo prebuild
 ```
 
@@ -101,9 +106,12 @@ export function StreamingMessage({
 }
 ```
 
-`MarkdownStream` batches native range updates and reuses stable AST nodes.
-Failed updates call `onError(error, "parse")` and retain the last valid render.
-Full guide: **[Streaming](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/streaming.md)**.
+`MarkdownStream` batches native range updates. Plain-text and fenced-code
+appends take an incremental path; structural updates re-parse with stable AST
+node reuse. Failed updates call `onError(error, "parse")` and retain the last
+valid render. For very large initial content, pass `initialParseMode="async"`
+so the first frame renders without parsing. Full guide:
+**[Streaming](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/streaming.md)**.
 
 ## Headless parsing
 
@@ -171,11 +179,14 @@ Presets: `defaultMarkdownTheme`, `darkMarkdownTheme`, `minimalMarkdownTheme` (or
 | `options.gfm` | `true` | Tables, strikethrough, task lists, autolinks. |
 | `options.math` | `true` | Inline and block math nodes. |
 | `options.html` | `false` | Preserve raw HTML nodes for custom renderers. |
-| `options.sourceOffsets` | `true` | Emit per-node `beg`/`end` source offsets as JavaScript UTF-16 indices, matching `String.length` and `String.slice`. Set `false` for one-shot headless parses to shrink the AST and speed up the round trip. |
-| `parseCache` | `true` | Reuse parsed ASTs for repeated content. |
+| `options.sourceOffsets` | `true` | Emit per-node `beg`/`end` source offsets as JavaScript UTF-16 indices, matching `String.length` and `String.slice`. Set `false` for one-shot headless parses to shrink the AST and speed up the round trip (the native parser skips the offset map entirely). |
+| `options.maxInputLength` | `10000000` | Maximum accepted input length in characters. Oversized inputs fail with a typed `input_too_large` error instead of being parsed. |
+| `parseCache` | `true` | Reuse parsed ASTs for repeated content. The cache is scoped per `<Markdown>` instance (max 32 entries); per-instance hit/miss/eviction counters are reported via `onParseComplete`'s `cacheStats`. |
 | `sourceAst` | `undefined` | Render a pre-parsed AST instead of parsing `children`. |
-| `onError` | `undefined` | Receive parser and plugin failures as `(error, phase, pluginName?)`. |
-| `highlightCode` | `false` | Built-in code syntax highlighting. |
+| `onError` | `undefined` | Receive parser and plugin failures as `(error, phase, pluginName?)`. Native parse and session failures are typed `MarkdownError`s with stable `code` and `source`. |
+| `errorText` | `"Error parsing markdown"` | Localized text rendered when parsing fails. |
+| `imageOptions` | `undefined` | Image URL policy: `allowedProtocols`, `allowedHosts`, and `remoteImages: "deny"` to block remote image loading entirely. |
+| `highlightCode` | `false` | Built-in code syntax highlighting (fixture-backed languages: JS/TS family, Python, shell). |
 | `virtualize` | `false` | Virtualize top-level blocks for long documents. |
 
 See **[Usage](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/usage.md)** for the full prop table and **[Customization](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/customization.md)** for themes, per-node styles, custom renderers, and plugins.
@@ -194,6 +205,21 @@ Parsing a ~320 KB document (example app, iOS Simulator; ratios are stable):
 Reproduce it: run the example app and tap **Run Benchmark**. Methodology and a
 full capability matrix: **[Comparison & benchmarks](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/comparison.md)**.
 
+## Security
+
+- Parse input is bounded: the JavaScript boundary rejects documents above
+  `options.maxInputLength` (default 10M characters) with a typed error, and the
+  C++ parser enforces the same hard cap in bytes plus a 64 MB JSON output cap.
+- Links handed to `onLinkPress` and `Linking` are validated first; unsafe
+  protocols never reach handlers. Remote images load by default for
+  compatibility — set `imageOptions={{ remoteImages: "deny" }}` (and/or
+  `allowedHosts`) when rendering untrusted markdown in privacy- or SSRF-sensitive
+  apps.
+- The C++ parser is fuzzed with a seeded, deterministic corpus and checked
+  against a CommonMark/GFM conformance corpus in `bun run check`.
+
+See [SECURITY.md](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/SECURITY.md) for supported versions and how to report issues.
+
 ## Documentation
 
 | Guide | What's inside |
@@ -205,6 +231,7 @@ full capability matrix: **[Comparison & benchmarks](https://github.com/JoaoPaulo
 | [Customization](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/customization.md) | Themes, dark mode, per-node styles, renderers, plugins. |
 | [Comparison & benchmarks](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/comparison.md) | Why Nitro, parse benchmarks, capability matrix. |
 | [API reference](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/api-reference.md) | Full export and type listing. |
+| [Security policy](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/SECURITY.md) | Supported versions, link/image policy, reporting. |
 | [Troubleshooting](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/troubleshooting.md) | Common install and runtime issues. |
 
 ## Compatibility
@@ -212,7 +239,7 @@ full capability matrix: **[Comparison & benchmarks](https://github.com/JoaoPaulo
 | Dependency | Supported |
 | ---------- | --------- |
 | [React Native](https://reactnative.dev/) | `>=0.75` (New Architecture) |
-| [Nitro Modules](https://www.npmjs.com/package/react-native-nitro-modules) | `>=0.36.4 <0.37.0` |
+| [Nitro Modules](https://www.npmjs.com/package/react-native-nitro-modules) | `>=0.36.5 <0.37.0` |
 | [RaTeX React Native](https://www.npmjs.com/package/ratex-react-native) | `>=0.1.4` (example validated with `0.1.14`) |
 | [Expo](https://docs.expo.dev/) | SDK 57 development builds |
 | Platforms | iOS, Android (Web not supported) |

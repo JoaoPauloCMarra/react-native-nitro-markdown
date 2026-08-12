@@ -12,8 +12,17 @@
  */
 import { NitroModules } from "react-native-nitro-modules";
 import type { MarkdownParser, ParserOptions } from "./Markdown.nitro";
+import {
+  MAX_PARSE_INPUT_LENGTH,
+  MarkdownError,
+  inputTooLargeError,
+  toMarkdownError,
+} from "./errors";
 
 export type { ParserOptions } from "./Markdown.nitro";
+
+export { MarkdownError, MAX_PARSE_INPUT_LENGTH } from "./errors";
+export type { MarkdownErrorCode, MarkdownErrorSource } from "./errors";
 
 export type MarkdownNodeType =
   | "document"
@@ -93,8 +102,28 @@ function reportNativeParserFailure(methodName: string, error?: unknown): void {
   }
 }
 
-function toError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
+function resolveMaxInputLength(options?: ParserOptions): number {
+  if (!options?.maxInputLength) return MAX_PARSE_INPUT_LENGTH;
+  return Math.min(options.maxInputLength, MAX_PARSE_INPUT_LENGTH);
+}
+
+function assertInputWithinBounds(text: string, options?: ParserOptions): void {
+  const maxLength = resolveMaxInputLength(options);
+  if (text.length > maxLength) {
+    throw inputTooLargeError(text.length, maxLength);
+  }
+}
+
+function parseJsonAst(jsonStr: string): MarkdownNode {
+  try {
+    return JSON.parse(jsonStr) as MarkdownNode;
+  } catch (error) {
+    throw new MarkdownError(
+      "invalid_json",
+      "parse",
+      `[NitroMarkdown] native parser returned invalid JSON: ${String(error)}`,
+    );
+  }
 }
 
 let MarkdownParserModule: MarkdownParser | null = null;
@@ -128,6 +157,7 @@ export function parseMarkdown(
   text: string,
   options?: ParserOptions,
 ): MarkdownNode {
+  assertInputWithinBounds(text, options);
   if (options != null) {
     return parseMarkdownWithOptions(text, options);
   }
@@ -137,14 +167,16 @@ export function parseMarkdown(
   ) {
     try {
       const jsonStr = MarkdownParserModule.parse(text);
-      return JSON.parse(jsonStr) as MarkdownNode;
+      return parseJsonAst(jsonStr);
     } catch (error) {
       reportNativeParserFailure("parseMarkdown", error);
-      throw toError(error);
+      throw toMarkdownError(error, "parse");
     }
   }
 
-  throw new Error(
+  throw new MarkdownError(
+    "native_unavailable",
+    "parse",
     "[NitroMarkdown] parseMarkdown: native parser unavailable — check installation.",
   );
 }
@@ -159,29 +191,35 @@ export function parseMarkdownWithOptions(
   text: string,
   options: ParserOptions,
 ): MarkdownNode {
+  assertInputWithinBounds(text, options);
   if (
     MarkdownParserModule != null &&
     typeof MarkdownParserModule.parseWithOptions === "function"
   ) {
     try {
       const jsonStr = MarkdownParserModule.parseWithOptions(text, options);
-      return JSON.parse(jsonStr) as MarkdownNode;
+      return parseJsonAst(jsonStr);
     } catch (error) {
       reportNativeParserFailure("parseMarkdownWithOptions", error);
-      throw toError(error);
+      throw toMarkdownError(error, "parse");
     }
   }
 
-  throw new Error(
+  throw new MarkdownError(
+    "native_unavailable",
+    "parse",
     "[NitroMarkdown] parseMarkdownWithOptions: native parser unavailable — check installation.",
   );
 }
 
 /**
- * Parse markdown and return flattened plain text directly from native parser.
- * Useful for search/indexing flows that don't need full AST rendering.
+ * Extract flattened plain text from the native parser.
+ * Native extraction failures throw a typed `MarkdownError`; there is no
+ * silent JavaScript fallback. Use `parseMarkdown*` plus `getFlattenedText`
+ * explicitly if you want JavaScript-side flattening.
  */
 export function extractPlainText(text: string): string {
+  assertInputWithinBounds(text);
   if (
     MarkdownParserModule != null &&
     typeof MarkdownParserModule.extractPlainText === "function"
@@ -190,19 +228,27 @@ export function extractPlainText(text: string): string {
       return MarkdownParserModule.extractPlainText(text);
     } catch (error) {
       reportNativeParserFailure("extractPlainText", error);
+      throw toMarkdownError(error, "extract");
     }
   }
 
-  return getFlattenedText(parseMarkdown(text));
+  throw new MarkdownError(
+    "native_unavailable",
+    "extract",
+    "[NitroMarkdown] extractPlainText: native parser unavailable — check installation.",
+  );
 }
 
 /**
- * Parse markdown with options and return flattened plain text from native parser.
+ * Extract flattened plain text from the native parser with options.
+ * Native extraction failures throw a typed `MarkdownError`; there is no
+ * silent JavaScript fallback.
  */
 export function extractPlainTextWithOptions(
   text: string,
   options: ParserOptions,
 ): string {
+  assertInputWithinBounds(text, options);
   if (
     MarkdownParserModule != null &&
     typeof MarkdownParserModule.extractPlainTextWithOptions === "function"
@@ -211,10 +257,15 @@ export function extractPlainTextWithOptions(
       return MarkdownParserModule.extractPlainTextWithOptions(text, options);
     } catch (error) {
       reportNativeParserFailure("extractPlainTextWithOptions", error);
+      throw toMarkdownError(error, "extract");
     }
   }
 
-  return getFlattenedText(parseMarkdownWithOptions(text, options));
+  throw new MarkdownError(
+    "native_unavailable",
+    "extract",
+    "[NitroMarkdown] extractPlainTextWithOptions: native parser unavailable — check installation.",
+  );
 }
 
 export type { MarkdownParser };

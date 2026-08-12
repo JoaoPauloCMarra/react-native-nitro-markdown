@@ -9,6 +9,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [0.10.0] - 2026-08-12
+
+### Changes
+
+- **Breaking changes:** `extractPlainText` and `extractPlainTextWithOptions`
+  no longer silently fall back to JavaScript flattening when native extraction
+  fails or the native extract method is unavailable; both now throw a typed
+  `MarkdownError` (use `parseMarkdown*` + `getFlattenedText` explicitly for
+  JS-side flattening).
+- **Breaking changes:** `onLinkPress` is now invoked only for validated,
+  allowed URLs. Unsafe protocols and protocol-less links never reach custom
+  link handlers or `Linking`.
+- Native parse and session failures now surface as typed `MarkdownError`s with
+  stable `code` (`input_too_large`, `parse_failed`, `invalid_json`,
+  `native_unavailable`, `extraction_failed`, `buffer_limit`, `invalid_range`,
+  `destroyed`) and `source` (`parse` | `extract` | `session` | `render`).
+- Parse input is bounded: `ParserOptions.maxInputLength` (default 10,000,000
+  characters) rejects oversized inputs before any native call; the C++ parser
+  enforces the same hard byte cap and a 64 MB JSON output cap.
+- `options.sourceOffsets: false` now skips building the UTF-16 offset map in
+  the native parser entirely, not just the JSON fields.
+- New image policy: `imageOptions.remoteImages: "deny"` disables remote image
+  loading for privacy- and SSRF-sensitive apps.
+- The parse AST cache is now scoped per `<Markdown>` instance with bounded
+  hit/miss/eviction counters reported through `onParseComplete.cacheStats`.
+- `MarkdownStream` supports `initialParseMode: "async"` so large initial
+  content no longer blocks the first frame; `sourceAstDisabledReason` gains
+  the `"initializing"` state.
+- `defaultHighlighter` restricts keyword highlighting to fixture-backed
+  languages (JavaScript/TypeScript family, Python, shell); other languages
+  return a single default token.
+- Accessibility: tables expose a `grid` role with a header summary label,
+  image accessibility labels strip raw markdown markers, and parse errors use
+  the new `errorText` prop (default unchanged).
+- `onParsingInProgress` is deprecated: parsing is synchronous, so the callback
+  had no in-progress window. Use `onParseComplete` or `MarkdownStream`'s
+  `sourceAstStatus`.
+- The incomplete wikilink branch in the native parser was removed; wikilinks
+  are not a supported syntax.
+
+### Fixed
+
+- Native session methods retain the Nitro HybridObject receiver when wrapped
+  for typed error handling, preventing proxy access failures at runtime.
+- iOS framework builds import the Objective-C exception barrier through a
+  Clang module map instead of an unsupported Swift bridging header.
+
 ## [0.9.0] - 2026-07-30
 
 ### Changes

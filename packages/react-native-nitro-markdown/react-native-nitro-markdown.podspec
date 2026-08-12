@@ -29,6 +29,7 @@ Pod::Spec.new do |s|
     "GCC_PREPROCESSOR_DEFINITIONS" => "$(inherited) MD4C_USE_UTF8=1 _FORTIFY_SOURCE=2",
     "OTHER_CFLAGS" => "$(inherited) -Wall -Wextra -fstack-protector-strong -Werror=format-security",
     "OTHER_CPLUSPLUS_FLAGS" => "$(inherited) -Wall -Wextra -fstack-protector-strong -Werror=format-security",
+    "OTHER_SWIFT_FLAGS" => "$(inherited) -Xcc -fmodule-map-file=$(PODS_TARGET_SRCROOT)/ios/NitroMarkdownObjC.modulemap",
     "HEADER_SEARCH_PATHS" => [
       "$(PODS_ROOT)/Headers/Private/Yoga",
       "$(PODS_TARGET_SRCROOT)/cpp/nitromd",

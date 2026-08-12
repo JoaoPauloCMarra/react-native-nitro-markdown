@@ -9,12 +9,13 @@ const path = require("path");
 const projectRoot = path.resolve(__dirname, "..");
 const exampleDir = path.join(projectRoot, "apps/example");
 const outputDir = path.join(projectRoot, "artifacts/example-smoke");
+const reportPath = path.join(outputDir, "report.json");
 const scheme = "nitromarkdown";
 const bundleId = "com.nitromarkdown.example";
 const packageName = "com.nitromarkdown.example";
 const port = Number(process.env.EXAMPLE_SMOKE_PORT ?? 8081);
-const launchWaitMs = Number(process.env.EXAMPLE_SMOKE_LAUNCH_WAIT_MS ?? 12000);
-const smokeWaitMs = Number(process.env.EXAMPLE_SMOKE_TAP_WAIT_MS ?? 5000);
+const launchWaitMs = Number(process.env.EXAMPLE_SMOKE_LAUNCH_WAIT_MS ?? 15000);
+const settleWaitMs = Number(process.env.EXAMPLE_SMOKE_SETTLE_WAIT_MS ?? 3000);
 
 const colors = {
   green: (text) => `\x1b[32m${text}\x1b[0m`,
@@ -32,14 +33,14 @@ function parseArgs(argv) {
     android: false,
     ios: false,
     startMetro: true,
-    smokeTap: true,
+    allowSkip: false,
   };
 
   for (const arg of argv) {
     if (arg === "--android") options.android = true;
     else if (arg === "--ios") options.ios = true;
     else if (arg === "--no-start") options.startMetro = false;
-    else if (arg === "--no-smoke-tap") options.smokeTap = false;
+    else if (arg === "--allow-skip") options.allowSkip = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
 
@@ -102,7 +103,7 @@ function runAndroidExpo() {
       resolved = true;
       child.kill("SIGTERM");
       reject(new Error("Android Expo runner timed out"));
-    }, 180000);
+    }, 300000);
 
     const handleOutput = (chunk) => {
       const text = chunk.toString();
@@ -203,15 +204,103 @@ function ensureOutputDir() {
   fs.mkdirSync(outputDir, { recursive: true });
 }
 
-async function launchAndroid(smokeTap) {
+/**
+ * Deterministic smoke reporter. Every test records a terminal state:
+ * executed (passed), explicitly skipped with a reason, or failed.
+ * The report is machine-readable JSON; no fixed test-count assertions exist.
+ */
+function createReporter() {
+  const tests = [];
+  return {
+    record(platform, name, status, reason) {
+      tests.push({ platform, name, status, reason: reason ?? null });
+      const icon = status === "passed" ? "✓" : status === "skipped" ? "⊘" : "✗";
+      const detail = status === "passed" ? "" : ` (${reason ?? "no reason"})`;
+      console.log(`  ${icon} [${platform}] ${name}${detail}`);
+    },
+    finish({ requiredPlatforms, allowSkip }) {
+      const failed = tests.filter((test) => test.status === "failed");
+      for (const platform of requiredPlatforms) {
+        const executed = tests.some(
+          (test) => test.platform === platform && test.status === "passed",
+        );
+        if (!executed && !allowSkip) {
+          failed.push({
+            platform,
+            name: "platform-smoke-execution",
+            status: "failed",
+            reason: `No smoke test passed on ${platform}; rerun with --allow-skip only when device absence is intended`,
+          });
+        }
+      }
+      fs.writeFileSync(reportPath, JSON.stringify({ tests }, null, 2));
+      log(`\nSmoke report written to ${reportPath}`, "cyan");
+      if (failed.length > 0) {
+        log(
+          `Smoke failed: ${failed.length} failed / ${tests.length} total (${tests.filter((t) => t.status === "passed").length} passed, ${tests.filter((t) => t.status === "skipped").length} skipped)`,
+          "red",
+        );
+        process.exit(1);
+      }
+      log(
+        `Smoke complete: ${tests.length} tests, 0 failed, ${tests.filter((t) => t.status === "skipped").length} skipped with reasons`,
+      );
+    },
+  };
+}
+
+// Android: deterministic UI assertions via uiautomator dumps (stable text
+// identifiers instead of fixed coordinate taps).
+function androidDumpWindow() {
+  tryRun("adb", ["shell", "uiautomator", "dump", "/sdcard/window_dump.xml"], {
+    stdio: "ignore",
+  });
+  try {
+    return run("adb", ["shell", "cat", "/sdcard/window_dump.xml"]);
+  } catch {
+    return "";
+  }
+}
+
+function androidFindTextBounds(dumpXml, text) {
+  const escaped = text.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+  const pattern = new RegExp(
+    `<node[^>]*text="${escaped}"[^>]*bounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"`,
+  );
+  const match = dumpXml.match(pattern);
+  if (!match) return null;
+  const x1 = Number(match[1]);
+  const y1 = Number(match[2]);
+  const x2 = Number(match[3]);
+  const y2 = Number(match[4]);
+  return {
+    x: Math.floor((x1 + x2) / 2),
+    y: Math.floor((y1 + y2) / 2),
+  };
+}
+
+function androidDumpContains(dumpXml, text) {
+  const escaped = text.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+  return new RegExp(`<node[^>]*text="${escaped}"`).test(dumpXml);
+}
+
+async function runAndroidSmoke(reporter) {
   if (!commandWorks("adb", ["devices"])) {
-    throw new Error("adb is not available");
+    reporter.record("android", "adb available", "skipped", "adb is not installed");
+    return;
   }
 
   const devices = run("adb", ["devices"]);
   if (!devices.includes("\tdevice")) {
-    throw new Error("No Android emulator/device is attached");
+    reporter.record(
+      "android",
+      "emulator attached",
+      "skipped",
+      "no Android emulator/device is attached",
+    );
+    return;
   }
+  reporter.record("android", "emulator attached", "passed");
 
   log("Launching Android example...", "cyan");
   run("adb", ["reverse", `tcp:${port}`, `tcp:${port}`], { stdio: "ignore" });
@@ -219,72 +308,170 @@ async function launchAndroid(smokeTap) {
   await runAndroidExpo();
   await wait(launchWaitMs);
 
-  if (smokeTap) {
-    run("adb", ["shell", "input", "tap", "300", "620"], { stdio: "ignore" });
-    await wait(smokeWaitMs);
-  }
-
   const pid = run("adb", ["shell", "pidof", packageName]).trim();
-  if (!pid) throw new Error("Android app did not stay running");
+  if (!pid) {
+    reporter.record("android", "app stays running", "failed", "app process not found");
+    return;
+  }
+  reporter.record("android", "app stays running", "passed");
 
   const screenshot = path.join(outputDir, "android.png");
-  const png = execFileSync("adb", ["exec-out", "screencap", "-p"], { cwd: projectRoot });
+  const png = execFileSync("adb", ["exec-out", "screencap", "-p"], {
+    cwd: projectRoot,
+  });
   fs.writeFileSync(screenshot, png);
-  log(`Android running, pid ${pid}; screenshot ${screenshot}`);
+  log(`Android screenshot ${screenshot}`, "cyan");
+
+  const tabs = [
+    { label: "Bench", expected: "Latest run" },
+    { label: "Default", expected: "Nitro Markdown" },
+    { label: "Styles", expected: "Theming" },
+    { label: "Custom", expected: "Note" },
+    { label: "Stream", expected: "Streaming Performance Lab" },
+  ];
+
+  for (const tab of tabs) {
+    const dump = androidDumpWindow();
+    if (!dump) {
+      reporter.record(
+        "android",
+        `tab ${tab.label} content`,
+        "skipped",
+        "uiautomator dump produced no output",
+      );
+      continue;
+    }
+
+    if (!androidDumpContains(dump, tab.label)) {
+      reporter.record(
+        "android",
+        `tab ${tab.label} visible`,
+        "failed",
+        `tab label "${tab.label}" not found in UI dump`,
+      );
+      continue;
+    }
+    reporter.record("android", `tab ${tab.label} visible`, "passed");
+
+    const bounds = androidFindTextBounds(dump, tab.label);
+    if (!bounds) {
+      reporter.record(
+        "android",
+        `tab ${tab.label} tappable`,
+        "skipped",
+        "tab label bounds not found in UI dump",
+      );
+      continue;
+    }
+
+    run("adb", ["shell", "input", "tap", String(bounds.x), String(bounds.y)], {
+      stdio: "ignore",
+    });
+    await wait(settleWaitMs);
+
+    const afterTap = androidDumpWindow();
+    if (!afterTap) {
+      reporter.record(
+        "android",
+        `tab ${tab.label} content`,
+        "skipped",
+        "uiautomator dump produced no output after tap",
+      );
+      continue;
+    }
+    if (androidDumpContains(afterTap, tab.expected)) {
+      reporter.record("android", `tab ${tab.label} content`, "passed");
+    } else {
+      reporter.record(
+        "android",
+        `tab ${tab.label} content`,
+        "failed",
+        `expected marker "${tab.expected}" not found after tapping "${tab.label}"`,
+      );
+    }
+  }
 }
 
-async function launchIos(devClientUrl, smokeTap) {
+async function runIosSmoke(reporter) {
   if (!commandWorks("xcrun", ["simctl", "list", "devices", "booted"])) {
-    throw new Error("xcrun simctl is not available");
+    reporter.record("ios", "simctl available", "skipped", "xcrun simctl is not available");
+    return;
   }
 
   const booted = run("xcrun", ["simctl", "list", "devices", "booted"]);
   const match = booted.match(/\(([0-9A-F-]{36})\) \(Booted\)/);
-  if (!match) throw new Error("No booted iOS simulator found");
+  if (!match) {
+    reporter.record(
+      "ios",
+      "booted simulator",
+      "skipped",
+      "no booted iOS simulator found",
+    );
+    return;
+  }
+  reporter.record("ios", "booted simulator", "passed");
 
   const udid = match[1];
+  const devClientUrl = createDevClientUrl("127.0.0.1");
   log(`Launching iOS example on ${udid}...`, "cyan");
   tryRun("xcrun", ["simctl", "terminate", udid, bundleId], { stdio: "ignore" });
   run("xcrun", ["simctl", "openurl", udid, devClientUrl], { stdio: "ignore" });
   await wait(launchWaitMs);
 
-  if (smokeTap && commandWorks("osascript", ["-e", "return 1"])) {
-    try {
-      run(
-        "osascript",
-        [
-          "-e",
-          'tell application "Simulator" to activate',
-          "-e",
-          'tell application "System Events" to click at {160, 315}',
-        ],
-        { stdio: "ignore" },
-      );
-      await wait(smokeWaitMs);
-    } catch {
-      log("Skipping iOS smoke tap because macOS assistive access is unavailable.", "yellow");
-    }
+  const installed = run("xcrun", ["simctl", "listapps", udid]);
+  if (!installed.includes(bundleId)) {
+    reporter.record("ios", "app installed", "failed", "bundle not present in simctl listapps");
+    return;
   }
+  reporter.record("ios", "app installed", "passed");
+
+  const launched = run("xcrun", ["simctl", "launch", udid, bundleId]);
+  const launchedOk = launched.includes("succeeded") || launched.includes(bundleId);
+  reporter.record(
+    "ios",
+    "app launches",
+    launchedOk ? "passed" : "failed",
+    launchedOk ? undefined : `simctl launch returned: ${launched.trim()}`,
+  );
 
   const screenshot = path.join(outputDir, "ios.png");
-  run("xcrun", ["simctl", "io", udid, "screenshot", screenshot], { stdio: "ignore" });
-  log(`iOS running on ${udid}; screenshot ${screenshot}`);
+  run("xcrun", ["simctl", "io", udid, "screenshot", screenshot], {
+    stdio: "ignore",
+  });
+  log(`iOS screenshot ${screenshot}`, "cyan");
+
+  // iOS has no supported content-level UI dump API via simctl alone. Content
+  // assertions require idb or a device agent; they are recorded as explicit
+  // skips so the run is never a silent no-op.
+  for (const tab of ["Bench", "Default", "Styles", "Custom", "Stream"]) {
+    reporter.record(
+      "ios",
+      `tab ${tab} content`,
+      "skipped",
+      "iOS content assertions need idb/a11y dump; screenshot artifact captured",
+    );
+  }
 }
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   ensureOutputDir();
+  const reporter = createReporter();
+  const requiredPlatforms = [];
 
   await startMetroIfNeeded(options.startMetro);
   await waitForMetro();
 
-  const iosUrl = createDevClientUrl("127.0.0.1");
+  if (options.android) {
+    requiredPlatforms.push("android");
+    await runAndroidSmoke(reporter);
+  }
+  if (options.ios) {
+    requiredPlatforms.push("ios");
+    await runIosSmoke(reporter);
+  }
 
-  if (options.android) await launchAndroid(options.smokeTap);
-  if (options.ios) await launchIos(iosUrl, options.smokeTap);
-
-  console.log("");
-  log("Example smoke launch complete.");
+  reporter.finish({ requiredPlatforms, allowSkip: options.allowSkip });
 }
 
 main().catch((error) => {

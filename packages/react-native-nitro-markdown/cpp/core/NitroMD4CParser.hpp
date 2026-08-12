@@ -39,6 +39,7 @@ public:
         size_t maxSize = static_cast<size_t>(std::numeric_limits<MD_SIZE>::max());
         return inputSize > maxSize ? maxSize : inputSize;
     }
+    bool lastParseTrackedOffsets = true;
 #endif
     
 private:

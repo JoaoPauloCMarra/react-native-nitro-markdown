@@ -49,13 +49,15 @@ CommonMark plus GitHub Flavored Markdown:
 | `onLinkPress` | open URL | Intercept link taps; return `false` to prevent the default. |
 | `onError` | — | `(error, phase, pluginName?)` for parser/plugin failures. |
 
-`parseCache` keeps an internal AST cache keyed by content + parser options, so
-re-rendering the same Markdown avoids re-parsing.
+`parseCache` keeps an internal AST cache per `<Markdown>` instance keyed by
+content + parser options, so re-rendering the same Markdown avoids re-parsing.
+The cache is bounded (32 entries) and per-instance hit/miss/eviction counters
+are reported through `onParseComplete`'s `cacheStats`.
 
 Native parse failures do not produce an empty document. `<Markdown>` renders
-nothing for that parse and calls `onError(error, "parse")`. Plugin failures use
-the `"before-plugin"` or `"after-plugin"` phase and include the plugin name when
-available.
+the `errorText` (localizable) and calls `onError(error, "parse")`. Plugin
+failures use the `"before-plugin"` or `"after-plugin"` phase and include the
+plugin name when available.
 
 ## Long documents (virtualization)
 

@@ -12,6 +12,7 @@ const steps = [
   "lint",
   "typecheck",
   "typecheck:public",
+  "size",
   "test:coverage",
   "benchmark",
   "test:cpp:coverage",

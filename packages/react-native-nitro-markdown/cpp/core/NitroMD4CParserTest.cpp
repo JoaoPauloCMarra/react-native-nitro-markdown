@@ -1,9 +1,15 @@
 #define NITRO_MARKDOWN_TESTING
 #include "NitroMD4CParser.hpp"
 #include "MarkdownTypes.hpp"
+#include "flatten.hpp"
+#include "FlattenCorpus.hpp"
+#include "ConformanceCorpus.hpp"
 #include "../nitromd/nitromd.h"
 #include <iostream>
 #include <cassert>
+#include <cstring>
+#include <random>
+#include <sstream>
 #include <string>
 #include <algorithm>
 #include <chrono>
@@ -62,6 +68,162 @@ int TestRunner::failCount = 0;
 
 class MD4CParserTest {
 public:
+    // Canonical node serialization shared with the corpus generator
+    // (scripts/test-cpp.js): field order, JSON-style string escaping, and
+    // node type names must stay in sync with canonicalizeNode() there.
+    static std::string jsonEscape(const std::string& value) {
+        std::string out;
+        for (unsigned char c : value) {
+            switch (c) {
+                case '"': out += "\\\""; break;
+                case '\\': out += "\\\\"; break;
+                case '\n': out += "\\n"; break;
+                case '\r': out += "\\r"; break;
+                case '\t': out += "\\t"; break;
+                default:
+                    if (c <= 0x1f) {
+                        char buf[8];
+                        snprintf(buf, sizeof(buf), "\\u%04x", c);
+                        out += buf;
+                    } else {
+                        out.push_back(static_cast<char>(c));
+                    }
+                    break;
+            }
+        }
+        return out;
+    }
+
+    static std::string canonicalizeNode(const std::shared_ptr<MarkdownNode>& node) {
+        if (!node) return "null";
+        std::string fields;
+        if (node->content.has_value()) {
+            fields += ",content=" + jsonEscape(node->content.value());
+        }
+        if (node->level.has_value()) {
+            fields += ",level=" + std::to_string(node->level.value());
+        }
+        if (node->href.has_value()) {
+            fields += ",href=" + jsonEscape(node->href.value());
+        }
+        if (node->title.has_value()) {
+            fields += ",title=" + jsonEscape(node->title.value());
+        }
+        if (node->alt.has_value()) {
+            fields += ",alt=" + jsonEscape(node->alt.value());
+        }
+        if (node->language.has_value()) {
+            fields += ",language=" + jsonEscape(node->language.value());
+        }
+        if (node->ordered.has_value()) {
+            fields += ",ordered=" + std::string(node->ordered.value() ? "true" : "false");
+        }
+        if (node->start.has_value()) {
+            fields += ",start=" + std::to_string(node->start.value());
+        }
+        if (node->checked.has_value()) {
+            fields += ",checked=" + std::string(node->checked.value() ? "true" : "false");
+        }
+        if (node->isHeader.has_value()) {
+            fields += ",isHeader=" + std::string(node->isHeader.value() ? "true" : "false");
+        }
+        if (node->align.has_value() && node->align.value() != TextAlign::Default) {
+            fields += ",align=" + jsonEscape(textAlignToString(node->align.value()));
+        }
+        if (!node->children.empty()) {
+            fields += ",children=[";
+            for (size_t i = 0; i < node->children.size(); i++) {
+                if (i > 0) fields += ",";
+                fields += canonicalizeNode(node->children[i]);
+            }
+            fields += "]";
+        }
+        return fields.empty()
+            ? nodeTypeToString(node->type)
+            : nodeTypeToString(node->type) + "{" + fields.substr(1) + "}";
+    }
+
+    static ParserOptions optionsFromJson(const char* json) {
+        ParserOptions options;
+        options.gfm = std::string(json).find("\"gfm\":false") == std::string::npos;
+        options.math = std::string(json).find("\"math\":false") == std::string::npos;
+        options.html = std::string(json).find("\"html\":true") != std::string::npos;
+        return options;
+    }
+
+    static void testFlattenCorpus() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+        for (const auto& entry : kFlattenCorpus) {
+            std::string input(entry.markdown);
+            auto ast = parser.parse(input, options);
+            std::string actual = flattenNodeText(ast);
+            std::string expected(entry.expected);
+            std::string name = "FlattenCorpus: ";
+            name += entry.name;
+            TestRunner::assertEqual(expected, actual, name);
+        }
+    }
+
+    static void testConformanceCorpus() {
+        MD4CParser parser;
+        for (const auto& entry : kConformanceCorpus) {
+            std::string input(entry.markdown);
+            ParserOptions options = optionsFromJson(entry.optionsJson);
+            std::string name = "Conformance: ";
+            name += entry.name;
+            bool threw = false;
+            std::shared_ptr<MarkdownNode> ast;
+            try {
+                ast = parser.parse(input, options);
+            } catch (const std::exception& error) {
+                threw = true;
+                TestRunner::assertEqual("", std::string(error.what()), name + " (unexpected throw)");
+            }
+            if (!threw) {
+                TestRunner::assertEqual(entry.expectedCanonical, canonicalizeNode(ast), name);
+            }
+        }
+    }
+
+    static void testSeededFuzz() {
+        // Deterministic, seed-driven fuzz: the same seed reproduces the same
+        // input sequence and the same result on every run.
+        const char kAlphabet[] =
+            "#*_`~[]()!<>|$\\\n\r\t-+.0123456789 abcdefghijklmnopqrstuvwxyz"
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZé🌍\0";
+        std::mt19937 rng(0xC0FFEE);
+        MD4CParser parser;
+        ParserOptions options{true, true};
+        unsigned int passed = 0;
+        for (int i = 0; i < 2000; i++) {
+            const size_t length = static_cast<size_t>(rng() % 512);
+            std::string input;
+            input.reserve(length);
+            for (size_t j = 0; j < length; j++) {
+                input.push_back(kAlphabet[rng() % (sizeof(kAlphabet) - 1)]);
+            }
+            options.gfm = (rng() % 2) == 0;
+            options.math = (rng() % 2) == 0;
+            options.html = (rng() % 2) == 0;
+            try {
+                auto ast = parser.parse(input, options);
+                if (ast != nullptr) {
+                    canonicalizeNode(ast);
+                    passed++;
+                }
+            } catch (const std::exception& error) {
+                std::string name = "Fuzz: input #";
+                name += std::to_string(i);
+                name += " threw: ";
+                name += error.what();
+                TestRunner::assertTrue(false, name);
+                return;
+            }
+        }
+        TestRunner::assertTrue(passed == 2000, "Fuzz: all 2000 seeded inputs parse deterministically");
+    }
+
     static void runAllTests() {
         std::cout << "Running MD4C Parser Tests..." << std::endl;
 
@@ -99,6 +261,12 @@ public:
         testTestOnlyExtensionFlags();
         testCallbackNullUserdataGuards();
         testParserFailureThrows();
+        testInputSizeCap();
+        testSourceOffsetsTracking();
+        testWikilinkNotMappedWithoutFlag();
+        testFlattenCorpus();
+        testConformanceCorpus();
+        testSeededFuzz();
 
         // Safety and crash prevention tests
         testMemoryLeaks();
@@ -903,11 +1071,24 @@ private:
 
         auto math = para->children[0];
         TestRunner::assertEqual("math_inline", nodeTypeToString(math->type), "MathInline: node type");
-        // MathInline content is stored via text callback as children
-        // (similar to CodeInline which stores in content field)
-        // Check that the math span exists and has text
-        bool hasContent = !math->children.empty() || math->content.has_value();
-        TestRunner::assertTrue(hasContent, "MathInline: has content or children");
+
+        // Native math content excludes the dollar delimiters.
+        auto textNode = findFirstNode(math, NodeType::Text);
+        TestRunner::assertNotNull(textNode.get(), "MathInline: has text node");
+        TestRunner::assertEqual("x", textNode->content.value_or(""), "MathInline: exact native content");
+
+        auto squared = parser.parse("$x^2$", options);
+        auto squaredText = findFirstNode(squared, NodeType::Text);
+        TestRunner::assertNotNull(squaredText.get(), "MathInline squared: has text node");
+        TestRunner::assertEqual("x^2", squaredText->content.value_or(""),
+            "MathInline squared: exact native content without dollars");
+
+        // An empty "$$" pair is NOT a math span; it stays literal text.
+        auto empty = parser.parse("$$", options);
+        auto emptyText = findFirstNode(empty, NodeType::Text);
+        TestRunner::assertNotNull(emptyText.get(), "MathInline empty: literal text node");
+        TestRunner::assertEqual("$$", emptyText->content.value_or(""),
+            "MathInline empty: bare dollars stay literal");
     }
 
     static void testMathBlock() {
@@ -932,6 +1113,12 @@ private:
             foundMathBlock = true;
         }
         TestRunner::assertTrue(foundMathBlock, "MathBlock: found math_block node");
+
+        // Exact block content: the display delimiters are not part of the content.
+        auto textNode = findFirstNode(result, NodeType::Text);
+        TestRunner::assertNotNull(textNode.get(), "MathBlock: has text node");
+        TestRunner::assertEqual("x^2 + y^2", textNode->content.value_or(""),
+            "MathBlock: exact native content without dollars");
     }
 
     static void testHtmlDisabledByDefault() {
@@ -1089,14 +1276,72 @@ private:
         );
         auto underline = findFirstNode(underlineResult, NodeType::Italic);
         TestRunner::assertNotNull(underline.get(), "TestFlags: underline maps to italic");
+    }
 
-        auto wikiResult = parser.parseWithExtraFlagsForTest(
-            "[[Wiki Page]]",
-            options,
-            MD_FLAG_WIKILINKS
-        );
-        auto wikiLink = findFirstNode(wikiResult, NodeType::Link);
-        TestRunner::assertNotNull(wikiLink.get(), "TestFlags: wikilink maps to link");
+    static void testInputSizeCap() {
+        MD4CParser parser;
+        ParserOptions options;
+        options.maxInputLength = 8;
+        bool threw = false;
+        try {
+            parser.parse("123456789", options);
+        } catch (const std::runtime_error& error) {
+            threw = std::string(error.what()).find("exceeds the maximum of 8 bytes") != std::string::npos;
+        }
+        TestRunner::assertTrue(threw, "Bounds: oversized input fails deterministically");
+
+        bool ok = false;
+        try {
+            auto ast = parser.parse("1234567", options);
+            ok = ast != nullptr;
+        } catch (const std::runtime_error&) {
+            ok = false;
+        }
+        TestRunner::assertTrue(ok, "Bounds: input within configured limit parses");
+
+        // Values above the hard cap are clamped to the hard cap (the JS
+        // boundary enforces the same clamp via Math.min).
+        bool clamped = false;
+        ParserOptions huge;
+        huge.maxInputLength = 20 * 1024 * 1024;
+        try {
+            parser.parse(std::string(11 * 1024 * 1024, 'a'), huge);
+        } catch (const std::runtime_error& error) {
+            clamped = std::string(error.what()).find(
+                "exceeds the maximum of 10485760 bytes"
+            ) != std::string::npos;
+        }
+        TestRunner::assertTrue(clamped,
+            "Bounds: maxInputLength above the hard cap is clamped to the hard cap");
+    }
+
+    static void testSourceOffsetsTracking() {
+        MD4CParser parser;
+        ParserOptions withOffsets;
+        withOffsets.sourceOffsets = true;
+        ParserOptions withoutOffsets;
+        withoutOffsets.sourceOffsets = false;
+
+        parser.parse("# Title", withOffsets);
+        TestRunner::assertTrue(parser.lastParseTrackedOffsets,
+            "Offsets: map tracked when sourceOffsets enabled");
+
+        parser.parse("# Title", withoutOffsets);
+        TestRunner::assertTrue(!parser.lastParseTrackedOffsets,
+            "Offsets: map skipped when sourceOffsets disabled");
+
+        auto ast = parser.parse("# Title", withoutOffsets);
+        auto heading = findFirstNode(ast, NodeType::Heading);
+        TestRunner::assertNotNull(heading.get(), "Offsets: disabled parse still produces nodes");
+    }
+
+    static void testWikilinkNotMappedWithoutFlag() {
+        MD4CParser parser;
+        ParserOptions options;
+        auto result = parser.parse("[[Wiki Page]]", options);
+        auto wikiLink = findFirstNode(result, NodeType::Link);
+        TestRunner::assertTrue(wikiLink == nullptr,
+            "Wikilink: no incomplete link node without MD_FLAG_WIKILINKS");
     }
 
     static void testCallbackNullUserdataGuards() {

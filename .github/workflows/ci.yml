@@ -93,3 +93,11 @@ jobs:
 
       - name: Build iOS example
         run: bun run example:ios:build
+
+  # Example smoke is intentionally not part of required CI yet. The smoke
+  # script needs a booted simulator with the built app installed and Metro
+  # reachable, but jobs here do not carry the example build artifact and CI
+  # does not provision a simulator. A job that runs the script with
+  # --allow-skip and continue-on-error would pass without any real smoke, so
+  # the gate stays local (`bun run example:smoke`) until CI can build, install,
+  # and launch the app deterministically.
