@@ -42,7 +42,7 @@ describe("Link renderer security policy", () => {
     openUrlMock.mockResolvedValue(undefined);
   });
 
-  it("does not invoke onLinkPress for unsafe protocols", async () => {
+  it("lets custom handlers receive unsafe protocols without opening them", async () => {
     const onLinkPress = jest.fn();
     const link = renderLink("javascript:alert(1)", onLinkPress);
 
@@ -50,12 +50,12 @@ describe("Link renderer security policy", () => {
       link.props.onPress();
     });
 
-    expect(onLinkPress).not.toHaveBeenCalled();
+    expect(onLinkPress).toHaveBeenCalledWith("javascript:alert(1)");
     expect(canOpenUrlMock).not.toHaveBeenCalled();
     expect(openUrlMock).not.toHaveBeenCalled();
   });
 
-  it("does not invoke onLinkPress for protocol-less links", async () => {
+  it("lets custom handlers receive protocol-less links without opening them", async () => {
     const onLinkPress = jest.fn();
     const link = renderLink("/relative/path", onLinkPress);
 
@@ -63,7 +63,7 @@ describe("Link renderer security policy", () => {
       link.props.onPress();
     });
 
-    expect(onLinkPress).not.toHaveBeenCalled();
+    expect(onLinkPress).toHaveBeenCalledWith("/relative/path");
   });
 
   it("invokes onLinkPress with the validated URL for allowed links", async () => {

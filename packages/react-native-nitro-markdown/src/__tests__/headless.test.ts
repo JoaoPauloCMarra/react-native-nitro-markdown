@@ -100,7 +100,7 @@ describe("headless native fallback", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it("throws a typed error when native extract methods are unavailable", () => {
+  it("falls back through the native AST when extract methods are unavailable", () => {
     const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
 
     runWithParserMock(
@@ -129,14 +129,14 @@ describe("headless native fallback", () => {
         ),
       }),
       (headless) => {
-        expect(() =>
+        expect(
           headless.extractPlainText("```ts\nconst fallback = true;\n```"),
-        ).toThrow(headless.MarkdownError);
-        expect(() =>
+        ).toBe("const fallback = true;\n\n");
+        expect(
           headless.extractPlainTextWithOptions("# Fallback title", {
             gfm: true,
           }),
-        ).toThrow(headless.MarkdownError);
+        ).toBe("Fallback title\n\n");
       },
     );
 
@@ -188,13 +188,13 @@ describe("headless native fallback", () => {
         expectCode(
           () => headless.extractPlainText("# Broken"),
           "parse_failed",
-          "extract",
+          "parse",
         );
         expectCode(
           () =>
             headless.extractPlainTextWithOptions("# Broken", { gfm: true }),
-          "parse_failed",
-          "extract",
+          "invalid_json",
+          "parse",
         );
       },
     );

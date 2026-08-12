@@ -212,12 +212,7 @@ export function parseMarkdownWithOptions(
   );
 }
 
-/**
- * Extract flattened plain text from the native parser.
- * Native extraction failures throw a typed `MarkdownError`; there is no
- * silent JavaScript fallback. Use `parseMarkdown*` plus `getFlattenedText`
- * explicitly if you want JavaScript-side flattening.
- */
+/** Extract flattened plain text from the native parser or parsed AST. */
 export function extractPlainText(text: string): string {
   assertInputWithinBounds(text);
   if (
@@ -228,22 +223,13 @@ export function extractPlainText(text: string): string {
       return MarkdownParserModule.extractPlainText(text);
     } catch (error) {
       reportNativeParserFailure("extractPlainText", error);
-      throw toMarkdownError(error, "extract");
     }
   }
 
-  throw new MarkdownError(
-    "native_unavailable",
-    "extract",
-    "[NitroMarkdown] extractPlainText: native parser unavailable — check installation.",
-  );
+  return getFlattenedText(parseMarkdown(text));
 }
 
-/**
- * Extract flattened plain text from the native parser with options.
- * Native extraction failures throw a typed `MarkdownError`; there is no
- * silent JavaScript fallback.
- */
+/** Extract flattened plain text from the native parser or parsed AST. */
 export function extractPlainTextWithOptions(
   text: string,
   options: ParserOptions,
@@ -257,15 +243,10 @@ export function extractPlainTextWithOptions(
       return MarkdownParserModule.extractPlainTextWithOptions(text, options);
     } catch (error) {
       reportNativeParserFailure("extractPlainTextWithOptions", error);
-      throw toMarkdownError(error, "extract");
     }
   }
 
-  throw new MarkdownError(
-    "native_unavailable",
-    "extract",
-    "[NitroMarkdown] extractPlainTextWithOptions: native parser unavailable — check installation.",
-  );
+  return getFlattenedText(parseMarkdownWithOptions(text, options));
 }
 
 export type { MarkdownParser };

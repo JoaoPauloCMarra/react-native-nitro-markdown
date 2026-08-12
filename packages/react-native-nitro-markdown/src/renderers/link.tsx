@@ -33,12 +33,11 @@ export const Link: FC<LinkProps> = ({ href, children, style }) => {
 
   const handlePress = async () => {
     const allowedExternalHref = getAllowedExternalHref(href);
-    if (!allowedExternalHref) return;
 
     try {
       const shouldOpen =
-        (await Promise.resolve(onLinkPress?.(allowedExternalHref))) !== false;
-      if (!shouldOpen) return;
+        (await Promise.resolve(onLinkPress?.(href))) !== false;
+      if (!shouldOpen || !allowedExternalHref) return;
 
       const canOpen = await Linking.canOpenURL(allowedExternalHref);
       if (!canOpen) return;

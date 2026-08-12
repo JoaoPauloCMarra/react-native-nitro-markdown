@@ -13,14 +13,16 @@ stay safe.
 
 ### Changes
 
-- **Breaking changes:** `extractPlainText` and `extractPlainTextWithOptions`
-  no longer silently fall back to JavaScript flattening when native extraction
-  fails or the native extract method is unavailable; both now throw a typed
-  `MarkdownError` (use `parseMarkdown*` + `getFlattenedText` explicitly for
-  JS-side flattening).
-- **Breaking changes:** `onLinkPress` is now invoked only for validated,
-  allowed URLs. Unsafe protocols and protocol-less links never reach custom
-  link handlers or `Linking`.
+- **Breaking changes:** the new default 10,000,000-character input limit rejects
+  documents that were previously attempted without a JavaScript-side bound.
+  This denial-of-service guard is retained; split larger documents or set a
+  lower app-specific limit. The native hard cap cannot be raised.
+- `extractPlainText` and `extractPlainTextWithOptions` preserve their AST
+  fallback when the optimized native extraction method is unavailable or
+  fails.
+- Custom `onLinkPress` handlers continue to receive every href, including app
+  routes and custom schemes. Only validated HTTP(S), mail, and telephone URLs
+  reach the built-in `Linking` fallback.
 - Native parse and session failures now surface as typed `MarkdownError`s with
   stable `code` (`input_too_large`, `parse_failed`, `invalid_json`,
   `native_unavailable`, `extraction_failed`, `buffer_limit`, `invalid_range`,

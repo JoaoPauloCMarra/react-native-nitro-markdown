@@ -210,9 +210,10 @@ full capability matrix: **[Comparison & benchmarks](https://github.com/JoaoPaulo
 - Parse input is bounded: the JavaScript boundary rejects documents above
   `options.maxInputLength` (default 10M characters) with a typed error, and the
   C++ parser enforces the same hard cap in bytes plus a 64 MB JSON output cap.
-- Links handed to `onLinkPress` and `Linking` are validated first; unsafe
-  protocols never reach handlers. Remote images load by default for
-  compatibility — set `imageOptions={{ remoteImages: "deny" }}` (and/or
+- Custom `onLinkPress` handlers receive the original href so apps can handle
+  routes and custom schemes. The built-in `Linking` fallback opens only
+  validated HTTP(S), mail, and telephone URLs. Remote images load by default
+  for compatibility — set `imageOptions={{ remoteImages: "deny" }}` (and/or
   `allowedHosts`) when rendering untrusted markdown in privacy- or SSRF-sensitive
   apps.
 - The C++ parser is fuzzed with a seeded, deterministic corpus and checked
