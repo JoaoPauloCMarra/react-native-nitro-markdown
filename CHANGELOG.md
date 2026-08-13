@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [0.10.1] - 2026-08-13
+
+### Changes
+
+- **Breaking changes:** None.
+- Quick start now shows `<Markdown onError>` for native parse failures.
+  Headless `parseMarkdown` still throws. App theming stays in a local wrapper.
+
 ## [0.10.0] - 2026-08-12
 
 ### Changes
