@@ -66,12 +66,21 @@ import { Markdown } from "react-native-nitro-markdown";
 
 export function Article() {
   return (
-    <Markdown options={{ gfm: true, math: true }}>
+    <Markdown
+      options={{ gfm: true, math: true }}
+      onError={(error) => {
+        console.error(error);
+      }}
+    >
       {"# Hello\nThis is **native** markdown."}
     </Markdown>
   );
 }
 ```
+
+Native parse failures call `onError` instead of rendering an empty document.
+Headless `parseMarkdown` throws; do not treat an empty AST as success. Keep
+product fonts and colors in an app wrapper around `<Markdown>`.
 
 ## Streaming (LLM / chat)
 
