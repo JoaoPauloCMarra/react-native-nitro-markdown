@@ -14,6 +14,7 @@ import {
   MarkdownStream,
   parseMarkdown,
   parseMarkdownWithOptions,
+  MarkdownError,
   extractPlainText,
   extractPlainTextWithOptions,
   getFlattenedText,
@@ -418,6 +419,17 @@ async function runSmokeTests(): Promise<LogEntry[]> {
   }
 
   try {
+    parseMarkdownWithOptions("12345", { maxInputLength: 4 });
+    fail("maxInputLength", "oversized input was accepted");
+  } catch (e) {
+    if (e instanceof MarkdownError && e.code === "input_too_large") {
+      pass("maxInputLength", "oversized input rejected with typed error");
+    } else {
+      fail("maxInputLength", String(e));
+    }
+  }
+
+  try {
     const ast = parseMarkdown("# Hello\n\nWorld");
     const flat = getFlattenedText(ast);
     if (flat.includes("Hello") && flat.includes("World")) {
@@ -475,6 +487,23 @@ async function runSmokeTests(): Promise<LogEntry[]> {
     }
   } catch (e) {
     fail("mergeThemes", String(e));
+  }
+
+  try {
+    const merged = mergeThemes(defaultMarkdownTheme, {
+      colors: { codeTokenColors: { keyword: "#ff0000" } },
+    });
+    if (
+      merged.colors.codeTokenColors?.keyword === "#ff0000" &&
+      merged.colors.codeTokenColors?.string ===
+        defaultMarkdownTheme.colors.codeTokenColors?.string
+    ) {
+      pass("mergeThemes codeTokenColors", "partial token map preserves defaults");
+    } else {
+      fail("mergeThemes codeTokenColors", "partial token map replaced defaults");
+    }
+  } catch (e) {
+    fail("mergeThemes codeTokenColors", String(e));
   }
 
   try {

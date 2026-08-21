@@ -92,6 +92,9 @@ describe("mergeThemes", () => {
       colors: { codeTokenColors: { keyword: "#ff0000" } },
     });
     expect(result.colors.codeTokenColors?.keyword).toBe("#ff0000");
+    expect(result.colors.codeTokenColors?.string).toBe(
+      defaultMarkdownTheme.colors.codeTokenColors?.string,
+    );
   });
 
   it("works with minimal theme as base", () => {

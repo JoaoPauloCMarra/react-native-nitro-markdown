@@ -4,9 +4,9 @@
 [![npm downloads](https://img.shields.io/npm/dm/react-native-nitro-markdown?color=22c55e&label=downloads)](https://www.npmjs.com/package/react-native-nitro-markdown)
 [![CI](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/actions/workflows/ci.yml/badge.svg)](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/react-native-nitro-markdown?color=007ec6)](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/LICENSE)
-[![React Native](https://img.shields.io/badge/react--native-%3E%3D0.75-61dafb)](https://reactnative.dev/docs/0.86/getting-started-without-a-framework)
-[![Expo](https://img.shields.io/badge/expo-SDK%2057-000020)](https://docs.expo.dev/versions/v57.0.0/)
-[![Nitro Modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.36.5%20%3C0.37.0-black)](https://www.npmjs.com/package/react-native-nitro-modules)
+[![React Native](https://img.shields.io/badge/react--native-0.87.0-61dafb)](https://reactnative.dev/docs/0.87/getting-started-without-a-framework)
+[![Expo](https://img.shields.io/badge/expo-SDK%2057%20%28RN%200.86.2%29-000020)](https://docs.expo.dev/versions/v57.0.0/)
+[![Nitro Modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.37.0%20%3C0.38.0-black)](https://www.npmjs.com/package/react-native-nitro-modules)
 [![TypeScript](https://img.shields.io/badge/typescript-6.0-3178c6)](https://www.typescriptlang.org/)
 
 **The fast Markdown engine for React Native.** Native **C++ parsing** (CommonMark
@@ -46,12 +46,12 @@ Native components — so you get native parse speed *and* component flexibility.
 ## Install
 
 ```sh
-bun add react-native-nitro-markdown react-native-nitro-modules@0.36.5 ratex-react-native@0.1.14
+bun add react-native-nitro-markdown react-native-nitro-modules@0.37.0 ratex-react-native@0.1.14
 ```
 
 ```sh
 # Expo development build
-bunx expo install react-native-nitro-markdown react-native-nitro-modules@0.36.5 ratex-react-native@0.1.14
+bunx expo install react-native-nitro-markdown react-native-nitro-modules@0.37.0 ratex-react-native@0.1.14
 bunx expo prebuild
 ```
 
@@ -249,11 +249,23 @@ See [SECURITY.md](./SECURITY.md) for supported versions and how to report issues
 
 | Dependency | Supported |
 | ---------- | --------- |
-| [React Native](https://reactnative.dev/) | `>=0.75` (New Architecture) |
-| [Nitro Modules](https://www.npmjs.com/package/react-native-nitro-modules) | `>=0.36.5 <0.37.0` |
+| [React Native](https://reactnative.dev/) | `>=0.75` (New Architecture); package gate `0.87.0` |
+| [Nitro Modules](https://www.npmjs.com/package/react-native-nitro-modules) | `>=0.37.0 <0.38.0` |
 | [RaTeX React Native](https://www.npmjs.com/package/ratex-react-native) | `>=0.1.4` (example validated with `0.1.14`) |
-| [Expo](https://docs.expo.dev/) | SDK 57 development builds |
+| [Expo](https://docs.expo.dev/versions/v57.0.0/) | SDK `57.0.15` development builds with RN `0.86.2` |
 | Platforms | iOS, Android (Web not supported) |
+
+The standalone package gate uses React Native `0.87.0` and its Strict
+TypeScript API. The Expo example stays on Expo SDK 57's supported React Native
+`0.86.2` baseline. Do not override the React Native version selected by Expo.
+
+### Upgrading from 0.10.x
+
+Version `0.11.0` requires `react-native-nitro-modules` `>=0.37.0 <0.38.0`.
+Upgrade that peer dependency before installing this package. There are no
+application API removals in this release; streaming now applies
+`maxInputLength` consistently, and partial `codeTokenColors` overrides retain
+the default colors that were not changed.
 
 ## Contributing
 

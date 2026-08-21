@@ -266,8 +266,21 @@ export const mergeThemes = (
   partial?: PartialMarkdownTheme,
 ): MarkdownTheme => {
   if (!partial) return base;
+
+  const partialColors = partial.colors;
   return {
-    colors: { ...base.colors, ...partial.colors },
+    colors: {
+      ...base.colors,
+      ...partialColors,
+      ...(partialColors?.codeTokenColors
+        ? {
+            codeTokenColors: {
+              ...base.colors.codeTokenColors,
+              ...partialColors.codeTokenColors,
+            },
+          }
+        : {}),
+    },
     spacing: { ...base.spacing, ...partial.spacing },
     fontSizes: { ...base.fontSizes, ...partial.fontSizes },
     fontFamilies: { ...base.fontFamilies, ...partial.fontFamilies },
