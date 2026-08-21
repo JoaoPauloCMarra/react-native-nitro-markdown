@@ -93,6 +93,26 @@ describe("MarkdownStream", () => {
     });
   });
 
+  it("preserves maxInputLength in stream parser options", () => {
+    const session = createSession({
+      allText: "Olá 👋",
+      rangeText: "",
+    });
+
+    act(() => {
+      TestRenderer.create(
+        React.createElement(MarkdownStream, {
+          session,
+          options: { maxInputLength: 100 },
+        }),
+      );
+    });
+
+    expect(mockParser.parseWithOptions).toHaveBeenCalledWith("Olá 👋", {
+      maxInputLength: 100,
+    });
+  });
+
   it("reports initial parser failures through onError", () => {
     const session = createSession({
       allText: "broken",

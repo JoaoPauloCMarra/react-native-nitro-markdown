@@ -1,4 +1,12 @@
-import { memo, useState, useEffect, useRef, useCallback, useMemo } from "react";
+import {
+  memo,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+  type ComponentRef,
+} from "react";
 import {
   View,
   Text,
@@ -29,6 +37,11 @@ const TOKEN_DELAY_MS = 150;
 const RAW_PREVIEW_SYNC_INTERVAL_MS = 60;
 const RAW_PREVIEW_MAX_CHARS = 3000;
 const CHARS_PER_TICK = 12;
+const STREAM_PARSER_OPTIONS = {
+  gfm: true,
+  math: true,
+  maxInputLength: 1_000_000,
+} as const;
 const DEMO_TEXT = `
 ### 🚀 High-Performance Markdown
 
@@ -169,7 +182,7 @@ function readSessionText(
 const RawPreviewPanel = memo(function RawPreviewPanel({
   session,
 }: RawPreviewPanelProps) {
-  const rawScrollViewRef = useRef<ScrollView>(null);
+  const rawScrollViewRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const [rawText, setRawText] = useState(() =>
     getRawPreviewText(readSessionText(session)),
   );
@@ -255,7 +268,7 @@ const MarkdownRendererPanel = memo(function MarkdownRendererPanel({
   hasContent,
   mode,
 }: MarkdownRendererPanelProps) {
-  const markdownScrollViewRef = useRef<ScrollView>(null);
+  const markdownScrollViewRef = useRef<ComponentRef<typeof ScrollView>>(null);
 
   const handleContentSizeChange = useCallback(() => {
     markdownScrollViewRef.current?.scrollToEnd({ animated: false });
@@ -296,12 +309,14 @@ const MarkdownRendererPanel = memo(function MarkdownRendererPanel({
         ) : mode === "builtIn" ? (
           <MarkdownStream
             session={session}
+            options={STREAM_PARSER_OPTIONS}
             updateStrategy="raf"
             useTransitionUpdates
           />
         ) : mode === "custom" ? (
           <MarkdownStream
             session={session}
+            options={STREAM_PARSER_OPTIONS}
             updateStrategy="raf"
             useTransitionUpdates
             renderMarkdown={renderCustomMarkdown}
@@ -355,6 +370,7 @@ const HeadlessStreamPreview = memo(function HeadlessStreamPreview({
 }) {
   const streamState = useMarkdownStreamState({
     session,
+    options: STREAM_PARSER_OPTIONS,
     updateStrategy: "raf",
     useTransitionUpdates: true,
   });

@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [0.11.0] - 2026-08-20
+
+### Breaking changes
+
+- The Nitro Modules peer requirement is now
+  `>=0.37.0 <0.38.0`. Upgrade `react-native-nitro-modules` before upgrading
+  this package.
+
+### Changed
+
+- Native Nitro bindings are regenerated for Nitro/Nitrogen `0.37.0` while
+  preserving the existing iOS and Android parser, session, rendering,
+  streaming, and headless behavior.
+- The standalone package compatibility baseline now includes React Native
+  `0.87.0` and its Strict TypeScript API; the Expo SDK 57 example remains on
+  React Native `0.86.2`, the version selected by that SDK.
+
+### Fixed
+
+- `MarkdownStream` now forwards `options.maxInputLength` to every incremental
+  parser call, so stream input limits cannot be bypassed by the streaming path.
+- Partial `codeTokenColors` theme overrides now preserve unspecified default
+  token colors instead of replacing the complete token-color map.
+
 ## [0.10.0] - 2026-08-12
 
 ### Changes

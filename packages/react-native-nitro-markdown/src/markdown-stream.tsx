@@ -35,12 +35,14 @@ const normalizeParserOptions = (
   const math = options.math;
   const html = options.html;
   const sourceOffsets = options.sourceOffsets;
+  const maxInputLength = options.maxInputLength;
 
   if (
     gfm === undefined &&
     math === undefined &&
     html === undefined &&
-    sourceOffsets === undefined
+    sourceOffsets === undefined &&
+    maxInputLength === undefined
   ) {
     return undefined;
   }
@@ -51,6 +53,9 @@ const normalizeParserOptions = (
   if (html !== undefined) normalized.html = html;
   if (sourceOffsets !== undefined) {
     normalized.sourceOffsets = sourceOffsets;
+  }
+  if (maxInputLength !== undefined) {
+    normalized.maxInputLength = maxInputLength;
   }
   return normalized;
 };
@@ -208,6 +213,7 @@ export function useMarkdownStreamState({
   const parserOptionMath = options?.math;
   const parserOptionHtml = options?.html;
   const parserOptionSourceOffsets = options?.sourceOffsets;
+  const parserOptionMaxInputLength = options?.maxInputLength;
   const parserOptions = useMemo(
     () =>
       normalizeParserOptions(
@@ -219,6 +225,9 @@ export function useMarkdownStreamState({
           parserOptionSourceOffsets === undefined
             ? null
             : { sourceOffsets: parserOptionSourceOffsets },
+          parserOptionMaxInputLength === undefined
+            ? null
+            : { maxInputLength: parserOptionMaxInputLength },
         ),
       ),
     [
@@ -226,6 +235,7 @@ export function useMarkdownStreamState({
       parserOptionMath,
       parserOptionHtml,
       parserOptionSourceOffsets,
+      parserOptionMaxInputLength,
     ],
   );
   const parseText = useCallback(
