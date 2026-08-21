@@ -12,6 +12,11 @@ on:
         description: npm dist-tag to use for dry-run validation
         required: false
         default: latest
+      publish:
+        description: Publish the package for an existing release tag (use only for release recovery)
+        required: false
+        type: boolean
+        default: false
 permissions:
   contents: read
 
@@ -36,7 +41,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: ${{ github.event.release.tag_name || github.ref }}
+          ref: ${{ github.event.release.tag_name || inputs.release_tag || github.ref }}
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
@@ -95,7 +100,7 @@ jobs:
       - name: Publish package
         run: |
           args=(--yes --tag="$NPM_DIST_TAG")
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.publish }}" != "true" ]; then
             args+=(--dry-run)
           fi
           node scripts/publish.js "${args[@]}"
