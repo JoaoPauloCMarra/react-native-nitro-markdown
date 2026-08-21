@@ -84,7 +84,10 @@ jobs:
           NODE
 
       - name: Release preflight
-        run: bun run release:preflight
+        run: |
+          bun run check:ci
+          bun run example:check
+          bun run publish-package:dry-run
 
       - name: Select npm dist tag
         run: |
