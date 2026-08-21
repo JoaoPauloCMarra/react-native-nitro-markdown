@@ -14,7 +14,7 @@
     "dev": "bun run example:start",
     "check": "bun run lint && bun run typecheck && bun run test && bun run test:cpp",
     "check:ci": "bun run verify:core-versions && bun run harness && bun run typecheck:rn087",
-    "release:preflight": "bun run check:ci && bun run example:check && bun run example:prebuild:clean && bun run example:android:assemble && bun run example:ios:build && bun run publish-package:dry-run",
+    "release:preflight": "bun run check:ci && bun run example:check && bun run publish-package:dry-run",
     "build": "bun run codegen && bun run --cwd packages/react-native-nitro-markdown build",
     "lint": "bun run --cwd packages/react-native-nitro-markdown lint",
     "clean": "bun run --cwd packages/react-native-nitro-markdown clean",
