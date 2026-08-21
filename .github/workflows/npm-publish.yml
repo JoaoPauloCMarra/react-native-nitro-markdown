@@ -56,8 +56,8 @@ jobs:
       - name: Verify C++ coverage tools
         run: |
           clang --version
-          llvm-cov --version
-          llvm-profdata --version
+          xcrun --find llvm-cov
+          xcrun --find llvm-profdata
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
