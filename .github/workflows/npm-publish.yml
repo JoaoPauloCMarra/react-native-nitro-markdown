@@ -33,7 +33,7 @@ env:
 jobs:
   publish:
     name: Publish react-native-nitro-markdown to npm
-    runs-on: macos-26
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
@@ -53,11 +53,10 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Verify C++ coverage tools
+      - name: Install C++ coverage tools
         run: |
-          clang --version
-          xcrun --find llvm-cov
-          xcrun --find llvm-profdata
+          sudo apt-get update
+          sudo apt-get install -y clang llvm
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
