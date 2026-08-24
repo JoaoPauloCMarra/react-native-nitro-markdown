@@ -8,20 +8,13 @@
 #pragma once
 
 // Forward declarations of C++ defined types
-// Forward declaration of `HybridMarkdownSessionSpec` to properly resolve imports.
-namespace margelo::nitro::Markdown { class HybridMarkdownSessionSpec; }
+
 
 // Forward declarations of Swift defined types
-// Forward declaration of `HybridMarkdownSessionSpec_cxx` to properly resolve imports.
-namespace NitroMarkdown { class HybridMarkdownSessionSpec_cxx; }
+
 
 // Include C++ defined types
-#include "HybridMarkdownSessionSpec.hpp"
-#include <NitroModules/Result.hpp>
-#include <exception>
-#include <functional>
-#include <memory>
-#include <string>
+
 
 /**
  * Contains specialized versions of C++ templated types so they can be accessed from Swift,
@@ -29,96 +22,6 @@ namespace NitroMarkdown { class HybridMarkdownSessionSpec_cxx; }
  */
 namespace margelo::nitro::Markdown::bridge::swift {
 
-  // pragma MARK: std::function<void()>
-  /**
-   * Specialized version of `std::function<void()>`.
-   */
-  using Func_void = std::function<void()>;
-  /**
-   * Wrapper class for a `std::function<void()>`, this can be used from Swift.
-   */
-  class Func_void_Wrapper final {
-  public:
-    explicit Func_void_Wrapper(std::function<void()>&& func): _function(std::make_unique<std::function<void()>>(std::move(func))) {}
-    inline void call() const noexcept {
-      _function->operator()();
-    }
-  private:
-    std::unique_ptr<std::function<void()>> _function;
-  } SWIFT_NONCOPYABLE;
-  Func_void create_Func_void(void* NON_NULL swiftClosureWrapper) noexcept;
-  inline Func_void_Wrapper wrap_Func_void(Func_void value) noexcept {
-    return Func_void_Wrapper(std::move(value));
-  }
   
-  // pragma MARK: std::function<void(double /* from */, double /* to */)>
-  /**
-   * Specialized version of `std::function<void(double, double)>`.
-   */
-  using Func_void_double_double = std::function<void(double /* from */, double /* to */)>;
-  /**
-   * Wrapper class for a `std::function<void(double / * from * /, double / * to * /)>`, this can be used from Swift.
-   */
-  class Func_void_double_double_Wrapper final {
-  public:
-    explicit Func_void_double_double_Wrapper(std::function<void(double /* from */, double /* to */)>&& func): _function(std::make_unique<std::function<void(double /* from */, double /* to */)>>(std::move(func))) {}
-    inline void call(double from, double to) const noexcept {
-      _function->operator()(from, to);
-    }
-  private:
-    std::unique_ptr<std::function<void(double /* from */, double /* to */)>> _function;
-  } SWIFT_NONCOPYABLE;
-  Func_void_double_double create_Func_void_double_double(void* NON_NULL swiftClosureWrapper) noexcept;
-  inline Func_void_double_double_Wrapper wrap_Func_void_double_double(Func_void_double_double value) noexcept {
-    return Func_void_double_double_Wrapper(std::move(value));
-  }
-  
-  // pragma MARK: std::shared_ptr<HybridMarkdownSessionSpec>
-  /**
-   * Specialized version of `std::shared_ptr<HybridMarkdownSessionSpec>`.
-   */
-  using std__shared_ptr_HybridMarkdownSessionSpec_ = std::shared_ptr<HybridMarkdownSessionSpec>;
-  std::shared_ptr<HybridMarkdownSessionSpec> create_std__shared_ptr_HybridMarkdownSessionSpec_(void* NON_NULL swiftUnsafePointer) noexcept;
-  void* NON_NULL get_std__shared_ptr_HybridMarkdownSessionSpec_(std__shared_ptr_HybridMarkdownSessionSpec_ cppType);
-  
-  // pragma MARK: std::weak_ptr<HybridMarkdownSessionSpec>
-  using std__weak_ptr_HybridMarkdownSessionSpec_ = std::weak_ptr<HybridMarkdownSessionSpec>;
-  inline std__weak_ptr_HybridMarkdownSessionSpec_ weakify_std__shared_ptr_HybridMarkdownSessionSpec_(const std::shared_ptr<HybridMarkdownSessionSpec>& strong) noexcept { return strong; }
-  
-  // pragma MARK: Result<double>
-  using Result_double_ = Result<double>;
-  inline Result_double_ create_Result_double_(double value) noexcept {
-    return Result<double>::withValue(std::move(value));
-  }
-  inline Result_double_ create_Result_double_(const std::exception_ptr& error) noexcept {
-    return Result<double>::withError(error);
-  }
-  
-  // pragma MARK: Result<void>
-  using Result_void_ = Result<void>;
-  inline Result_void_ create_Result_void_() noexcept {
-    return Result<void>::withValue();
-  }
-  inline Result_void_ create_Result_void_(const std::exception_ptr& error) noexcept {
-    return Result<void>::withError(error);
-  }
-  
-  // pragma MARK: Result<std::string>
-  using Result_std__string_ = Result<std::string>;
-  inline Result_std__string_ create_Result_std__string_(const std::string& value) noexcept {
-    return Result<std::string>::withValue(value);
-  }
-  inline Result_std__string_ create_Result_std__string_(const std::exception_ptr& error) noexcept {
-    return Result<std::string>::withError(error);
-  }
-  
-  // pragma MARK: Result<std::function<void()>>
-  using Result_std__function_void____ = Result<std::function<void()>>;
-  inline Result_std__function_void____ create_Result_std__function_void____(const std::function<void()>& value) noexcept {
-    return Result<std::function<void()>>::withValue(value);
-  }
-  inline Result_std__function_void____ create_Result_std__function_void____(const std::exception_ptr& error) noexcept {
-    return Result<std::function<void()>>::withError(error);
-  }
 
 } // namespace margelo::nitro::Markdown::bridge::swift

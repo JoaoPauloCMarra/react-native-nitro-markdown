@@ -23,7 +23,7 @@ documented here so app owners can reason about what is and is not guaranteed.
   test gate.
 - Parse input is bounded at two layers:
   - JavaScript boundary: inputs above `options.maxInputLength` (default
-    10,000,000 characters) are rejected with a typed `input_too_large` error
+    10,485,760 UTF-8 bytes) are rejected with a typed `input_too_large` error
     before any native call.
   - C++ boundary: the parser rejects inputs above the same hard cap (measured
     in bytes) and rejects serialized AST output above 64 MB.

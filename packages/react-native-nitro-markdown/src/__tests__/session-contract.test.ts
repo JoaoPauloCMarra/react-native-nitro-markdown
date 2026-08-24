@@ -5,8 +5,8 @@ import {
   SESSION_SCENARIO_CORPUS,
 } from "../utils/session-contract";
 
-describe("shared session contract corpus (X3, JS adapter only)", () => {
-  it("runs every scenario in the corpus against the JS session adapter", () => {
+describe("shared session contract corpus (JS adapter and C++ harness)", () => {
+  it("runs every scenario in the corpus against the JS adapter", () => {
     const results = runSessionScenarioCorpus(() => createMarkdownSession());
 
     expect(results).toHaveLength(SESSION_SCENARIO_CORPUS.length);
@@ -23,6 +23,8 @@ describe("shared session contract corpus (X3, JS adapter only)", () => {
         "dispose-rejects-all-operations",
         "unsubscribe-stops-notifications",
         "getTextRange-clamps",
+        "append-rejects-buffer-cap",
+        "replace-rejects-buffer-cap",
       ]),
     );
   });

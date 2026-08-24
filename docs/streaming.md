@@ -64,6 +64,10 @@ a structural append always does.
 falls back to a full session read for reset-like changes, replacements inside
 existing text, or a native range-read failure.
 
+Session ranges are JavaScript UTF-16 `[from, to)` units. Boundaries inside a
+surrogate pair (including emoji) are rejected with `invalid_range`; they are
+never rounded to consume or replace the whole code point.
+
 If any plugin defines `beforeParse`, incremental AST reuse is disabled so the
 full pipeline runs correctly (see `sourceAstStatus` below).
 

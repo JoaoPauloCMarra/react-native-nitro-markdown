@@ -14,6 +14,7 @@
  */
 export type MarkdownErrorCode =
   | "input_too_large"
+  | "invalid_ast"
   | "parse_failed"
   | "invalid_json"
   | "native_unavailable"
@@ -24,8 +25,31 @@ export type MarkdownErrorCode =
 
 export type MarkdownErrorSource = "parse" | "extract" | "session" | "render";
 
-/** JavaScript-side input cap enforced before any call reaches the native parser. */
+/** JavaScript-side UTF-8 byte cap enforced before any call reaches the native parser. */
 export const MAX_PARSE_INPUT_LENGTH = 10 * 1024 * 1024;
+
+export function utf8ByteLength(value: string): number {
+  let bytes = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x7f) {
+      bytes += 1;
+    } else if (code <= 0x7ff) {
+      bytes += 2;
+    } else if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        bytes += 4;
+        index += 1;
+      } else {
+        bytes += 3;
+      }
+    } else {
+      bytes += 3;
+    }
+  }
+  return bytes;
+}
 
 export class MarkdownError extends Error {
   readonly code: MarkdownErrorCode;
@@ -48,7 +72,8 @@ const MESSAGE_CODE_RULES: readonly (readonly [RegExp, MarkdownErrorCode])[] =
     // Native C++ parser: byte-cap rejection (JS-side char cap is typed
     // directly; the native byte cap is only reachable for multi-byte text).
     [/Markdown input size .* exceeds the maximum of/, "input_too_large"],
-    // Native sessions (Swift/Kotlin): stable, non-localized messages.
+    [/Markdown AST depth exceeds the maximum of/, "invalid_ast"],
+    // Native sessions (shared C++): stable, non-localized messages.
     [/Buffer size limit exceeded/, "buffer_limit"],
     [/Invalid range/, "invalid_range"],
     [/is destroyed/i, "destroyed"],
@@ -70,12 +95,28 @@ export function toMarkdownError(
 }
 
 export function inputTooLargeError(
-  actualLength: number,
-  maxLength: number,
+  actualBytes: number,
+  maxBytes: number,
 ): MarkdownError {
   return new MarkdownError(
     "input_too_large",
     "parse",
-    `Input length ${actualLength} exceeds the maximum of ${maxLength} characters`,
+    `Input size ${actualBytes} bytes exceeds the maximum of ${maxBytes} bytes`,
+  );
+}
+
+export function invalidInputLengthError(value: unknown): MarkdownError {
+  return new MarkdownError(
+    "input_too_large",
+    "parse",
+    `maxInputLength must be a finite non-negative integer in bytes; received ${String(value)}`,
+  );
+}
+
+export function invalidAstError(reason: string): MarkdownError {
+  return new MarkdownError(
+    "invalid_ast",
+    "render",
+    `[NitroMarkdown] Invalid Markdown AST: ${reason}`,
   );
 }

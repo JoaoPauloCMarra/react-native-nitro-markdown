@@ -1,7 +1,14 @@
 import type { MarkdownNode } from "../headless";
-import { parseMarkdown, parseMarkdownWithOptions } from "../headless";
+import {
+  parseMarkdown,
+  parseMarkdownWithOptions,
+} from "../headless";
 import type { ParserOptions } from "../Markdown.nitro";
 import type { MarkdownPlugin } from "../markdown";
+import {
+  cloneMarkdownNode as cloneValidatedMarkdownNode,
+  freezeMarkdownNode,
+} from "./freeze-ast";
 
 export type MarkdownErrorPhase = "parse" | "before-plugin" | "after-plugin";
 
@@ -49,7 +56,12 @@ export function safeOnError<P extends string>(
 
 export const isMarkdownNode = (value: unknown): value is MarkdownNode => {
   if (typeof value !== "object" || value === null) return false;
-  return typeof Reflect.get(value, "type") === "string";
+  try {
+    const descriptor = Reflect.getOwnPropertyDescriptor(value, "type");
+    return Boolean(descriptor && "value" in descriptor && typeof descriptor.value === "string");
+  } catch {
+    return false;
+  }
 };
 
 export const warnInDev = (message: string, error?: unknown): void => {
@@ -66,10 +78,8 @@ export const warnInDev = (message: string, error?: unknown): void => {
   }
 };
 
-export const cloneMarkdownNode = (node: MarkdownNode): MarkdownNode => {
-  const children = node.children?.map(cloneMarkdownNode);
-  return children ? { ...node, children } : { ...node };
-};
+export const cloneMarkdownNode = (node: MarkdownNode): MarkdownNode =>
+  cloneValidatedMarkdownNode(node);
 
 export const getParserOptionsKey = (options?: ParserOptions): string => {
   if (!options) {
@@ -194,8 +204,8 @@ export const applyAfterParsePlugins = (
 
     try {
       const transformed = plugin.afterParse(nextAst);
-      if (isMarkdownNode(transformed)) {
-        nextAst = transformed;
+      if (transformed !== undefined) {
+        nextAst = freezeMarkdownNode(cloneValidatedMarkdownNode(transformed));
       }
     } catch (error) {
       const pluginLabel = plugin.name ? ` (${plugin.name})` : "";

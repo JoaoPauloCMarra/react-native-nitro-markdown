@@ -54,6 +54,11 @@ content + parser options, so re-rendering the same Markdown avoids re-parsing.
 The cache is bounded (32 entries) and per-instance hit/miss/eviction counters
 are reported through `onParseComplete`'s `cacheStats`.
 
+Cached AST nodes and their nested child arrays are deeply frozen before they
+reach renderers or callbacks. `MarkdownNode` is readonly; an `afterParse`
+plugin or `astTransform` should return a new node/tree rather than mutate its
+input.
+
 Native parse failures do not produce an empty document. `<Markdown>` renders
 the `errorText` (localizable) and calls `onError(error, "parse")`. Plugin
 failures use the `"before-plugin"` or `"after-plugin"` phase and include the

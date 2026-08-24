@@ -12,6 +12,8 @@ set(CPP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 # Collect source files
 file(GLOB MD4C_SOURCES "${CPP_ROOT}/nitromd/*.c")
 file(GLOB CORE_SOURCES "${CPP_ROOT}/core/*.cpp")
+file(GLOB BINDING_SOURCES "${CPP_ROOT}/bindings/*.cpp")
+file(GLOB GENERATED_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/../nitrogen/generated/shared/c++/*.cpp")
 # Exclude the test file from the library sources
 list(FILTER CORE_SOURCES EXCLUDE REGEX ".*Test\.cpp$")
 
@@ -19,12 +21,18 @@ list(FILTER CORE_SOURCES EXCLUDE REGEX ".*Test\.cpp$")
 add_library(MD4CCore STATIC
     ${MD4C_SOURCES}
     ${CORE_SOURCES}
+    ${BINDING_SOURCES}
+    ${GENERATED_SOURCES}
 )
 
 # Include directories for the library
 target_include_directories(MD4CCore PUBLIC
     "${CPP_ROOT}/nitromd"
     "${CPP_ROOT}/core"
+    "${CPP_ROOT}/bindings"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../nitrogen/generated/shared/c++"
+    "${CMAKE_BINARY_DIR}/generated"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../node_modules/react-native/ReactCommon/jsi"
 )
 
 # Preprocessor definitions

@@ -38,7 +38,7 @@ Native components — so you get native parse speed *and* component flexibility.
 - 📜 **Virtualization** — bounded memory and fast first screen on long docs.
 - 📊 **GFM tables, task lists, inline & block math, syntax highlighting** built in.
 - 🛡️ **Type-safe** — full TypeScript types for nodes, renderers, options.
-- 🔒 **Safe by default** — bounded parse input (default 10M chars, overridable via
+- 🔒 **Safe by default** — bounded parse input (default 10 MiB UTF-8 bytes, overridable via
   `options.maxInputLength`), a hard C++ cap, seeded fuzzing and a CommonMark/GFM
   conformance corpus in the test gate, and a link/image URL policy
   ([security policy](./SECURITY.md)).
@@ -58,6 +58,13 @@ bunx expo prebuild
 `react-native-nitro-modules` and `ratex-react-native` are peer dependencies
 (parsing and math rendering use native code). Expo Go cannot load Nitro
 modules — use a development build. Full guide: **[Installation](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/installation.md)**.
+
+## Expo Config
+
+No package-specific Expo config plugin is required. After installing the
+package and its native peer dependencies, run `expo prebuild` and use an Expo
+development build. See the [Installation guide](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/installation.md)
+for the Expo and bare React Native setup.
 
 ## Quick start
 
@@ -122,6 +129,9 @@ valid render. For very large initial content, pass `initialParseMode="async"`
 so the first frame renders without parsing. Full guide:
 **[Streaming](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/streaming.md)**.
 
+Session ranges use JavaScript UTF-16 units. An index inside a surrogate pair
+(including emoji) is rejected with `invalid_range` instead of rounded.
+
 ## Headless parsing
 
 ```ts
@@ -157,6 +167,10 @@ render:
 When `sourceAst` is provided, `beforeParse` plugins are skipped because parsing
 already happened. `afterParse` plugins and `astTransform` still run.
 
+Parser AST nodes and nested child arrays are deeply frozen. Treat `MarkdownNode`
+fields as readonly and return a new tree from transforms or callbacks instead
+of mutating a parsed AST.
+
 ## Theming & customization
 
 Because every node renders as a real React Native component, you can restyle the
@@ -189,7 +203,7 @@ Presets: `defaultMarkdownTheme`, `darkMarkdownTheme`, `minimalMarkdownTheme` (or
 | `options.math` | `true` | Inline and block math nodes. |
 | `options.html` | `false` | Preserve raw HTML nodes for custom renderers. |
 | `options.sourceOffsets` | `true` | Emit per-node `beg`/`end` source offsets as JavaScript UTF-16 indices, matching `String.length` and `String.slice`. Set `false` for one-shot headless parses to shrink the AST and speed up the round trip (the native parser skips the offset map entirely). |
-| `options.maxInputLength` | `10000000` | Maximum accepted input length in characters. Oversized inputs fail with a typed `input_too_large` error instead of being parsed. |
+| `options.maxInputLength` | `10485760` | Maximum accepted input length in UTF-8 bytes. Oversized inputs fail with a typed `input_too_large` error instead of being parsed. Values above the hard cap are clamped. |
 | `parseCache` | `true` | Reuse parsed ASTs for repeated content. The cache is scoped per `<Markdown>` instance (max 32 entries); per-instance hit/miss/eviction counters are reported via `onParseComplete`'s `cacheStats`. |
 | `sourceAst` | `undefined` | Render a pre-parsed AST instead of parsing `children`. |
 | `onError` | `undefined` | Receive parser and plugin failures as `(error, phase, pluginName?)`. Native parse and session failures are typed `MarkdownError`s with stable `code` and `source`. |
@@ -217,7 +231,7 @@ full capability matrix: **[Comparison & benchmarks](https://github.com/JoaoPaulo
 ## Security
 
 - Parse input is bounded: the JavaScript boundary rejects documents above
-  `options.maxInputLength` (default 10M characters) with a typed error, and the
+  `options.maxInputLength` (default 10 MiB UTF-8 bytes) with a typed error, and the
   C++ parser enforces the same hard cap in bytes plus a 64 MB JSON output cap.
 - Custom `onLinkPress` handlers receive the original href so apps can handle
   routes and custom schemes. The built-in `Linking` fallback opens only
@@ -229,6 +243,19 @@ full capability matrix: **[Comparison & benchmarks](https://github.com/JoaoPaulo
   against a CommonMark/GFM conformance corpus in `bun run check`.
 
 See [SECURITY.md](./SECURITY.md) for supported versions and how to report issues.
+
+## API
+
+The stable component, hook, headless, renderer, session, and TypeScript export
+surface is documented in the [API reference](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/api-reference.md).
+
+## Error Contract
+
+Parser, extraction, session, and render failures use `MarkdownError` with stable
+`code` and `source` fields. A supplied or transformed AST with cyclic
+`children` fails with `code: "invalid_ast"` and `source: "render"`; return a new
+tree instead of mutating or cyclically linking an AST. See the [API reference](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/api-reference.md#headless-exports)
+for the error-code contract.
 
 ## Documentation
 
@@ -245,7 +272,7 @@ See [SECURITY.md](./SECURITY.md) for supported versions and how to report issues
 | [Changelog](./CHANGELOG.md) | Package changes and migration requirements by version. |
 | [Troubleshooting](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/troubleshooting.md) | Common install and runtime issues. |
 
-## Compatibility
+## Platform Support
 
 | Dependency | Supported |
 | ---------- | --------- |
@@ -259,6 +286,9 @@ The standalone package gate uses React Native `0.87.0` and its Strict
 TypeScript API. The Expo example stays on Expo SDK 57's supported React Native
 `0.86.2` baseline. Do not override the React Native version selected by Expo.
 
+Web and Expo Go are not supported runtime targets because the parser requires
+Nitro Modules (JSI). See the [installation platform matrix](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/installation.md#platform-support).
+
 ### Upgrading from 0.10.x
 
 Version `0.11.0` requires `react-native-nitro-modules` `>=0.37.0 <0.38.0`.
@@ -266,6 +296,38 @@ Upgrade that peer dependency before installing this package. There are no
 application API removals in this release; streaming now applies
 `maxInputLength` consistently, and partial `codeTokenColors` overrides retain
 the default colors that were not changed.
+
+## Troubleshooting
+
+For native-module, Expo, parser, streaming, and renderer failures, use the
+[Troubleshooting guide](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/troubleshooting.md).
+Prebuild and rebuild after native dependency changes; a successful typecheck or
+build does not prove runtime behavior.
+
+## Development
+
+```sh
+bun install
+bun run check
+bun run check:ci
+bun run release:preflight
+
+bun run example:prebuild -- --platform android
+bun run example:prebuild -- --platform ios
+bun run example:android:assemble
+bun run example:ios:build
+
+bun run example:smoke
+bun run example:smoke:android
+bun run example:smoke:ios
+```
+
+`check` runs package lint, typecheck, tests, and C++ tests. `check:ci` adds
+compatibility, harness, and React Native 0.87 checks; it does not launch a
+native app. `release:preflight` adds example checks and an auth-free publish
+dry-run; it does not publish or release the package. Prebuild generates native
+projects, the Android/iOS build commands compile them, and smoke commands are
+the runtime checks. Build and self-check success alone is not runtime proof.
 
 ## Contributing
 

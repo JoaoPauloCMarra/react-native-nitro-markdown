@@ -28,6 +28,10 @@ describe("toMarkdownError legacy classification", () => {
     const error = toMarkdownError(new Error("unknown native failure"), "parse");
     expect(error.code).toBe("parse_failed");
     expect(error.source).toBe("parse");
+
+    const nonError = toMarkdownError("unknown non-error failure", "parse");
+    expect(nonError.code).toBe("parse_failed");
+    expect(nonError.message).toBe("unknown non-error failure");
   });
 
   it("passes through existing MarkdownErrors unchanged", () => {
@@ -131,6 +135,41 @@ describe("createMarkdownSession", () => {
     expect(() => session.replace(-1, 0, "!")).toThrow("Invalid range");
     expect(() => session.replace(2, 1, "!")).toThrow("Invalid range");
     expect(session.getAllText()).toBe("hello");
+  });
+
+  it("uses UTF-16 boundaries without rounding surrogate pairs", () => {
+    const session = createMarkdownSession();
+
+    session.reset("A😀B");
+
+    expect(session.getLength()).toBe(4);
+    expect(session.getTextRange(0, 1)).toBe("A");
+    expect(session.getTextRange(1, 3)).toBe("😀");
+    expect(session.getTextRange(3, 4)).toBe("B");
+    expect(session.getTextRange(1, 1)).toBe("");
+    expect(session.getTextRange(3, 3)).toBe("");
+
+    const expectInvalidRange = (operation: () => unknown) => {
+      let caught: unknown;
+      try {
+        operation();
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(MarkdownError);
+      expect((caught as MarkdownError).code).toBe("invalid_range");
+      expect((caught as MarkdownError).source).toBe("session");
+      expect((caught as MarkdownError).message).toContain("surrogate pair");
+    };
+
+    expectInvalidRange(() => session.getTextRange(2, 2));
+    expect(() => session.getTextRange(1, 2)).toThrow("surrogate pair");
+    expectInvalidRange(() => session.replace(2, 2, "X"));
+    expect(() => session.replace(1, 2, "X")).toThrow("surrogate pair");
+    expect(session.getAllText()).toBe("A😀B");
+
+    expect(session.replace(1, 3, "X")).toBe(3);
+    expect(session.getAllText()).toBe("AXB");
   });
 
   it("disposes hook-owned sessions on unmount without emitting clear updates", () => {

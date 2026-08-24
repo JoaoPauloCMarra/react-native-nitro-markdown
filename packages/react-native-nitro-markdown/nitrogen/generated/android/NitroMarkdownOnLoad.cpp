@@ -15,11 +15,8 @@
 #include <fbjni/fbjni.h>
 #include <NitroModules/HybridObjectRegistry.hpp>
 
-#include "JHybridMarkdownSessionSpec.hpp"
-#include "JFunc_void.hpp"
-#include "JFunc_void_double_double.hpp"
 #include "HybridMarkdownParser.hpp"
-#include <NitroModules/DefaultConstructableObject.hpp>
+#include "HybridMarkdownSession.hpp"
 
 namespace margelo::nitro::Markdown {
 
@@ -29,23 +26,14 @@ int initialize(JavaVM* vm) {
   });
 }
 
-struct JHybridMarkdownSessionSpecImpl: public jni::JavaClass<JHybridMarkdownSessionSpecImpl, JHybridMarkdownSessionSpec::JavaPart> {
-  static constexpr auto kJavaDescriptor = "Lcom/margelo/nitro/com/nitromarkdown/HybridMarkdownSession;";
-  static std::shared_ptr<JHybridMarkdownSessionSpec> create() {
-    static const auto constructorFn = javaClassStatic()->getConstructor<JHybridMarkdownSessionSpecImpl::javaobject()>();
-    jni::local_ref<JHybridMarkdownSessionSpec::JavaPart> javaPart = javaClassStatic()->newObject(constructorFn);
-    return javaPart->getJHybridMarkdownSessionSpec();
-  }
-};
+
 
 void registerAllNatives() {
   using namespace margelo::nitro;
   using namespace margelo::nitro::Markdown;
 
   // Register native JNI methods
-  margelo::nitro::Markdown::JHybridMarkdownSessionSpec::CxxPart::registerNatives();
-  margelo::nitro::Markdown::JFunc_void_cxx::registerNatives();
-  margelo::nitro::Markdown::JFunc_void_double_double_cxx::registerNatives();
+  
 
   // Register Nitro Hybrid Objects
   HybridObjectRegistry::registerHybridObjectConstructor(
@@ -60,7 +48,10 @@ void registerAllNatives() {
   HybridObjectRegistry::registerHybridObjectConstructor(
     "MarkdownSession",
     []() -> std::shared_ptr<HybridObject> {
-      return JHybridMarkdownSessionSpecImpl::create();
+      static_assert(std::is_default_constructible_v<HybridMarkdownSession>,
+                    "The HybridObject \"HybridMarkdownSession\" is not default-constructible! "
+                    "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
+      return std::make_shared<HybridMarkdownSession>();
     }
   );
 }

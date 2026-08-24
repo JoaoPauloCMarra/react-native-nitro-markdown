@@ -137,6 +137,21 @@ function createMockSession() {
     }
   };
 
+  const assertUtf16Boundary = (index: number) => {
+    if (
+      index > 0 &&
+      index < buffer.length &&
+      buffer.charCodeAt(index - 1) >= 0xd800 &&
+      buffer.charCodeAt(index - 1) <= 0xdbff &&
+      buffer.charCodeAt(index) >= 0xdc00 &&
+      buffer.charCodeAt(index) <= 0xdfff
+    ) {
+      throw new Error(
+        `Invalid range: UTF-16 index ${index} splits a surrogate pair`,
+      );
+    }
+  };
+
   return {
     append: jest.fn((chunk: string) => {
       assertActive();
@@ -172,6 +187,8 @@ function createMockSession() {
       }
       const start = Math.max(0, Math.min(Math.trunc(from), buffer.length));
       const end = Math.max(start, Math.min(Math.trunc(to), buffer.length));
+      assertUtf16Boundary(start);
+      assertUtf16Boundary(end);
       return buffer.slice(start, end);
     }),
     get highlightPosition() {
@@ -196,6 +213,8 @@ function createMockSession() {
       }
       const start = Math.max(0, Math.min(Math.trunc(from), buffer.length));
       const end = Math.max(start, Math.min(Math.trunc(to), buffer.length));
+      assertUtf16Boundary(start);
+      assertUtf16Boundary(end);
       buffer = `${buffer.slice(0, start)}${text}${buffer.slice(end)}`;
       notify(start, start + text.length);
       return buffer.length;

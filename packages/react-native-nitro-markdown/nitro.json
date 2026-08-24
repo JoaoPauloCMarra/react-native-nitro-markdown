@@ -15,12 +15,8 @@
       }
     },
     "MarkdownSession": {
-      "ios": {
-        "language": "swift",
-        "implementationClassName": "HybridMarkdownSession"
-      },
-      "android": {
-        "language": "kotlin",
+      "all": {
+        "language": "c++",
         "implementationClassName": "HybridMarkdownSession"
       }
     }

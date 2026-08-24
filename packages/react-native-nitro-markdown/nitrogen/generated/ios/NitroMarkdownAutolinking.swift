@@ -12,15 +12,5 @@ import NitroModules
 public final class NitroMarkdownAutolinking {
   public typealias bridge = margelo.nitro.Markdown.bridge.swift
 
-  public static func createMarkdownSession() -> bridge.std__shared_ptr_HybridMarkdownSessionSpec_ {
-    let hybridObject = HybridMarkdownSession()
-    return { () -> bridge.std__shared_ptr_HybridMarkdownSessionSpec_ in
-      let __cxxWrapped = hybridObject.getCxxWrapper()
-      return __cxxWrapped.getCxxPart()
-    }()
-  }
   
-  public static func isMarkdownSessionRecyclable() -> Bool {
-    return HybridMarkdownSession.self is any RecyclableView.Type
-  }
 }

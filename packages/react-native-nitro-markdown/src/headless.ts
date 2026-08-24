@@ -15,9 +15,15 @@ import type { MarkdownParser, ParserOptions } from "./Markdown.nitro";
 import {
   MAX_PARSE_INPUT_LENGTH,
   MarkdownError,
+  invalidInputLengthError,
   inputTooLargeError,
   toMarkdownError,
+  utf8ByteLength,
 } from "./errors";
+import {
+  cloneMarkdownNode,
+  freezeMarkdownNode,
+} from "./utils/freeze-ast";
 
 export type { ParserOptions } from "./Markdown.nitro";
 
@@ -57,40 +63,42 @@ export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
 export type TableCellAlign = "left" | "center" | "right";
 
 /**
- * Represents a node in the Markdown AST (Abstract Syntax Tree).
+ * Represents an immutable node in the Markdown AST (Abstract Syntax Tree).
  * Each node has a type and optional properties depending on the node type.
+ * Parsed nodes and their child arrays are frozen at the native boundary. Build
+ * a new tree instead of mutating a parsed node.
  */
 export type MarkdownNode = {
   /** The type of markdown element this node represents. Used to decide how to render the node. */
-  type: MarkdownNodeType;
+  readonly type: MarkdownNodeType;
   /** Text content for text, code, and similar nodes. */
-  content?: string;
+  readonly content?: string;
   /** Heading level (1-6) for heading nodes. */
-  level?: HeadingLevel;
+  readonly level?: HeadingLevel;
   /** URL for link and image nodes. */
-  href?: string;
+  readonly href?: string;
   /** Title attribute for link and image nodes. */
-  title?: string;
+  readonly title?: string;
   /** Alt text for image nodes. */
-  alt?: string;
+  readonly alt?: string;
   /** Programming language for code blocks (e.g., 'typescript', 'javascript'). */
-  language?: string;
+  readonly language?: string;
   /** Whether a list is ordered (numbered) or unordered. */
-  ordered?: boolean;
+  readonly ordered?: boolean;
   /** The starting number for ordered lists. */
-  start?: number;
+  readonly start?: number;
   /** Whether a task list item is currently checked. */
-  checked?: boolean;
+  readonly checked?: boolean;
   /** Whether a table cell is part of the header row. */
-  isHeader?: boolean;
+  readonly isHeader?: boolean;
   /** Text alignment for table cells: 'left', 'center', or 'right'. */
-  align?: TableCellAlign;
+  readonly align?: TableCellAlign;
   /** Source start offset as a JavaScript UTF-16 index in the original markdown text. */
-  beg?: number;
+  readonly beg?: number;
   /** Source end offset as a JavaScript UTF-16 index in the original markdown text. */
-  end?: number;
+  readonly end?: number;
   /** Nested child nodes for hierarchical elements like paragraphs, lists, and tables. */
-  children?: MarkdownNode[];
+  readonly children?: readonly MarkdownNode[];
 };
 
 function reportNativeParserFailure(methodName: string, error?: unknown): void {
@@ -103,21 +111,27 @@ function reportNativeParserFailure(methodName: string, error?: unknown): void {
 }
 
 function resolveMaxInputLength(options?: ParserOptions): number {
-  if (!options?.maxInputLength) return MAX_PARSE_INPUT_LENGTH;
-  return Math.min(options.maxInputLength, MAX_PARSE_INPUT_LENGTH);
+  const value = options?.maxInputLength;
+  if (value === undefined || value === 0) return MAX_PARSE_INPUT_LENGTH;
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw invalidInputLengthError(value);
+  }
+  return Math.min(value, MAX_PARSE_INPUT_LENGTH);
 }
 
 function assertInputWithinBounds(text: string, options?: ParserOptions): void {
-  const maxLength = resolveMaxInputLength(options);
-  if (text.length > maxLength) {
-    throw inputTooLargeError(text.length, maxLength);
+  const maxBytes = resolveMaxInputLength(options);
+  const actualBytes = utf8ByteLength(text);
+  if (actualBytes > maxBytes) {
+    throw inputTooLargeError(actualBytes, maxBytes);
   }
 }
 
 function parseJsonAst(jsonStr: string): MarkdownNode {
   try {
-    return JSON.parse(jsonStr) as MarkdownNode;
+    return freezeMarkdownNode(JSON.parse(jsonStr) as MarkdownNode);
   } catch (error) {
+    if (error instanceof MarkdownError) throw error;
     throw new MarkdownError(
       "invalid_json",
       "parse",
@@ -258,65 +272,119 @@ export type { MarkdownParser };
  * @returns The concatenated text content
  */
 export const getTextContent = (node: MarkdownNode): string => {
-  if (node.content) return node.content;
-  return node.children?.map(getTextContent).join("") ?? "";
+  const safeNode = cloneMarkdownNode(node);
+  const pending: MarkdownNode[] = [safeNode];
+  let text = "";
+  while (pending.length > 0) {
+    const current = pending.pop()!;
+    if (current.content) {
+      text += current.content;
+      if (text.length > 64 * 1024 * 1024) {
+        throw new MarkdownError(
+          "invalid_ast",
+          "render",
+          "[NitroMarkdown] AST text content exceeds the maximum size",
+        );
+      }
+      continue;
+    }
+    const children = current.children;
+    if (!children) continue;
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      pending.push(children[index]!);
+    }
+  }
+  return text;
 };
 
 /**
  * recursively extracts plain text from the AST, normalizing spacing.
  */
 export const getFlattenedText = (node: MarkdownNode): string => {
-  if (
-    node.type === "text" ||
-    node.type === "code_inline" ||
-    node.type === "math_inline" ||
-    node.type === "html_inline"
-  ) {
-    return node.content ?? "";
+  const safeNode = cloneMarkdownNode(node);
+  const frames: {
+    node: MarkdownNode;
+    index: number;
+    parts: string[];
+  }[] = [{ node: safeNode, index: 0, parts: [] }];
+  let result = "";
+
+  const appendResult = (value: string): void => {
+    result += value;
+    if (result.length > 64 * 1024 * 1024) {
+      throw new MarkdownError(
+        "invalid_ast",
+        "render",
+        "[NitroMarkdown] Flattened AST text exceeds the maximum size",
+      );
+    }
+  };
+
+  while (frames.length > 0) {
+    const frame = frames[frames.length - 1]!;
+    const children = frame.node.children;
+    if (children && frame.index < children.length) {
+      const child = children[frame.index]!;
+      frame.index += 1;
+      frames.push({ node: child, index: 0, parts: [] });
+      continue;
+    }
+
+    const current = frame.node;
+    let value: string;
+    if (
+      current.type === "text" ||
+      current.type === "code_inline" ||
+      current.type === "math_inline" ||
+      current.type === "html_inline"
+    ) {
+      value = current.content ?? "";
+    } else if (
+      current.type === "code_block" ||
+      current.type === "math_block" ||
+      current.type === "html_block"
+    ) {
+      const blockContent = current.content ?? frame.parts.join("");
+      value = `${blockContent.trim()}\n\n`;
+    } else if (current.type === "line_break") {
+      value = "\n";
+    } else if (current.type === "soft_break") {
+      value = " ";
+    } else if (current.type === "horizontal_rule") {
+      value = "---\n\n";
+    } else if (current.type === "image") {
+      value = current.alt || current.title || "";
+    } else {
+      const childrenText = frame.parts.join("");
+      switch (current.type) {
+        case "paragraph":
+        case "heading":
+        case "blockquote":
+          value = `${childrenText.trim()}\n\n`;
+          break;
+        case "list_item":
+        case "task_list_item":
+          value = `${childrenText.trim()}\n`;
+          break;
+        case "list":
+        case "table_row":
+          value = `${childrenText}\n`;
+          break;
+        case "table_cell":
+          value = `${childrenText} | `;
+          break;
+        default:
+          value = childrenText;
+      }
+    }
+
+    frames.pop();
+    const parent = frames[frames.length - 1];
+    if (parent) parent.parts.push(value);
+    else appendResult(value);
   }
 
-  if (
-    node.type === "code_block" ||
-    node.type === "math_block" ||
-    node.type === "html_block"
-  ) {
-    const blockContent =
-      node.content ?? node.children?.map(getFlattenedText).join("") ?? "";
-    return blockContent.trim() + "\n\n";
-  }
-
-  if (node.type === "line_break") return "\n";
-  if (node.type === "soft_break") return " ";
-  if (node.type === "horizontal_rule") return "---\n\n";
-
-  if (node.type === "image") {
-    return node.alt || node.title || "";
-  }
-
-  const childrenText = node.children?.map(getFlattenedText).join("") ?? "";
-
-  switch (node.type) {
-    case "paragraph":
-    case "heading":
-    case "blockquote":
-      return childrenText.trim() + "\n\n";
-
-    case "list_item":
-    case "task_list_item":
-      return childrenText.trim() + "\n";
-
-    case "list":
-      return childrenText + "\n";
-
-    case "table_row":
-      return childrenText + "\n";
-
-    case "table_cell":
-      return childrenText + " | ";
-
-    default:
-      return childrenText;
-  }
+  return result;
 };
 
 /**
@@ -328,9 +396,18 @@ export const getFlattenedText = (node: MarkdownNode): string => {
  * the JSON cost of serializing/parsing them in the first place.
  */
 export function stripSourceOffsets(node: MarkdownNode): MarkdownNode {
-  const { beg: _beg, end: _end, children, ...rest } = node;
-  return {
-    ...rest,
-    ...(children ? { children: children.map(stripSourceOffsets) } : {}),
-  };
+  const cloned = cloneMarkdownNode(node);
+  const pending: MarkdownNode[] = [cloned];
+  while (pending.length > 0) {
+    const current = pending.pop()! as MarkdownNode & {
+      beg?: number;
+      end?: number;
+    };
+    delete current.beg;
+    delete current.end;
+    if (current.children) {
+      for (const child of current.children) pending.push(child);
+    }
+  }
+  return cloned;
 }

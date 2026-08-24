@@ -20,6 +20,9 @@ import {
   getFlattenedText,
   type MarkdownNode,
 } from "./headless";
+import {
+  freezeMarkdownNode,
+} from "./utils/freeze-ast";
 import type { ParserOptions } from "./Markdown.nitro";
 import {
   MarkdownContext,
@@ -45,7 +48,6 @@ import {
   cloneMarkdownNode,
   getParserOptionsKey,
   hashString,
-  isMarkdownNode,
   normalizeParserOptions,
   parseWithNativeParser,
   safeOnError,
@@ -54,6 +56,7 @@ import {
   ERROR_PHASE,
   type MarkdownErrorPhase,
 } from "./utils/parse-pipeline";
+import { reuseStableAstNodes } from "./utils/incremental-ast";
 
 export type { MarkdownErrorPhase } from "./utils/parse-pipeline";
 
@@ -103,6 +106,8 @@ export type MarkdownPlugin = {
   beforeParse?: (markdown: string) => string;
   /**
    * Optional AST postprocessor executed after native parsing.
+   * The input tree is readonly at runtime. Return a new node or tree instead
+   * of mutating the callback argument.
    */
   afterParse?: AstTransform;
 };
@@ -122,6 +127,7 @@ const getCachedParsedAst = (
   options: ParserOptions | undefined,
   cache: Map<string, ParseAstCacheEntry>,
   stats: { hits: number; misses: number; evictions: number },
+  shouldCloneSourceAst: boolean,
 ): MarkdownNode => {
   if (text.length > MAX_CACHEABLE_TEXT_LENGTH) {
     return parseWithNativeParser(text, options);
@@ -133,7 +139,9 @@ const getCachedParsedAst = (
     stats.hits += 1;
     cache.delete(cacheKey);
     cache.set(cacheKey, cachedEntry);
-    return cloneMarkdownNode(cachedEntry.ast);
+    return shouldCloneSourceAst
+      ? freezeMarkdownNode(cloneMarkdownNode(cachedEntry.ast))
+      : cachedEntry.ast;
   }
 
   stats.misses += 1;
@@ -150,7 +158,9 @@ const getCachedParsedAst = (
     }
   }
 
-  return cloneMarkdownNode(parsedNode);
+  return shouldCloneSourceAst
+    ? freezeMarkdownNode(cloneMarkdownNode(parsedNode))
+    : parsedNode;
 };
 
 export type MarkdownProps = {
@@ -180,21 +190,10 @@ export type MarkdownProps = {
   /**
    * Optional transform applied after parsing and before rendering.
    * The transformed AST is also returned in `onParseComplete`.
+   * The input tree is readonly at runtime. Return a new node or tree instead
+   * of mutating the callback argument.
    */
   astTransform?: AstTransform;
-  /**
-   * @deprecated Parsing is synchronous in `<Markdown>`, so this callback has
-   * no in-progress window: it fires in the `useEffect` commit phase after the
-   * new AST is already rendered. Use `onParseComplete` for post-parse
-   * inspection, and `MarkdownStream` (`sourceAstStatus`, `initialParseMode`)
-   * when you need a real asynchronous parse state.
-   *
-   * Callback fired after the current parse cycle completes and the component
-   * has re-rendered with new content. Because the native parser runs
-   * synchronously inside `useMemo`, there is no observable "in-progress"
-   * window.
-   */
-  onParsingInProgress?: () => void;
   /**
    * Callback fired when parsing completes.
    */
@@ -291,7 +290,6 @@ export const Markdown: FC<MarkdownProps> = ({
   styles: nodeStyles,
   stylingStrategy = "opinionated",
   style,
-  onParsingInProgress,
   onParseComplete,
   onLinkPress,
   onError,
@@ -314,6 +312,7 @@ export const Markdown: FC<MarkdownProps> = ({
   onErrorRef.current = onError;
 
   const parseAstCacheRef = useRef<Map<string, ParseAstCacheEntry> | null>(null);
+  const validatedSourceAstRef = useRef<MarkdownNode | null>(null);
   const cacheStatsRef = useRef({ hits: 0, misses: 0, evictions: 0 });
   if (parseAstCacheRef.current === null) {
     parseAstCacheRef.current = new Map();
@@ -322,8 +321,19 @@ export const Markdown: FC<MarkdownProps> = ({
 
   const parseResult = useMemo(() => {
     try {
+      let safeSourceAst: MarkdownNode | undefined;
+      if (sourceAst) {
+        const clonedSourceAst = freezeMarkdownNode(cloneMarkdownNode(sourceAst));
+        const previousSourceAst = validatedSourceAstRef.current;
+        safeSourceAst = previousSourceAst
+          ? freezeMarkdownNode(reuseStableAstNodes(previousSourceAst, clonedSourceAst))
+          : clonedSourceAst;
+        validatedSourceAstRef.current = safeSourceAst;
+      } else {
+        validatedSourceAstRef.current = null;
+      }
       const sortedPlugins = sortPluginsByPriority(plugins);
-      const markdownToParse = sourceAst
+      const markdownToParse = safeSourceAst
         ? children
         : applyBeforeParsePlugins(children, sortedPlugins, onErrorRef.current);
       const parserOptions = normalizeParserOptions(
@@ -341,19 +351,19 @@ export const Markdown: FC<MarkdownProps> = ({
         ),
       );
       const shouldCloneSourceAst =
-        sourceAst &&
-        (Boolean(astTransform) ||
-          sortedPlugins?.some((plugin) => plugin.afterParse) === true);
-      let parsedAst = sourceAst
+        Boolean(astTransform) ||
+        sortedPlugins?.some((plugin) => plugin.afterParse) === true;
+      let parsedAst = safeSourceAst
         ? shouldCloneSourceAst
-          ? cloneMarkdownNode(sourceAst)
-          : sourceAst
+          ? freezeMarkdownNode(cloneMarkdownNode(safeSourceAst))
+          : safeSourceAst
         : parseCache
           ? getCachedParsedAst(
               markdownToParse,
               parserOptions,
               parseAstCacheRef.current!,
               cacheStatsRef.current,
+              shouldCloneSourceAst,
             )
           : parseWithNativeParser(markdownToParse, parserOptions);
       parsedAst = applyAfterParsePlugins(
@@ -366,9 +376,7 @@ export const Markdown: FC<MarkdownProps> = ({
       if (astTransform) {
         try {
           const nextAst = astTransform(parsedAst);
-          if (isMarkdownNode(nextAst)) {
-            ast = nextAst;
-          }
+          ast = freezeMarkdownNode(cloneMarkdownNode(nextAst));
         } catch (error) {
           warnInDev(
             "[react-native-nitro-markdown] astTransform threw; falling back to parsed AST.",
@@ -400,18 +408,6 @@ export const Markdown: FC<MarkdownProps> = ({
     plugins,
   ]);
   /* eslint-enable react-hooks/refs */
-
-  useEffect(() => {
-    onParsingInProgress?.();
-  }, [
-    children,
-    parserOptionGfm,
-    parserOptionMath,
-    parserOptionHtml,
-    parserOptionSourceOffsets,
-    parserOptionMaxInputLength,
-    onParsingInProgress,
-  ]);
 
   useEffect(() => {
     if (!parseResult.ast || !onParseComplete) return;

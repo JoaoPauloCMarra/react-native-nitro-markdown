@@ -4,6 +4,8 @@
 #include "flatten.hpp"
 #include "FlattenCorpus.hpp"
 #include "ConformanceCorpus.hpp"
+#include "../bindings/HybridMarkdownParser.hpp"
+#include "../bindings/HybridMarkdownSession.hpp"
 #include "../nitromd/nitromd.h"
 #include <iostream>
 #include <cassert>
@@ -255,6 +257,7 @@ public:
         testSoftBreakAndHardBreak();
         testTableCellAlignment();
         testNestedBlockquotes();
+        testAstDepthLimit();
         testImageWithTitle();
         testHorizontalRule();
         testEntityText();
@@ -284,6 +287,11 @@ public:
         testUtf16Offsets();
         testParseLatencyBudgets();
         testLargeDocumentMemoryBudget();
+        testSerializationCacheEquivalence();
+        testSerializationCacheFlushBudget();
+
+        testHybridMarkdownSessionCorpus();
+        testHybridMarkdownParserBinding();
 
         TestRunner::printSummary();
     }
@@ -407,6 +415,547 @@ private:
             estimatedBytes <= kEstimatedAstBytesBudget,
             "Perf budget large-document estimated AST memory"
         );
+    }
+
+    static void testSerializationCacheEquivalence() {
+        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+
+        HybridMarkdownParser warm;
+        const std::vector<std::string> documents = {
+            "# Cache Heading\n\nParagraph with **bold**, *italic*, `code`, and a [link](https://example.com).\n\n- item one\n- item two\n- item three\n\n",
+            "## Título com acentos\n\nParágrafo com **negrito** e `código` — e emoji 🎉 no fim.\n\n| Coluna A | Coluna B |\n| --- | --- |\n| um | dois |\n| três | quatro |\n\n",
+            "Setext title\n=============\n\nParagraph after setext.\n\n> quote with **bold**\n\n```ts\nconst value = 1;\n```\n",
+            "[ref]: https://example.com/defined\n\nUses [ref] and [undefined] links.\n",
+            "Open paragraph that still continues",
+        };
+
+        bool allEquivalent = true;
+        for (size_t round = 0; round < 2; round++) {
+            for (const auto& document : documents) {
+                HybridMarkdownParser fresh;
+                allEquivalent = allEquivalent && fresh.parse(document) == warm.parse(document);
+            }
+        }
+        TestRunner::assertTrue(
+            allEquivalent,
+            "Serialization cache outputs stay byte-identical across repeated parses"
+        );
+
+        HybridMarkdownParser freshExtended;
+        const std::string extended =
+            documents[0] + "Appended **tail** paragraph with `code`.\n\n- appended item\n";
+        TestRunner::assertEqual(
+            freshExtended.parse(extended),
+            warm.parse(extended),
+            "Serialization cache outputs stay byte-identical for appended documents"
+        );
+
+        HybridMarkdownParser freshContinued;
+        const std::string continued = documents[4] + " and keeps going with **bold**";
+        TestRunner::assertEqual(
+            freshContinued.parse(continued),
+            warm.parse(continued),
+            "Serialization cache skips blocks terminated at end of input"
+        );
+
+        std::string evictionInput;
+        evictionInput.reserve(600 * 48);
+        for (size_t index = 0; index < 600; index++) {
+            evictionInput +=
+                "Eviction paragraph " + std::to_string(index) +
+                " with **bold " + std::to_string(index) + "** content.\n\n";
+        }
+        HybridMarkdownParser freshEviction;
+        TestRunner::assertEqual(
+            freshEviction.parse(evictionInput),
+            warm.parse(evictionInput),
+            "Serialization cache outputs stay byte-identical under entry eviction"
+        );
+        TestRunner::assertEqual(
+            freshEviction.parse(evictionInput),
+            warm.parse(evictionInput),
+            "Serialization cache outputs stay byte-identical when fully warm"
+        );
+    }
+
+    static std::string makeStreamingFlushPayload(size_t sections) {
+        std::string payload;
+        for (size_t index = 0; index < sections; index++) {
+            payload += "## Streaming heading " + std::to_string(index) + "\n\n";
+            for (size_t repeat = 0; repeat < 3; repeat++) {
+                payload +=
+                    "Span paragraph " + std::to_string(index) + "." + std::to_string(repeat) +
+                    " mixes **bold *with `code " + std::to_string(repeat) +
+                    "\" quotes` inside* bold**,"\
+                    " *italic **with `more \"code\"` nested** italic*,"\
+                    " **star *deep `span` deep* star**,"\
+                    " and [a **bold** link](https://example.com/s" + std::to_string(index) + ").\n\n";
+            }
+            payload +=
+                "| Column A | Column B | Column C | Column D |\n"
+                "| --- | --- | --- | --- |\n"
+                "| **b *i `c" + std::to_string(index) + "` i* b** | [link **bold**](https://example.com/t" +
+                std::to_string(index) + ") | `code \"x\"` | *i **b `c` b** i* |\n"
+                "| \"a \\\"q\\\"\" | **b *i `c` i* b** | [read](https://example.com/r" +
+                std::to_string(index) + ") | *i **b** i* |\n\n";
+            payload +=
+                "- list item one with **bold *nested `code`* bold**\n"
+                "- list item two with *italic **with `code`** italic*\n"
+                "- list item three with [a **bold** link](https://example.com/i" +
+                std::to_string(index) + ")\n\n";
+        }
+        return payload;
+    }
+
+    static void testSerializationCacheFlushBudget() {
+        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+
+        const std::string base = makeStreamingFlushPayload(48);
+        static constexpr int kColdRuns = 8;
+        static constexpr int kWarmRuns = 24;
+        static constexpr double kMaxWarmToColdRatio = 0.8;
+
+        double coldTotalMs = 0.0;
+        for (int run = 0; run < kColdRuns; run++) {
+            HybridMarkdownParser cold;
+            const auto start = std::chrono::steady_clock::now();
+            (void)cold.parse(base);
+            const auto end = std::chrono::steady_clock::now();
+            coldTotalMs += std::chrono::duration<double, std::milli>(end - start).count();
+        }
+        const double coldAvgMs = coldTotalMs / kColdRuns;
+
+        HybridMarkdownParser warm;
+        (void)warm.parse(base);
+
+        std::string grown = base;
+        double warmTotalMs = 0.0;
+        bool outputsMatchFresh = true;
+        for (int run = 0; run < kWarmRuns; run++) {
+            grown +=
+                "Warm tail paragraph " + std::to_string(run) +
+                " with **bold**, `code`, and [a link](https://example.com/warm-" +
+                std::to_string(run) + ").\n\n- warm item one " + std::to_string(run) +
+                "\n- warm item two\n\n";
+
+            const auto start = std::chrono::steady_clock::now();
+            const std::string warmJson = warm.parse(grown);
+            const auto end = std::chrono::steady_clock::now();
+            warmTotalMs += std::chrono::duration<double, std::milli>(end - start).count();
+
+            HybridMarkdownParser fresh;
+            outputsMatchFresh = outputsMatchFresh && fresh.parse(grown) == warmJson;
+        }
+        const double warmAvgMs = warmTotalMs / kWarmRuns;
+        const double ratio = coldAvgMs > 0.0 ? warmAvgMs / coldAvgMs : 0.0;
+
+        std::cout << "ℹ Perf budget serialization cache cold=" << coldAvgMs
+                  << "ms warm=" << warmAvgMs << "ms ratio=" << ratio << std::endl;
+
+        TestRunner::assertTrue(
+            outputsMatchFresh,
+            "Serialization cache warm outputs stay byte-identical to cold outputs"
+        );
+        TestRunner::assertTrue(
+            warmAvgMs <= kMaxWarmToColdRatio * coldAvgMs,
+            "Serialization cache keeps warm flush cost within 0.8x of cold parse"
+        );
+    }
+
+    static void testHybridMarkdownSessionCorpus() {
+        using ::margelo::nitro::Markdown::HybridMarkdownSession;
+
+        const std::vector<std::string> corpus = {
+            "append-extends-buffer",
+            "append-notifies-range",
+            "reset-replaces-buffer",
+            "reset-notifies-full-range",
+            "replace-inserts-in-place",
+            "replace-notifies-insert-range",
+            "replace-clamps-out-of-bounds",
+            "replace-rejects-invalid-range",
+            "getTextRange-clamps",
+            "getTextRange-rejects-invalid",
+            "clear-empties-buffer",
+            "clear-notifies-zero-range",
+            "dispose-rejects-all-operations",
+            "unsubscribe-stops-notifications",
+            "listeners-see-snapshot-ranges",
+            "append-rejects-buffer-cap",
+            "replace-rejects-buffer-cap",
+        };
+        TestRunner::assertTrue(corpus.size() == 17, "Session corpus has all scenarios");
+
+        auto resetSession = std::make_shared<HybridMarkdownSession>();
+        std::vector<std::pair<double, double>> resetRanges;
+        auto resetUnsubscribe = resetSession->addListener([&resetRanges](double from, double to) {
+            resetRanges.emplace_back(from, to);
+        });
+        resetSession->reset("new content");
+        TestRunner::assertEqual(
+            "new content",
+            resetSession->getAllText(),
+            "Session reset-replaces-buffer"
+        );
+        TestRunner::assertTrue(
+            resetRanges.back() == std::pair<double, double>{0.0, 11.0},
+            "Session reset-notifies-full-range"
+        );
+        resetUnsubscribe();
+
+        auto session = std::make_shared<HybridMarkdownSession>();
+        std::vector<std::pair<double, double>> ranges;
+        session->reset("hello");
+        auto unsubscribe = session->addListener([&ranges](double from, double to) {
+            ranges.emplace_back(from, to);
+        });
+        TestRunner::assertEqual("hello world", [&session]() {
+            session->append(" world");
+            return session->getAllText();
+        }(), "Session append extends buffer");
+        TestRunner::assertTrue(
+            ranges.back() == std::pair<double, double>{5.0, 11.0},
+            "Session append notifies inserted range"
+        );
+
+        session->reset("hello world");
+        ranges.clear();
+        session->replace(5.0, 5.0, " brave");
+        TestRunner::assertEqual(
+            "hello brave world",
+            session->getAllText(),
+            "Session replace-inserts-in-place"
+        );
+        TestRunner::assertTrue(
+            ranges.back() == std::pair<double, double>{5.0, 11.0},
+            "Session replace-notifies-insert-range"
+        );
+
+        session->reset("hello");
+        ranges.clear();
+        session->replace(10.0, 10.0, "!");
+        TestRunner::assertEqual("hello!", session->getAllText(), "Session replace clamps insertion");
+        TestRunner::assertTrue(
+            ranges.back() == std::pair<double, double>{5.0, 6.0},
+            "Session replace reports clamped range"
+        );
+
+        session->reset("hello");
+        TestRunner::assertEqual("ello", session->getTextRange(1.0, 100.0), "Session range clamps end");
+        TestRunner::assertEqual("", session->getTextRange(100.0, 200.0), "Session range clamps empty tail");
+        TestRunner::assertEqual("", session->getTextRange(2.0, 2.0), "Session ASCII empty range stays empty");
+        TestRunner::assertEqual("", session->getTextRange(std::numeric_limits<double>::quiet_NaN(), 0.0), "Session invalid range is empty");
+
+        auto unicodeSession = std::make_shared<HybridMarkdownSession>();
+        unicodeSession->reset("A😀B");
+        TestRunner::assertTrue(unicodeSession->getLength() == 4.0, "Session UTF-16 length counts emoji as two units");
+        TestRunner::assertEqual("A", unicodeSession->getTextRange(0.0, 1.0), "Session range before emoji");
+        TestRunner::assertEqual("😀", unicodeSession->getTextRange(1.0, 3.0), "Session range consumes complete emoji");
+        TestRunner::assertEqual("B", unicodeSession->getTextRange(3.0, 4.0), "Session range after emoji");
+        TestRunner::assertEqual("", unicodeSession->getTextRange(1.0, 1.0), "Session empty range before emoji");
+        TestRunner::assertEqual("", unicodeSession->getTextRange(3.0, 3.0), "Session empty range after emoji");
+
+        bool splitGetRangeThrew = false;
+        try {
+            (void)unicodeSession->getTextRange(2.0, 2.0);
+        } catch (const std::runtime_error& error) {
+            splitGetRangeThrew = std::string(error.what()).find("surrogate pair") != std::string::npos;
+        }
+        TestRunner::assertTrue(splitGetRangeThrew, "Session rejects a split-surrogate getTextRange boundary");
+
+        bool splitGetRangeEndThrew = false;
+        try {
+            (void)unicodeSession->getTextRange(1.0, 2.0);
+        } catch (const std::runtime_error& error) {
+            splitGetRangeEndThrew = std::string(error.what()).find("surrogate pair") != std::string::npos;
+        }
+        TestRunner::assertTrue(splitGetRangeEndThrew, "Session rejects a split-surrogate getTextRange end");
+
+        bool splitReplaceThrew = false;
+        try {
+            (void)unicodeSession->replace(2.0, 2.0, "X");
+        } catch (const std::runtime_error& error) {
+            splitReplaceThrew = std::string(error.what()).find("surrogate pair") != std::string::npos;
+        }
+        TestRunner::assertTrue(splitReplaceThrew, "Session rejects a split-surrogate replace boundary");
+
+        bool splitReplaceEndThrew = false;
+        try {
+            (void)unicodeSession->replace(1.0, 2.0, "X");
+        } catch (const std::runtime_error& error) {
+            splitReplaceEndThrew = std::string(error.what()).find("surrogate pair") != std::string::npos;
+        }
+        TestRunner::assertTrue(splitReplaceEndThrew, "Session rejects a split-surrogate replace end");
+        TestRunner::assertEqual("A😀B", unicodeSession->getAllText(), "Session split-surrogate rejection preserves text");
+        TestRunner::assertTrue(unicodeSession->replace(1.0, 3.0, "X") == 3.0, "Session replaces a complete emoji range");
+        TestRunner::assertEqual("AXB", unicodeSession->getAllText(), "Session complete emoji replacement preserves ASCII parity");
+
+        session->setHighlightPosition(12.0);
+        TestRunner::assertTrue(
+            session->getHighlightPosition() == 12.0,
+            "Session highlight position round-trips"
+        );
+        session->clear();
+        TestRunner::assertEqual("", session->getAllText(), "Session clear empties buffer");
+        TestRunner::assertTrue(session->getHighlightPosition() == 0.0, "Session clear resets highlight");
+        TestRunner::assertTrue(
+            ranges.back() == std::pair<double, double>{0.0, 0.0},
+            "Session clear notifies zero range"
+        );
+
+        unsubscribe();
+        const auto rangeCount = ranges.size();
+        session->append("after unsubscribe");
+        TestRunner::assertTrue(ranges.size() == rangeCount, "Session unsubscribe stops notifications");
+
+        bool invalidRangeThrew = false;
+        try {
+            session->replace(2.0, 1.0, "!");
+        } catch (const std::runtime_error&) {
+            invalidRangeThrew = true;
+        }
+        TestRunner::assertTrue(invalidRangeThrew, "Session replace rejects invalid range");
+
+        auto snapshotSession = std::make_shared<HybridMarkdownSession>();
+        std::vector<std::pair<double, double>> snapshotRanges;
+        auto snapshotUnsubscribe = snapshotSession->addListener(
+            [&snapshotRanges](double from, double to) {
+                snapshotRanges.emplace_back(from, to);
+            }
+        );
+        snapshotSession->append("one ");
+        snapshotSession->append("two");
+        TestRunner::assertTrue(
+            snapshotRanges == std::vector<std::pair<double, double>>{
+                {0.0, 4.0}, {4.0, 7.0}
+            },
+            "Session listeners-see-snapshot-ranges"
+        );
+        snapshotUnsubscribe();
+
+        auto capped = std::make_shared<HybridMarkdownSession>();
+        capped->append(std::string(10 * 1024 * 1024, 'a'));
+        bool appendCapThrew = false;
+        try {
+            capped->append("!");
+        } catch (const std::runtime_error&) {
+            appendCapThrew = true;
+        }
+        TestRunner::assertTrue(appendCapThrew, "Session append enforces buffer cap");
+
+        bool replaceCapThrew = false;
+        try {
+            capped->replace(0.0, 0.0, "!");
+        } catch (const std::runtime_error&) {
+            replaceCapThrew = true;
+        }
+        TestRunner::assertTrue(replaceCapThrew, "Session replace enforces buffer cap");
+
+        auto inspected = std::make_shared<HybridMarkdownSession>();
+        const size_t emptyMemory = inspected->getExternalMemorySize();
+        inspected->append(std::string(10 * 1024 * 1024, 'a'));
+        const size_t appendedMemory = inspected->getExternalMemorySize();
+        TestRunner::assertTrue(
+            appendedMemory >= 10 * 1024 * 1024 && appendedMemory > emptyMemory,
+            "Session external memory counts retained buffer capacity"
+        );
+        inspected->clear();
+        const size_t clearedMemory = inspected->getExternalMemorySize();
+        TestRunner::assertTrue(
+            clearedMemory >= 10 * 1024 * 1024,
+            "Session clear retains and reports buffer capacity"
+        );
+        auto inspectedUnsubscribe = inspected->addListener([](double, double) {});
+        const size_t listenerMemory = inspected->getExternalMemorySize();
+        TestRunner::assertTrue(
+            listenerMemory > clearedMemory,
+            "Session external memory counts listener container and callback storage"
+        );
+        inspectedUnsubscribe();
+        const size_t removedListenerMemory = inspected->getExternalMemorySize();
+        TestRunner::assertTrue(
+            removedListenerMemory >= listenerMemory,
+            "Session listener removal reports retained vector capacity"
+        );
+        inspected->dispose();
+        TestRunner::assertEqual("0", std::to_string(inspected->getExternalMemorySize()), "Session dispose releases memory and capacity");
+
+        auto disposed = std::make_shared<HybridMarkdownSession>();
+        disposed->reset("hello");
+        disposed->dispose();
+        size_t disposedFailures = 0;
+        try { disposed->append("!"); } catch (const std::runtime_error&) { disposedFailures++; }
+        try { disposed->clear(); } catch (const std::runtime_error&) { disposedFailures++; }
+        try { disposed->getAllText(); } catch (const std::runtime_error&) { disposedFailures++; }
+        try { disposed->getLength(); } catch (const std::runtime_error&) { disposedFailures++; }
+        try { disposed->getTextRange(0.0, 1.0); } catch (const std::runtime_error&) { disposedFailures++; }
+        try { disposed->setHighlightPosition(1.0); } catch (const std::runtime_error&) { disposedFailures++; }
+        try { disposed->getHighlightPosition(); } catch (const std::runtime_error&) { disposedFailures++; }
+        try { disposed->reset("new"); } catch (const std::runtime_error&) { disposedFailures++; }
+        try { disposed->replace(0.0, 0.0, "new"); } catch (const std::runtime_error&) { disposedFailures++; }
+        try { disposed->addListener([](double, double) {}); } catch (const std::runtime_error&) { disposedFailures++; }
+        TestRunner::assertTrue(
+            disposedFailures == 10,
+            "Session dispose-rejects-all-operations"
+        );
+    }
+
+    static void testHybridMarkdownParserBinding() {
+        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+        using BindingParserOptions = ::margelo::nitro::Markdown::ParserOptions;
+
+        HybridMarkdownParser parser;
+        const std::string json = parser.parse("# Title");
+        TestRunner::assertTrue(
+            json.find("\"type\":\"document\"") == 1,
+            "Parser binding emits document JSON"
+        );
+        TestRunner::assertTrue(
+            json.find("\"type\":\"heading\"") != std::string::npos &&
+            json.find("\"content\":\"Title\"") != std::string::npos,
+            "Parser binding emits structured heading JSON"
+        );
+        TestRunner::assertTrue(
+            json.find("\"beg\":0") != std::string::npos &&
+            json.find("\"end\":7") != std::string::npos,
+            "Parser binding emits source offsets"
+        );
+        TestRunner::assertTrue(
+            parser.extractPlainText("**plain**") == "plain\n\n",
+            "Parser binding propagates plain text extraction"
+        );
+
+        BindingParserOptions limited;
+        limited.maxInputLength = 8.0;
+        bool limitedThrew = false;
+        try {
+            (void)parser.parseWithOptions("123456789", limited);
+        } catch (const std::runtime_error& error) {
+            limitedThrew = std::string(error.what()).find("maximum of 8 bytes") != std::string::npos;
+        }
+        TestRunner::assertTrue(limitedThrew, "Parser binding propagates max-input errors");
+
+        BindingParserOptions multibyteLimit;
+        multibyteLimit.maxInputLength = 3.0;
+        bool multibyteThrew = false;
+        try {
+            (void)parser.parseWithOptions("éé", multibyteLimit);
+        } catch (const std::runtime_error& error) {
+            multibyteThrew = std::string(error.what()).find("maximum of 3 bytes") != std::string::npos;
+        }
+        TestRunner::assertTrue(multibyteThrew, "Parser binding counts max input in UTF-8 bytes");
+
+        BindingParserOptions invalidMax;
+        invalidMax.maxInputLength = std::numeric_limits<double>::quiet_NaN();
+        bool invalidMaxThrew = false;
+        try {
+            (void)parser.parseWithOptions("valid", invalidMax);
+        } catch (const std::runtime_error& error) {
+            invalidMaxThrew = std::string(error.what()).find(
+                "maxInputLength must be a finite non-negative integer"
+            ) != std::string::npos;
+        }
+        TestRunner::assertTrue(
+            invalidMaxThrew,
+            "Parser binding rejects non-finite max input"
+        );
+
+        BindingParserOptions fractionalMax;
+        fractionalMax.maxInputLength = 1.5;
+        bool fractionalMaxThrew = false;
+        try {
+            (void)parser.parseWithOptions("valid", fractionalMax);
+        } catch (const std::runtime_error& error) {
+            fractionalMaxThrew = std::string(error.what()).find(
+                "maxInputLength must be a finite non-negative integer"
+            ) != std::string::npos;
+        }
+        TestRunner::assertTrue(fractionalMaxThrew, "Parser binding rejects fractional max input");
+
+        BindingParserOptions unrepresentableMax;
+        unrepresentableMax.maxInputLength = std::numeric_limits<double>::max();
+        bool unrepresentableMaxThrew = false;
+        try {
+            (void)parser.parseWithOptions("valid", unrepresentableMax);
+        } catch (const std::runtime_error& error) {
+            unrepresentableMaxThrew = std::string(error.what()).find(
+                "cannot be represented as a native size"
+            ) != std::string::npos;
+        }
+        TestRunner::assertTrue(
+            unrepresentableMaxThrew,
+            "Parser binding rejects unrepresentable max input"
+        );
+
+        BindingParserOptions aboveHardCap;
+        aboveHardCap.maxInputLength = 20 * 1024 * 1024;
+        std::string aboveHardCapInput(10 * 1024 * 1024 + 1, 'x');
+        bool hardCapThrew = false;
+        try {
+            (void)parser.parseWithOptions(aboveHardCapInput, aboveHardCap);
+        } catch (const std::runtime_error& error) {
+            hardCapThrew = std::string(error.what()).find("maximum of 10485760 bytes") != std::string::npos;
+        }
+        TestRunner::assertTrue(hardCapThrew, "Parser binding clamps max input to the native hard cap");
+
+        bool corpusPassed = true;
+        for (const auto& entry : kConformanceCorpus) {
+            const ParserOptions internalOptions = optionsFromJson(entry.optionsJson);
+            BindingParserOptions corpusOptions;
+            corpusOptions.gfm = internalOptions.gfm;
+            corpusOptions.math = internalOptions.math;
+            corpusOptions.html = internalOptions.html;
+            corpusOptions.sourceOffsets = internalOptions.sourceOffsets;
+            try {
+                const auto corpusJson = parser.parseWithOptions(entry.markdown, corpusOptions);
+                corpusPassed = corpusPassed &&
+                    corpusJson.find("\"type\":\"document\"") != std::string::npos;
+            } catch (const std::exception&) {
+                corpusPassed = false;
+            }
+        }
+        TestRunner::assertTrue(corpusPassed, "Parser binding covers the conformance corpus");
+
+        constexpr size_t maxJsonBytes = 64 * 1024 * 1024;
+        const auto makeHorizontalRuleInput = [](size_t count) {
+            std::string value;
+            value.reserve(4 * count);
+            for (size_t index = 0; index < count; ++index) {
+                value += "---\n";
+            }
+            return value;
+        };
+        const std::string boundedInput = makeHorizontalRuleInput(10'000);
+        const std::string boundedJson = parser.parse(boundedInput);
+        TestRunner::assertTrue(
+            boundedJson.size() <= maxJsonBytes,
+            "Parser binding keeps bounded JSON output below the 64 MiB cap"
+        );
+
+        const std::string workBudgetInput = makeHorizontalRuleInput(1'200'000);
+        bool workBudgetThrew = false;
+        try {
+            (void)parser.parse(workBudgetInput);
+        } catch (const std::runtime_error& error) {
+            const std::string message = error.what();
+            workBudgetThrew =
+                message.find("Markdown AST node/work budget") != std::string::npos ||
+                message.find("Markdown AST child/work budget") != std::string::npos;
+        }
+        TestRunner::assertTrue(
+            workBudgetThrew,
+            "Parser binding rejects the 1.2M-rule input at the AST work budget"
+        );
+
+        bool parserErrorThrew = false;
+        try {
+            BindingParserOptions tiny;
+            tiny.maxInputLength = 1.0;
+            (void)parser.parseWithOptions("too large", tiny);
+        } catch (const std::runtime_error&) {
+            parserErrorThrew = true;
+        }
+        TestRunner::assertTrue(parserErrorThrew, "Parser binding preserves native error propagation");
     }
 
     static void testOffsets() {
@@ -1450,6 +1999,66 @@ private:
                     "NestedBlockquote: text content");
             }
         }
+    }
+
+    static void testAstDepthLimit() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+        auto makeNestedQuote = [](size_t depth) {
+            std::string markdown;
+            markdown.reserve(depth * 2 + 5);
+            for (size_t index = 0; index < depth; index += 1) {
+                markdown += "> ";
+            }
+            markdown += "text";
+            return markdown;
+        };
+
+        bool boundaryParsed = false;
+        try {
+            boundaryParsed = parser.parse(
+                makeNestedQuote(kMaxAstDepth - 4), options
+            ) != nullptr;
+        } catch (const std::exception&) {
+            boundaryParsed = false;
+        }
+        TestRunner::assertTrue(
+            boundaryParsed,
+            "AST depth: nested blocks below the limit parse"
+        );
+
+        bool rejected = false;
+        try {
+            parser.parse(makeNestedQuote(kMaxAstDepth + 4), options);
+        } catch (const std::runtime_error& error) {
+            rejected = std::string(error.what()).find(
+                "Markdown AST depth exceeds the maximum of"
+            ) != std::string::npos;
+        }
+        TestRunner::assertTrue(
+            rejected,
+            "AST depth: nested blocks above the limit fail deterministically"
+        );
+
+        auto deepRoot = std::make_shared<MarkdownNode>(NodeType::Document);
+        auto deepCurrent = deepRoot;
+        for (size_t index = 0; index < kMaxAstDepth; ++index) {
+            auto child = std::make_shared<MarkdownNode>(NodeType::Paragraph);
+            deepCurrent->addChild(child);
+            deepCurrent = std::move(child);
+        }
+        bool flattenRejected = false;
+        try {
+            (void)flattenNodeText(deepRoot);
+        } catch (const std::runtime_error& error) {
+            flattenRejected = std::string(error.what()).find(
+                "Markdown AST depth exceeds the maximum of"
+            ) != std::string::npos;
+        }
+        TestRunner::assertTrue(
+            flattenRejected,
+            "AST depth: iterative flatten rejects deep untrusted trees"
+        );
     }
 
     static void testImageWithTitle() {

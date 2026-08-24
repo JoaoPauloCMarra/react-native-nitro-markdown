@@ -4,6 +4,7 @@ import {
   type MarkdownNode,
 } from "../headless";
 import type { ParserOptions } from "../Markdown.nitro";
+import { freezeMarkdownNode } from "./freeze-ast";
 
 const PLAIN_TEXT_APPEND_PATTERN = /[`*_~[\]#!<>()|$\n\r]/;
 const FENCE_LINE_PATTERN = /^ {0,3}(```+|~~~+)/;
@@ -130,14 +131,13 @@ const appendPlainTextToAst = (
   const delta = appendedChunk.length;
   const update = (node: MarkdownNode, depth: number): MarkdownNode => {
     if (depth === path.length) {
-      const updatedNode: MarkdownNode = {
+      return {
         ...node,
         content: (node.content ?? "") + appendedChunk,
+        ...(typeof node.end === "number"
+          ? { end: node.end + delta }
+          : {}),
       };
-      if (typeof node.end === "number") {
-        updatedNode.end = node.end + delta;
-      }
-      return updatedNode;
     }
 
     const childIndex = path[depth];
@@ -145,16 +145,13 @@ const appendPlainTextToAst = (
       index === childIndex ? update(child, depth + 1) : child,
     );
 
-    const updatedNode: MarkdownNode = {
+    return {
       ...node,
+      ...(typeof node.end === "number"
+        ? { end: node.end + delta }
+        : {}),
+      ...(children ? { children } : {}),
     };
-    if (typeof node.end === "number") {
-      updatedNode.end = node.end + delta;
-    }
-    if (children) {
-      updatedNode.children = children;
-    }
-    return updatedNode;
   };
 
   return update(ast, 0);
@@ -242,7 +239,9 @@ const parseAstWithStableNodes = (
   text: string,
   options?: ParserOptions,
 ): MarkdownNode => {
-  return reuseStableAstNodes(previousAst, parseAst(text, options));
+  return freezeMarkdownNode(
+    reuseStableAstNodes(previousAst, parseAst(text, options)),
+  );
 };
 
 export type IncrementalAstInput = {
@@ -281,7 +280,7 @@ export const getNextStreamAst = ({
       previousText.length,
     );
     if (fencedTextAppendAst) {
-      return fencedTextAppendAst;
+      return freezeMarkdownNode(fencedTextAppendAst);
     }
   }
 
@@ -296,7 +295,7 @@ export const getNextStreamAst = ({
       previousText.length,
     );
     if (textAppendedAst) {
-      return textAppendedAst;
+      return freezeMarkdownNode(textAppendedAst);
     }
   }
 

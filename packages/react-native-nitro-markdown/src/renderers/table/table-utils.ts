@@ -43,8 +43,8 @@ export const extractTableData = (node: MarkdownNode): ExtractedTableData => {
 };
 
 export const estimateColumnWidths = (
-  headers: MarkdownNode[],
-  rows: MarkdownNode[][],
+  headers: readonly MarkdownNode[],
+  rows: readonly (readonly MarkdownNode[])[],
   columnCount: number,
   minColumnWidth: number,
 ) => {

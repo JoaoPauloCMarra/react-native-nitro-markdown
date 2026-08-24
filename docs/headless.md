@@ -29,7 +29,7 @@ The headless entry removes React rendering, but still requires the package's
 native iOS or Android runtime; it does not run on Node.js, servers, or web.
 
 > **Input bounds.** Inputs larger than `options.maxInputLength` (default
-> 10,000,000 characters) are rejected with a typed `input_too_large` error
+> 10,485,760 UTF-8 bytes) are rejected with a typed `input_too_large` error
 > before any native call. The native parser enforces the same hard cap in
 > bytes, plus a 64 MB JSON output cap.
 
@@ -85,6 +85,11 @@ native iOS or Android runtime; it does not run on Node.js, servers, or web.
   ],
 }
 ```
+
+Parsed nodes and every nested `children` array are deeply frozen before they
+are exposed. Treat the exported `MarkdownNode` fields as readonly; transforms
+and consumer callbacks must return or construct a new tree instead of mutating
+the parsed tree.
 
 ## Why headless?
 

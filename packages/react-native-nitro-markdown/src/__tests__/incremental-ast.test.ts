@@ -5,15 +5,23 @@ import {
   parseMarkdownAst,
   reuseStableAstNodes,
 } from "../utils/incremental-ast";
+import { cloneMarkdownNode } from "../utils/parse-pipeline";
 import { getTextContent } from "../headless";
 
 const setTrailingPathEnd = (ast: MarkdownNode, end: number): MarkdownNode => {
-  ast.end = end;
-  const children = ast.children;
-  if (children && children.length > 0) {
-    setTrailingPathEnd(children[children.length - 1], end);
-  }
-  return ast;
+  const mutableAst = cloneMarkdownNode(ast);
+  const update = (node: MarkdownNode): void => {
+    node.end = end;
+    const children = node.children;
+    if (children && children.length > 0) {
+      const lastChild = children[children.length - 1];
+      if (lastChild) {
+        update(lastChild);
+      }
+    }
+  };
+  update(mutableAst);
+  return mutableAst;
 };
 
 describe("incremental AST", () => {

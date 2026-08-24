@@ -7,11 +7,11 @@
 
 #import <Foundation/Foundation.h>
 #import <NitroModules/HybridObjectRegistry.hpp>
-#import "NitroMarkdown-Swift-Cxx-Umbrella.hpp"
+
 #import <type_traits>
 
 #include "HybridMarkdownParser.hpp"
-#include "HybridMarkdownSessionSpecSwift.hpp"
+#include "HybridMarkdownSession.hpp"
 
 @interface NitroMarkdownAutolinking : NSObject
 @end
@@ -34,8 +34,10 @@
   HybridObjectRegistry::registerHybridObjectConstructor(
     "MarkdownSession",
     []() -> std::shared_ptr<HybridObject> {
-      std::shared_ptr<HybridMarkdownSessionSpec> hybridObject = NitroMarkdown::NitroMarkdownAutolinking::createMarkdownSession();
-      return hybridObject;
+      static_assert(std::is_default_constructible_v<HybridMarkdownSession>,
+                    "The HybridObject \"HybridMarkdownSession\" is not default-constructible! "
+                    "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
+      return std::make_shared<HybridMarkdownSession>();
     }
   );
 }
