@@ -6,7 +6,7 @@
 [![license](https://img.shields.io/npm/l/react-native-nitro-markdown?color=007ec6)](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/LICENSE)
 [![React Native](https://img.shields.io/badge/react--native-0.87.0-61dafb)](https://reactnative.dev/docs/0.87/getting-started-without-a-framework)
 [![Expo](https://img.shields.io/badge/expo-SDK%2057%20%28RN%200.86.2%29-000020)](https://docs.expo.dev/versions/v57.0.0/)
-[![Nitro Modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.37.0%20%3C0.38.0-black)](https://www.npmjs.com/package/react-native-nitro-modules)
+[![Nitro Modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.37.0%20%3C0.38.0-black)](https://nitro.margelo.com)
 [![TypeScript](https://img.shields.io/badge/typescript-6.0-3178c6)](https://www.typescriptlang.org/)
 
 **The fast Markdown engine for React Native.** Native **C++ parsing** (CommonMark
@@ -66,7 +66,7 @@ package and its native peer dependencies, run `expo prebuild` and use an Expo
 development build. See the [Installation guide](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/installation.md)
 for the Expo and bare React Native setup.
 
-## Quick start
+## Quick Start
 
 ```tsx
 import { Markdown } from "react-native-nitro-markdown";
