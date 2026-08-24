@@ -27,6 +27,7 @@ const parserOptions = {
   html: false,
   sourceOffsets: false,
   maxInputLength: 1000,
+  freezeAst: true,
 } satisfies ParserOptions;
 
 const onError: NonNullable<MarkdownProps["onError"]> = (
@@ -80,6 +81,11 @@ declare const markdownError: MarkdownError;
 const errorCode: MarkdownErrorCode = markdownError.code;
 const errorSource: MarkdownErrorSource = markdownError.source;
 const inputLimit: number = MAX_PARSE_INPUT_LENGTH;
+const mutableNode: MarkdownNode = { type: "document", children: [] };
+mutableNode.children?.push({ type: "paragraph" });
+const parsingCompatibilityCallback: NonNullable<
+  MarkdownProps["onParsingInProgress"]
+> = () => {};
 
 void [
   markdownProps,
@@ -90,6 +96,8 @@ void [
   errorCode,
   errorSource,
   inputLimit,
+  mutableNode,
+  parsingCompatibilityCallback,
 ];
 
 // @ts-expect-error — sourceOffsets must be a boolean

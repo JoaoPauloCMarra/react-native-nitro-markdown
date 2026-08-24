@@ -1,4 +1,4 @@
-name: Publish npm package
+name: Publish npm
 
 on:
   release:
@@ -6,52 +6,103 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Release tag to validate against package.json (required for manual runs)
+        description: Release tag to validate and verify
         required: true
+        type: string
       npm_dist_tag:
-        description: npm dist-tag to use for dry-run validation
+        description: npm dist-tag to publish or verify
         required: false
         default: latest
+        type: string
       publish:
         description: Publish the package for an existing release tag (use only for release recovery)
         required: false
-        type: boolean
         default: false
+        type: boolean
+
 permissions:
   contents: read
 
 concurrency:
-  group: npm-publish-${{ github.event.release.tag_name || inputs.release_tag || github.ref_name }}
+  group: npm-publish-${{ github.event.release.tag_name || inputs.release_tag }}
   cancel-in-progress: false
 
 env:
   BUN_VERSION: "1.3.14"
   NODE_VERSION: "24"
-  CC: clang
-  CXX: clang++
+  NPM_VERSION: "11.19.0"
+  PACKAGE_DIR: packages/react-native-nitro-markdown
 
 jobs:
-  publish:
-    name: Publish react-native-nitro-markdown to npm
+  validate:
+    name: Validate release
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
+
+    outputs:
+      package_name: ${{ steps.metadata.outputs.package_name }}
+      package_version: ${{ steps.metadata.outputs.package_version }}
+      release_commit: ${{ steps.metadata.outputs.release_commit }}
+      expected_name: ${{ steps.metadata.outputs.package_name }}
+      expected_version: ${{ steps.metadata.outputs.package_version }}
+      expected_git_head: ${{ steps.metadata.outputs.release_commit }}
+      release_tag: ${{ steps.metadata.outputs.release_tag }}
+      dist_tag: ${{ steps.metadata.outputs.dist_tag }}
+      already_published: ${{ steps.registry.outputs.already_published }}
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: ${{ github.event.release.tag_name || inputs.release_tag || github.ref }}
+      - name: Validate release inputs
+        id: validate_inputs
+        env:
+          RAW_RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+          RAW_DIST_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.npm_dist_tag || github.event.release.prerelease && 'next' || 'latest' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_tag="${RAW_RELEASE_TAG}"
+          dist_tag="${RAW_DIST_TAG}"
 
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+          if (( ${#release_tag} == 0 || ${#release_tag} > 128 )) ||
+            [[ "${release_tag}" =~ [[:space:][:cntrl:]] || ! "${release_tag}" =~ ^v[A-Za-z0-9][A-Za-z0-9.+-]{0,126}$ ]]; then
+            echo "::error::Release tag contains unsafe characters or length."
+            exit 1
+          fi
+
+          if (( ${#dist_tag} == 0 || ${#dist_tag} > 63 )) ||
+            [[ "${dist_tag}" =~ [[:space:][:cntrl:]] || ! "${dist_tag}" =~ ^[A-Za-z][A-Za-z0-9._-]{0,62}$ || "${dist_tag}" =~ ^[vV]([0-9]|[xX*]) ]]; then
+            echo "::error::npm dist-tag contains unsafe characters or length."
+            exit 1
+          fi
+
+          {
+            printf 'release_tag=%s\n' "${release_tag}"
+            printf 'dist_tag=%s\n' "${dist_tag}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout release tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          clean: true
+          ref: refs/tags/${{ steps.validate_inputs.outputs.release_tag }}
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: ${{ env.NODE_VERSION }}
-          registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
           bun-version: ${{ env.BUN_VERSION }}
+          no-cache: true
+
+      - name: Install npm CLI
+        run: |
+          bun install -g "npm@${NPM_VERSION}"
+          npm_bin="$(bun pm bin -g)"
+          printf '%s\n' "$npm_bin" >> "$GITHUB_PATH"
+          "$npm_bin/npm" --version
 
       - name: Install C++ coverage tools
         run: |
@@ -61,48 +112,272 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Validate release tag
+      - name: Validate release tag policy
+        run: node scripts/validate-release-tags.js --test
+
+      - name: Resolve release metadata
+        id: metadata
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+          RELEASE_TAG: ${{ steps.validate_inputs.outputs.release_tag }}
+          DIST_TAG: ${{ steps.validate_inputs.outputs.dist_tag }}
         run: |
-          node - <<'NODE'
-          const fs = require("fs");
-          if (!process.env.RELEASE_TAG) {
-            console.error("A release tag is required for manual dispatch (release_tag input).");
-            process.exit(1);
-          }
-          const pkg = JSON.parse(
-            fs.readFileSync("packages/react-native-nitro-markdown/package.json", "utf8"),
-          );
-          const expected = `v${pkg.version}`;
-          if (process.env.RELEASE_TAG !== expected) {
-            console.error(
-              `Release tag ${process.env.RELEASE_TAG} does not match package version ${expected}`,
-            );
-            process.exit(1);
-          }
-          NODE
+          set -euo pipefail
+          if [ -z "${RELEASE_TAG}" ]; then
+            echo "::error::A release tag is required."
+            exit 1
+          fi
+
+          package_name="$(node -p "require('./${PACKAGE_DIR}/package.json').name")"
+          package_version="$(node -p "require('./${PACKAGE_DIR}/package.json').version")"
+          expected_tag="v${package_version}"
+          node scripts/validate-release-tags.js "${RELEASE_TAG}" "${DIST_TAG}" "${expected_tag}"
+
+          release_commit="$(git rev-parse HEAD)"
+          {
+            echo "package_name=${package_name}"
+            echo "package_version=${package_version}"
+            echo "release_commit=${release_commit}"
+            echo "release_tag=${RELEASE_TAG}"
+            echo "dist_tag=${DIST_TAG}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Expected ${package_name}@${package_version} from ${RELEASE_TAG} at ${release_commit} with dist-tag ${DIST_TAG}."
+
+      - name: Check registry availability and exact version
+        id: registry
+        env:
+          PACKAGE_NAME: ${{ steps.metadata.outputs.package_name }}
+          PACKAGE_VERSION: ${{ steps.metadata.outputs.package_version }}
+        run: |
+          set -euo pipefail
+          response=""
+          status=0
+          response="$(npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version --registry=https://registry.npmjs.org 2>&1)" || status=$?
+
+          if [ "${status}" -eq 0 ]; then
+            published_version="$(printf '%s\n' "${response}" | tr -d '\r' | tail -n 1)"
+            if [ "${published_version}" != "${PACKAGE_VERSION}" ]; then
+              echo "::error::Registry returned version ${published_version}, expected ${PACKAGE_VERSION}."
+              exit 1
+            fi
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
+            echo "Registry status: ${PACKAGE_NAME}@${PACKAGE_VERSION} is already published."
+          elif printf '%s' "${response}" | grep -Eqi 'E404|404 Not Found|No match found|No version'; then
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
+            echo "Registry status: ${PACKAGE_NAME}@${PACKAGE_VERSION} is not published."
+          else
+            echo "::error::npm registry lookup failed; refusing to infer that ${PACKAGE_NAME}@${PACKAGE_VERSION} is unpublished."
+            printf '%s\n' "${response}"
+            exit 1
+          fi
 
       - name: Release preflight
-        run: |
-          bun run check:ci
-          bun run example:check
-          bun run publish-package:dry-run
+        env:
+          CC: clang
+          CXX: clang++
+        run: bun run release:preflight
 
-      - name: Select npm dist tag
+  publish:
+    name: Publish package
+    if: ${{ (github.event_name == 'release' || inputs.publish == true) && needs.validate.outputs.already_published != 'true' }}
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Validate release inputs
+        id: validate_inputs
+        env:
+          RELEASE_TAG: ${{ needs.validate.outputs.release_tag }}
+          DIST_TAG: ${{ needs.validate.outputs.dist_tag }}
+        shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "NPM_DIST_TAG=${{ inputs.npm_dist_tag }}" >> "$GITHUB_ENV"
-          elif [ "${{ github.event.release.prerelease }}" = "true" ]; then
-            echo "NPM_DIST_TAG=next" >> "$GITHUB_ENV"
-          else
-            echo "NPM_DIST_TAG=latest" >> "$GITHUB_ENV"
+          set -euo pipefail
+          release_tag="${RELEASE_TAG}"
+          dist_tag="${DIST_TAG}"
+
+          if (( ${#release_tag} == 0 || ${#release_tag} > 128 )) ||
+            [[ "${release_tag}" =~ [[:space:][:cntrl:]] || ! "${release_tag}" =~ ^v[A-Za-z0-9][A-Za-z0-9.+-]{0,126}$ ]]; then
+            echo "::error::Release tag contains unsafe characters or length."
+            exit 1
           fi
 
-      - name: Publish package
-        run: |
-          args=(--yes --tag="$NPM_DIST_TAG")
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.publish }}" != "true" ]; then
-            args+=(--dry-run)
+          if (( ${#dist_tag} == 0 || ${#dist_tag} > 63 )) ||
+            [[ "${dist_tag}" =~ [[:space:][:cntrl:]] || ! "${dist_tag}" =~ ^[A-Za-z][A-Za-z0-9._-]{0,62}$ || "${dist_tag}" =~ ^[vV]([0-9]|[xX*]) ]]; then
+            echo "::error::npm dist-tag contains unsafe characters or length."
+            exit 1
           fi
-          node scripts/publish.js "${args[@]}"
+
+          {
+            printf 'release_tag=%s\n' "${release_tag}"
+            printf 'dist_tag=%s\n' "${dist_tag}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout release tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          clean: true
+          ref: refs/tags/${{ steps.validate_inputs.outputs.release_tag }}
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          no-cache: true
+
+      - name: Install npm CLI
+        run: |
+          bun install -g "npm@${NPM_VERSION}"
+          npm_bin="$(bun pm bin -g)"
+          printf '%s\n' "$npm_bin" >> "$GITHUB_PATH"
+          "$npm_bin/npm" --version
+
+      - name: Install C++ coverage tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Prepare package artifacts
+        run: bun run build
+
+      - name: Publish to npm with Trusted Publishing
+        working-directory: ${{ env.PACKAGE_DIR }}
+        env:
+          DIST_TAG: ${{ steps.validate_inputs.outputs.dist_tag }}
+        run: npm publish --access public --tag "${DIST_TAG}" --provenance
+
+  verify:
+    name: Verify public registry
+    if: ${{ always() && needs.validate.result == 'success' && (github.event_name == 'release' || inputs.publish == true) }}
+    needs: [validate, publish]
+    runs-on: ubuntu-latest
+    env:
+      PACKAGE_NAME: ${{ needs.validate.outputs.package_name }}
+      PACKAGE_VERSION: ${{ needs.validate.outputs.package_version }}
+      RELEASE_COMMIT: ${{ needs.validate.outputs.release_commit }}
+
+    steps:
+      - name: Validate release inputs
+        id: validate_inputs
+        env:
+          RELEASE_TAG: ${{ needs.validate.outputs.release_tag }}
+          DIST_TAG: ${{ needs.validate.outputs.dist_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_tag="${RELEASE_TAG}"
+          dist_tag="${DIST_TAG}"
+
+          if (( ${#release_tag} == 0 || ${#release_tag} > 128 )) ||
+            [[ "${release_tag}" =~ [[:space:][:cntrl:]] || ! "${release_tag}" =~ ^v[A-Za-z0-9][A-Za-z0-9.+-]{0,126}$ ]]; then
+            echo "::error::Release tag contains unsafe characters or length."
+            exit 1
+          fi
+
+          if (( ${#dist_tag} == 0 || ${#dist_tag} > 63 )) ||
+            [[ "${dist_tag}" =~ [[:space:][:cntrl:]] || ! "${dist_tag}" =~ ^[A-Za-z][A-Za-z0-9._-]{0,62}$ || "${dist_tag}" =~ ^[vV]([0-9]|[xX*]) ]]; then
+            echo "::error::npm dist-tag contains unsafe characters or length."
+            exit 1
+          fi
+
+          {
+            printf 'release_tag=%s\n' "${release_tag}"
+            printf 'dist_tag=%s\n' "${dist_tag}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout release tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          clean: true
+          ref: refs/tags/${{ steps.validate_inputs.outputs.release_tag }}
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Verify exact version, dist-tag, and provenance
+        env:
+          DIST_TAG: ${{ steps.validate_inputs.outputs.dist_tag }}
+          RELEASE_TAG: ${{ steps.validate_inputs.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          delays=(10 20 40 60 60 60)
+          attempt=0
+
+          is_not_found() {
+            printf '%s' "$1" | grep -Eqi 'E404|404 Not Found|No match found|No version'
+          }
+
+          for delay in "${delays[@]}"; do
+            attempt=$((attempt + 1))
+            version_response=""
+            version_status=0
+            version_response="$(npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version --registry=https://registry.npmjs.org 2>&1)" || version_status=$?
+
+            if [ "${version_status}" -eq 0 ]; then
+              published_version="$(printf '%s\n' "${version_response}" | tr -d '\r' | tail -n 1)"
+              if [ "${published_version}" != "${PACKAGE_VERSION}" ]; then
+                echo "::error::Registry version ${published_version} does not match ${PACKAGE_VERSION}."
+                exit 1
+              fi
+
+              dist_response=""
+              dist_status=0
+              dist_response="$(npm view "${PACKAGE_NAME}" "dist-tags.${DIST_TAG}" --registry=https://registry.npmjs.org 2>&1)" || dist_status=$?
+              if [ "${dist_status}" -ne 0 ] && ! is_not_found "${dist_response}"; then
+                echo "::error::npm registry dist-tag lookup failed."
+                printf '%s\n' "${dist_response}"
+                exit 1
+              fi
+
+              dist_value="$(printf '%s\n' "${dist_response}" | tr -d '\r' | tail -n 1)"
+              if [ "${dist_status}" -eq 0 ] && [ "${dist_value}" = "${PACKAGE_VERSION}" ]; then
+                git_head_response=""
+                git_head_status=0
+                git_head_response="$(npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" gitHead --registry=https://registry.npmjs.org 2>&1)" || git_head_status=$?
+                if [ "${git_head_status}" -ne 0 ]; then
+                  echo "::error::npm registry gitHead lookup failed; registry metadata was not stable."
+                  printf '%s\n' "${git_head_response}"
+                  exit 1
+                fi
+
+                git_head="$(printf '%s\n' "${git_head_response}" | tr -d '\r' | tail -n 1)"
+                if [ -z "${git_head}" ] || [ "${git_head}" = "undefined" ] || [ "${git_head}" = "null" ]; then
+                  echo "::warning::npm omitted gitHead; commit provenance could not be compared."
+                elif [ "${git_head}" != "${RELEASE_COMMIT}" ]; then
+                  echo "::error::npm gitHead ${git_head} does not match checked-out tag commit ${RELEASE_COMMIT}."
+                  exit 1
+                fi
+
+                echo "Verified ${PACKAGE_NAME}@${PACKAGE_VERSION} on dist-tag ${DIST_TAG} from ${RELEASE_TAG}."
+                exit 0
+              fi
+            elif ! is_not_found "${version_response}"; then
+              echo "::error::npm registry lookup failed; refusing to classify it as propagation delay."
+              printf '%s\n' "${version_response}"
+              exit 1
+            fi
+
+            if [ "${attempt}" -lt "${#delays[@]}" ]; then
+              echo "Waiting for npm registry propagation (attempt ${attempt}/${#delays[@]}); next check in ${delay}s."
+              sleep "${delay}"
+            fi
+          done
+
+          echo "::error::Timed out waiting for ${PACKAGE_NAME}@${PACKAGE_VERSION} and dist-tag ${DIST_TAG} registry verification."
+          exit 1

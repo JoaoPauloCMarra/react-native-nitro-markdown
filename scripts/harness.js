@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-const { spawnSync } = require("child_process");
 const path = require("path");
+const { runProcess } = require("./process-runner.js");
 
 const projectRoot = path.resolve(__dirname, "..");
 const bunBin = process.platform === "win32" ? "bun.cmd" : "bun";
@@ -18,24 +18,25 @@ const steps = [
   "test:cpp:coverage",
 ];
 
-function runStep(scriptName) {
+async function runStep(scriptName) {
   console.log(`\n> bun run ${scriptName}`);
-  const result = spawnSync(bunBin, ["run", scriptName], {
+  const result = await runProcess({
+    command: bunBin,
+    args: ["run", scriptName],
     cwd: projectRoot,
     stdio: "inherit",
   });
 
-  if (result.error) {
-    console.error(`Failed to start "${scriptName}": ${result.error.message}`);
-    process.exit(1);
-  }
-
-  if (result.status !== 0) {
-    process.exit(result.status ?? 1);
+  if (!result.ok) {
+    const detail = result.error ? `: ${result.error.message}` : "";
+    console.error(
+      `Step "${scriptName}" failed with exit code ${result.exitCode}${detail}`,
+    );
+    process.exitCode = result.exitCode || 1;
   }
 }
 
-function main() {
+async function main() {
   console.log(
     `Running harness (${dryRun ? "dry-run" : "full"}): ${steps.join(" -> ")}`,
   );
@@ -48,10 +49,14 @@ function main() {
   }
 
   for (const step of steps) {
-    runStep(step);
+    await runStep(step);
+    if (process.exitCode) return;
   }
 
   console.log("\nHarness completed.");
 }
 
-main();
+main().catch((error) => {
+  console.error(`Harness failed: ${error.message}`);
+  process.exitCode = 1;
+});

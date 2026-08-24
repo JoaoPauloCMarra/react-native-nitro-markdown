@@ -4,6 +4,7 @@ const { execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const { rimrafSync } = require("rimraf");
+const { runProcess } = require("../../../scripts/process-runner.js");
 
 const colors = {
   green: (text) => `\x1b[32m${text}\x1b[0m`,
@@ -18,17 +19,19 @@ function log(message, color = "green") {
   console.log(colors[color](message));
 }
 
-function execCommand(command, options = {}) {
-  try {
-    execSync(command, {
-      stdio: "inherit",
-      shell: true,
-      ...options,
-    });
-    return true;
-  } catch {
-    return false;
-  }
+async function execCommand(command, options = {}) {
+  const shell = process.platform === "win32" ? "cmd.exe" : "/bin/sh";
+  const args = process.platform === "win32"
+    ? ["/d", "/s", "/c", command]
+    : ["-c", command];
+  const result = await runProcess({
+    command: shell,
+    args,
+    cwd: options.cwd ?? packageRoot,
+    env: options.env,
+    stdio: "inherit",
+  });
+  return result.ok;
 }
 
 function commandExists(command) {
@@ -184,7 +187,7 @@ function ensureDir(dirPath) {
   }
 }
 
-function main() {
+async function main() {
   const args = new Set(process.argv.slice(2));
   const collectCoverage = args.has("--coverage");
   const minLinesArg = process.argv
@@ -229,6 +232,75 @@ function main() {
 
   const generatedDir = path.join(buildDir, "generated");
   ensureDir(generatedDir);
+  const nitroVirtualDir = path.join(generatedDir, "NitroModules");
+  ensureDir(nitroVirtualDir);
+
+  const workspaceRoot = path.resolve(packageRoot, "../..");
+  const nitroCppRoot = path.join(
+    workspaceRoot,
+    "node_modules",
+    "react-native-nitro-modules",
+    "cpp",
+  );
+  const nitroHeaderDirs = [
+    "core",
+    "platform",
+    "registry",
+    "jsi",
+    "utils",
+    "threading",
+    "views",
+    "entrypoint",
+    "prototype",
+    "templates",
+  ];
+  for (const headerDir of nitroHeaderDirs) {
+    const sourceDir = path.join(nitroCppRoot, headerDir);
+    if (!fs.existsSync(sourceDir)) continue;
+    for (const file of fs.readdirSync(sourceDir)) {
+      if (!file.endsWith(".h") && !file.endsWith(".hpp")) continue;
+      fs.copyFileSync(path.join(sourceDir, file), path.join(nitroVirtualDir, file));
+    }
+  }
+  fs.writeFileSync(
+    path.join(nitroVirtualDir, "HybridObject.hpp"),
+    `#pragma once
+#include <cstddef>
+#include <memory>
+
+namespace margelo::nitro {
+
+class Prototype {
+public:
+  template <typename... Args>
+  void registerHybridGetter(const char*, Args...) {}
+  template <typename... Args>
+  void registerHybridSetter(const char*, Args...) {}
+  template <typename... Args>
+  void registerHybridMethod(const char*, Args...) {}
+};
+
+class HybridObject : public std::enable_shared_from_this<HybridObject> {
+public:
+  explicit HybridObject(const char* = "") {}
+  virtual ~HybridObject() = default;
+  virtual void loadHybridMethods() {}
+  virtual void dispose() {}
+
+protected:
+  virtual size_t getExternalMemorySize() noexcept { return 0; }
+
+  template <typename Fn>
+  void registerHybrids(HybridObject*, Fn&& fn) {
+    Prototype prototype;
+    fn(prototype);
+  }
+};
+
+} // namespace margelo::nitro
+`,
+    "utf8",
+  );
   writeCorpusHeaders(generatedDir);
 
   log("Configuring with CMake...");
@@ -250,7 +322,7 @@ function main() {
     : "";
   const cmakeConfigCommand = `cmake ${cmakeGenerator} ${coverageFlags} "${cppDir}"`.trim();
 
-  if (!execCommand(cmakeConfigCommand, { cwd: buildDir })) {
+  if (!(await execCommand(cmakeConfigCommand, { cwd: buildDir }))) {
     log("CMake configuration failed", "red");
     process.exit(1);
   }
@@ -258,7 +330,7 @@ function main() {
   log("Building test executable...");
   const cmakeBuildCommand = "cmake --build . --target MD4CParserTest";
 
-  if (!execCommand(cmakeBuildCommand, { cwd: buildDir })) {
+  if (!(await execCommand(cmakeBuildCommand, { cwd: buildDir }))) {
     log("Build failed", "red");
     process.exit(1);
   }
@@ -290,7 +362,7 @@ function main() {
     ? { ...process.env, LLVM_PROFILE_FILE: path.join(buildDir, "coverage-%p.profraw") }
     : process.env;
 
-  if (!execCommand(`"${testExecutable}"`, { cwd: buildDir, env: testEnv })) {
+  if (!(await execCommand(`"${testExecutable}"`, { cwd: buildDir, env: testEnv }))) {
     log("Tests failed", "red");
     process.exit(1);
   }
@@ -311,9 +383,9 @@ function main() {
     }
 
     if (
-      !execCommand(`"${llvmProfdata}" merge -sparse ${rawProfiles} -o "${profilePath}"`, {
+      !(await execCommand(`"${llvmProfdata}" merge -sparse ${rawProfiles} -o "${profilePath}"`, {
         cwd: buildDir,
-      })
+      }))
     ) {
       log("Failed to merge C++ coverage profiles", "red");
       process.exit(1);
@@ -352,4 +424,7 @@ function main() {
   log("C++ tests completed!");
 }
 
-main();
+main().catch((error) => {
+  log(`C++ test runner failed: ${error.message}`, "red");
+  process.exitCode = 1;
+});

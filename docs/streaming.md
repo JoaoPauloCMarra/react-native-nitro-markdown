@@ -7,7 +7,10 @@ AST node reuse (see [How incremental parsing works](#how-incremental-parsing-wor
 
 ```tsx
 import { useEffect } from "react";
-import { MarkdownStream, useMarkdownSession } from "react-native-nitro-markdown";
+import {
+  MarkdownStream,
+  useMarkdownSession,
+} from "react-native-nitro-markdown";
 
 export function ChatMessage({ text }: { text: string }) {
   const session = useMarkdownSession();
@@ -37,10 +40,10 @@ session.getSession().append("**world**");
 
 `MarkdownStream` batches append-only updates. Choose how it flushes:
 
-| `updateStrategy` | Use when |
-| ---------------- | -------- |
-| `"raf"` | Smooth visual streaming (flush per animation frame). |
-| `"interval"` | Bound update frequency — pair with `updateIntervalMs={50}`. |
+| `updateStrategy` | Use when                                                    |
+| ---------------- | ----------------------------------------------------------- |
+| `"raf"`          | Smooth visual streaming (flush per animation frame).        |
+| `"interval"`     | Bound update frequency — pair with `updateIntervalMs={50}`. |
 
 Pass the controller from `useMarkdownSession()` directly. Use
 `session.getSession()` only when another API needs the raw native session.
@@ -63,6 +66,10 @@ a structural append always does.
 `MarkdownStream` also uses native range reads for append-only updates and only
 falls back to a full session read for reset-like changes, replacements inside
 existing text, or a native range-read failure.
+
+Session ranges are JavaScript UTF-16 `[from, to)` units. Boundaries inside a
+surrogate pair (including emoji) are rejected with `invalid_range`; they are
+never rounded to consume or replace the whole code point.
 
 If any plugin defines `beforeParse`, incremental AST reuse is disabled so the
 full pipeline runs correctly (see `sourceAstStatus` below).

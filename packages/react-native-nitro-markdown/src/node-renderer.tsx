@@ -47,10 +47,18 @@ const isInline = (type: MarkdownNode["type"]): boolean => {
   );
 };
 
-const containsInlineMath = (nodes?: MarkdownNode[]): boolean =>
-  nodes?.some(
-    (node) => node.type === "math_inline" || containsInlineMath(node.children),
-  ) ?? false;
+const containsInlineMath = (nodes?: readonly MarkdownNode[]): boolean => {
+  if (!nodes || nodes.length === 0) return false;
+  const pending = [...nodes];
+  while (pending.length > 0) {
+    const node = pending.pop()!;
+    if (node.type === "math_inline") return true;
+    if (node.children) {
+      for (const child of node.children) pending.push(child);
+    }
+  }
+  return false;
+};
 
 const NodeRendererComponent: FC<NodeRendererProps> = ({
   node,
@@ -62,7 +70,7 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
   const baseStyles = getBaseStyles(theme);
 
   const renderChildren = (
-    children?: MarkdownNode[],
+    children?: readonly MarkdownNode[],
     childInListItem = false,
     childParentIsText = false,
   ): ReactNode => {

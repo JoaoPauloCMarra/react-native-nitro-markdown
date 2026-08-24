@@ -1,7 +1,14 @@
 import type { MarkdownNode } from "../headless";
-import { parseMarkdown, parseMarkdownWithOptions } from "../headless";
+import {
+  parseMarkdown,
+  parseMarkdownWithOptions,
+} from "../headless";
 import type { ParserOptions } from "../Markdown.nitro";
 import type { MarkdownPlugin } from "../markdown";
+import {
+  cloneMarkdownNode as cloneValidatedMarkdownNode,
+  freezeMarkdownNode,
+} from "./freeze-ast";
 
 export type MarkdownErrorPhase = "parse" | "before-plugin" | "after-plugin";
 
@@ -49,7 +56,12 @@ export function safeOnError<P extends string>(
 
 export const isMarkdownNode = (value: unknown): value is MarkdownNode => {
   if (typeof value !== "object" || value === null) return false;
-  return typeof Reflect.get(value, "type") === "string";
+  try {
+    const descriptor = Reflect.getOwnPropertyDescriptor(value, "type");
+    return Boolean(descriptor && "value" in descriptor && typeof descriptor.value === "string");
+  } catch {
+    return false;
+  }
 };
 
 export const warnInDev = (message: string, error?: unknown): void => {
@@ -66,14 +78,20 @@ export const warnInDev = (message: string, error?: unknown): void => {
   }
 };
 
-export const cloneMarkdownNode = (node: MarkdownNode): MarkdownNode => {
-  const children = node.children?.map(cloneMarkdownNode);
-  return children ? { ...node, children } : { ...node };
+export const cloneMarkdownNode = (node: MarkdownNode): MarkdownNode =>
+  cloneValidatedMarkdownNode(node);
+
+export const materializeMarkdownNode = (
+  node: MarkdownNode,
+  freezeAst = false,
+): MarkdownNode => {
+  const clone = cloneValidatedMarkdownNode(node);
+  return freezeAst ? freezeMarkdownNode(clone) : clone;
 };
 
 export const getParserOptionsKey = (options?: ParserOptions): string => {
   if (!options) {
-    return "gfm:default|math:default|html:default|sourceOffsets:default|maxInputLength:default";
+    return "gfm:default|math:default|html:default|sourceOffsets:default|maxInputLength:default|freezeAst:default";
   }
 
   const gfm = options.gfm === undefined ? "default" : options.gfm ? "1" : "0";
@@ -91,7 +109,9 @@ export const getParserOptionsKey = (options?: ParserOptions): string => {
     options.maxInputLength === undefined
       ? "default"
       : String(options.maxInputLength);
-  return `gfm:${gfm}|math:${math}|html:${html}|sourceOffsets:${sourceOffsets}|maxInputLength:${maxInputLength}`;
+  const freezeAst =
+    options.freezeAst === undefined ? "default" : options.freezeAst ? "1" : "0";
+  return `gfm:${gfm}|math:${math}|html:${html}|sourceOffsets:${sourceOffsets}|maxInputLength:${maxInputLength}|freezeAst:${freezeAst}`;
 };
 
 export const normalizeParserOptions = (
@@ -104,13 +124,15 @@ export const normalizeParserOptions = (
   const html = options.html;
   const sourceOffsets = options.sourceOffsets;
   const maxInputLength = options.maxInputLength;
+  const freezeAst = options.freezeAst;
 
   if (
     gfm === undefined &&
     math === undefined &&
     html === undefined &&
     sourceOffsets === undefined &&
-    maxInputLength === undefined
+    maxInputLength === undefined &&
+    freezeAst === undefined
   ) {
     return undefined;
   }
@@ -124,6 +146,9 @@ export const normalizeParserOptions = (
   }
   if (maxInputLength !== undefined) {
     normalized.maxInputLength = maxInputLength;
+  }
+  if (freezeAst !== undefined) {
+    normalized.freezeAst = freezeAst;
   }
   return normalized;
 };
@@ -183,6 +208,7 @@ export const applyAfterParsePlugins = (
   ast: MarkdownNode,
   sortedPlugins?: MarkdownPlugin[],
   onError?: (error: Error, phase: "after-plugin", pluginName?: string) => void,
+  freezeAst = false,
 ): MarkdownNode => {
   if (!sortedPlugins || sortedPlugins.length === 0) {
     return ast;
@@ -193,9 +219,10 @@ export const applyAfterParsePlugins = (
     if (!plugin.afterParse) continue;
 
     try {
-      const transformed = plugin.afterParse(nextAst);
-      if (isMarkdownNode(transformed)) {
-        nextAst = transformed;
+      const pluginInput = materializeMarkdownNode(nextAst, freezeAst);
+      const transformed = plugin.afterParse(pluginInput);
+      if (transformed !== undefined) {
+        nextAst = materializeMarkdownNode(transformed, freezeAst);
       }
     } catch (error) {
       const pluginLabel = plugin.name ? ` (${plugin.name})` : "";

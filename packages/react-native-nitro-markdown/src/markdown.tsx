@@ -45,7 +45,7 @@ import {
   cloneMarkdownNode,
   getParserOptionsKey,
   hashString,
-  isMarkdownNode,
+  materializeMarkdownNode,
   normalizeParserOptions,
   parseWithNativeParser,
   safeOnError,
@@ -54,6 +54,7 @@ import {
   ERROR_PHASE,
   type MarkdownErrorPhase,
 } from "./utils/parse-pipeline";
+import { reuseStableAstNodes } from "./utils/incremental-ast";
 
 export type { MarkdownErrorPhase } from "./utils/parse-pipeline";
 
@@ -103,6 +104,8 @@ export type MarkdownPlugin = {
   beforeParse?: (markdown: string) => string;
   /**
    * Optional AST postprocessor executed after native parsing.
+   * The callback receives an isolated AST. It is mutable by default and frozen
+   * when `options.freezeAst` is true.
    */
   afterParse?: AstTransform;
 };
@@ -122,6 +125,7 @@ const getCachedParsedAst = (
   options: ParserOptions | undefined,
   cache: Map<string, ParseAstCacheEntry>,
   stats: { hits: number; misses: number; evictions: number },
+  freezeAst: boolean,
 ): MarkdownNode => {
   if (text.length > MAX_CACHEABLE_TEXT_LENGTH) {
     return parseWithNativeParser(text, options);
@@ -133,14 +137,14 @@ const getCachedParsedAst = (
     stats.hits += 1;
     cache.delete(cacheKey);
     cache.set(cacheKey, cachedEntry);
-    return cloneMarkdownNode(cachedEntry.ast);
+    return materializeMarkdownNode(cachedEntry.ast, freezeAst);
   }
 
   stats.misses += 1;
   const parsedNode = parseWithNativeParser(text, options);
   cache.set(cacheKey, {
     text,
-    ast: parsedNode,
+    ast: materializeMarkdownNode(parsedNode, true),
   });
   if (cache.size > MAX_PARSE_CACHE_ENTRIES) {
     const oldestCacheKey = cache.keys().next().value;
@@ -150,7 +154,7 @@ const getCachedParsedAst = (
     }
   }
 
-  return cloneMarkdownNode(parsedNode);
+  return materializeMarkdownNode(parsedNode, freezeAst);
 };
 
 export type MarkdownProps = {
@@ -180,19 +184,14 @@ export type MarkdownProps = {
   /**
    * Optional transform applied after parsing and before rendering.
    * The transformed AST is also returned in `onParseComplete`.
+   * The callback receives an isolated AST. It is mutable by default and frozen
+   * when `options.freezeAst` is true.
    */
   astTransform?: AstTransform;
   /**
-   * @deprecated Parsing is synchronous in `<Markdown>`, so this callback has
-   * no in-progress window: it fires in the `useEffect` commit phase after the
-   * new AST is already rendered. Use `onParseComplete` for post-parse
-   * inspection, and `MarkdownStream` (`sourceAstStatus`, `initialParseMode`)
-   * when you need a real asynchronous parse state.
-   *
-   * Callback fired after the current parse cycle completes and the component
-   * has re-rendered with new content. Because the native parser runs
-   * synchronously inside `useMemo`, there is no observable "in-progress"
-   * window.
+   * Deprecated callback retained for source compatibility. It fires in the
+   * effect phase after the current AST has rendered; use `onParseComplete` for
+   * completed parse data or `MarkdownStream` for asynchronous parse state.
    */
   onParsingInProgress?: () => void;
   /**
@@ -308,12 +307,14 @@ export const Markdown: FC<MarkdownProps> = ({
   const parserOptionHtml = options?.html;
   const parserOptionSourceOffsets = options?.sourceOffsets;
   const parserOptionMaxInputLength = options?.maxInputLength;
+  const parserOptionFreezeAst = options?.freezeAst;
 
   /* eslint-disable react-hooks/refs -- Refs updated/read intentionally to avoid re-parsing on callback identity changes */
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
 
   const parseAstCacheRef = useRef<Map<string, ParseAstCacheEntry> | null>(null);
+  const validatedSourceAstRef = useRef<MarkdownNode | null>(null);
   const cacheStatsRef = useRef({ hits: 0, misses: 0, evictions: 0 });
   if (parseAstCacheRef.current === null) {
     parseAstCacheRef.current = new Map();
@@ -322,8 +323,22 @@ export const Markdown: FC<MarkdownProps> = ({
 
   const parseResult = useMemo(() => {
     try {
+      let safeSourceAst: MarkdownNode | undefined;
+      if (sourceAst) {
+        const clonedSourceAst = cloneMarkdownNode(sourceAst);
+        const previousSourceAst = validatedSourceAstRef.current;
+        safeSourceAst = previousSourceAst
+          ? reuseStableAstNodes(previousSourceAst, clonedSourceAst)
+          : clonedSourceAst;
+        validatedSourceAstRef.current = safeSourceAst;
+      } else {
+        validatedSourceAstRef.current = null;
+      }
       const sortedPlugins = sortPluginsByPriority(plugins);
-      const markdownToParse = sourceAst
+      const hasAstTransforms =
+        Boolean(astTransform) ||
+        sortedPlugins?.some((plugin) => plugin.afterParse) === true;
+      const markdownToParse = safeSourceAst
         ? children
         : applyBeforeParsePlugins(children, sortedPlugins, onErrorRef.current);
       const parserOptions = normalizeParserOptions(
@@ -338,37 +353,42 @@ export const Markdown: FC<MarkdownProps> = ({
           parserOptionMaxInputLength === undefined
             ? null
             : { maxInputLength: parserOptionMaxInputLength },
+          parserOptionFreezeAst === undefined
+            ? null
+            : { freezeAst: parserOptionFreezeAst },
         ),
       );
-      const shouldCloneSourceAst =
-        sourceAst &&
-        (Boolean(astTransform) ||
-          sortedPlugins?.some((plugin) => plugin.afterParse) === true);
-      let parsedAst = sourceAst
-        ? shouldCloneSourceAst
-          ? cloneMarkdownNode(sourceAst)
-          : sourceAst
+      let parsedAst = safeSourceAst
+        ? safeSourceAst
         : parseCache
           ? getCachedParsedAst(
               markdownToParse,
               parserOptions,
               parseAstCacheRef.current!,
               cacheStatsRef.current,
+              parserOptions?.freezeAst === true,
             )
           : parseWithNativeParser(markdownToParse, parserOptions);
       parsedAst = applyAfterParsePlugins(
         parsedAst,
         sortedPlugins,
         onErrorRef.current,
+        parserOptions?.freezeAst === true,
       );
 
       let ast = parsedAst;
       if (astTransform) {
         try {
-          const nextAst = astTransform(parsedAst);
-          if (isMarkdownNode(nextAst)) {
-            ast = nextAst;
-          }
+          const nextAst = astTransform(
+            materializeMarkdownNode(
+              parsedAst,
+              parserOptions?.freezeAst === true,
+            ),
+          );
+          ast = materializeMarkdownNode(
+            nextAst,
+            parserOptions?.freezeAst === true,
+          );
         } catch (error) {
           warnInDev(
             "[react-native-nitro-markdown] astTransform threw; falling back to parsed AST.",
@@ -379,7 +399,13 @@ export const Markdown: FC<MarkdownProps> = ({
       }
 
       return {
-        ast,
+        ast:
+          parserOptions?.freezeAst === true || hasAstTransforms
+            ? materializeMarkdownNode(
+                ast,
+                parserOptions?.freezeAst === true,
+              )
+            : ast,
       };
     } catch (parseError) {
       safeOnError(onErrorRef.current, parseError, ERROR_PHASE.PARSE);
@@ -394,6 +420,7 @@ export const Markdown: FC<MarkdownProps> = ({
     parserOptionHtml,
     parserOptionSourceOffsets,
     parserOptionMaxInputLength,
+    parserOptionFreezeAst,
     sourceAst,
     parseCache,
     astTransform,
@@ -410,6 +437,7 @@ export const Markdown: FC<MarkdownProps> = ({
     parserOptionHtml,
     parserOptionSourceOffsets,
     parserOptionMaxInputLength,
+    parserOptionFreezeAst,
     onParsingInProgress,
   ]);
 

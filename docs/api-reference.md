@@ -7,11 +7,11 @@ Two entry points:
 
 ## Components
 
-| Export | Description |
-| ------ | ----------- |
-| `Markdown` | Render a complete Markdown string. See [usage](./usage.md). |
-| `MarkdownStream` | Incremental / streaming render. See [streaming](./streaming.md). |
-| `Heading`, `Paragraph`, `Link`, `Blockquote`, `HorizontalRule`, `CodeBlock`, `InlineCode`, `List`, `ListItem`, `TaskListItem`, `TableRenderer`, `Image`, `MathInline`, `MathBlock` | Individual renderer components (compose your own tree). |
+| Export                                                                                                                                                                             | Description                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `Markdown`                                                                                                                                                                         | Render a complete Markdown string. See [usage](./usage.md).      |
+| `MarkdownStream`                                                                                                                                                                   | Incremental / streaming render. See [streaming](./streaming.md). |
+| `Heading`, `Paragraph`, `Link`, `Blockquote`, `HorizontalRule`, `CodeBlock`, `InlineCode`, `List`, `ListItem`, `TaskListItem`, `TableRenderer`, `Image`, `MathInline`, `MathBlock` | Individual renderer components (compose your own tree).          |
 
 ### `MarkdownProps` (selected)
 
@@ -29,22 +29,22 @@ large initial content), `options`, `plugins`, `onError`, `renderMarkdown`.
 
 ## Hooks & sessions
 
-| Export | Description |
-| ------ | ----------- |
-| `useMarkdownSession()` | Owns a streaming session; `reset` / `append` / `getSession()`. |
-| `useMarkdownStreamState(options)` | Headless streaming text + source AST state. |
-| `useStream()` | Timestamped stream state. |
-| `createMarkdownSession()` | Imperative session outside React. Session failures throw typed `MarkdownError`s with `source: "session"`. |
-| `useMarkdownContext()` / `MarkdownContext` | Access theme/renderers within custom renderers. |
+| Export                                     | Description                                                                                                                                                                                                                                                                     |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useMarkdownSession()`                     | Owns a streaming session; `reset` / `append` / `getSession()`.                                                                                                                                                                                                                  |
+| `useMarkdownStreamState(options)`          | Headless streaming text + source AST state.                                                                                                                                                                                                                                     |
+| `useStream()`                              | Timestamped stream state.                                                                                                                                                                                                                                                       |
+| `createMarkdownSession()`                  | Imperative session outside React. Session failures throw typed `MarkdownError`s with `source: "session"`. `getTextRange` and `replace` use `[from, to)` JavaScript UTF-16 units; an index inside a surrogate pair (including emoji) throws `invalid_range` instead of rounding. |
+| `useMarkdownContext()` / `MarkdownContext` | Access theme/renderers within custom renderers.                                                                                                                                                                                                                                 |
 
 ## Theme
 
-| Export | Description |
-| ------ | ----------- |
-| `defaultMarkdownTheme` | Opinionated default (light) theme tokens. |
-| `darkMarkdownTheme` | Ready-made dark theme preset. |
-| `minimalMarkdownTheme` | Near-unstyled baseline. |
-| `mergeThemes(base, partial)` | Merge a partial theme over a base. |
+| Export                       | Description                               |
+| ---------------------------- | ----------------------------------------- |
+| `defaultMarkdownTheme`       | Opinionated default (light) theme tokens. |
+| `darkMarkdownTheme`          | Ready-made dark theme preset.             |
+| `minimalMarkdownTheme`       | Near-unstyled baseline.                   |
+| `mergeThemes(base, partial)` | Merge a partial theme over a base.        |
 
 ## Headless exports
 
@@ -54,20 +54,29 @@ large initial content), `options`, `plugins`, `onError`, `renderMarkdown`.
 
 `parseMarkdown` and `parseMarkdownWithOptions` throw when native parsing cannot
 produce a complete valid AST. Failures are typed `MarkdownError`s with stable
-`code` (`input_too_large`, `parse_failed`, `invalid_json`, `native_unavailable`,
-`extraction_failed`, `buffer_limit`, `invalid_range`, `destroyed`) and
+`code` (`input_too_large`, `invalid_ast`, `parse_failed`, `invalid_json`,
+`native_unavailable`, `extraction_failed`, `buffer_limit`, `invalid_range`,
+`destroyed`) and
 `source` (`parse` | `extract` | `session` | `render`). `<Markdown>` and
 `<MarkdownStream>` surface the same failures through `onError(error, "parse")`.
+Parser text nodes preserve verbatim entity text such as `&amp;`; entity text is
+not decoded before it reaches the AST or renderer.
+
+`invalid_ast` has `source: "render"` and is reported when a supplied `sourceAst`
+or an AST returned by `afterParse`/`astTransform` contains a cycle in its
+`children`. Shared child nodes (a DAG) are valid; cyclic trees are rejected
+before rendering so the renderer never recurses forever.
 
 ## `ParserOptions`
 
 ```ts
 type ParserOptions = {
-  gfm?: boolean;           // default true — tables, strikethrough, task lists, autolinks
-  math?: boolean;          // default true — inline $..$ and block $$..$$
-  html?: boolean;          // default false — keep raw HTML nodes
+  gfm?: boolean; // default true — tables, strikethrough, task lists, autolinks
+  math?: boolean; // default true — inline $..$ and block $$..$$
+  html?: boolean; // default false — keep raw HTML nodes
   sourceOffsets?: boolean; // default true — emit beg/end JavaScript UTF-16 indices
-  maxInputLength?: number; // default 10,000,000 — maximum input length in characters
+  maxInputLength?: number; // default 10,485,760 — maximum input length in UTF-8 bytes
+  freezeAst?: boolean; // default false — freeze returned nodes and child arrays
 };
 ```
 
@@ -80,6 +89,10 @@ rebuilds the tree after the cost is paid. Keep the default (`true`) for
 streaming/incremental rendering, which uses offsets to reuse stable nodes
 between reparses. Enabled offsets match JavaScript `String.length` and
 `String.slice`, including for accented text and emoji.
+
+`freezeAst` is an additive defensive option. The default AST is mutable for
+compatibility with earlier releases; component and cache boundaries still clone
+trees so mutation of one consumer result cannot poison another cached result.
 
 ## Key types
 
@@ -102,3 +115,9 @@ between reparses. Enabled offsets match JavaScript `String.length` and
 
 > Prefer importing these types over local object shapes so editors and AI tools
 > catch invalid parser options, node names, renderer props, and session usage.
+
+`MarkdownNode` values are mutable by default for compatibility. Pass
+`freezeAst: true` when defensive immutability is required. A `sourceAst` must
+be acyclic; cyclic trees are rejected before rendering. Plugins and transforms
+receive isolated trees, so they may mutate their input in the default mode or
+return a new tree.

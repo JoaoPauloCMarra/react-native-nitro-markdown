@@ -8,16 +8,10 @@
 #pragma once
 
 // Forward declarations of C++ defined types
-// Forward declaration of `HybridMarkdownSessionSpec` to properly resolve imports.
-namespace margelo::nitro::Markdown { class HybridMarkdownSessionSpec; }
+
 
 // Include C++ defined types
-#include "HybridMarkdownSessionSpec.hpp"
-#include <NitroModules/Result.hpp>
-#include <exception>
-#include <functional>
-#include <memory>
-#include <string>
+
 
 // C++ helpers for Swift
 #include "NitroMarkdown-Swift-Cxx-Bridge.hpp"
@@ -29,8 +23,7 @@ namespace margelo::nitro::Markdown { class HybridMarkdownSessionSpec; }
 #include <NitroModules/DateToChronoDate.hpp>
 
 // Forward declarations of Swift defined types
-// Forward declaration of `HybridMarkdownSessionSpec_cxx` to properly resolve imports.
-namespace NitroMarkdown { class HybridMarkdownSessionSpec_cxx; }
+
 
 // Include Swift defined types
 #if __has_include("NitroMarkdown-Swift.h")

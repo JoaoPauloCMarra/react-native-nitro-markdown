@@ -1,25 +1,17 @@
 import type { MarkdownSession } from "../specs/MarkdownSession.nitro";
+import { MAX_PARSE_INPUT_LENGTH } from "../errors";
 
 /**
  * Shared session contract scenarios (X3 corpus).
  *
  * This module defines the cross-platform session contract as one scenario
- * list. The canonical jest gate runs it against the JavaScript session adapter
- * (`createMarkdownSession`), which wraps the native HybridObject — in this
- * gate that means the JavaScript test double, not a live native session.
+ * list. The Jest gate runs it against the JavaScript session adapter, and the
+ * C++ harness runs the same scenario names against the source-owned
+ * HybridMarkdownSession used by both native platforms.
  *
- * Scope limitation: the native Swift session (ios/HybridMarkdownSession.swift)
- * and Kotlin session (android/.../HybridMarkdownSession.kt) are NOT executed
- * by this gate. There is no native session test harness in this repository
- * (no XCTest target, no instrumented Kotlin tests), so the X3 native-session
- * rows remain PENDING until native runtime evidence is produced on device.
- * Until then the native implementations are mapped to these scenarios by code
- * inspection only, and this module must not be reported as cross-platform
- * executed.
- *
- * Every scenario below is written so it can run against any conforming
- * session implementation, which is the prerequisite for wiring a native
- * harness later.
+ * Every scenario below is implementation-agnostic. Listener range snapshots
+ * are coalesced by the streaming hook before a parse flush; the session itself
+ * reports each mutation range.
  */
 export type SessionScenarioName =
   | "append-extends-buffer"
@@ -36,7 +28,9 @@ export type SessionScenarioName =
   | "clear-notifies-zero-range"
   | "dispose-rejects-all-operations"
   | "unsubscribe-stops-notifications"
-  | "listeners-see-snapshot-ranges";
+  | "listeners-see-snapshot-ranges"
+  | "append-rejects-buffer-cap"
+  | "replace-rejects-buffer-cap";
 
 export type SessionScenario = { name: SessionScenarioName };
 
@@ -56,6 +50,8 @@ export const SESSION_SCENARIO_CORPUS: SessionScenario[] = [
   { name: "dispose-rejects-all-operations" },
   { name: "unsubscribe-stops-notifications" },
   { name: "listeners-see-snapshot-ranges" },
+  { name: "append-rejects-buffer-cap" },
+  { name: "replace-rejects-buffer-cap" },
 ];
 
 export type SessionScenarioResult = {
@@ -256,6 +252,22 @@ const runScenario = (
         name: scenario.name,
         pass: JSON.stringify(calls) === expected,
         detail: JSON.stringify(calls),
+      };
+    }
+    case "append-rejects-buffer-cap": {
+      session.reset("");
+      const oversized = "x".repeat(MAX_PARSE_INPUT_LENGTH + 1);
+      return {
+        name: scenario.name,
+        pass: expectThrows(() => session.append(oversized)),
+      };
+    }
+    case "replace-rejects-buffer-cap": {
+      session.reset("");
+      const oversized = "x".repeat(MAX_PARSE_INPUT_LENGTH + 1);
+      return {
+        name: scenario.name,
+        pass: expectThrows(() => session.replace(0, 0, oversized)),
       };
     }
     default:

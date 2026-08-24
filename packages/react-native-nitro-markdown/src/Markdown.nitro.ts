@@ -6,12 +6,17 @@ export interface ParserOptions {
   html?: boolean;
   sourceOffsets?: boolean;
   /**
-   * Maximum accepted input length in characters.
-   * Defaults to a hard cap of 10,000,000 characters. Values above the hard
+   * Maximum accepted input length in UTF-8 bytes.
+   * Defaults to a hard cap of 10,485,760 bytes. Values above the hard
    * cap are clamped to it. Oversized inputs fail with a typed error instead
    * of being parsed.
    */
   maxInputLength?: number;
+  /**
+   * Freeze parsed AST nodes and child arrays before returning them.
+   * Defaults to false for compatibility with the historical mutable AST.
+   */
+  freezeAst?: boolean;
 }
 
 export interface MarkdownParser extends HybridObject<{

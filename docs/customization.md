@@ -11,7 +11,12 @@ Pass a partial theme to override tokens (colors, spacing, font sizes, families):
 ```tsx
 import { Markdown, defaultMarkdownTheme } from "react-native-nitro-markdown";
 
-<Markdown theme={{ colors: { link: "#0ea5e9", heading: "#0b1424" }, fontSizes: { h1: 30 } }}>
+<Markdown
+  theme={{
+    colors: { link: "#0ea5e9", heading: "#0b1424" },
+    fontSizes: { h1: 30 },
+  }}
+>
   {content}
 </Markdown>;
 ```
@@ -38,10 +43,10 @@ or pass a bare partial (`{ colors: { text: "#e5e7eb" } }`) for a one-off overrid
 
 ### Theme presets
 
-| Preset | Use for |
-| ------ | ------- |
-| `defaultMarkdownTheme` | Opinionated light defaults (the baseline). |
-| `darkMarkdownTheme` | Ready-made dark palette. |
+| Preset                 | Use for                                                                      |
+| ---------------------- | ---------------------------------------------------------------------------- |
+| `defaultMarkdownTheme` | Opinionated light defaults (the baseline).                                   |
+| `darkMarkdownTheme`    | Ready-made dark palette.                                                     |
 | `minimalMarkdownTheme` | Near-unstyled baseline you fully control (also `stylingStrategy="minimal"`). |
 
 ## Per-node style overrides
@@ -50,9 +55,11 @@ or pass a bare partial (`{ colors: { text: "#e5e7eb" } }`) for a one-off overrid
 replacing a renderer:
 
 ```tsx
-<Markdown styles={{ heading: { color: "red" }, code_block: { borderRadius: 0 } }}>
+<Markdown
+  styles={{ heading: { color: "red" }, code_block: { borderRadius: 0 } }}
+>
   {content}
-</Markdown>;
+</Markdown>
 ```
 
 ## Custom renderers

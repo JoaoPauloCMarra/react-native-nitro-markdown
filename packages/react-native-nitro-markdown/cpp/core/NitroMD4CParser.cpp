@@ -2,6 +2,7 @@
 #include "../nitromd/nitromd.h"
 
 #include <stack>
+#include <memory_resource>
 #include <vector>
 #include <cstring>
 #include <algorithm>
@@ -105,8 +106,71 @@ static std::vector<OFF> createUtf16OffsetMap(
 }
 } // namespace
 
+class MarkdownNodeArena;
+
+template <typename T>
+class MarkdownNodeAllocator {
+public:
+    using value_type = T;
+
+    explicit MarkdownNodeAllocator(std::shared_ptr<MarkdownNodeArena> arena) noexcept
+        : arena_(std::move(arena)) {}
+
+    template <typename U>
+    MarkdownNodeAllocator(const MarkdownNodeAllocator<U>& other) noexcept
+        : arena_(other.arena_) {}
+
+    T* allocate(std::size_t count);
+    void deallocate(T* pointer, std::size_t count) noexcept;
+
+    template <typename U>
+    bool operator==(const MarkdownNodeAllocator<U>& other) const noexcept {
+        return arena_ == other.arena_;
+    }
+
+    template <typename U>
+    bool operator!=(const MarkdownNodeAllocator<U>& other) const noexcept {
+        return !(*this == other);
+    }
+
+private:
+    template <typename>
+    friend class MarkdownNodeAllocator;
+
+    std::shared_ptr<MarkdownNodeArena> arena_;
+};
+
+class MarkdownNodeArena final : public std::enable_shared_from_this<MarkdownNodeArena> {
+public:
+    std::shared_ptr<MarkdownNode> make(NodeType type) {
+        return std::allocate_shared<MarkdownNode>(
+            MarkdownNodeAllocator<MarkdownNode>(shared_from_this()),
+            type
+        );
+    }
+
+private:
+    template <typename>
+    friend class MarkdownNodeAllocator;
+
+    std::pmr::unsynchronized_pool_resource resource_;
+};
+
+template <typename T>
+T* MarkdownNodeAllocator<T>::allocate(std::size_t count) {
+    return static_cast<T*>(
+        arena_->resource_.allocate(count * sizeof(T), alignof(T))
+    );
+}
+
+template <typename T>
+void MarkdownNodeAllocator<T>::deallocate(T* pointer, std::size_t count) noexcept {
+    arena_->resource_.deallocate(pointer, count * sizeof(T), alignof(T));
+}
+
 class MD4CParser::Impl {
 public:
+    std::shared_ptr<MarkdownNodeArena> nodeArena;
     std::shared_ptr<MarkdownNode> root;
     std::stack<std::shared_ptr<MarkdownNode>, std::vector<std::shared_ptr<MarkdownNode>>> nodeStack;
     std::string currentText;
@@ -117,9 +181,45 @@ public:
     OFF lastTextEnd = 0;
     size_t lastTextByteEnd = 0;
     bool forceCallbackFailure = false;
+    std::string callbackError;
+    size_t nodeCount = 0;
+    size_t childSlotCount = 0;
+    size_t workCount = 0;
+
+    std::shared_ptr<MarkdownNode> makeNode(NodeType type) {
+        if (nodeCount >= kMaxAstNodes || workCount >= kMaxAstWork) {
+            callbackError =
+                "Markdown AST node/work budget exceeds the maximum of " +
+                std::to_string(kMaxAstWork);
+            throw std::runtime_error(callbackError);
+        }
+        nodeCount += 1;
+        workCount += 1;
+        return nodeArena->make(type);
+    }
+
+    void addChild(
+        const std::shared_ptr<MarkdownNode>& parent,
+        std::shared_ptr<MarkdownNode> child
+    ) {
+        if (!parent || !child) return;
+        if (childSlotCount >= kMaxAstChildSlots || workCount >= kMaxAstWork) {
+            callbackError =
+                "Markdown AST child/work budget exceeds the maximum of " +
+                std::to_string(kMaxAstWork);
+            throw std::runtime_error(callbackError);
+        }
+        childSlotCount += 1;
+        workCount += 1;
+        parent->addChild(std::move(child));
+    }
     
     void reset() {
-        root = std::make_shared<MarkdownNode>(NodeType::Document);
+        nodeArena = std::make_shared<MarkdownNodeArena>();
+        nodeCount = 0;
+        childSlotCount = 0;
+        workCount = 0;
+        root = makeNode(NodeType::Document);
         while (!nodeStack.empty()) nodeStack.pop();
         nodeStack.push(root);
         currentText.clear();
@@ -128,6 +228,7 @@ public:
         lastTextEnd = 0;
         lastTextByteEnd = 0;
         forceCallbackFailure = false;
+        callbackError.clear();
     }
 
     void setInput(const char* text, size_t size, bool trackOffsets) {
@@ -166,11 +267,11 @@ public:
     void flushText() {
         if (!currentText.empty()) {
             if (!nodeStack.empty()) {
-                auto textNode = std::make_shared<MarkdownNode>(NodeType::Text);
+                auto textNode = makeNode(NodeType::Text);
                 textNode->content = std::move(currentText);
                 textNode->beg = currentTextBeg;
                 textNode->end = lastTextEnd;
-                nodeStack.top()->addChild(std::move(textNode));
+                addChild(nodeStack.top(), std::move(textNode));
                 currentText.clear();
             } else {
 #if defined(NITROMARKDOWN_DEBUG) || defined(DEBUG)
@@ -185,8 +286,14 @@ public:
     void pushNode(std::shared_ptr<MarkdownNode> node, OFF beg = 0) {
         flushText();
         if (node && !nodeStack.empty()) {
+            if (nodeStack.size() >= kMaxAstDepth) {
+                callbackError =
+                    "Markdown AST depth exceeds the maximum of " +
+                    std::to_string(kMaxAstDepth);
+                throw std::runtime_error(callbackError);
+            }
             node->beg = beg;
-            nodeStack.top()->addChild(node);
+            addChild(nodeStack.top(), node);
             nodeStack.push(std::move(node));
         }
     }
@@ -251,12 +358,12 @@ public:
                 break;
 
             case MD_BLOCK_QUOTE: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Blockquote), off);
+                impl->pushNode(impl->makeNode(NodeType::Blockquote), off);
                 break;
             }
 
             case MD_BLOCK_UL: {
-                auto node = std::make_shared<MarkdownNode>(NodeType::List);
+                auto node = impl->makeNode(NodeType::List);
                 node->ordered = false;
                 impl->pushNode(node, off);
                 break;
@@ -264,7 +371,7 @@ public:
 
             case MD_BLOCK_OL: {
                 auto* d = static_cast<MD_BLOCK_OL_DETAIL*>(detail);
-                auto node = std::make_shared<MarkdownNode>(NodeType::List);
+                auto node = impl->makeNode(NodeType::List);
                 node->ordered = true;
                 node->start = d->start;
                 impl->pushNode(node, off);
@@ -274,23 +381,23 @@ public:
             case MD_BLOCK_LI: {
                 auto* d = static_cast<MD_BLOCK_LI_DETAIL*>(detail);
                 if (d->is_task) {
-                    auto node = std::make_shared<MarkdownNode>(NodeType::TaskListItem);
+                    auto node = impl->makeNode(NodeType::TaskListItem);
                     node->checked = (d->task_mark == 'x' || d->task_mark == 'X');
                     impl->pushNode(node, off);
                 } else {
-                    impl->pushNode(std::make_shared<MarkdownNode>(NodeType::ListItem), off);
+                    impl->pushNode(impl->makeNode(NodeType::ListItem), off);
                 }
                 break;
             }
 
             case MD_BLOCK_HR: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::HorizontalRule), off);
+                impl->pushNode(impl->makeNode(NodeType::HorizontalRule), off);
                 break;
             }
 
             case MD_BLOCK_H: {
                 auto* d = static_cast<MD_BLOCK_H_DETAIL*>(detail);
-                auto node = std::make_shared<MarkdownNode>(NodeType::Heading);
+                auto node = impl->makeNode(NodeType::Heading);
                 node->level = d->level;
                 impl->pushNode(node, off);
                 break;
@@ -298,7 +405,7 @@ public:
 
             case MD_BLOCK_CODE: {
                 auto* d = static_cast<MD_BLOCK_CODE_DETAIL*>(detail);
-                auto node = std::make_shared<MarkdownNode>(NodeType::CodeBlock);
+                auto node = impl->makeNode(NodeType::CodeBlock);
                 if (d->lang.size > 0) {
                     node->language = impl->getAttributeText(&d->lang);
                 }
@@ -307,38 +414,38 @@ public:
             }
 
             case MD_BLOCK_HTML: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::HtmlBlock), off);
+                impl->pushNode(impl->makeNode(NodeType::HtmlBlock), off);
                 break;
             }
 
             case MD_BLOCK_P: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Paragraph), off);
+                impl->pushNode(impl->makeNode(NodeType::Paragraph), off);
                 break;
             }
 
             case MD_BLOCK_TABLE: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Table), off);
+                impl->pushNode(impl->makeNode(NodeType::Table), off);
                 break;
             }
 
             case MD_BLOCK_THEAD: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::TableHead), off);
+                impl->pushNode(impl->makeNode(NodeType::TableHead), off);
                 break;
             }
 
             case MD_BLOCK_TBODY: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::TableBody), off);
+                impl->pushNode(impl->makeNode(NodeType::TableBody), off);
                 break;
             }
 
             case MD_BLOCK_TR: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::TableRow), off);
+                impl->pushNode(impl->makeNode(NodeType::TableRow), off);
                 break;
             }
 
             case MD_BLOCK_TH: {
                 auto* d = static_cast<MD_BLOCK_TD_DETAIL*>(detail);
-                auto node = std::make_shared<MarkdownNode>(NodeType::TableCell);
+                auto node = impl->makeNode(NodeType::TableCell);
                 node->isHeader = true;
                 switch (d->align) {
                     case MD_ALIGN_LEFT: node->align = TextAlign::Left; break;
@@ -352,7 +459,7 @@ public:
 
             case MD_BLOCK_TD: {
                 auto* d = static_cast<MD_BLOCK_TD_DETAIL*>(detail);
-                auto node = std::make_shared<MarkdownNode>(NodeType::TableCell);
+                auto node = impl->makeNode(NodeType::TableCell);
                 node->isHeader = false;
                 switch (d->align) {
                     case MD_ALIGN_LEFT: node->align = TextAlign::Left; break;
@@ -403,23 +510,23 @@ public:
 
         switch (type) {
             case MD_SPAN_EM: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Italic), off);
+                impl->pushNode(impl->makeNode(NodeType::Italic), off);
                 break;
             }
 
             case MD_SPAN_STRONG: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Bold), off);
+                impl->pushNode(impl->makeNode(NodeType::Bold), off);
                 break;
             }
 
             case MD_SPAN_DEL: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Strikethrough), off);
+                impl->pushNode(impl->makeNode(NodeType::Strikethrough), off);
                 break;
             }
 
             case MD_SPAN_A: {
                 auto* d = static_cast<MD_SPAN_A_DETAIL*>(detail);
-                auto node = std::make_shared<MarkdownNode>(NodeType::Link);
+                auto node = impl->makeNode(NodeType::Link);
                 if (d->href.size > 0) {
                     node->href = impl->getAttributeText(&d->href);
                 }
@@ -432,7 +539,7 @@ public:
 
             case MD_SPAN_IMG: {
                 auto* d = static_cast<MD_SPAN_IMG_DETAIL*>(detail);
-                auto node = std::make_shared<MarkdownNode>(NodeType::Image);
+                auto node = impl->makeNode(NodeType::Image);
                 if (d->src.size > 0) {
                     node->href = impl->getAttributeText(&d->src);
                 }
@@ -444,22 +551,22 @@ public:
             }
 
             case MD_SPAN_CODE: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::CodeInline), off);
+                impl->pushNode(impl->makeNode(NodeType::CodeInline), off);
                 break;
             }
 
             case MD_SPAN_LATEXMATH: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::MathInline), off);
+                impl->pushNode(impl->makeNode(NodeType::MathInline), off);
                 break;
             }
 
             case MD_SPAN_LATEXMATH_DISPLAY: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::MathBlock), off);
+                impl->pushNode(impl->makeNode(NodeType::MathBlock), off);
                 break;
             }
 
             case MD_SPAN_U: {
-                impl->pushNode(std::make_shared<MarkdownNode>(NodeType::Italic), off);
+                impl->pushNode(impl->makeNode(NodeType::Italic), off);
                 break;
             }
 
@@ -526,16 +633,16 @@ public:
             case MD_TEXT_BR:
                 impl->flushText();
                 if (!impl->nodeStack.empty()) {
-                    impl->nodeStack.top()->addChild(
-                        std::make_shared<MarkdownNode>(NodeType::LineBreak));
+                    impl->addChild(impl->nodeStack.top(),
+                        impl->makeNode(NodeType::LineBreak));
                 }
                 break;
 
             case MD_TEXT_SOFTBR:
                 impl->flushText();
                 if (!impl->nodeStack.empty()) {
-                    impl->nodeStack.top()->addChild(
-                        std::make_shared<MarkdownNode>(NodeType::SoftBreak));
+                    impl->addChild(impl->nodeStack.top(),
+                        impl->makeNode(NodeType::SoftBreak));
                 }
                 break;
 
@@ -556,11 +663,11 @@ public:
                         break;
                     }
 
-                    auto node = std::make_shared<MarkdownNode>(NodeType::HtmlInline);
+                    auto node = impl->makeNode(NodeType::HtmlInline);
                     node->content = std::string(text, size);
                     node->beg = beg;
                     node->end = end;
-                    impl->nodeStack.top()->addChild(node);
+                    impl->addChild(impl->nodeStack.top(), node);
                     impl->lastTextEnd = end;
                 }
                 break;
@@ -661,6 +768,9 @@ std::shared_ptr<MarkdownNode> MD4CParser::parseWithFlags(
                           static_cast<MD_SIZE>(inputSize),
                           &parser,
                           &impl);
+    if (!impl.callbackError.empty()) {
+        throw std::runtime_error(impl.callbackError);
+    }
     if (result != 0) {
         throw std::runtime_error(
             "Markdown parsing failed with code " + std::to_string(result)

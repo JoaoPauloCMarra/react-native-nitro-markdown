@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { Markdown, type MarkdownPlugin } from "../markdown";
 import type { MarkdownNode } from "../headless";
+import { MarkdownError } from "../errors";
 import { mockParser } from "./setup";
 
 jest.mock("../renderers/math", () => ({
@@ -233,6 +234,186 @@ describe("Markdown plugin pipeline", () => {
     }
   });
 
+  it("rejects a direct sourceAst cycle with a typed error before rendering", () => {
+    const root = {
+      type: "document" as const,
+      children: [] as MarkdownNode[],
+    };
+    root.children.push(root as unknown as MarkdownNode);
+    const onError = jest.fn();
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+
+    try {
+      act(() => {
+        create(
+          createElement(
+            Markdown,
+            { sourceAst: root as MarkdownNode, onError },
+            "ignored markdown",
+          ),
+        );
+      });
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+
+    const [error, phase] = onError.mock.calls[0] as [
+      MarkdownError,
+      string,
+      string | undefined,
+    ];
+    expect(error).toBeInstanceOf(MarkdownError);
+    expect(error.code).toBe("invalid_ast");
+    expect(error.source).toBe("render");
+    expect(phase).toBe("parse");
+  });
+
+  it("rejects an indirect sourceAst cycle with a typed error", () => {
+    const root = {
+      type: "document" as const,
+      children: [] as MarkdownNode[],
+    };
+    const paragraph = {
+      type: "paragraph" as const,
+      children: [] as MarkdownNode[],
+    };
+    root.children.push(paragraph as MarkdownNode);
+    paragraph.children.push(root as unknown as MarkdownNode);
+    const onError = jest.fn();
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+
+    try {
+      act(() => {
+        create(
+          createElement(
+            Markdown,
+            { sourceAst: root as MarkdownNode, onError },
+            "ignored markdown",
+          ),
+        );
+      });
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: "invalid_ast",
+        source: "render",
+      }),
+      "parse",
+      undefined,
+    );
+  });
+
+  it("allows a shared-child sourceAst DAG", () => {
+    const sharedText: MarkdownNode = { type: "text", content: "shared" };
+    const sharedParagraph: MarkdownNode = {
+      type: "paragraph",
+      children: [sharedText],
+    };
+    const sourceAst: MarkdownNode = {
+      type: "document",
+      children: [sharedParagraph, sharedParagraph],
+    };
+    const onError = jest.fn();
+    const onParseComplete = jest.fn();
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+
+    try {
+      act(() => {
+        create(
+          createElement(
+            Markdown,
+            { sourceAst, onError, onParseComplete },
+            "ignored markdown",
+          ),
+        );
+      });
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(onParseComplete).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "shared\n\nshared\n\n" }),
+    );
+  });
+
+  it("falls back when an afterParse plugin returns a cyclic AST", () => {
+    const cyclic = {
+      type: "document" as const,
+      children: [] as MarkdownNode[],
+    };
+    cyclic.children.push(cyclic as unknown as MarkdownNode);
+    const onError = jest.fn();
+    const onParseComplete = jest.fn();
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+
+    try {
+      act(() => {
+        create(
+          createElement(
+            Markdown,
+            {
+              plugins: [
+                {
+                  name: "cyclic",
+                  afterParse: () => cyclic as MarkdownNode,
+                },
+              ],
+              onError,
+              onParseComplete,
+            },
+            "plugin fallback",
+          ),
+        );
+      });
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: "invalid_ast" }),
+      "after-plugin",
+      "cyclic",
+    );
+    expect(onParseComplete).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "plugin fallback\n\n" }),
+    );
+  });
+
+  it("falls back when astTransform returns a cyclic AST", () => {
+    const cyclic = {
+      type: "document" as const,
+      children: [] as MarkdownNode[],
+    };
+    cyclic.children.push(cyclic as unknown as MarkdownNode);
+    const onParseComplete = jest.fn();
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+
+    try {
+      act(() => {
+        create(
+          createElement(
+            Markdown,
+            {
+              astTransform: () => cyclic as MarkdownNode,
+              onParseComplete,
+            },
+            "transform fallback",
+          ),
+        );
+      });
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+
+    expect(onParseComplete).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "transform fallback\n\n" }),
+    );
+  });
+
   it("preserves unchanged sourceAst child identity between renders", () => {
     const firstParagraph: MarkdownNode = {
       type: "paragraph",
@@ -327,6 +508,124 @@ describe("Markdown plugin pipeline", () => {
     } finally {
       consoleErrorSpy.mockRestore();
     }
+  });
+
+  it("isolates cached ASTs while returning mutable consumer trees", () => {
+    const results: MarkdownNode[] = [];
+    const onParseComplete = jest.fn(({ ast }: { ast: MarkdownNode }) => {
+      results.push(ast);
+    });
+    let renderer: ReactTestRenderer | undefined;
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+
+    try {
+      act(() => {
+        renderer = create(
+          createElement(Markdown, { onParseComplete }, "cache identity"),
+        );
+      });
+      act(() => {
+        renderer!.update(createElement(Markdown, { onParseComplete }, "other"));
+      });
+      act(() => {
+        renderer!.update(
+          createElement(Markdown, { onParseComplete }, "cache identity"),
+        );
+      });
+
+      expect(results[2]).not.toBe(results[0]);
+
+      act(() => {
+        renderer!.update(
+          createElement(
+            Markdown,
+            { onParseComplete, astTransform: (ast) => ast },
+            "cache identity",
+          ),
+        );
+      });
+      expect(results[3]).not.toBe(results[0]);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it("protects cached ASTs from consumer callback mutation", () => {
+    const markdown = "immutable cache input";
+    const onParseComplete = jest.fn(({ ast }: { ast: MarkdownNode }) => {
+      if (onParseComplete.mock.calls.length !== 1) return;
+
+      expect(Object.isFrozen(ast)).toBe(false);
+      expect(Object.isFrozen(ast.children)).toBe(false);
+      ast.children?.push({ type: "text", content: "poison" });
+      const firstText = ast.children?.[0]?.children?.[0];
+      if (firstText) firstText.content = "poison";
+    });
+    let renderer: ReactTestRenderer | undefined;
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+
+    try {
+      act(() => {
+        renderer = create(
+          createElement(Markdown, { onParseComplete }, markdown),
+        );
+      });
+      act(() => {
+        renderer!.update(createElement(Markdown, { onParseComplete }, "other"));
+      });
+      act(() => {
+        renderer!.update(
+          createElement(Markdown, { onParseComplete }, markdown),
+        );
+      });
+
+      const result = onParseComplete.mock.calls.at(-1)?.[0] as {
+        ast: MarkdownNode;
+        text: string;
+      };
+      expect(result.text).toBe(`${markdown}\n\n`);
+      expect(result.ast.children).toHaveLength(1);
+      expect(result.ast.children?.[0]?.children?.[0]?.content).toBe(markdown);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it("freezes ASTs passed to post-parse callbacks when requested", () => {
+    const observed: boolean[] = [];
+    const plugin: MarkdownPlugin = {
+      afterParse: (ast) => {
+        observed.push(Object.isFrozen(ast), Object.isFrozen(ast.children));
+        return ast;
+      },
+    };
+
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+    try {
+      act(() => {
+        create(
+          createElement(
+            Markdown,
+            {
+              options: { freezeAst: true },
+              plugins: [plugin],
+              astTransform: (ast) => {
+                observed.push(
+                  Object.isFrozen(ast),
+                  Object.isFrozen(ast.children),
+                );
+                return ast;
+              },
+            },
+            "frozen callback input",
+          ),
+        );
+      });
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+
+    expect(observed).toEqual([true, true, true, true]);
   });
 
   it("reuses cached ASTs within an instance and reports bounded cache stats", () => {

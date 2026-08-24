@@ -279,6 +279,34 @@ describe("MarkdownStream", () => {
     );
   });
 
+  it("coalesces adjacent listener ranges before a stream flush", () => {
+    const session = createSession({
+      allText: "hello",
+      rangeText: " world",
+    });
+
+    act(() => {
+      TestRenderer.create(
+        React.createElement(MarkdownStream, {
+          session,
+          updateIntervalMs: 1,
+        }),
+      );
+    });
+
+    act(() => {
+      session.setAllText("hello world");
+      session.emit(5, 8);
+      session.emit(8, 11);
+      jest.runOnlyPendingTimers();
+    });
+
+    expect(session.getTextRange).toHaveBeenCalledWith(5, 11);
+    expect(markdownMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ children: "hello world" }),
+    );
+  });
+
   it("keeps the stream subscription stable when parser option values do not change", () => {
     const session = createSession({
       allText: "hello",

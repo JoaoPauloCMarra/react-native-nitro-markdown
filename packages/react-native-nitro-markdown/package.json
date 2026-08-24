@@ -1,7 +1,7 @@
 {
   "name": "react-native-nitro-markdown",
-  "version": "0.11.0",
-  "description": "Fast native Markdown parser and renderer for React Native — CommonMark + GFM, streaming, headless AST, and math, powered by Nitro Modules and md4c",
+  "version": "0.12.0",
+  "description": "Fast native Markdown parser and renderer for React Native \u2014 CommonMark + GFM, streaming, headless AST, and math, powered by Nitro Modules and md4c",
   "main": "lib/commonjs/index.js",
   "module": "lib/module/index.js",
   "types": "lib/typescript/commonjs/index.d.ts",
@@ -59,15 +59,15 @@
     "prebuild": "bun run codegen",
     "build": "bob build",
     "clean": "rimraf lib nitrogen/generated",
-    "codegen": "nitrogen --logLevel=\"debug\"",
+    "codegen": "bun scripts/codegen.ts",
     "lint": "bunx eslint src --max-warnings=0 --ignore-pattern 'src/**/__tests__/**' --ignore-pattern 'src/**/*.nitro.ts'",
     "lint:fix": "bunx eslint src --fix --ignore-pattern 'src/**/__tests__/**' --ignore-pattern 'src/**/*.nitro.ts'",
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:coverage": "jest --coverage",
     "benchmark": "node ../../scripts/benchmark-comparison.js",
-    "prepack": "node -e \"const fs=require('fs'); for(const name of ['README.md','CHANGELOG.md','SECURITY.md','LICENSE'])fs.copyFileSync('../../'+name,'./'+name)\"",
-    "postpack": "node -e \"const fs=require('fs'); for(const name of ['README.md','CHANGELOG.md','SECURITY.md','LICENSE'])if(fs.existsSync('./'+name))fs.unlinkSync('./'+name)\"",
+    "prepack": "node scripts/sync-package-docs.js prepare",
+    "postpack": "node scripts/sync-package-docs.js cleanup",
     "test:cpp": "node scripts/test-cpp.js",
     "test:cpp:coverage": "node scripts/test-cpp.js --coverage --min-lines=90",
     "size": "size-limit"
@@ -98,7 +98,7 @@
     "type": "git",
     "url": "git+https://github.com/JoaoPauloCMarra/react-native-nitro-markdown.git"
   },
-  "author": "João Paulo C. Marra <joaopaulocmarra@gmail.com>",
+  "author": "Jo\u00e3o Paulo C. Marra <joaopaulocmarra@gmail.com>",
   "license": "MIT",
   "sideEffects": false,
   "bugs": {

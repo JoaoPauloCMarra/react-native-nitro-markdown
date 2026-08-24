@@ -1,0 +1,70 @@
+name: Bug report
+description: Report a reproducible Nitro Markdown bug.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Remove secrets, tokens, private URLs, and personal data from all examples and logs.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Provide the smallest code sample or public repository that reproduces the issue.
+      render: tsx
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Markdown area
+      options:
+        - Parsing
+        - Rendering
+        - Streaming
+        - Plugins
+        - Native module or build
+        - Packaging or installation
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - iOS
+        - Android
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include device or simulator, OS version, Node/Bun version, and build configuration.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Include react-native-nitro-markdown, React Native, react-native-nitro-modules, Expo if used, and OS/toolchain versions.
+      placeholder: "react-native-nitro-markdown 0.11.0, RN 0.87.0, Nitro 0.36.5, Expo 57, iOS 26"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Paste relevant redacted Metro, native build, or runtime logs. Do not include secrets.
+      render: text
+    validations:
+      required: false

@@ -1,9 +1,17 @@
 #!/usr/bin/env node
 
-const { spawn, spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
+const {
+  restoreDirectorySnapshot,
+  snapshotDirectory,
+} = require("./generated-snapshot.js");
+const {
+  ProcessInterrupted,
+  ProcessTreeTerminationError,
+  runProcess,
+} = require("./process-runner.js");
 
 const PACKAGE_NAME = "react-native-nitro-markdown";
 const VALID_TAG_PATTERN = /^[a-zA-Z0-9._-]+$/;
@@ -22,6 +30,15 @@ const packageJsonPath = path.join(packageDir, "package.json");
 const rootReadmePath = path.join(projectRoot, "README.md");
 const changelogPath = path.join(projectRoot, "CHANGELOG.md");
 const podspecPath = path.join(packageDir, `${PACKAGE_NAME}.podspec`);
+const packageDocsSyncScript = path.join(
+  packageDir,
+  "scripts",
+  "sync-package-docs.js",
+);
+const generatedParent = packageDir;
+const generatedSubdirectory = path.join("nitrogen", "generated");
+
+class PublishCancelled extends Error {}
 
 function log(message, color = "green") {
   console.log(colors[color](message));
@@ -31,58 +48,59 @@ function formatCommand(command, args) {
   return [command, ...args].join(" ");
 }
 
-function run(command, args, options = {}) {
-  const result = spawnSync(command, args, {
+async function run(command, args, options = {}) {
+  const result = await runProcess({
+    command,
+    args,
     cwd: projectRoot,
     stdio: "inherit",
-    shell: false,
     ...options,
   });
 
+  if (result.signal) throw new ProcessInterrupted(result.signal);
   if (result.error) {
     log(`Failed to run ${command}: ${result.error.message}`, "red");
     return false;
   }
 
-  return result.status === 0;
+  return result.ok;
 }
 
-function runQuiet(command, args, options = {}) {
-  const result = spawnSync(command, args, {
+async function runQuiet(command, args, options = {}) {
+  const result = await runProcess({
+    command,
+    args,
     cwd: projectRoot,
-    encoding: "utf-8",
     stdio: ["ignore", "pipe", "pipe"],
-    shell: false,
     ...options,
   });
 
+  if (result.signal) throw new ProcessInterrupted(result.signal);
   return {
-    status: result.status ?? 1,
-    stdout: result.stdout?.trim() ?? "",
-    stderr: result.stderr?.trim() ?? "",
+    status: result.exitCode,
+    stdout: result.stdout.trim(),
+    stderr: result.stderr.trim(),
     error: result.error,
   };
 }
 
-function runAsync({ label, command, args, cwd = projectRoot }) {
-  return new Promise((resolve) => {
-    const startedAt = Date.now();
-    log(`${label} started: ${formatCommand(command, args)}`, "cyan");
-
-    const child = spawn(command, args, {
-      cwd,
-      stdio: "inherit",
-      shell: false,
-    });
-
-    child.on("error", (error) => {
-      resolve({ label, ok: false, durationMs: Date.now() - startedAt, error });
-    });
-
-    child.on("close", (code) => {
-      resolve({ label, ok: code === 0, durationMs: Date.now() - startedAt, code });
-    });
+async function runAsync({ label, command, args, cwd = projectRoot }) {
+  const startedAt = Date.now();
+  log(`${label} started: ${formatCommand(command, args)}`, "cyan");
+  const result = await runProcess({
+    command,
+    args,
+    cwd,
+    stdio: "inherit",
   });
+  return {
+    label,
+    ok: result.ok,
+    durationMs: Date.now() - startedAt,
+    code: result.exitCode,
+    error: result.error,
+    signal: result.signal,
+  };
 }
 
 async function runParallelSteps(label, steps) {
@@ -102,7 +120,9 @@ async function runParallelSteps(label, steps) {
   }
 
   console.log("");
-  if (failed) process.exit(1);
+  const interrupted = results.find((result) => result.signal);
+  if (interrupted?.signal) throw new ProcessInterrupted(interrupted.signal);
+  if (failed) throw new Error("One or more package checks failed");
 }
 
 function askQuestion(question) {
@@ -164,14 +184,16 @@ function getPackageJson() {
   return readJson(packageJsonPath);
 }
 
-function checkGitStatus() {
-  const result = runQuiet("git", ["status", "--porcelain"], { cwd: projectRoot });
+async function checkGitStatus() {
+  const result = await runQuiet("git", ["status", "--porcelain"], {
+    cwd: projectRoot,
+  });
   if (result.error || result.status !== 0) return false;
   return result.stdout === "";
 }
 
-function getNpmUser() {
-  const result = runQuiet("npm", ["whoami"], { cwd: projectRoot });
+async function getNpmUser() {
+  const result = await runQuiet("npm", ["whoami"], { cwd: projectRoot });
   if (result.status !== 0 || result.stdout === "") return null;
   return result.stdout;
 }
@@ -184,10 +206,12 @@ function hasGitHubTrustedPublishingContext() {
   );
 }
 
-function getPublishedVersion(version) {
-  const result = runQuiet("npm", ["view", `${PACKAGE_NAME}@${version}`, "version"], {
-    cwd: projectRoot,
-  });
+async function getPublishedVersion(version) {
+  const result = await runQuiet(
+    "npm",
+    ["view", `${PACKAGE_NAME}@${version}`, "version"],
+    { cwd: projectRoot },
+  );
 
   if (result.status === 0) return result.stdout;
   if (result.stderr.includes("E404") || result.stdout.includes("E404")) return null;
@@ -198,7 +222,7 @@ function assertTextIncludes(filePath, label, expected) {
   const text = fs.readFileSync(filePath, "utf-8");
   if (!text.includes(expected)) {
     log(`Missing ${label}: ${expected}`, "red");
-    process.exit(1);
+    throw new Error(`Missing ${label}`);
   }
 }
 
@@ -221,17 +245,19 @@ function validateReleaseDocs(version) {
   console.log("");
 }
 
-function validatePackedFiles() {
+async function validatePackedFiles() {
   log("Validating packed package contents...", "cyan");
 
   // Bun-native, auth-free dry-run with lifecycle scripts disabled (X4).
-  const result = runQuiet("bun", ["pm", "pack", "--dry-run", "--ignore-scripts"], {
-    cwd: packageDir,
-  });
+  const result = await runQuiet(
+    "bun",
+    ["pm", "pack", "--dry-run", "--ignore-scripts"],
+    { cwd: packageDir },
+  );
   if (result.error || result.status !== 0) {
     log("bun pm pack dry-run failed", "red");
     if (result.stderr) console.error(result.stderr);
-    process.exit(1);
+    throw new Error("bun pm pack dry-run failed");
   }
 
   const files = new Set();
@@ -244,17 +270,21 @@ function validatePackedFiles() {
 
   if (files.size === 0) {
     log("bun pm pack output did not list any packed files.", "red");
-    process.exit(1);
+    throw new Error("bun pm pack output did not list any packed files");
   }
 
   const expectedFiles = [
+    "README.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "LICENSE",
     ".watchmanconfig",
     "android/build.gradle",
-    "android/src/main/java/com/margelo/nitro/com/nitromarkdown/HybridMarkdownSession.kt",
+    "cpp/bindings/HybridMarkdownSession.cpp",
+    "cpp/bindings/HybridMarkdownSession.hpp",
     "cpp/core/NitroMD4CParser.cpp",
     "cpp/core/flatten.cpp",
     "cpp/nitromd/nitromd.c",
-    "ios/HybridMarkdownSession.swift",
     "lib/module/index.js",
     "lib/module/headless.js",
     "lib/commonjs/index.js",
@@ -269,23 +299,21 @@ function validatePackedFiles() {
     "nitrogen/generated/android/NitroMarkdownOnLoad.hpp",
     "nitrogen/generated/shared/c++/HybridMarkdownParserSpec.cpp",
     "nitrogen/generated/shared/c++/HybridMarkdownParserSpec.hpp",
+    "nitrogen/generated/shared/c++/HybridMarkdownSessionSpec.cpp",
+    "nitrogen/generated/shared/c++/HybridMarkdownSessionSpec.hpp",
     "nitrogen/generated/shared/c++/ParserOptions.hpp",
     "src/index.ts",
     "src/headless.ts",
     `${PACKAGE_NAME}.podspec`,
   ];
 
-  // README.md and LICENSE are injected by the prepack lifecycle script from
-  // the repository root, so they are intentionally absent from the
-  // --ignore-scripts pack listing. Their content is validated separately by
-  // validateReleaseDocs (README) and the repository-level release process.
   const missing = expectedFiles.filter((file) => !files.has(file));
   if (missing.length > 0) {
     log(`Packed package is missing ${missing.length} required files:`, "red");
     for (const file of missing) {
       log(`  ${file}`, "red");
     }
-    process.exit(1);
+    throw new Error(`Packed package is missing ${missing.length} required files`);
   }
 
   console.log(`  ✓ ${PACKAGE_NAME} pack contains all required package files`);
@@ -293,11 +321,33 @@ function validatePackedFiles() {
   console.log("");
 }
 
-function runStep(label, command, args, options = {}) {
+async function runPackageDocs(mode) {
+  const result = await runProcess({
+    command: "node",
+    args: [packageDocsSyncScript, mode],
+    cwd: packageDir,
+    stdio: "inherit",
+  });
+  if (result.signal) throw new ProcessInterrupted(result.signal);
+  if (!result.ok) {
+    throw new Error(`${mode} package document lifecycle step failed`);
+  }
+}
+
+async function withPackageDocsRestored(task) {
+  try {
+    await runPackageDocs("prepare");
+    return await task();
+  } finally {
+    await runPackageDocs("cleanup");
+  }
+}
+
+async function runStep(label, command, args, options = {}) {
   log(label, "cyan");
-  if (!run(command, args, options)) {
+  if (!(await run(command, args, options))) {
     log(`${label.replace(/^[^a-zA-Z]+/, "")} failed`, "red");
-    process.exit(1);
+    throw new Error(`${label.replace(/^[^a-zA-Z]+/, "")} failed`);
   }
   console.log("");
 }
@@ -311,23 +361,23 @@ async function runPreflight({ dryRun, skipPreflight, version }) {
 
   log("Running pre-publish checks...", "cyan");
 
-  const gitClean = checkGitStatus();
+  const gitClean = await checkGitStatus();
   if (gitClean) {
     console.log("  ✓ Git working directory is clean");
   } else if (dryRun) {
     log("  ⚠ Git working directory is dirty; dry-run will continue", "yellow");
   } else {
     log("Refusing to publish with uncommitted changes", "red");
-    process.exit(1);
+    throw new Error("Refusing to publish with uncommitted changes");
   }
 
-  const publishedVersion = getPublishedVersion(version);
+  const publishedVersion = await getPublishedVersion(version);
   if (publishedVersion === version) {
     if (dryRun) {
       log(`  ⚠ ${PACKAGE_NAME}@${version} already exists on npm; dry-run will continue`, "yellow");
     } else {
       log(`${PACKAGE_NAME}@${version} already exists on npm`, "red");
-      process.exit(1);
+      throw new Error(`${PACKAGE_NAME}@${version} already exists on npm`);
     }
   } else if (publishedVersion === null) {
     console.log(`  ✓ ${PACKAGE_NAME}@${version} is not published yet`);
@@ -335,16 +385,16 @@ async function runPreflight({ dryRun, skipPreflight, version }) {
     log("  ⚠ Could not verify npm version availability; dry-run will continue", "yellow");
   } else {
     log("Could not verify npm version availability", "red");
-    process.exit(1);
+    throw new Error("Could not verify npm version availability");
   }
 
   if (!dryRun && hasGitHubTrustedPublishingContext()) {
     console.log("  ✓ npm auth will use GitHub Actions trusted publishing (OIDC)");
   } else if (!dryRun) {
-    const npmUser = getNpmUser();
+    const npmUser = await getNpmUser();
     if (!npmUser) {
       log("Not logged in to npm. Run: npm login", "red");
-      process.exit(1);
+      throw new Error("Not logged in to npm");
     }
     console.log(`  ✓ Logged in to npm as: ${npmUser}`);
   } else {
@@ -360,15 +410,53 @@ async function runVerification() {
     { label: "JS coverage", command: "bun", args: ["run", "test:coverage"], cwd: packageDir },
   ]);
 
-  runStep("Running C++ coverage...", "bun", ["run", "test:cpp:coverage"], {
+  await runStep("Running C++ coverage...", "bun", ["run", "test:cpp:coverage"], {
     cwd: packageDir,
   });
-  runStep("Running repo typecheck...", "bun", ["run", "typecheck"], { cwd: projectRoot });
-  // Root build regenerates Nitro bindings before compiling, so publish
-  // verification can never run against stale generated state.
-  runStep("Building package (with codegen)...", "bun", ["run", "build"], {
+  await runStep("Running repo typecheck...", "bun", ["run", "typecheck"], {
     cwd: projectRoot,
   });
+  // Root build regenerates Nitro bindings before compiling, so publish
+  // verification can never run against stale generated state.
+  await runStep("Building package (with codegen)...", "bun", ["run", "build"], {
+    cwd: projectRoot,
+  });
+}
+
+async function withGeneratedDirectoryRestored(task) {
+  const snapshot = await snapshotDirectory(generatedParent, generatedSubdirectory);
+  let restorePromise;
+  let receivedSignal;
+  let safeToRestore = true;
+  const restore = () => {
+    if (!restorePromise) {
+      restorePromise = restoreDirectorySnapshot(
+        generatedParent,
+        generatedSubdirectory,
+        snapshot,
+      );
+    }
+    return restorePromise;
+  };
+
+  const handleSignal = (signal) => {
+    receivedSignal ??= signal;
+  };
+
+  process.once("SIGINT", handleSignal);
+  process.once("SIGTERM", handleSignal);
+  try {
+    const result = await task();
+    if (receivedSignal) throw new ProcessInterrupted(receivedSignal);
+    return result;
+  } catch (error) {
+    if (error instanceof ProcessTreeTerminationError) safeToRestore = false;
+    throw error;
+  } finally {
+    process.removeListener("SIGINT", handleSignal);
+    process.removeListener("SIGTERM", handleSignal);
+    if (safeToRestore) await restore();
+  }
 }
 
 async function main() {
@@ -384,51 +472,67 @@ async function main() {
   if (options.dryRun) log("Mode: DRY RUN (no actual publish)", "yellow");
   console.log("");
 
-  await runPreflight({ ...options, version });
+  const publish = async () => {
+    await runPreflight({ ...options, version });
 
-  if (!options.skipDocs) validateReleaseDocs(version);
-  else log("Skipping release doc validation", "yellow");
+    if (!options.skipDocs) validateReleaseDocs(version);
+    else log("Skipping release doc validation", "yellow");
 
-  if (!options.skipChecks) await runVerification();
-  else log("Skipping verification checks", "yellow");
+    if (!options.skipChecks) await runVerification();
+    else log("Skipping verification checks", "yellow");
 
-  validatePackedFiles();
+    await validatePackedFiles();
 
-  const publishCommand = options.dryRun ? "bun" : "npm";
-  const publishArgs = options.dryRun
-    ? ["pm", "pack", "--dry-run", "--ignore-scripts"]
-    : ["publish", "--tag", options.tag, "--access", "public"];
+    const publishCommand = options.dryRun ? "bun" : "npm";
+    const publishArgs = options.dryRun
+      ? ["pm", "pack", "--dry-run", "--ignore-scripts"]
+      : ["publish", "--tag", options.tag, "--access", "public"];
 
-  if (!options.dryRun && !options.yes) {
-    const answer = await askQuestion(
-      `Publish ${PACKAGE_NAME}@${version} to npm with tag "${options.tag}"? (y/n): `,
-    );
-    if (answer !== "y" && answer !== "yes") {
-      log("Publish cancelled", "yellow");
-      process.exit(0);
+    if (!options.dryRun && !options.yes) {
+      const answer = await askQuestion(
+        `Publish ${PACKAGE_NAME}@${version} to npm with tag "${options.tag}"? (y/n): `,
+      );
+      if (answer !== "y" && answer !== "yes") {
+        log("Publish cancelled", "yellow");
+        throw new PublishCancelled("Publish cancelled");
+      }
+      console.log("");
     }
-    console.log("");
-  }
 
-  runStep(
-    options.dryRun ? "Running package pack dry-run..." : "Publishing to npm...",
-    publishCommand,
-    publishArgs,
-    { cwd: packageDir },
-  );
+    await runStep(
+      options.dryRun ? "Running package pack dry-run..." : "Publishing to npm...",
+      publishCommand,
+      publishArgs,
+      { cwd: packageDir },
+    );
+
+    if (options.dryRun) {
+      log("Dry run complete. Package publish path is ready.", "green");
+      log(`Run without --dry-run to publish ${PACKAGE_NAME}@${version}`, "cyan");
+    } else {
+      log(`Published ${PACKAGE_NAME}@${version}`, "green");
+      log(`https://www.npmjs.com/package/${PACKAGE_NAME}`, "cyan");
+    }
+
+    console.log("");
+  };
 
   if (options.dryRun) {
-    log("Dry run complete. Package publish path is ready.", "green");
-    log(`Run without --dry-run to publish ${PACKAGE_NAME}@${version}`, "cyan");
+    await withGeneratedDirectoryRestored(() => withPackageDocsRestored(publish));
   } else {
-    log(`Published ${PACKAGE_NAME}@${version}`, "green");
-    log(`https://www.npmjs.com/package/${PACKAGE_NAME}`, "cyan");
+    await withPackageDocsRestored(publish);
   }
-
-  console.log("");
 }
 
 main().catch((error) => {
+  if (error instanceof PublishCancelled) {
+    process.exitCode = 0;
+    return;
+  }
+  if (error instanceof ProcessInterrupted) {
+    process.exitCode = error.exitCode;
+    return;
+  }
   log(`Publish failed: ${error.message}`, "red");
-  process.exit(1);
+  process.exitCode = 1;
 });

@@ -9,13 +9,12 @@ namespace margelo::nitro::Markdown {
 using InternalMarkdownNode = ::NitroMarkdown::MarkdownNode;
 using InternalParserOptions = ::NitroMarkdown::ParserOptions;
 
+class MarkdownSerializationCache;
+
 class HybridMarkdownParser : public HybridMarkdownParserSpec {
 public:
-    HybridMarkdownParser() : HybridObject(TAG), HybridMarkdownParserSpec() {
-        parser_ = std::make_unique<::NitroMarkdown::MD4CParser>();
-    }
-    
-    ~HybridMarkdownParser() override = default;
+    HybridMarkdownParser();
+    ~HybridMarkdownParser() override;
 
     [[nodiscard]] std::string parse(const std::string& text) override;
     [[nodiscard]] std::string parseWithOptions(const std::string& text, const ParserOptions& options) override;
@@ -24,7 +23,12 @@ public:
 
 private:
     std::unique_ptr<::NitroMarkdown::MD4CParser> parser_;
-    std::string nodeToJson(const std::shared_ptr<InternalMarkdownNode>& node, bool includeOffsets);
+    std::unique_ptr<MarkdownSerializationCache> cache_;
+    std::string nodeToJson(
+        const std::shared_ptr<InternalMarkdownNode>& node,
+        const std::string& source,
+        const InternalParserOptions& options
+    );
 };
 
 } // namespace margelo::nitro::Markdown

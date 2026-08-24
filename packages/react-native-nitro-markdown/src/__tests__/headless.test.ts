@@ -208,8 +208,8 @@ describe("headless native fallback", () => {
 
     runWithParserMock(
       () => ({
-        parse: jest.fn(() => "{}"),
-        parseWithOptions: jest.fn(() => "{}"),
+        parse: jest.fn(() => JSON.stringify({ type: "document" })),
+        parseWithOptions: jest.fn(() => JSON.stringify({ type: "document" })),
         extractPlainText: jest.fn(() => ""),
         extractPlainTextWithOptions: jest.fn(() => ""),
       }),
@@ -237,7 +237,7 @@ describe("headless native fallback", () => {
         expectInputTooLarge(() =>
           headless.extractPlainTextWithOptions(oversized, { gfm: true }),
         );
-        expect(headless.parseMarkdown("ok")).toEqual({});
+        expect(headless.parseMarkdown("ok")).toEqual({ type: "document" });
       },
     );
 
@@ -247,7 +247,7 @@ describe("headless native fallback", () => {
   it("honors a custom maxInputLength lower than the hard cap", () => {
     runWithParserMock(
       () => ({
-        parseWithOptions: jest.fn(() => "{}"),
+        parseWithOptions: jest.fn(() => JSON.stringify({ type: "document" })),
       }),
       (headless) => {
         expect(() =>
@@ -257,7 +257,33 @@ describe("headless native fallback", () => {
         ).toThrow(headless.MarkdownError);
         expect(headless.parseMarkdownWithOptions("1234567", {
           maxInputLength: 8,
-        })).toEqual({});
+        })).toEqual({ type: "document" });
+        expect(() =>
+          headless.parseMarkdownWithOptions("éé", { maxInputLength: 3 }),
+        ).toThrow(headless.MarkdownError);
+        expect(headless.parseMarkdownWithOptions("éé", {
+          maxInputLength: 4,
+        })).toEqual({ type: "document" });
+        expect(headless.parseMarkdownWithOptions("😀", {
+          maxInputLength: 4,
+        })).toEqual({ type: "document" });
+        expect(() =>
+          headless.parseMarkdownWithOptions("😀", { maxInputLength: 3 }),
+        ).toThrow(headless.MarkdownError);
+        expect(headless.parseMarkdownWithOptions("\ue000", {
+          maxInputLength: 3,
+        })).toEqual({ type: "document" });
+        expect(headless.parseMarkdownWithOptions("\ud800", {
+          maxInputLength: 3,
+        })).toEqual({ type: "document" });
+        expect(() =>
+          headless.parseMarkdownWithOptions("\ud800", { maxInputLength: 2 }),
+        ).toThrow(headless.MarkdownError);
+        for (const value of [Number.NaN, Number.POSITIVE_INFINITY, 1.5, -1]) {
+          expect(() =>
+            headless.parseMarkdownWithOptions("ok", { maxInputLength: value }),
+          ).toThrow(headless.MarkdownError);
+        }
       },
     );
   });
@@ -323,6 +349,7 @@ describe("getFlattenedText", () => {
     expect(getFlattenedText({ type: "code_inline", content: "foo()" })).toBe("foo()");
     expect(getFlattenedText({ type: "math_inline", content: "E=mc^2" })).toBe("E=mc^2");
     expect(getFlattenedText({ type: "html_inline", content: "<br>" })).toBe("<br>");
+    expect(getFlattenedText({ type: "text" })).toBe("");
   });
 
   it("handles break types", () => {

@@ -36,7 +36,7 @@ target_sources(
   ../nitrogen/generated/shared/c++/HybridMarkdownParserSpec.cpp
   ../nitrogen/generated/shared/c++/HybridMarkdownSessionSpec.cpp
   # Android-specific Nitrogen C++ sources
-  ../nitrogen/generated/android/c++/JHybridMarkdownSessionSpec.cpp
+  
 )
 
 # From node_modules/react-native/ReactAndroid/cmake-utils/folly-flags.cmake

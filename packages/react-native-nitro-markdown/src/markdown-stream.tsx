@@ -17,6 +17,8 @@ import {
   type MarkdownSessionController,
 } from "./use-markdown-stream";
 import { getNextStreamAst, parseMarkdownAst } from "./utils/incremental-ast";
+import { freezeMarkdownNode } from "./utils/freeze-ast";
+import { normalizeParserOptions } from "./utils/parse-pipeline";
 
 type MarkdownOnError = NonNullable<MarkdownProps["onError"]>;
 
@@ -24,40 +26,6 @@ const normalizeOffset = (value: number): number | null => {
   if (!Number.isFinite(value)) return null;
   if (value <= 0) return 0;
   return Math.floor(value);
-};
-
-const normalizeParserOptions = (
-  options?: ParserOptions,
-): ParserOptions | undefined => {
-  if (!options) return undefined;
-
-  const gfm = options.gfm;
-  const math = options.math;
-  const html = options.html;
-  const sourceOffsets = options.sourceOffsets;
-  const maxInputLength = options.maxInputLength;
-
-  if (
-    gfm === undefined &&
-    math === undefined &&
-    html === undefined &&
-    sourceOffsets === undefined &&
-    maxInputLength === undefined
-  ) {
-    return undefined;
-  }
-
-  const normalized: ParserOptions = {};
-  if (gfm !== undefined) normalized.gfm = gfm;
-  if (math !== undefined) normalized.math = math;
-  if (html !== undefined) normalized.html = html;
-  if (sourceOffsets !== undefined) {
-    normalized.sourceOffsets = sourceOffsets;
-  }
-  if (maxInputLength !== undefined) {
-    normalized.maxInputLength = maxInputLength;
-  }
-  return normalized;
 };
 
 const resolveStreamText = ({
@@ -214,6 +182,7 @@ export function useMarkdownStreamState({
   const parserOptionHtml = options?.html;
   const parserOptionSourceOffsets = options?.sourceOffsets;
   const parserOptionMaxInputLength = options?.maxInputLength;
+  const parserOptionFreezeAst = options?.freezeAst;
   const parserOptions = useMemo(
     () =>
       normalizeParserOptions(
@@ -228,6 +197,9 @@ export function useMarkdownStreamState({
           parserOptionMaxInputLength === undefined
             ? null
             : { maxInputLength: parserOptionMaxInputLength },
+          parserOptionFreezeAst === undefined
+            ? null
+            : { freezeAst: parserOptionFreezeAst },
         ),
       ),
     [
@@ -236,16 +208,20 @@ export function useMarkdownStreamState({
       parserOptionHtml,
       parserOptionSourceOffsets,
       parserOptionMaxInputLength,
+      parserOptionFreezeAst,
     ],
   );
   const parseText = useCallback(
     (text: string): MarkdownNode => parseMarkdownAst(text, parserOptions),
     [parserOptions],
   );
-  const createEmptyAst = (): MarkdownNode => ({
-    type: "document",
-    children: [],
-  });
+  const createEmptyAst = useCallback((): MarkdownNode => {
+    const ast: MarkdownNode = {
+      type: "document",
+      children: [],
+    };
+    return parserOptionFreezeAst ? freezeMarkdownNode(ast) : ast;
+  }, [parserOptionFreezeAst]);
   const hasBeforeParsePlugins =
     plugins?.some((plugin) => typeof plugin.beforeParse === "function") ??
     false;
@@ -333,7 +309,13 @@ export function useMarkdownStreamState({
     forceFullSyncRef.current = false;
     renderStateRef.current = initialState;
     setRenderState(initialState);
-  }, [activeSession, hasBeforeParsePlugins, parseText, initialParseMode]);
+  }, [
+    activeSession,
+    createEmptyAst,
+    hasBeforeParsePlugins,
+    parseText,
+    initialParseMode,
+  ]);
 
   useEffect(() => {
     const flushUpdate = () => {

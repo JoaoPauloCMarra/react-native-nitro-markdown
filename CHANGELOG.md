@@ -9,6 +9,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [0.12.0] - 2026-08-24
+
+### Breaking changes
+
+- `ParserOptions.maxInputLength` is enforced as a UTF-8 byte limit at both the
+  JavaScript and native boundaries. Callers that sized this value by
+  JavaScript character count must account for multibyte text and stay within
+  the 10 MiB native hard cap.
+- `MarkdownSession` rejects ranges that split a UTF-16 surrogate pair with
+  `invalid_range`; use boundaries returned by the session or complete code-point
+  boundaries for `getTextRange()` and `replace()`.
+
+### Changed
+
+- Native `MarkdownSession` now uses one source-owned C++ HybridObject on iOS
+  and Android, preserving the existing session API and limits.
+- Streaming re-parses reuse a bounded native serialization cache keyed by the
+  exact source slice, absolute offset, parser flags, and node type of a
+  completed block, so unchanged prefix blocks are not re-serialized on every
+  flush while preserving byte-identical output.
+- Parsed ASTs are mutable by default again for compatibility. The new additive
+  `ParserOptions.freezeAst` option freezes nodes and child arrays when an app
+  needs defensive immutability. Cache and component boundaries still clone
+  trees so consumer mutation cannot poison another cached result.
+- Restored the deprecated `Markdown.onParsingInProgress` callback for source
+  compatibility. It runs after the current parse render commits; new code
+  should use `onParseComplete` or `MarkdownStream` state.
+- Session ranges use JavaScript UTF-16 units; split-surrogate boundaries now
+  throw `invalid_range` instead of rounding, and session external-memory
+  accounting releases retained buffer and listener capacity on dispose.
+
+### Fixed
+
+- Markdown JSON serialization now counts actual emitted bytes against the
+  64 MiB cap, so valid near-limit output is accepted without estimate-based
+  false rejections.
+
 ## [0.11.0] - 2026-08-20
 
 ### Breaking changes
@@ -22,9 +59,9 @@ stay safe.
 - Native Nitro bindings are regenerated for Nitro/Nitrogen `0.37.0` while
   preserving the existing iOS and Android parser, session, rendering,
   streaming, and headless behavior.
-- The standalone package compatibility baseline now includes React Native
-  `0.87.0` and its Strict TypeScript API; the Expo SDK 57 example remains on
-  React Native `0.86.2`, the version selected by that SDK.
+- Added a React Native `0.87.0` Strict TypeScript compatibility check; the
+  package gate and Expo SDK 57 example remain on React Native `0.86.2`, the
+  version selected by that SDK.
 
 ### Fixed
 
@@ -69,9 +106,6 @@ stay safe.
 - Accessibility: tables expose a `grid` role with a header summary label,
   image accessibility labels strip raw markdown markers, and parse errors use
   the new `errorText` prop (default unchanged).
-- `onParsingInProgress` is deprecated: parsing is synchronous, so the callback
-  had no in-progress window. Use `onParseComplete` or `MarkdownStream`'s
-  `sourceAstStatus`.
 - The incomplete wikilink branch in the native parser was removed; wikilinks
   are not a supported syntax.
 
@@ -365,6 +399,7 @@ _No breaking changes._
 - Native parser plain-text helpers:
   - `extractPlainText(text)`
   - `extractPlainTextWithOptions(text, options)`
+
 ### Changed
 
 - Table renderer now uses immediate estimated column widths and refines in background measurement, avoiding blank-table states when layout callbacks are delayed.

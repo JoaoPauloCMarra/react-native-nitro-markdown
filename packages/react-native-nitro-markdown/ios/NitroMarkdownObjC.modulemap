@@ -1,4 +1,0 @@
-module NitroMarkdownObjC {
-  header "NitroMarkdownTryCatch.h"
-  export *
-}

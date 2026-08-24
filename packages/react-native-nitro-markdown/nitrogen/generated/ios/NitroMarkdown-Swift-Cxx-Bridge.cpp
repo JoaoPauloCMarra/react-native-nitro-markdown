@@ -8,42 +8,10 @@
 #include "NitroMarkdown-Swift-Cxx-Bridge.hpp"
 
 // Include C++ implementation defined types
-#include "HybridMarkdownSessionSpecSwift.hpp"
-#include "NitroMarkdown-Swift-Cxx-Umbrella.hpp"
-#include <NitroModules/NitroDefines.hpp>
+
 
 namespace margelo::nitro::Markdown::bridge::swift {
 
-  // pragma MARK: std::function<void()>
-  Func_void create_Func_void(void* NON_NULL swiftClosureWrapper) noexcept {
-    auto swiftClosure = NitroMarkdown::Func_void::fromUnsafe(swiftClosureWrapper);
-    return [swiftClosure = std::move(swiftClosure)]() mutable -> void {
-      swiftClosure.call();
-    };
-  }
   
-  // pragma MARK: std::function<void(double /* from */, double /* to */)>
-  Func_void_double_double create_Func_void_double_double(void* NON_NULL swiftClosureWrapper) noexcept {
-    auto swiftClosure = NitroMarkdown::Func_void_double_double::fromUnsafe(swiftClosureWrapper);
-    return [swiftClosure = std::move(swiftClosure)](double from, double to) mutable -> void {
-      swiftClosure.call(from, to);
-    };
-  }
-  
-  // pragma MARK: std::shared_ptr<HybridMarkdownSessionSpec>
-  std::shared_ptr<HybridMarkdownSessionSpec> create_std__shared_ptr_HybridMarkdownSessionSpec_(void* NON_NULL swiftUnsafePointer) noexcept {
-    NitroMarkdown::HybridMarkdownSessionSpec_cxx swiftPart = NitroMarkdown::HybridMarkdownSessionSpec_cxx::fromUnsafe(swiftUnsafePointer);
-    return std::make_shared<margelo::nitro::Markdown::HybridMarkdownSessionSpecSwift>(swiftPart);
-  }
-  void* NON_NULL get_std__shared_ptr_HybridMarkdownSessionSpec_(std__shared_ptr_HybridMarkdownSessionSpec_ cppType) {
-    std::shared_ptr<margelo::nitro::Markdown::HybridMarkdownSessionSpecSwift> swiftWrapper = std::dynamic_pointer_cast<margelo::nitro::Markdown::HybridMarkdownSessionSpecSwift>(cppType);
-    #ifdef NITRO_DEBUG
-    if (swiftWrapper == nullptr) [[unlikely]] {
-      throw std::runtime_error("Class \"HybridMarkdownSessionSpec\" is not implemented in Swift!");
-    }
-    #endif
-    NitroMarkdown::HybridMarkdownSessionSpec_cxx& swiftPart = swiftWrapper->getSwiftPart();
-    return swiftPart.toUnsafe();
-  }
 
 } // namespace margelo::nitro::Markdown::bridge::swift

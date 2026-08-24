@@ -6,13 +6,13 @@ custom native build. It cannot run in Expo Go.
 
 ## Requirements
 
-| Dependency | Minimum |
-| ---------- | ------- |
-| React Native | `>=0.75` (New Architecture / Fabric) |
-| [react-native-nitro-modules](https://www.npmjs.com/package/react-native-nitro-modules) | `>=0.37.0 <0.38.0` (peer dependency) |
-| [ratex-react-native](https://www.npmjs.com/package/ratex-react-native) | `>=0.1.4` (peer dependency, example validated with `0.1.14`) |
-| iOS | 16.4+ |
-| Expo | SDK 57 development build |
+| Dependency                                                                             | Minimum                                                      |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| React Native                                                                           | `>=0.75` (New Architecture / Fabric)                         |
+| [react-native-nitro-modules](https://www.npmjs.com/package/react-native-nitro-modules) | `>=0.37.0 <0.38.0` (peer dependency)                         |
+| [ratex-react-native](https://www.npmjs.com/package/ratex-react-native)                 | `>=0.1.4` (peer dependency, example validated with `0.1.14`) |
+| iOS                                                                                    | 16.4+                                                        |
+| Expo                                                                                   | SDK 57 development build                                     |
 
 `react-native-nitro-modules` and `ratex-react-native` are peer dependencies
 because parsing and math rendering run in native code.
@@ -53,12 +53,12 @@ up the module — re-run `prebuild`/`pod install` and rebuild the app.
 
 ## Platform support
 
-| Platform | Status |
-| -------- | ------ |
-| iOS | Native parser via Nitro + the bundled `nitromd` (md4c) engine. |
-| Android | Native parser via Nitro + the bundled `nitromd` (md4c) engine. |
-| Expo | Development builds only. |
-| Web | Not supported. The parser requires Nitro Modules (JSI); imports fail deterministically on web. |
+| Platform | Status                                                                                         |
+| -------- | ---------------------------------------------------------------------------------------------- |
+| iOS      | Native parser via Nitro + the bundled `nitromd` (md4c) engine.                                 |
+| Android  | Native parser via Nitro + the bundled `nitromd` (md4c) engine.                                 |
+| Expo     | Development builds only.                                                                       |
+| Web      | Not supported. The parser requires Nitro Modules (JSI); imports fail deterministically on web. |
 
 ## Next steps
 

@@ -4,8 +4,14 @@
 #include <vector>
 #include <optional>
 #include <memory>
+#include <cstddef>
 
 namespace NitroMarkdown {
+
+constexpr std::size_t kMaxAstDepth = 256;
+constexpr std::size_t kMaxAstNodes = 100'000;
+constexpr std::size_t kMaxAstChildSlots = 250'000;
+constexpr std::size_t kMaxAstWork = 500'000;
 
 typedef unsigned MD_OFFSET;
 typedef MD_OFFSET OFF;
