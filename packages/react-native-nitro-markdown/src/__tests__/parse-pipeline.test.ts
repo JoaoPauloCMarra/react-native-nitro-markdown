@@ -7,6 +7,7 @@ import {
   getParserOptionsKey,
   hashString,
   isMarkdownNode,
+  materializeMarkdownNode,
   normalizeParserOptions,
   parseWithNativeParser,
   safeOnError,
@@ -78,6 +79,13 @@ describe("parse pipeline utilities", () => {
 
     const leaf: MarkdownNode = { type: "text", content: "leaf" };
     expect(cloneMarkdownNode(leaf)).toEqual(leaf);
+
+    const materialized = materializeMarkdownNode(ROOT_NODE);
+    expect(materialized).not.toBe(ROOT_NODE);
+    expect(Object.isFrozen(materialized)).toBe(false);
+
+    const frozen = materializeMarkdownNode(ROOT_NODE, true);
+    expect(Object.isFrozen(frozen)).toBe(true);
   });
 
   it("materializes proxy data properties before rendering can observe changes", () => {
@@ -146,9 +154,7 @@ describe("parse pipeline utilities", () => {
       enumerable: true,
       value: true,
     });
-    expectInvalid(
-      changingRoot("metadata", { values: metadataArray }),
-    );
+    expectInvalid(changingRoot("metadata", { values: metadataArray }));
 
     const manyNodes = Array.from({ length: 100_001 }, () => ({
       type: "text" as const,
@@ -281,19 +287,31 @@ describe("parse pipeline utilities", () => {
 
     const throwingKeys = new Proxy(
       { type: "text" },
-      { ownKeys: () => { throw new Error("keys"); } },
+      {
+        ownKeys: () => {
+          throw new Error("keys");
+        },
+      },
     );
     expectInvalid(throwingKeys);
 
     const throwingProperty = new Proxy(
       { type: "text" },
-      { getOwnPropertyDescriptor: () => { throw new Error("property"); } },
+      {
+        getOwnPropertyDescriptor: () => {
+          throw new Error("property");
+        },
+      },
     );
     expectInvalid(throwingProperty);
 
     const throwingFreeze = new Proxy(
       { type: "text" },
-      { preventExtensions: () => { throw new Error("freeze"); } },
+      {
+        preventExtensions: () => {
+          throw new Error("freeze");
+        },
+      },
     );
     expectInvalid(throwingFreeze);
 
@@ -411,9 +429,9 @@ describe("parse pipeline utilities", () => {
     expect(() => freezeMarkdownNode({} as MarkdownNode)).toThrow(
       expect.objectContaining({ code: "invalid_ast" }),
     );
-    expect(() => freezeMarkdownNode({ type: "unknown" } as MarkdownNode)).toThrow(
-      expect.objectContaining({ code: "invalid_ast" }),
-    );
+    expect(() =>
+      freezeMarkdownNode({ type: "unknown" } as MarkdownNode),
+    ).toThrow(expect.objectContaining({ code: "invalid_ast" }));
   });
 
   it("rejects over-depth and oversized arrays before traversal work", () => {
@@ -467,8 +485,10 @@ describe("parse pipeline utilities", () => {
         html: true,
         sourceOffsets: false,
         maxInputLength: 42,
+        freezeAst: true,
       }),
-    ).toBe("gfm:1|math:0|html:1|sourceOffsets:0|maxInputLength:42");
+    ).toBe("gfm:1|math:0|html:1|sourceOffsets:0|maxInputLength:42|freezeAst:1");
+    expect(getParserOptionsKey({ freezeAst: false })).toContain("freezeAst:0");
   });
 
   it("removes empty parser options and preserves explicit values", () => {
@@ -481,6 +501,7 @@ describe("parse pipeline utilities", () => {
         html: false,
         sourceOffsets: false,
         maxInputLength: 100,
+        freezeAst: true,
       }),
     ).toEqual({
       gfm: false,
@@ -488,6 +509,7 @@ describe("parse pipeline utilities", () => {
       html: false,
       sourceOffsets: false,
       maxInputLength: 100,
+      freezeAst: true,
     });
   });
 
@@ -510,9 +532,9 @@ describe("parse pipeline utilities", () => {
       { name: "high", priority: 10 },
       { name: "low", priority: -1 },
     ];
-    expect(sortPluginsByPriority(plugins)?.map((plugin) => plugin.name)).toEqual(
-      ["high", "default", "low"],
-    );
+    expect(
+      sortPluginsByPriority(plugins)?.map((plugin) => plugin.name),
+    ).toEqual(["high", "default", "low"]);
     expect(plugins.map((plugin) => plugin.name)).toEqual([
       "default",
       "high",
@@ -558,7 +580,10 @@ describe("parse pipeline utilities", () => {
     const warning = jest.spyOn(console, "warn").mockImplementation();
     const plugins: MarkdownPlugin[] = [
       { name: "noop" },
-      { name: "invalid", afterParse: () => ({ invalid: true }) as MarkdownNode },
+      {
+        name: "invalid",
+        afterParse: () => ({ invalid: true }) as MarkdownNode,
+      },
       { name: "transform", afterParse: () => replacement },
       {
         afterParse: () => {
@@ -572,7 +597,14 @@ describe("parse pipeline utilities", () => {
     const transformed = applyAfterParsePlugins(ROOT_NODE, plugins, onError);
     expect(transformed).toEqual(replacement);
     expect(transformed).not.toBe(replacement);
-    expect(Object.isFrozen(transformed)).toBe(true);
+    expect(Object.isFrozen(transformed)).toBe(false);
+    const frozen = applyAfterParsePlugins(
+      ROOT_NODE,
+      [{ afterParse: () => replacement }],
+      undefined,
+      true,
+    );
+    expect(Object.isFrozen(frozen)).toBe(true);
     expect(onError).toHaveBeenCalledWith(
       expect.objectContaining({ message: "after failed" }),
       "after-plugin",

@@ -182,6 +182,7 @@ export function useMarkdownStreamState({
   const parserOptionHtml = options?.html;
   const parserOptionSourceOffsets = options?.sourceOffsets;
   const parserOptionMaxInputLength = options?.maxInputLength;
+  const parserOptionFreezeAst = options?.freezeAst;
   const parserOptions = useMemo(
     () =>
       normalizeParserOptions(
@@ -196,6 +197,9 @@ export function useMarkdownStreamState({
           parserOptionMaxInputLength === undefined
             ? null
             : { maxInputLength: parserOptionMaxInputLength },
+          parserOptionFreezeAst === undefined
+            ? null
+            : { freezeAst: parserOptionFreezeAst },
         ),
       ),
     [
@@ -204,17 +208,20 @@ export function useMarkdownStreamState({
       parserOptionHtml,
       parserOptionSourceOffsets,
       parserOptionMaxInputLength,
+      parserOptionFreezeAst,
     ],
   );
   const parseText = useCallback(
     (text: string): MarkdownNode => parseMarkdownAst(text, parserOptions),
     [parserOptions],
   );
-  const createEmptyAst = (): MarkdownNode =>
-    freezeMarkdownNode({
+  const createEmptyAst = useCallback((): MarkdownNode => {
+    const ast: MarkdownNode = {
       type: "document",
       children: [],
-    });
+    };
+    return parserOptionFreezeAst ? freezeMarkdownNode(ast) : ast;
+  }, [parserOptionFreezeAst]);
   const hasBeforeParsePlugins =
     plugins?.some((plugin) => typeof plugin.beforeParse === "function") ??
     false;
@@ -302,7 +309,13 @@ export function useMarkdownStreamState({
     forceFullSyncRef.current = false;
     renderStateRef.current = initialState;
     setRenderState(initialState);
-  }, [activeSession, hasBeforeParsePlugins, parseText, initialParseMode]);
+  }, [
+    activeSession,
+    createEmptyAst,
+    hasBeforeParsePlugins,
+    parseText,
+    initialParseMode,
+  ]);
 
   useEffect(() => {
     const flushUpdate = () => {

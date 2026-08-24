@@ -16,6 +16,11 @@ const parseAst = (text: string, options?: ParserOptions): MarkdownNode => {
   return parseMarkdown(text);
 };
 
+const materializeIncrementalAst = (
+  ast: MarkdownNode,
+  options?: ParserOptions,
+): MarkdownNode => (options?.freezeAst ? freezeMarkdownNode(ast) : ast);
+
 const isInsideFencedCodeBlock = (text: string): boolean => {
   const lines = text.split(/\r?\n/);
   let openFenceChar: "`" | "~" | null = null;
@@ -239,8 +244,9 @@ const parseAstWithStableNodes = (
   text: string,
   options?: ParserOptions,
 ): MarkdownNode => {
-  return freezeMarkdownNode(
+  return materializeIncrementalAst(
     reuseStableAstNodes(previousAst, parseAst(text, options)),
+    options,
   );
 };
 
@@ -280,7 +286,7 @@ export const getNextStreamAst = ({
       previousText.length,
     );
     if (fencedTextAppendAst) {
-      return freezeMarkdownNode(fencedTextAppendAst);
+      return materializeIncrementalAst(fencedTextAppendAst, options);
     }
   }
 
@@ -295,7 +301,7 @@ export const getNextStreamAst = ({
       previousText.length,
     );
     if (textAppendedAst) {
-      return freezeMarkdownNode(textAppendedAst);
+      return materializeIncrementalAst(textAppendedAst, options);
     }
   }
 

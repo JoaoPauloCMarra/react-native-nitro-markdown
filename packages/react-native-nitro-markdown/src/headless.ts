@@ -22,6 +22,7 @@ import {
 } from "./errors";
 import {
   cloneMarkdownNode,
+  assertAcyclicMarkdownNode,
   freezeMarkdownNode,
 } from "./utils/freeze-ast";
 
@@ -63,42 +64,42 @@ export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
 export type TableCellAlign = "left" | "center" | "right";
 
 /**
- * Represents an immutable node in the Markdown AST (Abstract Syntax Tree).
+ * Represents a node in the Markdown AST (Abstract Syntax Tree).
  * Each node has a type and optional properties depending on the node type.
- * Parsed nodes and their child arrays are frozen at the native boundary. Build
- * a new tree instead of mutating a parsed node.
+ * Parsed nodes are mutable by default for compatibility. Pass
+ * `freezeAst: true` when defensive immutability is required.
  */
 export type MarkdownNode = {
   /** The type of markdown element this node represents. Used to decide how to render the node. */
-  readonly type: MarkdownNodeType;
+  type: MarkdownNodeType;
   /** Text content for text, code, and similar nodes. */
-  readonly content?: string;
+  content?: string;
   /** Heading level (1-6) for heading nodes. */
-  readonly level?: HeadingLevel;
+  level?: HeadingLevel;
   /** URL for link and image nodes. */
-  readonly href?: string;
+  href?: string;
   /** Title attribute for link and image nodes. */
-  readonly title?: string;
+  title?: string;
   /** Alt text for image nodes. */
-  readonly alt?: string;
+  alt?: string;
   /** Programming language for code blocks (e.g., 'typescript', 'javascript'). */
-  readonly language?: string;
+  language?: string;
   /** Whether a list is ordered (numbered) or unordered. */
-  readonly ordered?: boolean;
+  ordered?: boolean;
   /** The starting number for ordered lists. */
-  readonly start?: number;
+  start?: number;
   /** Whether a task list item is currently checked. */
-  readonly checked?: boolean;
+  checked?: boolean;
   /** Whether a table cell is part of the header row. */
-  readonly isHeader?: boolean;
+  isHeader?: boolean;
   /** Text alignment for table cells: 'left', 'center', or 'right'. */
-  readonly align?: TableCellAlign;
+  align?: TableCellAlign;
   /** Source start offset as a JavaScript UTF-16 index in the original markdown text. */
-  readonly beg?: number;
+  beg?: number;
   /** Source end offset as a JavaScript UTF-16 index in the original markdown text. */
-  readonly end?: number;
+  end?: number;
   /** Nested child nodes for hierarchical elements like paragraphs, lists, and tables. */
-  readonly children?: readonly MarkdownNode[];
+  children?: MarkdownNode[];
 };
 
 function reportNativeParserFailure(methodName: string, error?: unknown): void {
@@ -127,9 +128,11 @@ function assertInputWithinBounds(text: string, options?: ParserOptions): void {
   }
 }
 
-function parseJsonAst(jsonStr: string): MarkdownNode {
+function parseJsonAst(jsonStr: string, freezeAst = false): MarkdownNode {
   try {
-    return freezeMarkdownNode(JSON.parse(jsonStr) as MarkdownNode);
+    const ast = JSON.parse(jsonStr) as MarkdownNode;
+    assertAcyclicMarkdownNode(ast);
+    return freezeAst ? freezeMarkdownNode(ast) : ast;
   } catch (error) {
     if (error instanceof MarkdownError) throw error;
     throw new MarkdownError(
@@ -181,7 +184,7 @@ export function parseMarkdown(
   ) {
     try {
       const jsonStr = MarkdownParserModule.parse(text);
-      return parseJsonAst(jsonStr);
+      return parseJsonAst(jsonStr, false);
     } catch (error) {
       reportNativeParserFailure("parseMarkdown", error);
       throw toMarkdownError(error, "parse");
@@ -212,7 +215,7 @@ export function parseMarkdownWithOptions(
   ) {
     try {
       const jsonStr = MarkdownParserModule.parseWithOptions(text, options);
-      return parseJsonAst(jsonStr);
+      return parseJsonAst(jsonStr, options.freezeAst === true);
     } catch (error) {
       reportNativeParserFailure("parseMarkdownWithOptions", error);
       throw toMarkdownError(error, "parse");

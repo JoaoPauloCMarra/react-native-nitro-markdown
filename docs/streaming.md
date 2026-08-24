@@ -7,7 +7,10 @@ AST node reuse (see [How incremental parsing works](#how-incremental-parsing-wor
 
 ```tsx
 import { useEffect } from "react";
-import { MarkdownStream, useMarkdownSession } from "react-native-nitro-markdown";
+import {
+  MarkdownStream,
+  useMarkdownSession,
+} from "react-native-nitro-markdown";
 
 export function ChatMessage({ text }: { text: string }) {
   const session = useMarkdownSession();
@@ -37,10 +40,10 @@ session.getSession().append("**world**");
 
 `MarkdownStream` batches append-only updates. Choose how it flushes:
 
-| `updateStrategy` | Use when |
-| ---------------- | -------- |
-| `"raf"` | Smooth visual streaming (flush per animation frame). |
-| `"interval"` | Bound update frequency — pair with `updateIntervalMs={50}`. |
+| `updateStrategy` | Use when                                                    |
+| ---------------- | ----------------------------------------------------------- |
+| `"raf"`          | Smooth visual streaming (flush per animation frame).        |
+| `"interval"`     | Bound update frequency — pair with `updateIntervalMs={50}`. |
 
 Pass the controller from `useMarkdownSession()` directly. Use
 `session.getSession()` only when another API needs the raw native session.

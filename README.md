@@ -4,15 +4,16 @@
 [![npm downloads](https://img.shields.io/npm/dm/react-native-nitro-markdown?color=22c55e&label=downloads)](https://www.npmjs.com/package/react-native-nitro-markdown)
 [![CI](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/actions/workflows/ci.yml/badge.svg)](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/react-native-nitro-markdown?color=007ec6)](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/LICENSE)
-[![React Native](https://img.shields.io/badge/react--native-0.87.0-61dafb)](https://reactnative.dev/docs/0.87/getting-started-without-a-framework)
+[![React Native](https://img.shields.io/badge/react--native-0.86.2-61dafb)](https://reactnative.dev/docs/0.86/getting-started-without-a-framework)
 [![Expo](https://img.shields.io/badge/expo-SDK%2057%20%28RN%200.86.2%29-000020)](https://docs.expo.dev/versions/v57.0.0/)
-[![Nitro Modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.37.0%20%3C0.38.0-black)](https://nitro.margelo.com)
+[![Nitro Modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.37.0%20%3C0.38.0-black)](https://nitro.margelo.com/)
 [![TypeScript](https://img.shields.io/badge/typescript-6.0-3178c6)](https://www.typescriptlang.org/)
 
 **The fast Markdown engine for React Native.** Native **C++ parsing** (CommonMark
-+ GitHub Flavored Markdown), real React Native rendering, first-class
-**streaming** for LLM/chat output, and a **headless AST** API — powered by
-[md4c](https://github.com/mity/md4c) and [Nitro Modules](https://nitro.margelo.com/).
+
+- GitHub Flavored Markdown), real React Native rendering, first-class
+  **streaming** for LLM/chat output, and a **headless AST** API — powered by
+  [md4c](https://github.com/mity/md4c) and [Nitro Modules](https://nitro.margelo.com/).
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/JoaoPauloCMarra/react-native-nitro-markdown/main/readme/render.png" alt="Nitro Markdown rendering rich GitHub Flavored Markdown natively in React Native" width="250" />
@@ -29,7 +30,7 @@
 
 Most React Native Markdown libraries parse in JavaScript on the JS thread. Nitro
 Markdown parses in a **native C++ engine** over JSI, then renders flexible React
-Native components — so you get native parse speed *and* component flexibility.
+Native components — so you get native parse speed _and_ component flexibility.
 
 - ⚡ **Native C++ parsing** — ~2.8× to ~19× faster than JS parsers ([benchmarks](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/comparison.md)).
 - 🔀 **Streaming** — built for token-by-token LLM / chat output.
@@ -93,7 +94,10 @@ product fonts and colors in an app wrapper around `<Markdown>`.
 
 ```tsx
 import { useEffect } from "react";
-import { MarkdownStream, useMarkdownSession } from "react-native-nitro-markdown";
+import {
+  MarkdownStream,
+  useMarkdownSession,
+} from "react-native-nitro-markdown";
 
 type StreamingMessageProps = {
   subscribe: (onToken: (token: string) => void) => () => void;
@@ -167,9 +171,12 @@ render:
 When `sourceAst` is provided, `beforeParse` plugins are skipped because parsing
 already happened. `afterParse` plugins and `astTransform` still run.
 
-Parser AST nodes and nested child arrays are deeply frozen. Treat `MarkdownNode`
-fields as readonly and return a new tree from transforms or callbacks instead
-of mutating a parsed AST.
+Parser AST nodes are mutable by default for compatibility with earlier releases.
+The package validates and clones ASTs at component and cache boundaries so a
+consumer callback cannot poison another cached result. Pass
+`options={{ freezeAst: true }}` when a defensive immutable tree is preferred;
+this freezes nodes and child arrays before they reach plugins, transforms, and
+callbacks.
 
 ## Theming & customization
 
@@ -183,7 +190,9 @@ import { Markdown, darkMarkdownTheme } from "react-native-nitro-markdown";
 <Markdown theme={darkMarkdownTheme}>{content}</Markdown>;
 
 // 2. Override individual node styles (layered on top of the theme)
-<Markdown styles={{ heading: { color: "#7c3aed" }, code_block: { borderRadius: 16 } }}>
+<Markdown
+  styles={{ heading: { color: "#7c3aed" }, code_block: { borderRadius: 16 } }}
+>
   {content}
 </Markdown>;
 
@@ -197,20 +206,22 @@ Presets: `defaultMarkdownTheme`, `darkMarkdownTheme`, `minimalMarkdownTheme` (or
 
 ## Common options
 
-| Prop / option | Default | What it does |
-| ------------- | ------- | ------------ |
-| `options.gfm` | `true` | Tables, strikethrough, task lists, autolinks. |
-| `options.math` | `true` | Inline and block math nodes. |
-| `options.html` | `false` | Preserve raw HTML nodes for custom renderers. |
-| `options.sourceOffsets` | `true` | Emit per-node `beg`/`end` source offsets as JavaScript UTF-16 indices, matching `String.length` and `String.slice`. Set `false` for one-shot headless parses to shrink the AST and speed up the round trip (the native parser skips the offset map entirely). |
-| `options.maxInputLength` | `10485760` | Maximum accepted input length in UTF-8 bytes. Oversized inputs fail with a typed `input_too_large` error instead of being parsed. Values above the hard cap are clamped. |
-| `parseCache` | `true` | Reuse parsed ASTs for repeated content. The cache is scoped per `<Markdown>` instance (max 32 entries); per-instance hit/miss/eviction counters are reported via `onParseComplete`'s `cacheStats`. |
-| `sourceAst` | `undefined` | Render a pre-parsed AST instead of parsing `children`. |
-| `onError` | `undefined` | Receive parser and plugin failures as `(error, phase, pluginName?)`. Native parse and session failures are typed `MarkdownError`s with stable `code` and `source`. |
-| `errorText` | `"Error parsing markdown"` | Localized text rendered when parsing fails. |
-| `imageOptions` | `undefined` | Image URL policy: `allowedProtocols`, `allowedHosts`, and `remoteImages: "deny"` to block remote image loading entirely. |
-| `highlightCode` | `false` | Built-in code syntax highlighting (fixture-backed languages: JS/TS family, Python, shell). |
-| `virtualize` | `false` | Virtualize top-level blocks for long documents. |
+| Prop / option            | Default                    | What it does                                                                                                                                                                                                                                                  |
+| ------------------------ | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `options.gfm`            | `true`                     | Tables, strikethrough, task lists, autolinks.                                                                                                                                                                                                                 |
+| `options.math`           | `true`                     | Inline and block math nodes.                                                                                                                                                                                                                                  |
+| `options.html`           | `false`                    | Preserve raw HTML nodes for custom renderers.                                                                                                                                                                                                                 |
+| `options.sourceOffsets`  | `true`                     | Emit per-node `beg`/`end` source offsets as JavaScript UTF-16 indices, matching `String.length` and `String.slice`. Set `false` for one-shot headless parses to shrink the AST and speed up the round trip (the native parser skips the offset map entirely). |
+| `options.maxInputLength` | `10485760`                 | Maximum accepted input length in UTF-8 bytes. Oversized inputs fail with a typed `input_too_large` error instead of being parsed. Values above the hard cap are clamped.                                                                                      |
+| `options.freezeAst`      | `false`                    | Freeze parsed AST nodes and child arrays before exposing them to plugins, transforms, renderers, and callbacks.                                                                                                                                               |
+| `parseCache`             | `true`                     | Reuse parsed ASTs for repeated content. The cache is scoped per `<Markdown>` instance (max 32 entries); per-instance hit/miss/eviction counters are reported via `onParseComplete`'s `cacheStats`.                                                            |
+| `sourceAst`              | `undefined`                | Render a pre-parsed AST instead of parsing `children`.                                                                                                                                                                                                        |
+| `onParsingInProgress`    | `undefined`                | Deprecated compatibility callback invoked after the current parse render commits. Use `onParseComplete` or `MarkdownStream` state for new code.                                                                                                               |
+| `onError`                | `undefined`                | Receive parser and plugin failures as `(error, phase, pluginName?)`. Native parse and session failures are typed `MarkdownError`s with stable `code` and `source`.                                                                                            |
+| `errorText`              | `"Error parsing markdown"` | Localized text rendered when parsing fails.                                                                                                                                                                                                                   |
+| `imageOptions`           | `undefined`                | Image URL policy: `allowedProtocols`, `allowedHosts`, and `remoteImages: "deny"` to block remote image loading entirely.                                                                                                                                      |
+| `highlightCode`          | `false`                    | Built-in code syntax highlighting (fixture-backed languages: JS/TS family, Python, shell).                                                                                                                                                                    |
+| `virtualize`             | `false`                    | Virtualize top-level blocks for long documents.                                                                                                                                                                                                               |
 
 See **[Usage](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/usage.md)** for the full prop table and **[Customization](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/customization.md)** for themes, per-node styles, custom renderers, and plugins.
 
@@ -218,12 +229,12 @@ See **[Usage](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blo
 
 Parsing a ~320 KB document (example app, iOS Simulator; ratios are stable):
 
-| Parser | Time | vs Nitro |
-| ------ | ---- | -------- |
-| **Nitro (C++)** | **~41 ms** | — |
-| CommonMark (JS) | ~113 ms | ~2.8× |
-| Markdown-It (JS) | ~184 ms | ~4.5× |
-| Marked (JS) | ~814 ms | ~19.8× |
+| Parser           | Time       | vs Nitro |
+| ---------------- | ---------- | -------- |
+| **Nitro (C++)**  | **~41 ms** | —        |
+| CommonMark (JS)  | ~113 ms    | ~2.8×    |
+| Markdown-It (JS) | ~184 ms    | ~4.5×    |
+| Marked (JS)      | ~814 ms    | ~19.8×   |
 
 Reproduce it: run the example app and tap **Run Benchmark**. Methodology and a
 full capability matrix: **[Comparison & benchmarks](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/comparison.md)**.
@@ -259,43 +270,45 @@ for the error-code contract.
 
 ## Documentation
 
-| Guide | What's inside |
-| ----- | ------------- |
-| [Installation](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/installation.md) | Expo & bare RN setup, requirements, platforms. |
-| [Usage](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/usage.md) | `<Markdown>`, props, elements, virtualization, source AST. |
-| [Streaming](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/streaming.md) | Token-by-token LLM / chat rendering. |
-| [Headless](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/headless.md) | Parse to AST, plain-text extraction. |
-| [Customization](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/customization.md) | Themes, dark mode, per-node styles, renderers, plugins. |
-| [Comparison & benchmarks](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/comparison.md) | Why Nitro, parse benchmarks, capability matrix. |
-| [API reference](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/api-reference.md) | Full export and type listing. |
-| [Security policy](./SECURITY.md) | Supported versions, link/image policy, reporting. |
-| [Changelog](./CHANGELOG.md) | Package changes and migration requirements by version. |
-| [Troubleshooting](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/troubleshooting.md) | Common install and runtime issues. |
+| Guide                                                                                                                  | What's inside                                              |
+| ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| [Installation](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/installation.md)          | Expo & bare RN setup, requirements, platforms.             |
+| [Usage](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/usage.md)                        | `<Markdown>`, props, elements, virtualization, source AST. |
+| [Streaming](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/streaming.md)                | Token-by-token LLM / chat rendering.                       |
+| [Headless](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/headless.md)                  | Parse to AST, plain-text extraction.                       |
+| [Customization](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/customization.md)        | Themes, dark mode, per-node styles, renderers, plugins.    |
+| [Comparison & benchmarks](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/comparison.md) | Why Nitro, parse benchmarks, capability matrix.            |
+| [API reference](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/api-reference.md)        | Full export and type listing.                              |
+| [Security policy](./SECURITY.md)                                                                                       | Supported versions, link/image policy, reporting.          |
+| [Changelog](./CHANGELOG.md)                                                                                            | Package changes and migration requirements by version.     |
+| [Troubleshooting](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/troubleshooting.md)    | Common install and runtime issues.                         |
 
 ## Platform Support
 
-| Dependency | Supported |
-| ---------- | --------- |
-| [React Native](https://reactnative.dev/) | `>=0.75` (New Architecture); package gate `0.87.0` |
-| [Nitro Modules](https://www.npmjs.com/package/react-native-nitro-modules) | `>=0.37.0 <0.38.0` |
-| [RaTeX React Native](https://www.npmjs.com/package/ratex-react-native) | `>=0.1.4` (example validated with `0.1.14`) |
-| [Expo](https://docs.expo.dev/versions/v57.0.0/) | SDK `57.0.15` development builds with RN `0.86.2` |
-| Platforms | iOS, Android (Web not supported) |
+| Dependency                                                                | Supported                                                                                           |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| [React Native](https://reactnative.dev/)                                  | `>=0.75` (New Architecture); runtime gate `0.86.2`, RN `0.87` Strict TypeScript compatibility check |
+| [Nitro Modules](https://www.npmjs.com/package/react-native-nitro-modules) | `>=0.37.0 <0.38.0`                                                                                  |
+| [RaTeX React Native](https://www.npmjs.com/package/ratex-react-native)    | `>=0.1.4` (example validated with `0.1.14`)                                                         |
+| [Expo](https://docs.expo.dev/versions/v57.0.0/)                           | SDK `57.0.16` development builds with RN `0.86.2`                                                   |
+| Platforms                                                                 | iOS, Android (Web not supported)                                                                    |
 
-The standalone package gate uses React Native `0.87.0` and its Strict
-TypeScript API. The Expo example stays on Expo SDK 57's supported React Native
-`0.86.2` baseline. Do not override the React Native version selected by Expo.
+The native package gate and Expo example use React Native `0.86.2`. `check:ci`
+also compiles the public source against React Native `0.87.0`'s Strict
+TypeScript API. Do not override the React Native version selected by Expo.
 
 Web and Expo Go are not supported runtime targets because the parser requires
 Nitro Modules (JSI). See the [installation platform matrix](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/installation.md#platform-support).
 
-### Upgrading from 0.10.x
+### Upgrading from 0.11.x and earlier
 
-Version `0.11.0` requires `react-native-nitro-modules` `>=0.37.0 <0.38.0`.
-Upgrade that peer dependency before installing this package. There are no
-application API removals in this release; streaming now applies
-`maxInputLength` consistently, and partial `codeTokenColors` overrides retain
-the default colors that were not changed.
+Version `0.12.0` requires `react-native-nitro-modules` `>=0.37.0 <0.38.0`.
+Upgrade that peer dependency before installing this package and rebuild native
+projects. `options.maxInputLength` is measured in UTF-8 bytes, and session
+ranges that split a UTF-16 surrogate pair now fail with `invalid_range`; use
+code-point boundaries when calling `getTextRange()` or `replace()`. The
+deprecated `onParsingInProgress` callback remains available, and ASTs are
+mutable by default again. Use `options.freezeAst` for defensive immutability.
 
 ## Troubleshooting
 
@@ -323,8 +336,8 @@ bun run example:smoke:ios
 ```
 
 `check` runs package lint, typecheck, tests, and C++ tests. `check:ci` adds
-compatibility, harness, and React Native 0.87 checks; it does not launch a
-native app. `release:preflight` adds example checks and an auth-free publish
+compatibility, harness, and React Native 0.87 type-compatibility checks; it does
+not launch a native app. `release:preflight` adds example checks and an auth-free publish
 dry-run; it does not publish or release the package. Prebuild generates native
 projects, the Android/iOS build commands compile them, and smoke commands are
 the runtime checks. Build and self-check success alone is not runtime proof.

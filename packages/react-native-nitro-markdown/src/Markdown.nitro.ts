@@ -12,6 +12,11 @@ export interface ParserOptions {
    * of being parsed.
    */
   maxInputLength?: number;
+  /**
+   * Freeze parsed AST nodes and child arrays before returning them.
+   * Defaults to false for compatibility with the historical mutable AST.
+   */
+  freezeAst?: boolean;
 }
 
 export interface MarkdownParser extends HybridObject<{

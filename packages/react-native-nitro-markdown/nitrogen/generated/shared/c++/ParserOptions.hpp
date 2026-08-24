@@ -44,10 +44,11 @@ namespace margelo::nitro::Markdown {
     std::optional<bool> html     SWIFT_PRIVATE;
     std::optional<bool> sourceOffsets     SWIFT_PRIVATE;
     std::optional<double> maxInputLength     SWIFT_PRIVATE;
+    std::optional<bool> freezeAst     SWIFT_PRIVATE;
 
   public:
     ParserOptions() = default;
-    explicit ParserOptions(std::optional<bool> gfm, std::optional<bool> math, std::optional<bool> html, std::optional<bool> sourceOffsets, std::optional<double> maxInputLength): gfm(gfm), math(math), html(html), sourceOffsets(sourceOffsets), maxInputLength(maxInputLength) {}
+    explicit ParserOptions(std::optional<bool> gfm, std::optional<bool> math, std::optional<bool> html, std::optional<bool> sourceOffsets, std::optional<double> maxInputLength, std::optional<bool> freezeAst): gfm(gfm), math(math), html(html), sourceOffsets(sourceOffsets), maxInputLength(maxInputLength), freezeAst(freezeAst) {}
 
   public:
     friend bool operator==(const ParserOptions& lhs, const ParserOptions& rhs) = default;
@@ -67,7 +68,8 @@ namespace margelo::nitro {
         JSIConverter<std::optional<bool>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "math"))),
         JSIConverter<std::optional<bool>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "html"))),
         JSIConverter<std::optional<bool>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "sourceOffsets"))),
-        JSIConverter<std::optional<double>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "maxInputLength")))
+        JSIConverter<std::optional<double>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "maxInputLength"))),
+        JSIConverter<std::optional<bool>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "freezeAst")))
       );
     }
     static inline jsi::Value toJSI(jsi::Runtime& runtime, const margelo::nitro::Markdown::ParserOptions& arg) {
@@ -77,6 +79,7 @@ namespace margelo::nitro {
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "html"), JSIConverter<std::optional<bool>>::toJSI(runtime, arg.html));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "sourceOffsets"), JSIConverter<std::optional<bool>>::toJSI(runtime, arg.sourceOffsets));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "maxInputLength"), JSIConverter<std::optional<double>>::toJSI(runtime, arg.maxInputLength));
+      obj.setProperty(runtime, PropNameIDCache::get(runtime, "freezeAst"), JSIConverter<std::optional<bool>>::toJSI(runtime, arg.freezeAst));
       return obj;
     }
     static inline bool canConvert(jsi::Runtime& runtime, const jsi::Value& value) {
@@ -92,6 +95,7 @@ namespace margelo::nitro {
       if (!JSIConverter<std::optional<bool>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "html")))) return false;
       if (!JSIConverter<std::optional<bool>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "sourceOffsets")))) return false;
       if (!JSIConverter<std::optional<double>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "maxInputLength")))) return false;
+      if (!JSIConverter<std::optional<bool>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "freezeAst")))) return false;
       return true;
     }
   };

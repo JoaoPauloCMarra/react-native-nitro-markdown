@@ -15,7 +15,9 @@ import {
 const ast = parseMarkdown("# Title");
 const astWithMath = parseMarkdownWithOptions("Inline $x^2$", { math: true });
 const text = extractPlainText("Hello **world**"); // "Hello world"
-const gfmText = extractPlainTextWithOptions("| A |\n|---|\n| B |", { gfm: true });
+const gfmText = extractPlainTextWithOptions("| A |\n|---|\n| B |", {
+  gfm: true,
+});
 
 // Search / indexing — skip source offsets natively for a smaller, faster AST.
 const lean = parseMarkdownWithOptions(doc, { sourceOffsets: false });
@@ -42,7 +44,7 @@ native iOS or Android runtime; it does not run on Node.js, servers, or web.
 > pass `{ sourceOffsets: false }`. The native parser skips building the UTF-16
 > offset map entirely, omits the `beg`/`end` fields, and shrinks the JSON
 > crossing JSI and the work `JSON.parse` does — and it is cheaper than
-> `stripSourceOffsets`, which only removes them *after* the full tree has been
+> `stripSourceOffsets`, which only removes them _after_ the full tree has been
 > serialized and parsed. Keep the default for streaming/incremental rendering,
 > which relies on offsets to reuse nodes. Enabled offsets are JavaScript UTF-16
 > indices and can be passed directly to `String.slice`, including for accented
@@ -56,19 +58,19 @@ native iOS or Android runtime; it does not run on Node.js, servers, or web.
 
 ## API
 
-| Function | Returns | Description |
-| -------- | ------- | ----------- |
-| `parseMarkdown(text)` | `MarkdownNode` | Parse with default options. |
-| `parseMarkdownWithOptions(text, options)` | `MarkdownNode` | Parse with explicit `ParserOptions`. |
-| `extractPlainText(text)` | `string` | Strip Markdown to plain text. |
-| `extractPlainTextWithOptions(text, options)` | `string` | Plain text with explicit options. |
+| Function                                     | Returns        | Description                          |
+| -------------------------------------------- | -------------- | ------------------------------------ |
+| `parseMarkdown(text)`                        | `MarkdownNode` | Parse with default options.          |
+| `parseMarkdownWithOptions(text, options)`    | `MarkdownNode` | Parse with explicit `ParserOptions`. |
+| `extractPlainText(text)`                     | `string`       | Strip Markdown to plain text.        |
+| `extractPlainTextWithOptions(text, options)` | `string`       | Plain text with explicit options.    |
 
 ### AST helpers
 
-| Helper | Description |
-| ------ | ----------- |
-| `getTextContent(node)` | Concatenated text of a node. |
-| `getFlattenedText(node)` | Flattened text of an entire tree. |
+| Helper                     | Description                                                             |
+| -------------------------- | ----------------------------------------------------------------------- |
+| `getTextContent(node)`     | Concatenated text of a node.                                            |
+| `getFlattenedText(node)`   | Flattened text of an entire tree.                                       |
 | `stripSourceOffsets(node)` | Remove `beg`/`end` source offsets (smaller payloads, stable snapshots). |
 
 ## The AST
@@ -86,10 +88,9 @@ native iOS or Android runtime; it does not run on Node.js, servers, or web.
 }
 ```
 
-Parsed nodes and every nested `children` array are deeply frozen before they
-are exposed. Treat the exported `MarkdownNode` fields as readonly; transforms
-and consumer callbacks must return or construct a new tree instead of mutating
-the parsed tree.
+Parsed nodes are mutable by default for compatibility. Pass
+`freezeAst: true` to freeze each node and nested `children` array before it is
+exposed. The parser validates the tree and rejects cycles in either mode.
 
 ## Why headless?
 

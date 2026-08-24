@@ -510,7 +510,7 @@ describe("Markdown plugin pipeline", () => {
     }
   });
 
-  it("only clones cached ASTs when a post-parse transform requires isolation", () => {
+  it("isolates cached ASTs while returning mutable consumer trees", () => {
     const results: MarkdownNode[] = [];
     const onParseComplete = jest.fn(({ ast }: { ast: MarkdownNode }) => {
       results.push(ast);
@@ -533,7 +533,7 @@ describe("Markdown plugin pipeline", () => {
         );
       });
 
-      expect(results[2]).toBe(results[0]);
+      expect(results[2]).not.toBe(results[0]);
 
       act(() => {
         renderer!.update(
@@ -555,23 +555,11 @@ describe("Markdown plugin pipeline", () => {
     const onParseComplete = jest.fn(({ ast }: { ast: MarkdownNode }) => {
       if (onParseComplete.mock.calls.length !== 1) return;
 
-      expect(Object.isFrozen(ast)).toBe(true);
-      expect(Object.isFrozen(ast.children)).toBe(true);
-      expect(Object.isFrozen(ast.children?.[0])).toBe(true);
-      expect(Object.isFrozen(ast.children?.[0]?.children)).toBe(true);
-      expect(Object.isFrozen(ast.children?.[0]?.children?.[0])).toBe(true);
-
-      try {
-        (ast.children as MarkdownNode[]).push({
-          type: "text",
-          content: "poison",
-        });
-      } catch {
-      }
-      try {
-        (ast.children?.[0]?.children?.[0] as MarkdownNode).content = "poison";
-      } catch {
-      }
+      expect(Object.isFrozen(ast)).toBe(false);
+      expect(Object.isFrozen(ast.children)).toBe(false);
+      ast.children?.push({ type: "text", content: "poison" });
+      const firstText = ast.children?.[0]?.children?.[0];
+      if (firstText) firstText.content = "poison";
     });
     let renderer: ReactTestRenderer | undefined;
     const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
@@ -603,7 +591,7 @@ describe("Markdown plugin pipeline", () => {
     }
   });
 
-  it("freezes ASTs passed to post-parse callbacks", () => {
+  it("freezes ASTs passed to post-parse callbacks when requested", () => {
     const observed: boolean[] = [];
     const plugin: MarkdownPlugin = {
       afterParse: (ast) => {
@@ -619,6 +607,7 @@ describe("Markdown plugin pipeline", () => {
           createElement(
             Markdown,
             {
+              options: { freezeAst: true },
               plugins: [plugin],
               astTransform: (ast) => {
                 observed.push(

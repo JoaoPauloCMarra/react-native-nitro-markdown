@@ -13,10 +13,13 @@ stay safe.
 
 ### Breaking changes
 
-- Removed the deprecated `Markdown` `onParsingInProgress` prop. Parsing is
-  synchronous and exposes no observable in-progress window; migrate to
-  `onParseComplete` for completed parses or `MarkdownStream`'s
-  `sourceAstStatus` for asynchronous stream state.
+- `ParserOptions.maxInputLength` is enforced as a UTF-8 byte limit at both the
+  JavaScript and native boundaries. Callers that sized this value by
+  JavaScript character count must account for multibyte text and stay within
+  the 10 MiB native hard cap.
+- `MarkdownSession` rejects ranges that split a UTF-16 surrogate pair with
+  `invalid_range`; use boundaries returned by the session or complete code-point
+  boundaries for `getTextRange()` and `replace()`.
 
 ### Changed
 
@@ -25,11 +28,14 @@ stay safe.
 - Streaming re-parses reuse a bounded native serialization cache keyed by the
   exact source slice, absolute offset, parser flags, and node type of a
   completed block, so unchanged prefix blocks are not re-serialized on every
-  flush. Output stays byte-identical; the C++ flush budget test asserts warm
-  re-parse cost stays within 0.8x of a cold parse.
-- Parsed AST nodes and nested child arrays are deeply frozen, with readonly
-  TypeScript fields and isolated transform inputs so callbacks cannot poison a
-  cached tree.
+  flush while preserving byte-identical output.
+- Parsed ASTs are mutable by default again for compatibility. The new additive
+  `ParserOptions.freezeAst` option freezes nodes and child arrays when an app
+  needs defensive immutability. Cache and component boundaries still clone
+  trees so consumer mutation cannot poison another cached result.
+- Restored the deprecated `Markdown.onParsingInProgress` callback for source
+  compatibility. It runs after the current parse render commits; new code
+  should use `onParseComplete` or `MarkdownStream` state.
 - Session ranges use JavaScript UTF-16 units; split-surrogate boundaries now
   throw `invalid_range` instead of rounding, and session external-memory
   accounting releases retained buffer and listener capacity on dispose.
@@ -53,9 +59,9 @@ stay safe.
 - Native Nitro bindings are regenerated for Nitro/Nitrogen `0.37.0` while
   preserving the existing iOS and Android parser, session, rendering,
   streaming, and headless behavior.
-- The standalone package compatibility baseline now includes React Native
-  `0.87.0` and its Strict TypeScript API; the Expo SDK 57 example remains on
-  React Native `0.86.2`, the version selected by that SDK.
+- Added a React Native `0.87.0` Strict TypeScript compatibility check; the
+  package gate and Expo SDK 57 example remain on React Native `0.86.2`, the
+  version selected by that SDK.
 
 ### Fixed
 
@@ -393,6 +399,7 @@ _No breaking changes._
 - Native parser plain-text helpers:
   - `extractPlainText(text)`
   - `extractPlainTextWithOptions(text, options)`
+
 ### Changed
 
 - Table renderer now uses immediate estimated column widths and refines in background measurement, avoiding blank-table states when layout callbacks are delayed.

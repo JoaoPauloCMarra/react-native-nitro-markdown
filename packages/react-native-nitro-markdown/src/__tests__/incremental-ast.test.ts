@@ -30,9 +30,12 @@ describe("incremental AST", () => {
   it("forwards parser options for direct AST parsing", () => {
     parseMarkdownAst("| A |\n|---|\n| B |", { gfm: true });
 
-    expect(mockParser.parseWithOptions).toHaveBeenCalledWith("| A |\n|---|\n| B |", {
-      gfm: true,
-    });
+    expect(mockParser.parseWithOptions).toHaveBeenCalledWith(
+      "| A |\n|---|\n| B |",
+      {
+        gfm: true,
+      },
+    );
   });
 
   it("returns the previous AST when text is unchanged", () => {
@@ -52,7 +55,10 @@ describe("incremental AST", () => {
 
   it("avoids reparsing for plain text append", () => {
     const previousText = "Hello";
-    const previousAst = setTrailingPathEnd(parseMarkdownAst(previousText), previousText.length);
+    const previousAst = setTrailingPathEnd(
+      parseMarkdownAst(previousText),
+      previousText.length,
+    );
     jest.clearAllMocks();
 
     const nextAst = getNextStreamAst({
@@ -63,6 +69,24 @@ describe("incremental AST", () => {
 
     expect(mockParser.parse).not.toHaveBeenCalled();
     expect(getTextContent(nextAst)).toContain("Hello world");
+  });
+
+  it("freezes incrementally materialized ASTs when requested", () => {
+    const previousText = "Hello";
+    const previousAst = setTrailingPathEnd(
+      parseMarkdownAst(previousText),
+      previousText.length,
+    );
+
+    const nextAst = getNextStreamAst({
+      previousAst,
+      previousText,
+      nextText: "Hello world",
+      options: { freezeAst: true },
+    });
+
+    expect(Object.isFrozen(nextAst)).toBe(true);
+    expect(Object.isFrozen(nextAst.children)).toBe(true);
   });
 
   it("uses JavaScript UTF-16 lengths for accented and emoji appends", () => {
@@ -87,7 +111,10 @@ describe("incremental AST", () => {
 
   it("forces full parse when append starts after a line boundary", () => {
     const previousText = "> Quote\n\n";
-    const previousAst = setTrailingPathEnd(parseMarkdownAst(previousText), previousText.length);
+    const previousAst = setTrailingPathEnd(
+      parseMarkdownAst(previousText),
+      previousText.length,
+    );
     jest.clearAllMocks();
 
     getNextStreamAst({
@@ -101,7 +128,10 @@ describe("incremental AST", () => {
 
   it("forces full parse after carriage-return block boundaries", () => {
     const previousText = "Line\r";
-    const previousAst = setTrailingPathEnd(parseMarkdownAst(previousText), previousText.length);
+    const previousAst = setTrailingPathEnd(
+      parseMarkdownAst(previousText),
+      previousText.length,
+    );
     jest.clearAllMocks();
 
     getNextStreamAst({
@@ -187,7 +217,10 @@ describe("incremental AST", () => {
 
   it("falls back to full parse when the trailing text end is stale", () => {
     const previousText = "Hello";
-    const previousAst = setTrailingPathEnd(parseMarkdownAst(previousText), previousText.length - 1);
+    const previousAst = setTrailingPathEnd(
+      parseMarkdownAst(previousText),
+      previousText.length - 1,
+    );
     jest.clearAllMocks();
 
     getNextStreamAst({
@@ -215,7 +248,10 @@ describe("incremental AST", () => {
 
   it("appends inside open fenced code blocks without reparsing", () => {
     const previousText = "Intro\n\n```ts\nconst a = 1;\n";
-    const previousAst = setTrailingPathEnd(parseMarkdownAst(previousText), previousText.length);
+    const previousAst = setTrailingPathEnd(
+      parseMarkdownAst(previousText),
+      previousText.length,
+    );
     const nextText = `${previousText}const b = 2;\n`;
     jest.clearAllMocks();
 
@@ -227,7 +263,10 @@ describe("incremental AST", () => {
 
   it("falls back to full parse when fenced code append cannot update the trailing leaf", () => {
     const previousText = "Intro\n\n```ts\nconst a = 1;\n";
-    const previousAst = setTrailingPathEnd(parseMarkdownAst(previousText), previousText.length - 1);
+    const previousAst = setTrailingPathEnd(
+      parseMarkdownAst(previousText),
+      previousText.length - 1,
+    );
     jest.clearAllMocks();
 
     getNextStreamAst({
@@ -269,7 +308,10 @@ describe("incremental AST", () => {
 
   it("keeps p95 latency within budget for append-only updates", () => {
     let previousText = "Hello";
-    let previousAst = setTrailingPathEnd(parseMarkdownAst(previousText), previousText.length);
+    let previousAst = setTrailingPathEnd(
+      parseMarkdownAst(previousText),
+      previousText.length,
+    );
     jest.clearAllMocks();
 
     const timings: number[] = [];

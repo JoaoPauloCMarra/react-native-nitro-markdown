@@ -81,9 +81,17 @@ export const warnInDev = (message: string, error?: unknown): void => {
 export const cloneMarkdownNode = (node: MarkdownNode): MarkdownNode =>
   cloneValidatedMarkdownNode(node);
 
+export const materializeMarkdownNode = (
+  node: MarkdownNode,
+  freezeAst = false,
+): MarkdownNode => {
+  const clone = cloneValidatedMarkdownNode(node);
+  return freezeAst ? freezeMarkdownNode(clone) : clone;
+};
+
 export const getParserOptionsKey = (options?: ParserOptions): string => {
   if (!options) {
-    return "gfm:default|math:default|html:default|sourceOffsets:default|maxInputLength:default";
+    return "gfm:default|math:default|html:default|sourceOffsets:default|maxInputLength:default|freezeAst:default";
   }
 
   const gfm = options.gfm === undefined ? "default" : options.gfm ? "1" : "0";
@@ -101,7 +109,9 @@ export const getParserOptionsKey = (options?: ParserOptions): string => {
     options.maxInputLength === undefined
       ? "default"
       : String(options.maxInputLength);
-  return `gfm:${gfm}|math:${math}|html:${html}|sourceOffsets:${sourceOffsets}|maxInputLength:${maxInputLength}`;
+  const freezeAst =
+    options.freezeAst === undefined ? "default" : options.freezeAst ? "1" : "0";
+  return `gfm:${gfm}|math:${math}|html:${html}|sourceOffsets:${sourceOffsets}|maxInputLength:${maxInputLength}|freezeAst:${freezeAst}`;
 };
 
 export const normalizeParserOptions = (
@@ -114,13 +124,15 @@ export const normalizeParserOptions = (
   const html = options.html;
   const sourceOffsets = options.sourceOffsets;
   const maxInputLength = options.maxInputLength;
+  const freezeAst = options.freezeAst;
 
   if (
     gfm === undefined &&
     math === undefined &&
     html === undefined &&
     sourceOffsets === undefined &&
-    maxInputLength === undefined
+    maxInputLength === undefined &&
+    freezeAst === undefined
   ) {
     return undefined;
   }
@@ -134,6 +146,9 @@ export const normalizeParserOptions = (
   }
   if (maxInputLength !== undefined) {
     normalized.maxInputLength = maxInputLength;
+  }
+  if (freezeAst !== undefined) {
+    normalized.freezeAst = freezeAst;
   }
   return normalized;
 };
@@ -193,6 +208,7 @@ export const applyAfterParsePlugins = (
   ast: MarkdownNode,
   sortedPlugins?: MarkdownPlugin[],
   onError?: (error: Error, phase: "after-plugin", pluginName?: string) => void,
+  freezeAst = false,
 ): MarkdownNode => {
   if (!sortedPlugins || sortedPlugins.length === 0) {
     return ast;
@@ -203,9 +219,10 @@ export const applyAfterParsePlugins = (
     if (!plugin.afterParse) continue;
 
     try {
-      const transformed = plugin.afterParse(nextAst);
+      const pluginInput = materializeMarkdownNode(nextAst, freezeAst);
+      const transformed = plugin.afterParse(pluginInput);
       if (transformed !== undefined) {
-        nextAst = freezeMarkdownNode(cloneValidatedMarkdownNode(transformed));
+        nextAst = materializeMarkdownNode(transformed, freezeAst);
       }
     } catch (error) {
       const pluginLabel = plugin.name ? ` (${plugin.name})` : "";
