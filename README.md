@@ -402,7 +402,7 @@ bun run check          # lint + typecheck + tests
 bun run example:ios    # run the example app
 ```
 
-See [CONTRIBUTING.md](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/CONTRIBUTING.md). Run native example builds before release when changing native, Nitro, rendering, or packaging files.
+See [CONTRIBUTING.md](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/CONTRIBUTING.md). Run native example builds locally before release when changing native, Nitro, rendering, or packaging files. GitHub CI does not build the Android or iOS example.
 
 ## License
 
