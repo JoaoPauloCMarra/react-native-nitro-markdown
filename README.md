@@ -153,6 +153,21 @@ const text = extractPlainText("Hello **world**"); // "Hello world"
 const lean = parseMarkdownWithOptions(doc, { sourceOffsets: false });
 ```
 
+`sourceOffsets` is optional. Set it to `false` when your headless code does not
+map AST nodes back to the original Markdown source, such as for search,
+indexing, validation, or plain-text extraction. Leave it omitted when you need
+source ranges for diagnostics, source maps, editor selection, annotations, or
+streaming/incremental AST reuse. The public headless default remains `true` so
+existing consumers keep receiving `beg`/`end`; changing that default would be a
+breaking AST-shape change. The ordinary string `<Markdown>` fast path chooses
+`false` internally when no consumer-facing AST or source ranges are needed.
+
+The TypeScript return type follows the option: `parseMarkdown("...")` exposes
+required UTF-16 `beg`/`end` fields, while a literal
+`{ sourceOffsets: false }` returns a node type without those fields. If an
+options object is typed as the broad `ParserOptions`, offsets remain optional
+in the result because the runtime value is not known to TypeScript.
+
 Use the `/headless` export for AST data, plain-text extraction, indexing, or
 tests without rendering UI. Parser functions throw when the native module is
 unavailable, parsing fails, or native output is invalid; catch errors at your
@@ -172,8 +187,11 @@ When `sourceAst` is provided, `beforeParse` plugins are skipped because parsing
 already happened. `afterParse` plugins and `astTransform` still run.
 
 Parser AST nodes are mutable by default for compatibility with earlier releases.
-The package validates and clones ASTs at component and cache boundaries so a
-consumer callback cannot poison another cached result. Pass
+Public parser and consumer AST boundaries validate and clone trees so a
+consumer callback cannot poison another cached result. The default string
+render path keeps the native AST internal and skips that materialization.
+Public AST hooks and custom renderers continue to use the compatibility path.
+Pass
 `options={{ freezeAst: true }}` when a defensive immutable tree is preferred;
 this freezes nodes and child arrays before they reach plugins, transforms, and
 callbacks.
@@ -206,40 +224,71 @@ Presets: `defaultMarkdownTheme`, `darkMarkdownTheme`, `minimalMarkdownTheme` (or
 
 ## Common options
 
-| Prop / option            | Default                    | What it does                                                                                                                                                                                                                                                  |
-| ------------------------ | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `options.gfm`            | `true`                     | Tables, strikethrough, task lists, autolinks.                                                                                                                                                                                                                 |
-| `options.math`           | `true`                     | Inline and block math nodes.                                                                                                                                                                                                                                  |
-| `options.html`           | `false`                    | Preserve raw HTML nodes for custom renderers.                                                                                                                                                                                                                 |
-| `options.sourceOffsets`  | `true`                     | Emit per-node `beg`/`end` source offsets as JavaScript UTF-16 indices, matching `String.length` and `String.slice`. Set `false` for one-shot headless parses to shrink the AST and speed up the round trip (the native parser skips the offset map entirely). |
-| `options.maxInputLength` | `10485760`                 | Maximum accepted input length in UTF-8 bytes. Oversized inputs fail with a typed `input_too_large` error instead of being parsed. Values above the hard cap are clamped.                                                                                      |
-| `options.freezeAst`      | `false`                    | Freeze parsed AST nodes and child arrays before exposing them to plugins, transforms, renderers, and callbacks.                                                                                                                                               |
-| `parseCache`             | `true`                     | Reuse parsed ASTs for repeated content. The cache is scoped per `<Markdown>` instance (max 32 entries); per-instance hit/miss/eviction counters are reported via `onParseComplete`'s `cacheStats`.                                                            |
-| `sourceAst`              | `undefined`                | Render a pre-parsed AST instead of parsing `children`.                                                                                                                                                                                                        |
-| `onParsingInProgress`    | `undefined`                | Deprecated compatibility callback invoked after the current parse render commits. Use `onParseComplete` or `MarkdownStream` state for new code.                                                                                                               |
-| `onError`                | `undefined`                | Receive parser and plugin failures as `(error, phase, pluginName?)`. Native parse and session failures are typed `MarkdownError`s with stable `code` and `source`.                                                                                            |
-| `errorText`              | `"Error parsing markdown"` | Localized text rendered when parsing fails.                                                                                                                                                                                                                   |
-| `imageOptions`           | `undefined`                | Image URL policy: `allowedProtocols`, `allowedHosts`, and `remoteImages: "deny"` to block remote image loading entirely.                                                                                                                                      |
-| `highlightCode`          | `false`                    | Built-in code syntax highlighting (fixture-backed languages: JS/TS family, Python, shell).                                                                                                                                                                    |
-| `virtualize`             | `false`                    | Virtualize top-level blocks for long documents.                                                                                                                                                                                                               |
+| Prop / option            | Default                    | What it does                                                                                                                                                                                                                                                                                        |
+| ------------------------ | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `options.gfm`            | `true`                     | Tables, strikethrough, task lists, autolinks.                                                                                                                                                                                                                                                       |
+| `options.math`           | `true`                     | Inline and block math nodes.                                                                                                                                                                                                                                                                        |
+| `options.html`           | `false`                    | Preserve raw HTML nodes for custom renderers.                                                                                                                                                                                                                                                       |
+| `options.sourceOffsets`  | `true`                     | Optional source mapping. `true` emits per-node `beg`/`end` as JavaScript UTF-16 indices; `false` omits them and skips the native UTF-16 map. Headless consumers should choose `false` unless they need source ranges. The ordinary string render fast path chooses `false` automatically when safe. |
+| `options.maxInputLength` | `10485760`                 | Maximum accepted input length in UTF-8 bytes. Oversized inputs fail with a typed `input_too_large` error instead of being parsed. Values above the hard cap are clamped.                                                                                                                            |
+| `options.freezeAst`      | `false`                    | Freeze parsed AST nodes and child arrays before exposing them to plugins, transforms, renderers, and callbacks.                                                                                                                                                                                     |
+| `parseCache`             | `true`                     | Reuse parsed ASTs for repeated content. The cache is scoped per `<Markdown>` instance (max 32 entries); per-instance hit/miss/eviction counters are reported via `onParseComplete`'s `cacheStats`.                                                                                                  |
+| `sourceAst`              | `undefined`                | Render a pre-parsed AST instead of parsing `children`.                                                                                                                                                                                                                                              |
+| `onParsingInProgress`    | `undefined`                | Deprecated compatibility callback invoked after the current parse render commits. Use `onParseComplete` or `MarkdownStream` state for new code.                                                                                                                                                     |
+| `onError`                | `undefined`                | Receive parser and plugin failures as `(error, phase, pluginName?)`. Native parse and session failures are typed `MarkdownError`s with stable `code` and `source`.                                                                                                                                  |
+| `errorText`              | `"Error parsing markdown"` | Localized text rendered when parsing fails.                                                                                                                                                                                                                                                         |
+| `imageOptions`           | `undefined`                | Image URL policy: `allowedProtocols`, `allowedHosts`, and `remoteImages: "deny"` to block remote image loading entirely.                                                                                                                                                                            |
+| `highlightCode`          | `false`                    | Built-in code syntax highlighting (fixture-backed languages: JS/TS family, Python, shell).                                                                                                                                                                                                          |
+| `virtualize`             | `false`                    | Virtualize top-level blocks for long documents.                                                                                                                                                                                                                                                     |
 
 See **[Usage](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/usage.md)** for the full prop table and **[Customization](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/customization.md)** for themes, per-node styles, custom renderers, and plugins.
 
 ## Performance
 
-Representative development-build measurement for a ~320 KB document on the
-iPhone 17 iOS Simulator (absolute values vary by device, build, and workload):
+Nitro Markdown optimizes the complete string → native parse → React Native
+render path. The default render-only path avoids public AST validation and
+cloning, omits source-offset serialization when it is safe, and collapses
+contiguous plain-text runs into fewer native `Text` nodes. Use `virtualize` for
+long documents so only the visible top-level blocks mount initially.
 
-| Parser           | Time   |
-| ---------------- | ------ |
-| **Nitro (C++)**  | ~242 ms |
-| CommonMark (JS)  | ~117 ms |
-| Markdown-It (JS) | ~191 ms |
-| Marked (JS)      | ~1,036 ms |
+Representative development-build measurements for a ~320 KB document after
+these optimizations (mount-to-layout time; absolute values vary by device,
+build, and workload):
 
-These are development-build measurements, not a release-performance guarantee.
-Reproduce them on your target device by running the example app and tapping
-**Run Benchmark**. Methodology and a full capability matrix:
+| Render path                       | iPhone 17 iOS Simulator | Pixel 7 Android Emulator |
+| --------------------------------- | ----------------------- | ------------------------ |
+| Rich document                     | 217.24 ms               | 291.20 ms                |
+| Long document with virtualization | 150.50 ms               | 168.69 ms                |
+
+These are development-build measurements from isolated fresh runs, not a
+release-performance guarantee.
+
+The parser-only comparison uses isolated records. The example app measures
+Nitro only on the target device:
+
+| Nitro device path | iPhone 17 iOS Simulator | Pixel 7 Android Emulator |
+| ----------------- | ----------------------- | ------------------------ |
+| **Offsets on**    | 71.3 ms p50             | 57.0 ms p50              |
+| **Offsets off**   | 47.2 ms p50             | 37.6 ms p50              |
+
+The JavaScript baseline is a separate Node benchmark. Each parser runs in a
+fresh process and the result includes its fixture hash and runtime. The latest
+macOS arm64 record for the 182,850-byte `node-complex-markdown-v1` fixture was:
+
+| JavaScript baseline |      p50 |      p95 |
+| ------------------- | -------: | -------: |
+| CommonMark.js       |  5.15 ms |  9.20 ms |
+| Markdown-It         |  8.59 ms | 11.91 ms |
+| Marked              | 13.52 ms | 16.48 ms |
+
+Do not compare Node and device timings as a single speed ratio. With offsets
+disabled, Nitro's measured device round trip is about 34% faster than its
+compatibility path. The package's advantage is the full React Native path,
+native parsing without a JS parser dependency, streaming, and long-document
+virtualization; no universal "fastest" result should be inferred from one
+fixture. Reproduce device numbers by running the example app and tapping
+**Run Benchmark**, and reproduce the isolated JS baseline with `bun run benchmark`.
+Methodology and the full capability matrix:
 **[Comparison & benchmarks](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/comparison.md)**.
 
 ## Security

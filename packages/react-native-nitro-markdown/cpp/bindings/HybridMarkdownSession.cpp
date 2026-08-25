@@ -50,7 +50,9 @@ std::string numberString(double value) {
 } // namespace
 
 HybridMarkdownSession::HybridMarkdownSession()
-    : HybridObject(TAG), HybridMarkdownSessionSpec() {}
+    : HybridObject(TAG), HybridMarkdownSessionSpec() {
+    parser_ = std::make_unique<HybridMarkdownParser>();
+}
 
 HybridMarkdownSession::~HybridMarkdownSession() {
     dispose();
@@ -74,10 +76,14 @@ double HybridMarkdownSession::append(const std::string& chunk) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
         ensureActiveLocked();
-        from = utf16Length(buffer_);
-        validateBufferSizeLocked(from + utf16Length(chunk));
+        const size_t chunkLength = utf16Length(chunk);
+        if (chunkLength > kMaxBufferSize - bufferUtf16Length_) {
+            validateBufferSizeLocked(kMaxBufferSize + 1);
+        }
+        from = bufferUtf16Length_;
+        to = from + chunkLength;
         buffer_.append(chunk);
-        to = utf16Length(buffer_);
+        bufferUtf16Length_ = to;
     }
 
     notifyListeners(snapshotListeners(), static_cast<double>(from), static_cast<double>(to));
@@ -89,6 +95,7 @@ void HybridMarkdownSession::clear() {
         std::lock_guard<std::mutex> lock(mutex_);
         ensureActiveLocked();
         buffer_.clear();
+        bufferUtf16Length_ = 0;
         highlightPosition_ = 0.0;
     }
 
@@ -104,7 +111,7 @@ std::string HybridMarkdownSession::getAllText() {
 double HybridMarkdownSession::getLength() {
     std::lock_guard<std::mutex> lock(mutex_);
     ensureActiveLocked();
-    return static_cast<double>(utf16Length(buffer_));
+    return static_cast<double>(bufferUtf16Length_);
 }
 
 std::string HybridMarkdownSession::getTextRange(double from, double to) {
@@ -117,10 +124,22 @@ std::string HybridMarkdownSession::getTextRange(double from, double to) {
 
     std::lock_guard<std::mutex> lock(mutex_);
     ensureActiveLocked();
-    const auto [start, end] = validateAndClampRange(from, to, utf16Length(buffer_));
+    const auto [start, end] = validateAndClampRange(from, to, bufferUtf16Length_);
     const size_t startByte = byteOffsetForUtf16(buffer_, start);
     const size_t endByte = byteOffsetForUtf16(buffer_, end);
     return buffer_.substr(startByte, endByte - startByte);
+}
+
+std::string HybridMarkdownSession::parse() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    ensureActiveLocked();
+    return parser_->parseForStreaming(buffer_);
+}
+
+std::string HybridMarkdownSession::parseWithOptions(const ParserOptions& options) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    ensureActiveLocked();
+    return parser_->parseWithOptionsForStreaming(buffer_, options);
 }
 
 std::function<void()> HybridMarkdownSession::addListener(
@@ -160,6 +179,7 @@ void HybridMarkdownSession::reset(const std::string& text) {
         ensureActiveLocked();
         validateBufferSizeLocked(newLength);
         buffer_ = text;
+        bufferUtf16Length_ = newLength;
         highlightPosition_ = 0.0;
     }
 
@@ -174,26 +194,31 @@ double HybridMarkdownSession::replace(
     size_t start;
     size_t end;
     size_t newLength;
+    size_t insertedLength;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         ensureActiveLocked();
-        const auto range = validateAndClampRange(from, to, utf16Length(buffer_));
+        const auto range = validateAndClampRange(from, to, bufferUtf16Length_);
         start = range.first;
         end = range.second;
-        const size_t insertedLength = utf16Length(text);
-        const size_t oldLength = utf16Length(buffer_);
+        insertedLength = utf16Length(text);
+        const size_t oldLength = bufferUtf16Length_;
+        if (insertedLength > kMaxBufferSize || oldLength - (end - start) > kMaxBufferSize - insertedLength) {
+            validateBufferSizeLocked(kMaxBufferSize + 1);
+        }
         newLength = oldLength - (end - start) + insertedLength;
         validateBufferSizeLocked(newLength);
 
         const size_t startByte = byteOffsetForUtf16(buffer_, start);
         const size_t endByte = byteOffsetForUtf16(buffer_, end);
         buffer_.replace(startByte, endByte - startByte, text);
+        bufferUtf16Length_ = newLength;
     }
 
     notifyListeners(
         snapshotListeners(),
         static_cast<double>(start),
-        static_cast<double>(start + utf16Length(text))
+        static_cast<double>(start + insertedLength)
     );
     return static_cast<double>(newLength);
 }
@@ -203,6 +228,8 @@ void HybridMarkdownSession::dispose() {
     disposed_ = true;
     std::vector<Listener>().swap(listeners_);
     std::string().swap(buffer_);
+    bufferUtf16Length_ = 0;
+    parser_.reset();
     highlightPosition_ = 0.0;
 }
 

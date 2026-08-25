@@ -23,6 +23,13 @@ const gfmText = extractPlainTextWithOptions("| A |\n|---|\n| B |", {
 const lean = parseMarkdownWithOptions(doc, { sourceOffsets: false });
 ```
 
+`sourceOffsets` is optional. The public default is `true` for compatibility, so
+`parseMarkdown()` returns nodes with JavaScript UTF-16 `beg`/`end` ranges. Use a
+literal `{ sourceOffsets: false }` for a lean headless AST when your code does
+not map nodes back to the original source. This option is not needed for the
+ordinary `<Markdown>` component: its safe string-render fast path selects it
+internally.
+
 `parseMarkdown`, `parseMarkdownWithOptions`, `extractPlainText`, and
 `extractPlainTextWithOptions` throw typed `MarkdownError`s (stable `code` and
 `source` fields) when the Nitro module is unavailable, native parsing fails, or
@@ -50,18 +57,18 @@ native iOS or Android runtime; it does not run on Node.js, servers, or web.
 > indices and can be passed directly to `String.slice`, including for accented
 > text and emoji.
 >
-> Measured in the example app on a ~53 KB document: the AST JSON is **~39 %
-> smaller** and the full native-parse → JSI → `JSON.parse` round trip is **~35 %
-> faster** with `sourceOffsets: false`. (Absolute numbers vary by device and
-> document; the savings scale with node count. Reproduce with
-> `scripts/benchmark-node.js` / the example benchmark screen.)
+> Measured in the example app on a ~320 KB document, the no-offset native parse
+> → JSI → `JSON.parse` round trip reduced p50 from **71.3 ms to 47.2 ms** on
+> the iPhone 17 simulator and from **57.0 ms to 37.6 ms** on the Pixel 7
+> emulator. Absolute values vary by device and document; reproduce them in the
+> example benchmark screen.
 
 ## API
 
 | Function                                     | Returns        | Description                          |
 | -------------------------------------------- | -------------- | ------------------------------------ |
-| `parseMarkdown(text)`                        | `MarkdownNode` | Parse with default options.          |
-| `parseMarkdownWithOptions(text, options)`    | `MarkdownNode` | Parse with explicit `ParserOptions`. |
+| `parseMarkdown(text)`                        | `MarkdownNodeWithSourceOffsets` | Parse with default options and UTF-16 source ranges. |
+| `parseMarkdownWithOptions(text, options)`    | `MarkdownNode` | Parse with explicit `ParserOptions`; a literal `sourceOffsets: false` returns `MarkdownNodeWithoutSourceOffsets`. |
 | `extractPlainText(text)`                     | `string`       | Strip Markdown to plain text.        |
 | `extractPlainTextWithOptions(text, options)` | `string`       | Plain text with explicit options.    |
 

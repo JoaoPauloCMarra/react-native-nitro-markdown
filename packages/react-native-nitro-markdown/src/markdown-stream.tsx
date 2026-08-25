@@ -8,7 +8,10 @@ import {
   type FC,
   type ReactNode,
 } from "react";
-import type { MarkdownNode } from "./headless";
+import {
+  parseMarkdownSession,
+  type MarkdownNode,
+} from "./headless";
 import type { ParserOptions } from "./Markdown.nitro";
 import { Markdown, type MarkdownPlugin, type MarkdownProps } from "./markdown";
 import type { MarkdownSession } from "./specs/MarkdownSession.nitro";
@@ -211,9 +214,18 @@ export function useMarkdownStreamState({
       parserOptionFreezeAst,
     ],
   );
-  const parseText = useCallback(
-    (text: string): MarkdownNode => parseMarkdownAst(text, parserOptions),
-    [parserOptions],
+  const canParseSessionNatively =
+    parserOptions != null
+      ? typeof activeSession.parseWithOptions === "function"
+      : typeof activeSession.parse === "function";
+  const parseSession = useCallback(
+    (knownText?: string): MarkdownNode => {
+      if (canParseSessionNatively || knownText === undefined) {
+        return parseMarkdownSession(activeSession, parserOptions);
+      }
+      return parseMarkdownAst(knownText, parserOptions);
+    },
+    [activeSession, canParseSessionNatively, parserOptions],
   );
   const createEmptyAst = useCallback((): MarkdownNode => {
     const ast: MarkdownNode = {
@@ -242,7 +254,7 @@ export function useMarkdownStreamState({
     let initialAst: MarkdownNode | null = createEmptyAst();
     if (!hasBeforeParsePlugins) {
       try {
-        initialAst = parseText(initialText);
+        initialAst = parseSession(initialText);
       } catch (error) {
         notifyStreamParseError(onError, error);
         initialAst = null;
@@ -292,7 +304,7 @@ export function useMarkdownStreamState({
     let initialAst: MarkdownNode | null = createEmptyAst();
     if (!hasBeforeParsePlugins) {
       try {
-        initialAst = parseText(initialText);
+        initialAst = parseSession(initialText);
       } catch (error) {
         notifyStreamParseError(onErrorRef.current, error);
         initialAst = null;
@@ -313,7 +325,7 @@ export function useMarkdownStreamState({
     activeSession,
     createEmptyAst,
     hasBeforeParsePlugins,
-    parseText,
+    parseSession,
     initialParseMode,
   ]);
 
@@ -360,10 +372,11 @@ export function useMarkdownStreamState({
             nextText: latest,
             previousAst: previousState.ast,
             previousText: previousState.text,
+            parseCurrent: () => parseSession(latest),
             ...(parserOptions ? { options: parserOptions } : {}),
           });
         } else {
-          nextAst = parseText(latest);
+          nextAst = parseSession(latest);
         }
       } catch (error) {
         notifyStreamParseError(onErrorRef.current, error);
@@ -452,7 +465,7 @@ export function useMarkdownStreamState({
   }, [
     allowIncremental,
     hasBeforeParsePlugins,
-    parseText,
+    parseSession,
     parserOptions,
     activeSession,
     updateIntervalMs,

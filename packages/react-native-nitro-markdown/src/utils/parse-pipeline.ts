@@ -9,6 +9,7 @@ import {
   cloneMarkdownNode as cloneValidatedMarkdownNode,
   freezeMarkdownNode,
 } from "./freeze-ast";
+import { parseMarkdownForRender } from "./render-parser";
 
 export type MarkdownErrorPhase = "parse" | "before-plugin" | "after-plugin";
 
@@ -161,6 +162,13 @@ export const parseWithNativeParser = (
     return parseMarkdownWithOptions(text, options);
   }
   return parseMarkdown(text);
+};
+
+export const parseWithNativeParserForRender = (
+  text: string,
+  options?: ParserOptions,
+): MarkdownNode => {
+  return parseMarkdownForRender(text, options);
 };
 
 export const sortPluginsByPriority = (

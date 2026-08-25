@@ -23,6 +23,26 @@ stay safe.
 
 ### Changed
 
+- The bundled `nitromd` parser is synchronized with official MD4C upstream at
+  commit `3e7ace20d262028baf702db9850520f017c25591` (2026-08-17), including
+  upstream parser correctness, Unicode, URL-autolink, and quadratic-behavior
+  fixes while retaining Nitro's source-range callback extension.
+- Native JSON serialization uses a bounded writer with string views and direct
+  integer formatting to reduce allocation and copying on the native-to-JS
+  boundary. The public JSON transport and AST shape remain unchanged.
+- `sourceOffsets` remains `true` by default for public headless parsing, but a
+  literal `sourceOffsets: false` result now has a stronger TypeScript return
+  type without `beg`/`end`. The ordinary string renderer selects this option
+  internally when no consumer-facing AST or source ranges are needed.
+- The default `<Markdown>` string-to-render path now keeps the native AST
+  internal. It skips consumer-boundary AST validation and cloning while
+  preserving the public headless parser contract; public AST hooks and custom
+  renderers continue to use the compatibility path.
+- Contiguous plain-text and line-break runs render as one text value when no
+  custom inline renderers are supplied, reducing React Native host `Text`
+  nodes without bypassing custom renderer callbacks or style overrides.
+- Native serialization no longer builds the UTF-16 offset index when
+  `sourceOffsets: false` is used.
 - Native `MarkdownSession` now uses one source-owned C++ HybridObject on iOS
   and Android, preserving the existing session API and limits.
 - Streaming re-parses reuse a bounded native serialization cache keyed by the

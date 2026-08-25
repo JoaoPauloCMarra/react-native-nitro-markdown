@@ -37,7 +37,7 @@ CommonMark plus GitHub Flavored Markdown:
 | `options.gfm`            | `true`      | Tables, strikethrough, task lists, autolinks.                                                                                                   |
 | `options.math`           | `true`      | Parse inline and block math nodes.                                                                                                              |
 | `options.html`           | `false`     | Preserve raw HTML nodes for custom renderers.                                                                                                   |
-| `options.sourceOffsets`  | `true`      | Emit `beg`/`end` as JavaScript UTF-16 indices.                                                                                                  |
+| `options.sourceOffsets`  | `true`      | Optional source mapping. `true` emits `beg`/`end` as JavaScript UTF-16 indices; `false` omits them and skips the native offset map. Keep it omitted (or set `true`) when your code needs source ranges; set `false` for lean one-shot rendering. The ordinary string render fast path selects `false` automatically when safe. |
 | `options.maxInputLength` | `10485760`  | Maximum accepted input in UTF-8 bytes.                                                                                                          |
 | `options.freezeAst`      | `false`     | Freeze AST nodes and child arrays before callbacks and rendering.                                                                               |
 | `parseCache`             | `true`      | Reuse parsed ASTs for repeated content (set `false` to force re-parse).                                                                         |
@@ -60,6 +60,13 @@ are reported through `onParseComplete`'s `cacheStats`.
 AST nodes are mutable by default, and plugin/transform inputs are isolated from
 the parser cache. Set `options.freezeAst` to freeze nodes and child arrays
 before they reach renderers or callbacks.
+
+`sourceOffsets` is optional. The public parser keeps the compatibility default
+`true` because existing consumers may use `beg`/`end` for diagnostics, source
+maps, annotations, editor selection, or incremental AST reuse. A literal
+`{ sourceOffsets: false }` option returns a TypeScript node type without those
+fields and is the recommended choice for one-shot headless work that does not
+need source mapping.
 
 Native parse failures do not produce an empty document. `<Markdown>` renders
 the `errorText` (localizable) and calls `onError(error, "parse")`. Plugin

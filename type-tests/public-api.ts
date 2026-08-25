@@ -15,8 +15,11 @@ import type {
 import {
   MAX_PARSE_INPUT_LENGTH,
   parseMarkdown,
+  parseMarkdownSession,
   parseMarkdownWithOptions,
   type MarkdownNode,
+  type MarkdownNodeWithSourceOffsets,
+  type MarkdownNodeWithoutSourceOffsets,
 } from "react-native-nitro-markdown/headless";
 
 declare const session: MarkdownSession;
@@ -76,6 +79,15 @@ const leanNode: MarkdownNode = parseMarkdownWithOptions(
   "Olá 👋",
   parserOptions,
 );
+const offsetNode: MarkdownNodeWithSourceOffsets = parseMarkdown("# Ranged");
+const noOffsetNode: MarkdownNodeWithoutSourceOffsets = parseMarkdownWithOptions(
+  "# Lean",
+  { sourceOffsets: false },
+);
+const sessionNode: MarkdownNode = parseMarkdownSession(session);
+const offset: number = offsetNode.beg;
+// @ts-expect-error — sourceOffsets:false does not expose source ranges
+const missingOffset: number = noOffsetNode.beg;
 
 declare const markdownError: MarkdownError;
 const errorCode: MarkdownErrorCode = markdownError.code;
@@ -93,6 +105,10 @@ void [
   disabledReason,
   rootNode,
   leanNode,
+  noOffsetNode,
+  sessionNode,
+  offset,
+  missingOffset,
   errorCode,
   errorSource,
   inputLimit,

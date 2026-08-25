@@ -10,9 +10,25 @@
  * This script demonstrates JS parser performance in Node.js.
  */
 
-const { Parser: CommonMarkParser } = require("commonmark");
-const MarkdownIt = require("markdown-it");
-const { marked } = require("marked");
+const crypto = require("crypto");
+const { createRequire } = require("module");
+const path = require("path");
+const { spawnSync } = require("child_process");
+
+const repoRoot = path.resolve(__dirname, "..");
+const packageRoot = path.join(
+  repoRoot,
+  "packages",
+  "react-native-nitro-markdown",
+);
+const packageManifest = require(path.join(packageRoot, "package.json"));
+const packageRequire = createRequire(path.join(packageRoot, "package.json"));
+
+if (packageManifest.name !== "react-native-nitro-markdown") {
+  throw new Error(
+    `Benchmark setup failed: expected react-native-nitro-markdown, got ${packageManifest.name}.`,
+  );
+}
 
 // Complex markdown test data (same as used in the app)
 const COMPLEX_MARKDOWN = `# 🚀 Nitro Markdown Comprehensive Demo
@@ -177,159 +193,153 @@ Content below
 [ref-link]: https://github.com/margelo/react-native-nitro-modules "Nitro Modules"
 `;
 
-// Generate massive test payload (50 repetitions = ~50KB)
+// Keep this fixture stable. The device benchmark has a separate fixture and is
+// never merged into this Node result automatically.
 const REPEATED_MARKDOWN = COMPLEX_MARKDOWN.repeat(50);
+const FIXTURE = {
+  id: "node-complex-markdown-v1",
+  utf8Bytes: Buffer.byteLength(REPEATED_MARKDOWN, "utf8"),
+  sha256: crypto.createHash("sha256").update(REPEATED_MARKDOWN).digest("hex"),
+};
+const PARSERS = [
+  { id: "commonmark", label: "CommonMark.js" },
+  { id: "markdown-it", label: "Markdown-It" },
+  { id: "marked", label: "Marked" },
+];
+const WARMUP_SAMPLES = 3;
+const MEASURED_SAMPLES = 10;
 
-function benchmarkParser(name, parseFn, warmupFn, iterations = 10) {
-  // Warmup
-  warmupFn();
+function percentile(values, percentileValue) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const position = (sorted.length - 1) * percentileValue;
+  const lower = Math.floor(position);
+  const upper = Math.ceil(position);
+  if (lower === upper) return sorted[lower];
+  return sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower);
+}
 
-  const times = [];
-
-  for (let i = 0; i < iterations; i++) {
-    const start = performance.now();
-    parseFn();
-    const end = performance.now();
-    times.push(end - start);
+function getParser(parserId) {
+  if (parserId === "commonmark") {
+    const { Parser } = packageRequire("commonmark");
+    const parser = new Parser();
+    return () => parser.parse(REPEATED_MARKDOWN);
   }
 
-  const avgTime = times.reduce((a, b) => a + b, 0) / times.length;
-  const minTime = Math.min(...times);
-  const maxTime = Math.max(...times);
+  if (parserId === "markdown-it") {
+    const MarkdownIt = packageRequire("markdown-it");
+    const parser = new MarkdownIt();
+    return () => parser.render(REPEATED_MARKDOWN);
+  }
 
-  return { avgTime, minTime, maxTime, iterations };
+  if (parserId === "marked") {
+    const { marked } = packageRequire("marked");
+    return () => marked.parse(REPEATED_MARKDOWN);
+  }
+
+  throw new Error(`Unknown parser worker: ${parserId}`);
+}
+
+async function runWorker(parserId) {
+  const parse = getParser(parserId);
+  for (let index = 0; index < WARMUP_SAMPLES; index += 1) {
+    await parse();
+  }
+
+  const samples = [];
+  for (let index = 0; index < MEASURED_SAMPLES; index += 1) {
+    const start = performance.now();
+    const result = await parse();
+    if (result == null || result === "") {
+      throw new Error(`${parserId} returned an empty result`);
+    }
+    samples.push(performance.now() - start);
+  }
+
+  const totalMs = samples.reduce((sum, sample) => sum + sample, 0);
+  return {
+    parser: parserId,
+    meanMs: totalMs / samples.length,
+    p50Ms: percentile(samples, 0.5),
+    p95Ms: percentile(samples, 0.95),
+    minMs: Math.min(...samples),
+    maxMs: Math.max(...samples),
+    warmupSamples: WARMUP_SAMPLES,
+    measuredSamples: MEASURED_SAMPLES,
+  };
 }
 
 function runComparison() {
-  console.log("🚀 JavaScript Markdown Parser Performance Comparison");
-  console.log("====================================================");
-  console.log(
-    `📊 Test payload: ${(REPEATED_MARKDOWN.length / 1024).toFixed(1)} KB of complex markdown\n`,
-  );
+  const results = PARSERS.map(({ id }) => {
+    const child = spawnSync(process.execPath, [__filename, "--worker", id], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      maxBuffer: 2 * 1024 * 1024,
+      env: {
+        ...process.env,
+        NODE_ENV: "production",
+        NITRO_MARKDOWN_BENCHMARK_WORKER: "1",
+      },
+    });
 
-  // Initialize parsers
-  const commonmarkParser = new CommonMarkParser();
-  const markdownItParser = new MarkdownIt();
+    if (child.status !== 0) {
+      throw new Error(
+        `${id} benchmark worker failed with exit code ${child.status}: ${child.stderr || child.stdout}`,
+      );
+    }
 
-  // Benchmark each parser
-  console.log("Running benchmarks (10 iterations each)...\n");
-
-  const commonmarkResult = benchmarkParser(
-    "CommonMark.js",
-    () => commonmarkParser.parse(REPEATED_MARKDOWN),
-    () => commonmarkParser.parse("warmup"),
-  );
-
-  const markdownItResult = benchmarkParser(
-    "Markdown-It",
-    () => markdownItParser.render(REPEATED_MARKDOWN),
-    () => markdownItParser.render("warmup"),
-  );
-
-  const markedResult = benchmarkParser(
-    "Marked",
-    () => marked.parse(REPEATED_MARKDOWN),
-    () => marked.parse("warmup"),
-  );
-
-  // Display results
-  console.log("📋 BENCHMARK RESULTS:");
-  console.log("=====================\n");
-
-  console.log(`📋 CommonMark.js (Reference Implementation)`);
-  console.log(`   Average: ${commonmarkResult.avgTime.toFixed(2)}ms`);
-  console.log(
-    `   Min: ${commonmarkResult.minTime.toFixed(2)}ms | Max: ${commonmarkResult.maxTime.toFixed(2)}ms\n`,
-  );
-
-  console.log(`🏗️  Markdown-It (Feature-rich)`);
-  console.log(`   Average: ${markdownItResult.avgTime.toFixed(2)}ms`);
-  console.log(
-    `   Min: ${markdownItResult.minTime.toFixed(2)}ms | Max: ${markdownItResult.maxTime.toFixed(2)}ms\n`,
-  );
-
-  console.log(`💨 Marked (Popular & Fast)`);
-  console.log(`   Average: ${markedResult.avgTime.toFixed(2)}ms`);
-  console.log(
-    `   Min: ${markedResult.minTime.toFixed(2)}ms | Max: ${markedResult.maxTime.toFixed(2)}ms\n`,
-  );
-
-  // Find fastest JS parser
-  const jsResults = [
-    { name: "CommonMark.js", time: commonmarkResult.avgTime },
-    { name: "Markdown-It", time: markdownItResult.avgTime },
-    { name: "Marked", time: markedResult.avgTime },
-  ];
-  jsResults.sort((a, b) => a.time - b.time);
-  const fastestJS = jsResults[0];
-  const slowestJS = jsResults[jsResults.length - 1];
-
-  console.log("🏆 JAVASCRIPT PARSER RANKING:");
-  console.log("=============================\n");
-  jsResults.forEach((r, i) => {
-    const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : "🥉";
-    console.log(`${medal} ${r.name}: ${r.time.toFixed(2)}ms`);
+    const output = child.stdout.trim();
+    const result = JSON.parse(output.split(/\r?\n/).at(-1));
+    return {
+      ...result,
+      label: PARSERS.find((parser) => parser.id === id).label,
+    };
   });
 
-  console.log("\n📈 NITRO COMPARISON STATUS:");
-  console.log("===========================\n");
+  const result = {
+    package: packageManifest.name,
+    version: packageManifest.version,
+    benchmark: "javascript-parser-baseline",
+    scope: "node-one-process-per-parser",
+    fixture: FIXTURE,
+    runtime: process.version,
+    platform: process.platform,
+    architecture: process.arch,
+    parsers: results,
+  };
+
+  console.log("JavaScript Markdown parser baseline");
+  console.log(`Package: ${result.package}@${result.version}`);
   console.log(
-    "This script measures only JavaScript parsers in Node.js. Nitro is measured in the React Native app.",
+    `Fixture: ${FIXTURE.id}, ${FIXTURE.utf8Bytes} UTF-8 bytes, sha256=${FIXTURE.sha256}`,
   );
   console.log(
-    "Use `NITRO_BENCH_MS=<value> bun run benchmark` to include a Nitro reference row from app measurements.\n",
+    "Isolation: each parser ran sequentially in its own fresh Node process; Nitro device results are not merged into this command.",
   );
-
-  const nitroBenchmarkMs = Number(process.env.NITRO_BENCH_MS);
-  const hasNitroBenchmark =
-    Number.isFinite(nitroBenchmarkMs) && nitroBenchmarkMs > 0;
-
-  // Summary table
-  console.log("📊 SUMMARY TABLE:");
-  console.log("=================\n");
-  console.log("| Parser        | Avg Time  | Relative Speed |");
-  console.log("|---------------|-----------|----------------|");
-  jsResults.forEach((r) => {
-    const relative = (r.time / fastestJS.time).toFixed(2);
+  console.log("");
+  console.log("| Parser | Mean | P50 | P95 | Samples |");
+  console.log("| --- | ---: | ---: | ---: | ---: |");
+  for (const parser of results) {
     console.log(
-      `| ${r.name.padEnd(13)} | ${r.time.toFixed(2).padStart(7)}ms | ${relative}x ${r.name === fastestJS.name ? "(fastest)" : "         "} |`,
-    );
-  });
-  if (hasNitroBenchmark) {
-    const nitroRelative = (nitroBenchmarkMs / fastestJS.time).toFixed(2);
-    console.log(
-      `| Nitro (C++)   | ${nitroBenchmarkMs.toFixed(2).padStart(7)}ms | ${nitroRelative}x ${nitroBenchmarkMs <= fastestJS.time ? "(faster)" : "(slower)"} |`,
+      `| ${parser.label} | ${parser.meanMs.toFixed(2)}ms | ${parser.p50Ms.toFixed(2)}ms | ${parser.p95Ms.toFixed(2)}ms | ${parser.measuredSamples} |`,
     );
   }
   console.log(
-    "\nNitro benchmark values should be taken from `apps/example/app/index.tsx` runtime measurements.\n",
+    "\nUse the React Native example benchmark separately for Nitro device timing. Its fixture and runtime are intentionally reported as a different benchmark record.",
   );
-
-  console.log("💡 KEY INSIGHTS:");
-  console.log("================\n");
-  console.log(
-    `• Fastest JS parser: ${fastestJS.name} (${fastestJS.time.toFixed(2)}ms)`,
-  );
-  console.log(
-    `• Slowest JS parser: ${slowestJS.name} (${slowestJS.time.toFixed(2)}ms)`,
-  );
-  console.log(
-    `• JS speed spread: ${(slowestJS.time / fastestJS.time).toFixed(1)}x difference`,
-  );
-  if (hasNitroBenchmark) {
-    console.log(
-      `• Nitro (app input): ${nitroBenchmarkMs.toFixed(2)}ms (${(nitroBenchmarkMs / fastestJS.time).toFixed(2)}x vs fastest JS baseline)`,
-    );
-  } else {
-    console.log("• Nitro value not included in this run (set NITRO_BENCH_MS)");
-  }
-  console.log(
-    "• md4c: Highly optimized C parser with zero-copy architecture\n",
-  );
+  console.log(`BENCHMARK_RESULT ${JSON.stringify(result)}`);
 }
 
 if (require.main === module) {
-  runComparison();
+  if (process.argv[2] === "--worker") {
+    runWorker(process.argv[3])
+      .then((result) => console.log(JSON.stringify(result)))
+      .catch((error) => {
+        console.error(error instanceof Error ? error.message : String(error));
+        process.exit(1);
+      });
+  } else {
+    runComparison();
+  }
 }
 
 module.exports = { runComparison };

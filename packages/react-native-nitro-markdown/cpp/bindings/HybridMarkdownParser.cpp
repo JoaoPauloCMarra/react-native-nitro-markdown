@@ -1,5 +1,7 @@
 #include "HybridMarkdownParser.hpp"
 #include "../core/flatten.hpp"
+#include <algorithm>
+#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <list>
@@ -27,36 +29,44 @@ static constexpr size_t kMaxJsonSize = 64 * 1024 * 1024;
     );
 }
 
-class BoundedJsonWriter final {
+template <bool EnforceLimit>
+class JsonWriter final {
 public:
+    void reserve(size_t capacity) {
+        output_.reserve(std::min(capacity, kMaxJsonSize));
+    }
+
     void append(std::string_view value) {
-        const size_t remaining = kMaxJsonSize - size_;
-        if (value.size() > remaining) {
-            if (value.size() > std::numeric_limits<size_t>::max() - size_) {
-                throwJsonSizeError(kMaxJsonSize + 1);
+        if constexpr (EnforceLimit) {
+            const size_t currentSize = output_.size();
+            const size_t remaining = kMaxJsonSize - currentSize;
+            if (value.size() > remaining) {
+                if (value.size() > std::numeric_limits<size_t>::max() - currentSize) {
+                    throwJsonSizeError(kMaxJsonSize + 1);
+                }
+                throwJsonSizeError(currentSize + value.size());
             }
-            throwJsonSizeError(size_ + value.size());
         }
 
         output_.append(value.data(), value.size());
-        size_ += value.size();
     }
 
     void push(char value) {
-        if (size_ == kMaxJsonSize) {
-            throwJsonSizeError(kMaxJsonSize + 1);
+        if constexpr (EnforceLimit) {
+            if (output_.size() == kMaxJsonSize) {
+                throwJsonSizeError(kMaxJsonSize + 1);
+            }
         }
 
         output_.push_back(value);
-        size_++;
     }
 
     [[nodiscard]] size_t size() const noexcept {
-        return size_;
+        return output_.size();
     }
 
     [[nodiscard]] std::string fragment(size_t start) const {
-        return output_.substr(start, size_ - start);
+        return output_.substr(start, output_.size() - start);
     }
 
     [[nodiscard]] std::string take() && {
@@ -65,50 +75,100 @@ public:
 
 private:
     std::string output_;
-    size_t size_ = 0;
 };
 
-inline void appendEscapedJsonString(BoundedJsonWriter& output, const std::string& input) {
-    static constexpr char kHex[] = "0123456789abcdef";
+using BoundedJsonWriter = JsonWriter<true>;
+using FastJsonWriter = JsonWriter<false>;
 
-    for (unsigned char c : input) {
+template <typename Writer, typename T>
+inline void appendInteger(Writer& output, T value) {
+    char buffer[std::numeric_limits<T>::digits10 + 3];
+    const auto result = std::to_chars(buffer, buffer + sizeof(buffer), value);
+    if (result.ec != std::errc()) {
+        throw std::runtime_error("Markdown JSON integer serialization failed");
+    }
+    output.append(std::string_view(buffer, static_cast<size_t>(result.ptr - buffer)));
+}
+
+template <typename Writer>
+inline void appendEscapedJsonString(Writer& output, std::string_view input) {
+    static constexpr char kHex[] = "0123456789abcdef";
+    size_t safeStart = 0;
+
+    for (size_t index = 0; index < input.size(); index++) {
+        const unsigned char c = static_cast<unsigned char>(input[index]);
         switch (c) {
             case '"':
+                if (index > safeStart) {
+                    output.append(std::string_view(input.data() + safeStart, index - safeStart));
+                }
                 output.append("\\\"");
+                safeStart = index + 1;
                 break;
             case '\\':
+                if (index > safeStart) {
+                    output.append(std::string_view(input.data() + safeStart, index - safeStart));
+                }
                 output.append("\\\\");
+                safeStart = index + 1;
                 break;
             case '\b':
+                if (index > safeStart) {
+                    output.append(std::string_view(input.data() + safeStart, index - safeStart));
+                }
                 output.append("\\b");
+                safeStart = index + 1;
                 break;
             case '\f':
+                if (index > safeStart) {
+                    output.append(std::string_view(input.data() + safeStart, index - safeStart));
+                }
                 output.append("\\f");
+                safeStart = index + 1;
                 break;
             case '\n':
+                if (index > safeStart) {
+                    output.append(std::string_view(input.data() + safeStart, index - safeStart));
+                }
                 output.append("\\n");
+                safeStart = index + 1;
                 break;
             case '\r':
+                if (index > safeStart) {
+                    output.append(std::string_view(input.data() + safeStart, index - safeStart));
+                }
                 output.append("\\r");
+                safeStart = index + 1;
                 break;
             case '\t':
+                if (index > safeStart) {
+                    output.append(std::string_view(input.data() + safeStart, index - safeStart));
+                }
                 output.append("\\t");
+                safeStart = index + 1;
                 break;
             default: {
                 if (c <= 0x1f) {
+                    if (index > safeStart) {
+                        output.append(std::string_view(input.data() + safeStart, index - safeStart));
+                    }
                     output.append("\\u00");
                     output.push(kHex[(c >> 4) & 0x0f]);
                     output.push(kHex[c & 0x0f]);
-                } else {
-                    output.push(static_cast<char>(c));
+                    safeStart = index + 1;
                 }
                 break;
             }
         }
     }
+
+    if (safeStart < input.size()) {
+        output.append(std::string_view(input.data() + safeStart, input.size() - safeStart));
+    }
 }
 
-inline void appendStringField(BoundedJsonWriter& output, const char* key, const std::string& value) {
+template <typename Writer>
+inline void appendStringField(Writer& output, const char* key, std::string_view value) {
     output.push(',');
     output.push('"');
     output.append(key);
@@ -117,23 +177,26 @@ inline void appendStringField(BoundedJsonWriter& output, const char* key, const 
     output.push('"');
 }
 
-inline void appendIntField(BoundedJsonWriter& output, const char* key, int value) {
+template <typename Writer>
+inline void appendIntField(Writer& output, const char* key, int value) {
     output.push(',');
     output.push('"');
     output.append(key);
     output.append("\":");
-    output.append(std::to_string(value));
+    appendInteger(output, value);
 }
 
-inline void appendOffsetField(BoundedJsonWriter& output, const char* key, unsigned int value) {
+template <typename Writer>
+inline void appendOffsetField(Writer& output, const char* key, unsigned int value) {
     output.push(',');
     output.push('"');
     output.append(key);
     output.append("\":");
-    output.append(std::to_string(value));
+    appendInteger(output, value);
 }
 
-inline void appendBoolField(BoundedJsonWriter& output, const char* key, bool value) {
+template <typename Writer>
+inline void appendBoolField(Writer& output, const char* key, bool value) {
     output.push(',');
     output.push('"');
     output.append(key);
@@ -160,21 +223,19 @@ size_t resolveMaxInputBytes(const std::optional<double>& maxInputLength) {
     return static_cast<size_t>(value);
 }
 
-// A cached fragment is keyed by the exact source bytes of the block, its
-// absolute UTF-16 start offset, the parser flags, and the node type. Documents
+// A cached fragment is keyed by its absolute UTF-16 range, parser flags, and
+// node type. Documents
 // that may contain link reference definitions bypass the cache entirely
 // because a definition anywhere can change how a link inside an unchanged
 // block resolves.
 struct BlockFragmentKey {
-    uint64_t sliceHash = 0;
     uint32_t beg = 0;
     uint32_t end = 0;
     uint16_t nodeType = 0;
     uint8_t parserFlags = 0;
 
     bool operator==(const BlockFragmentKey& other) const noexcept {
-        return sliceHash == other.sliceHash &&
-            beg == other.beg &&
+        return beg == other.beg &&
             end == other.end &&
             nodeType == other.nodeType &&
             parserFlags == other.parserFlags;
@@ -182,7 +243,7 @@ struct BlockFragmentKey {
 
     struct Hash {
         size_t operator()(const BlockFragmentKey& key) const noexcept {
-            uint64_t hash = key.sliceHash;
+            uint64_t hash = 0xcbf29ce484222325ULL;
             hash ^= static_cast<uint64_t>(key.beg) * 0x9e3779b97f4a7c15ULL;
             hash ^= static_cast<uint64_t>(key.end) * 0xc2b2ae3d27d4eb4fULL;
             hash ^= static_cast<uint64_t>(key.nodeType) << 48;
@@ -229,24 +290,17 @@ size_t utf8SequenceLength(const unsigned char* bytes, size_t remaining) noexcept
         return 2;
     }
     if (
-        first >= 0xE0 &&
-        first <= 0xEF &&
-        remaining >= 3 &&
-        isContinuation(bytes[1]) &&
-        isContinuation(bytes[2]) &&
+        first >= 0xE0 && first <= 0xEF && remaining >= 3 &&
+        isContinuation(bytes[1]) && isContinuation(bytes[2]) &&
         !(first == 0xE0 && bytes[1] < 0xA0) &&
         !(first == 0xED && bytes[1] >= 0xA0)
     ) {
         return 3;
     }
     if (
-        first >= 0xF0 &&
-        first <= 0xF4 &&
-        remaining >= 4 &&
-        isContinuation(bytes[1]) &&
-        isContinuation(bytes[2]) &&
-        isContinuation(bytes[3]) &&
-        !(first == 0xF0 && bytes[1] < 0x90) &&
+        first >= 0xF0 && first <= 0xF4 && remaining >= 4 &&
+        isContinuation(bytes[1]) && isContinuation(bytes[2]) &&
+        isContinuation(bytes[3]) && !(first == 0xF0 && bytes[1] < 0x90) &&
         !(first == 0xF4 && bytes[1] >= 0x90)
     ) {
         return 4;
@@ -254,101 +308,44 @@ size_t utf8SequenceLength(const unsigned char* bytes, size_t remaining) noexcept
     return 1;
 }
 
-// Maps the parser's UTF-16 node offsets back to byte offsets so cache keys
-// can hash the exact source slice of a block. ASCII inputs are identity.
-class SourceUtf16ByteIndex {
-public:
-    explicit SourceUtf16ByteIndex(const std::string& source) : sourceSize_(source.size()) {
-        const auto* bytes = reinterpret_cast<const unsigned char*>(source.data());
-        const size_t size = source.size();
-
-        size_t asciiEnd = 0;
-        while (asciiEnd < size && bytes[asciiEnd] < 0x80) asciiEnd++;
-        if (asciiEnd == size) {
-            asciiOnly_ = true;
-            utf16Length_ = static_cast<uint32_t>(size);
-            return;
-        }
-
-        uint32_t utf16Length = 0;
-        size_t byteIndex = 0;
-        while (byteIndex < size) {
-            const size_t sequenceLength = utf8SequenceLength(bytes + byteIndex, size - byteIndex);
-            if (sequenceLength == 0) break;
-            byteIndex += sequenceLength;
-            utf16Length += sequenceLength == 4 ? 2 : 1;
-        }
-
-        utf16ToByte_.assign(static_cast<size_t>(utf16Length) + 1, 0);
-        uint32_t utf16Index = 0;
-        byteIndex = 0;
-        while (byteIndex < size) {
-            const size_t sequenceLength = utf8SequenceLength(bytes + byteIndex, size - byteIndex);
-            if (sequenceLength == 0) break;
-            const uint32_t units = sequenceLength == 4 ? 2 : 1;
-            for (uint32_t unit = 0; unit < units && utf16Index <= utf16Length; unit++) {
-                utf16ToByte_[utf16Index] = static_cast<uint32_t>(byteIndex);
-                utf16Index++;
-            }
-            byteIndex += sequenceLength;
-        }
-        utf16ToByte_[utf16Length] = static_cast<uint32_t>(size);
-        utf16Length_ = utf16Length;
+uint32_t utf16LengthForCache(const std::string& source) noexcept {
+    const auto* bytes = reinterpret_cast<const unsigned char*>(source.data());
+    size_t byteIndex = 0;
+    uint32_t length = 0;
+    while (byteIndex < source.size()) {
+        const size_t sequenceLength = utf8SequenceLength(
+            bytes + byteIndex,
+            source.size() - byteIndex
+        );
+        byteIndex += sequenceLength;
+        length += sequenceLength == 4 ? 2 : 1;
     }
-
-    [[nodiscard]] uint32_t utf16Length() const noexcept {
-        return utf16Length_;
-    }
-
-    [[nodiscard]] size_t byteOffset(uint32_t utf16Offset) const noexcept {
-        if (asciiOnly_) {
-            return utf16Offset > sourceSize_ ? sourceSize_ : static_cast<size_t>(utf16Offset);
-        }
-        if (utf16Offset >= utf16ToByte_.size()) return sourceSize_;
-        return utf16ToByte_[utf16Offset];
-    }
-
-private:
-    std::vector<uint32_t> utf16ToByte_;
-    size_t sourceSize_ = 0;
-    uint32_t utf16Length_ = 0;
-    bool asciiOnly_ = false;
-};
-
-uint64_t mixCacheHashByte(uint64_t hash, unsigned char value) noexcept {
-    hash ^= value;
-    return hash * 0x100000001b3ULL;
+    return length;
 }
 
 // Blocks that end at the end of the input are skipped: their extent may
-// depend on EOF termination rather than on the slice itself.
+// depend on EOF termination rather than on the slice itself. The cache
+// validates the complete previous source prefix before these keys are used.
 std::optional<BlockFragmentKey> makeFragmentKey(
-    const std::shared_ptr<InternalMarkdownNode>& node,
-    const std::string& source,
-    const SourceUtf16ByteIndex& byteIndex,
+    const InternalMarkdownNode* node,
     uint32_t utf16Length,
     uint8_t parserFlags
 ) {
+    if (node == nullptr) return std::nullopt;
     if (node->end <= node->beg) return std::nullopt;
     if (node->end >= utf16Length) return std::nullopt;
 
-    const size_t byteBeg = byteIndex.byteOffset(node->beg);
-    const size_t byteEnd = byteIndex.byteOffset(node->end);
-    if (byteEnd <= byteBeg || byteEnd > source.size()) return std::nullopt;
-
-    const auto* bytes = reinterpret_cast<const unsigned char*>(source.data()) + byteBeg;
-    uint64_t hash = 0xcbf29ce484222325ULL;
-    for (size_t index = 0; index < byteEnd - byteBeg; index++) {
-        hash = mixCacheHashByte(hash, bytes[index]);
-    }
-
     BlockFragmentKey key;
-    key.sliceHash = hash;
     key.beg = node->beg;
     key.end = node->end;
     key.nodeType = static_cast<uint16_t>(static_cast<int>(node->type));
     key.parserFlags = parserFlags;
     return key;
+}
+
+uint64_t mixCacheHashByte(uint64_t hash, unsigned char value) noexcept {
+    hash ^= value;
+    return hash * 0x100000001b3ULL;
 }
 
 uint8_t parserFlagBits(const InternalParserOptions& options) noexcept {
@@ -368,6 +365,30 @@ public:
     ~MarkdownSerializationCache() = default;
     MarkdownSerializationCache(const MarkdownSerializationCache&) = delete;
     MarkdownSerializationCache& operator=(const MarkdownSerializationCache&) = delete;
+
+    bool canReuseFor(std::string_view source, uint8_t parserFlags) const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!hasPreviousSource_ || source.size() <= previousSourceSize_) return false;
+        if (previousParserFlags_ != parserFlags) return false;
+        return hashSource(source.substr(0, previousSourceSize_)) == previousSourceHash_;
+    }
+
+    void rememberSource(std::string_view source, uint8_t parserFlags) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        const bool preservesPrefix = hasPreviousSource_ &&
+            source.size() > previousSourceSize_ &&
+            previousParserFlags_ == parserFlags &&
+            hashSource(source.substr(0, previousSourceSize_)) == previousSourceHash_;
+        if (!preservesPrefix) {
+            lru_.clear();
+            index_.clear();
+            totalBytes_ = 0;
+        }
+        hasPreviousSource_ = true;
+        previousSourceSize_ = source.size();
+        previousSourceHash_ = hashSource(source);
+        previousParserFlags_ = parserFlags;
+    }
 
     std::shared_ptr<const std::string> get(const BlockFragmentKey& key) {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -413,10 +434,22 @@ private:
     static constexpr size_t kMaxCacheEntries = 512;
     static constexpr size_t kMaxCacheTotalBytes = 4 * 1024 * 1024;
 
-    std::mutex mutex_;
+    static uint64_t hashSource(std::string_view source) noexcept {
+        uint64_t hash = 0xcbf29ce484222325ULL;
+        for (const unsigned char value : source) {
+            hash = mixCacheHashByte(hash, value);
+        }
+        return hash;
+    }
+
+    mutable std::mutex mutex_;
     std::list<Entry> lru_;
     std::unordered_map<BlockFragmentKey, std::list<Entry>::iterator, BlockFragmentKey::Hash> index_;
     size_t totalBytes_ = 0;
+    bool hasPreviousSource_ = false;
+    size_t previousSourceSize_ = 0;
+    uint64_t previousSourceHash_ = 0;
+    uint8_t previousParserFlags_ = 0;
 };
 
 namespace {
@@ -426,10 +459,11 @@ void appendNodeJson(
     const std::shared_ptr<InternalMarkdownNode>& root,
     const std::string& source,
     const InternalParserOptions& options,
-    MarkdownSerializationCache& cache
+    MarkdownSerializationCache& cache,
+    bool useSerializationCache
 ) {
     struct Frame {
-        std::shared_ptr<InternalMarkdownNode> node;
+        const InternalMarkdownNode* node = nullptr;
         size_t nextChild = 0;
         bool opened = false;
         bool hasChildren = false;
@@ -439,13 +473,14 @@ void appendNodeJson(
 
     const bool includeOffsets = options.sourceOffsets;
     const uint8_t parserFlags = parserFlagBits(options);
-    const bool cacheable = includeOffsets && !mayContainReferenceDefinitions(source);
-    const SourceUtf16ByteIndex byteIndex(source);
-    const uint32_t utf16Length = byteIndex.utf16Length();
+    const bool cacheable = useSerializationCache &&
+        includeOffsets &&
+        !mayContainReferenceDefinitions(source);
+    const uint32_t utf16Length = cacheable ? utf16LengthForCache(source) : 0;
 
     std::vector<Frame> frames;
     Frame rootFrame{};
-    rootFrame.node = root;
+    rootFrame.node = root.get();
     frames.push_back(std::move(rootFrame));
     size_t nodeCount = 0;
     size_t childSlotCount = 0;
@@ -465,7 +500,7 @@ void appendNodeJson(
 
             output.push('{');
             output.append("\"type\":\"");
-            output.append(::NitroMarkdown::nodeTypeToString(node->type));
+            output.append(::NitroMarkdown::nodeTypeToStringView(node->type));
             output.push('"');
 
             if (includeOffsets) {
@@ -483,7 +518,7 @@ void appendNodeJson(
             if (node->checked.has_value()) appendBoolField(output, "checked", node->checked.value());
             if (node->isHeader.has_value()) appendBoolField(output, "isHeader", node->isHeader.value());
             if (node->align.has_value()) {
-                const std::string alignStr = ::NitroMarkdown::textAlignToString(node->align.value());
+                const std::string_view alignStr = ::NitroMarkdown::textAlignToStringView(node->align.value());
                 if (!alignStr.empty()) appendStringField(output, "align", alignStr);
             }
             frame.hasChildren = !node->children.empty();
@@ -506,12 +541,16 @@ void appendNodeJson(
                 );
             }
             if (frame.nextChild > 0) output.push(',');
-            auto child = frame.node->children[frame.nextChild++];
+            const auto* child = frame.node->children[frame.nextChild++].get();
 
             if (frames.size() == 1) {
                 std::optional<BlockFragmentKey> key;
                 if (cacheable) {
-                    key = makeFragmentKey(child, source, byteIndex, utf16Length, parserFlags);
+                    key = makeFragmentKey(
+                        child,
+                        utf16Length,
+                        parserFlags
+                    );
                 }
                 if (key.has_value()) {
                     const auto cached = cache.get(key.value());
@@ -521,7 +560,7 @@ void appendNodeJson(
                     }
                 }
                 Frame childFrame;
-                childFrame.node = std::move(child);
+                childFrame.node = child;
                 childFrame.outputMark = output.size();
                 childFrame.captureKey = std::move(key);
                 frames.push_back(std::move(childFrame));
@@ -529,7 +568,7 @@ void appendNodeJson(
             }
 
             Frame nestedFrame{};
-            nestedFrame.node = std::move(child);
+            nestedFrame.node = child;
             frames.push_back(std::move(nestedFrame));
             continue;
         }
@@ -541,6 +580,50 @@ void appendNodeJson(
         }
         frames.pop_back();
     }
+}
+
+template <typename Writer>
+void appendNodeJsonFast(
+    Writer& output,
+    const std::shared_ptr<InternalMarkdownNode>& node,
+    bool includeOffsets
+) {
+    if (!node) throw std::runtime_error("Markdown AST contains a null node");
+
+    output.push('{');
+    output.append("\"type\":\"");
+    output.append(::NitroMarkdown::nodeTypeToStringView(node->type));
+    output.push('"');
+
+    if (includeOffsets) {
+        appendOffsetField(output, "beg", node->beg);
+        appendOffsetField(output, "end", node->end);
+    }
+    if (node->content.has_value()) appendStringField(output, "content", node->content.value());
+    if (node->level.has_value()) appendIntField(output, "level", node->level.value());
+    if (node->href.has_value()) appendStringField(output, "href", node->href.value());
+    if (node->title.has_value()) appendStringField(output, "title", node->title.value());
+    if (node->alt.has_value()) appendStringField(output, "alt", node->alt.value());
+    if (node->language.has_value()) appendStringField(output, "language", node->language.value());
+    if (node->ordered.has_value()) appendBoolField(output, "ordered", node->ordered.value());
+    if (node->start.has_value()) appendIntField(output, "start", node->start.value());
+    if (node->checked.has_value()) appendBoolField(output, "checked", node->checked.value());
+    if (node->isHeader.has_value()) appendBoolField(output, "isHeader", node->isHeader.value());
+    if (node->align.has_value()) {
+        const std::string_view alignStr = ::NitroMarkdown::textAlignToStringView(node->align.value());
+        if (!alignStr.empty()) appendStringField(output, "align", alignStr);
+    }
+
+    if (!node->children.empty()) {
+        output.append(",\"children\":[");
+        for (size_t index = 0; index < node->children.size(); index++) {
+            if (index > 0) output.push(',');
+            appendNodeJsonFast(output, node->children[index], includeOffsets);
+        }
+        output.push(']');
+    }
+
+    output.push('}');
 }
 
 } // namespace
@@ -557,7 +640,7 @@ std::string HybridMarkdownParser::parse(const std::string& text) {
     InternalParserOptions opts{.gfm = true, .math = true, .html = false};
 
     auto ast = parser_->parse(text, opts);
-    return nodeToJson(ast, text, opts);
+    return nodeToJson(ast, text, opts, false);
 }
 
 std::string HybridMarkdownParser::parseWithOptions(const std::string& text, const ParserOptions& options) {
@@ -569,7 +652,29 @@ std::string HybridMarkdownParser::parseWithOptions(const std::string& text, cons
     internalOpts.maxInputLength = resolveMaxInputBytes(options.maxInputLength);
 
     auto ast = parser_->parse(text, internalOpts);
-    return nodeToJson(ast, text, internalOpts);
+    return nodeToJson(ast, text, internalOpts, false);
+}
+
+std::string HybridMarkdownParser::parseForStreaming(const std::string& text) {
+    InternalParserOptions opts{.gfm = true, .math = true, .html = false};
+
+    auto ast = parser_->parse(text, opts);
+    return nodeToJson(ast, text, opts, true);
+}
+
+std::string HybridMarkdownParser::parseWithOptionsForStreaming(
+    const std::string& text,
+    const ParserOptions& options
+) {
+    InternalParserOptions internalOpts;
+    internalOpts.gfm = options.gfm.value_or(true);
+    internalOpts.math = options.math.value_or(true);
+    internalOpts.html = options.html.value_or(false);
+    internalOpts.sourceOffsets = options.sourceOffsets.value_or(true);
+    internalOpts.maxInputLength = resolveMaxInputBytes(options.maxInputLength);
+
+    auto ast = parser_->parse(text, internalOpts);
+    return nodeToJson(ast, text, internalOpts, true);
 }
 
 std::string HybridMarkdownParser::extractPlainText(const std::string& text) {
@@ -594,10 +699,42 @@ std::string HybridMarkdownParser::extractPlainTextWithOptions(const std::string&
 std::string HybridMarkdownParser::nodeToJson(
     const std::shared_ptr<InternalMarkdownNode>& node,
     const std::string& source,
-    const InternalParserOptions& options
+    const InternalParserOptions& options,
+    bool allowSerializationCache
 ) {
+    const uint8_t parserFlags = parserFlagBits(options);
+    const bool useSerializationCache = allowSerializationCache &&
+        options.sourceOffsets &&
+        cache_->canReuseFor(source, parserFlags);
+
+    if (!allowSerializationCache || !useSerializationCache) {
+        FastJsonWriter writer;
+        const size_t reserveSize = source.size() > (kMaxJsonSize - 256) / 2
+            ? kMaxJsonSize
+            : std::max<size_t>(4096, source.size() * 2 + 256);
+        writer.reserve(reserveSize);
+        appendNodeJsonFast(writer, node, options.sourceOffsets);
+        if (writer.size() > kMaxJsonSize) throwJsonSizeError(writer.size());
+        if (allowSerializationCache && options.sourceOffsets) {
+            cache_->rememberSource(source, parserFlags);
+        }
+        return std::move(writer).take();
+    }
+
     BoundedJsonWriter writer;
-    appendNodeJson(writer, node, source, options, *cache_);
+    const size_t reserveSize = source.size() > (kMaxJsonSize - 256) / 2
+        ? kMaxJsonSize
+        : std::max<size_t>(4096, source.size() * 2 + 256);
+    writer.reserve(reserveSize);
+    appendNodeJson(
+        writer,
+        node,
+        source,
+        options,
+        *cache_,
+        useSerializationCache
+    );
+    cache_->rememberSource(source, parserFlags);
     return std::move(writer).take();
 }
 

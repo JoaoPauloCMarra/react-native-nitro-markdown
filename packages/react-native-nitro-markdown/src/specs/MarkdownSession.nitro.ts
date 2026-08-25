@@ -1,4 +1,5 @@
 import type { HybridObject } from "react-native-nitro-modules";
+import type { ParserOptions } from "../Markdown.nitro";
 
 export type MarkdownSessionListener = (from: number, to: number) => void;
 
@@ -15,6 +16,14 @@ export interface MarkdownSession extends HybridObject<{
    * surrogate pair throws an `invalid_range` error instead of rounding.
    */
   getTextRange(from: number, to: number): string;
+
+  /**
+   * Parses the current native buffer without copying the full document
+   * through JavaScript. This is used by the streaming renderer.
+   */
+  parse(): string;
+  /** Parses the current native buffer with parser options. */
+  parseWithOptions(options: ParserOptions): string;
 
   highlightPosition: number;
 

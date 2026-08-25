@@ -7,11 +7,14 @@ external is fetched at install or build time; the engine ships as package source
 ## Upstream
 
 - Project: md4c — Markdown parser for C (https://github.com/mity/md4c)
-- Author: Martin Mitáš, © 2016–2024
+- Author: Martin Mitáš, © 2016–2026
 - License: MIT (retained in the `nitromd.h` / `nitromd.c` headers)
 
-The exact upstream commit was not tagged in the source when vendored; record the
-upstream tag/commit here whenever the engine is next synced.
+- Synced from upstream `master` at commit
+  `3e7ace20d262028baf702db9850520f017c25591` (2026-08-17).
+- This commit contains the upstream 0.5.3 changes and the current work-in-progress
+  parser fixes and extensions. NitroMarkdown keeps its existing enabled flag set,
+  so new upstream extensions remain opt-in and do not change the package grammar.
 
 ## Local modifications
 
@@ -24,6 +27,10 @@ The fork is deliberately minimal so upstream fixes stay easy to re-apply:
    `md_parse` (everything else is `static`). `nitromd.h` defines
    `md_parse` → `nitromd_parse` so two md4c-based static libraries can link into
    one binary without a duplicate-symbol error.
+3. **Source-offset callback extension** — NitroMarkdown retains the callback
+   `MD_OFFSET` argument and block range fields that its AST wrapper needs. The
+   current upstream parser does not expose those callback offsets, so this
+   small ABI-local change is re-applied when syncing upstream.
 
 Everything else is stock md4c. The C++ wrapper lives in
 `../core/NitroMD4CParser.{hpp,cpp}` and is the only intended entry point.
@@ -41,4 +48,4 @@ Everything else is stock md4c. The C++ wrapper lives in
 1. Diff the new upstream `md4c.c` / `md4c.h` against `nitromd.c` / `nitromd.h`.
 2. Re-apply only the two local changes above (the `#include "nitromd.h"` line in
    `nitromd.c` and the `#define md_parse nitromd_parse` block in `nitromd.h`).
-3. Run `bun run test:cpp` and record the synced upstream tag/commit above.
+3. Run `bun run test:cpp` and update the synced upstream commit above.

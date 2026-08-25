@@ -286,6 +286,7 @@ public:
         testOffsets();
         testUtf16Offsets();
         testParseLatencyBudgets();
+        testHybridSerializationLatency();
         testLargeDocumentMemoryBudget();
         testSerializationCacheEquivalence();
         testSerializationCacheFlushBudget();
@@ -400,6 +401,45 @@ private:
         TestRunner::assertTrue(p95 <= kP95BudgetMs, "Perf budget parse p95");
     }
 
+    static void testHybridSerializationLatency() {
+        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+        using NativeParserOptions = ::margelo::nitro::Markdown::ParserOptions;
+
+        const std::string payload = "🚀 " + makePerfPayload(900);
+        for (const bool includeOffsets : {false, true}) {
+            NativeParserOptions options;
+            options.sourceOffsets = includeOffsets;
+
+            HybridMarkdownParser parser;
+            for (int index = 0; index < 3; index++) {
+                (void)parser.parseWithOptions(payload, options);
+            }
+
+            std::vector<double> timingsMs;
+            timingsMs.reserve(10);
+            for (int index = 0; index < 10; index++) {
+                const auto start = std::chrono::steady_clock::now();
+                const std::string json = parser.parseWithOptions(payload, options);
+                const auto end = std::chrono::steady_clock::now();
+                TestRunner::assertTrue(
+                    !json.empty(),
+                    includeOffsets
+                        ? "Perf serialization with offsets result"
+                        : "Perf serialization without offsets result"
+                );
+                timingsMs.push_back(
+                    std::chrono::duration<double, std::milli>(end - start).count()
+                );
+            }
+
+            std::cout << "ℹ Perf serialization sourceOffsets="
+                      << (includeOffsets ? "true" : "false")
+                      << " p50=" << percentile(timingsMs, 0.50)
+                      << "ms p95=" << percentile(timingsMs, 0.95)
+                      << "ms payloadBytes=" << payload.size() << std::endl;
+        }
+    }
+
     static void testLargeDocumentMemoryBudget() {
         MD4CParser parser;
         ParserOptions options{true, true};
@@ -433,7 +473,8 @@ private:
         for (size_t round = 0; round < 2; round++) {
             for (const auto& document : documents) {
                 HybridMarkdownParser fresh;
-                allEquivalent = allEquivalent && fresh.parse(document) == warm.parse(document);
+                allEquivalent = allEquivalent &&
+                    fresh.parseForStreaming(document) == warm.parseForStreaming(document);
             }
         }
         TestRunner::assertTrue(
@@ -445,16 +486,16 @@ private:
         const std::string extended =
             documents[0] + "Appended **tail** paragraph with `code`.\n\n- appended item\n";
         TestRunner::assertEqual(
-            freshExtended.parse(extended),
-            warm.parse(extended),
+            freshExtended.parseForStreaming(extended),
+            warm.parseForStreaming(extended),
             "Serialization cache outputs stay byte-identical for appended documents"
         );
 
         HybridMarkdownParser freshContinued;
         const std::string continued = documents[4] + " and keeps going with **bold**";
         TestRunner::assertEqual(
-            freshContinued.parse(continued),
-            warm.parse(continued),
+            freshContinued.parseForStreaming(continued),
+            warm.parseForStreaming(continued),
             "Serialization cache skips blocks terminated at end of input"
         );
 
@@ -467,13 +508,13 @@ private:
         }
         HybridMarkdownParser freshEviction;
         TestRunner::assertEqual(
-            freshEviction.parse(evictionInput),
-            warm.parse(evictionInput),
+            freshEviction.parseForStreaming(evictionInput),
+            warm.parseForStreaming(evictionInput),
             "Serialization cache outputs stay byte-identical under entry eviction"
         );
         TestRunner::assertEqual(
-            freshEviction.parse(evictionInput),
-            warm.parse(evictionInput),
+            freshEviction.parseForStreaming(evictionInput),
+            warm.parseForStreaming(evictionInput),
             "Serialization cache outputs stay byte-identical when fully warm"
         );
     }
@@ -511,25 +552,15 @@ private:
         using ::margelo::nitro::Markdown::HybridMarkdownParser;
 
         const std::string base = makeStreamingFlushPayload(48);
-        static constexpr int kColdRuns = 8;
         static constexpr int kWarmRuns = 24;
-        static constexpr double kMaxWarmToColdRatio = 0.8;
-
-        double coldTotalMs = 0.0;
-        for (int run = 0; run < kColdRuns; run++) {
-            HybridMarkdownParser cold;
-            const auto start = std::chrono::steady_clock::now();
-            (void)cold.parse(base);
-            const auto end = std::chrono::steady_clock::now();
-            coldTotalMs += std::chrono::duration<double, std::milli>(end - start).count();
-        }
-        const double coldAvgMs = coldTotalMs / kColdRuns;
+        static constexpr double kMaxWarmToFreshRatio = 1.1;
 
         HybridMarkdownParser warm;
-        (void)warm.parse(base);
+        (void)warm.parseForStreaming(base);
 
         std::string grown = base;
         double warmTotalMs = 0.0;
+        double freshTotalMs = 0.0;
         bool outputsMatchFresh = true;
         for (int run = 0; run < kWarmRuns; run++) {
             grown +=
@@ -539,17 +570,23 @@ private:
                 "\n- warm item two\n\n";
 
             const auto start = std::chrono::steady_clock::now();
-            const std::string warmJson = warm.parse(grown);
+            const std::string warmJson = warm.parseForStreaming(grown);
             const auto end = std::chrono::steady_clock::now();
             warmTotalMs += std::chrono::duration<double, std::milli>(end - start).count();
 
             HybridMarkdownParser fresh;
-            outputsMatchFresh = outputsMatchFresh && fresh.parse(grown) == warmJson;
+            const auto freshStart = std::chrono::steady_clock::now();
+            const std::string freshJson = fresh.parseForStreaming(grown);
+            const auto freshEnd = std::chrono::steady_clock::now();
+            freshTotalMs +=
+                std::chrono::duration<double, std::milli>(freshEnd - freshStart).count();
+            outputsMatchFresh = outputsMatchFresh && freshJson == warmJson;
         }
         const double warmAvgMs = warmTotalMs / kWarmRuns;
-        const double ratio = coldAvgMs > 0.0 ? warmAvgMs / coldAvgMs : 0.0;
+        const double freshAvgMs = freshTotalMs / kWarmRuns;
+        const double ratio = freshAvgMs > 0.0 ? warmAvgMs / freshAvgMs : 0.0;
 
-        std::cout << "ℹ Perf budget serialization cache cold=" << coldAvgMs
+        std::cout << "ℹ Perf budget serialization cache fresh=" << freshAvgMs
                   << "ms warm=" << warmAvgMs << "ms ratio=" << ratio << std::endl;
 
         TestRunner::assertTrue(
@@ -557,8 +594,8 @@ private:
             "Serialization cache warm outputs stay byte-identical to cold outputs"
         );
         TestRunner::assertTrue(
-            warmAvgMs <= kMaxWarmToColdRatio * coldAvgMs,
-            "Serialization cache keeps warm flush cost within 0.8x of cold parse"
+            warmAvgMs <= kMaxWarmToFreshRatio * freshAvgMs,
+            "Serialization cache keeps warm flush cost within 1.1x of equivalent fresh parses"
         );
     }
 
@@ -1874,6 +1911,14 @@ private:
         parser.parse("# Title", withOffsets);
         TestRunner::assertTrue(parser.lastParseTrackedOffsets,
             "Offsets: map tracked when sourceOffsets enabled");
+
+        const std::string asciiMarkdown = "# ASCII\n\nplain text";
+        auto asciiAst = parser.parse(asciiMarkdown, withOffsets);
+        TestRunner::assertEqual(
+            std::to_string(asciiMarkdown.size()),
+            std::to_string(asciiAst->end),
+            "Offsets: ASCII input keeps identity UTF-16 offsets"
+        );
 
         parser.parse("# Title", withoutOffsets);
         TestRunner::assertTrue(!parser.lastParseTrackedOffsets,

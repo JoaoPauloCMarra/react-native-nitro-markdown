@@ -1,5 +1,6 @@
 #pragma once
 
+#include "HybridMarkdownParser.hpp"
 #include "HybridMarkdownSessionSpec.hpp"
 #include <cstddef>
 #include <functional>
@@ -23,6 +24,8 @@ public:
     std::string getAllText() override;
     double getLength() override;
     std::string getTextRange(double from, double to) override;
+    std::string parse() override;
+    std::string parseWithOptions(const ParserOptions& options) override;
     std::function<void()> addListener(
         const std::function<void(double, double)>& listener
     ) override;
@@ -41,6 +44,8 @@ private:
 
     mutable std::mutex mutex_;
     std::string buffer_;
+    size_t bufferUtf16Length_ = 0;
+    std::unique_ptr<HybridMarkdownParser> parser_;
     double highlightPosition_ = 0.0;
     bool disposed_ = false;
     size_t nextListenerId_ = 0;

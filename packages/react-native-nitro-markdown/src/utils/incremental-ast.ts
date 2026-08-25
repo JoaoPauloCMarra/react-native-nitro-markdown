@@ -243,9 +243,13 @@ const parseAstWithStableNodes = (
   previousAst: MarkdownNode,
   text: string,
   options?: ParserOptions,
+  parseCurrent?: () => MarkdownNode,
 ): MarkdownNode => {
   return materializeIncrementalAst(
-    reuseStableAstNodes(previousAst, parseAst(text, options)),
+    reuseStableAstNodes(
+      previousAst,
+      parseCurrent ? parseCurrent() : parseAst(text, options),
+    ),
     options,
   );
 };
@@ -256,6 +260,7 @@ export type IncrementalAstInput = {
   options?: ParserOptions;
   previousAst: MarkdownNode;
   previousText: string;
+  parseCurrent?: () => MarkdownNode;
 };
 
 export const getNextStreamAst = ({
@@ -264,9 +269,10 @@ export const getNextStreamAst = ({
   options,
   previousAst,
   previousText,
+  parseCurrent,
 }: IncrementalAstInput): MarkdownNode => {
   if (!allowIncremental || !nextText.startsWith(previousText)) {
-    return parseAstWithStableNodes(previousAst, nextText, options);
+    return parseAstWithStableNodes(previousAst, nextText, options, parseCurrent);
   }
 
   const appendedChunk = nextText.slice(previousText.length);
@@ -292,7 +298,7 @@ export const getNextStreamAst = ({
 
   if (!PLAIN_TEXT_APPEND_PATTERN.test(appendedChunk)) {
     if (endsAtBlockBoundary(previousText)) {
-      return parseAstWithStableNodes(previousAst, nextText, options);
+      return parseAstWithStableNodes(previousAst, nextText, options, parseCurrent);
     }
 
     const textAppendedAst = appendPlainTextToAst(
@@ -306,12 +312,12 @@ export const getNextStreamAst = ({
   }
 
   if (insideFencedCodeBlock) {
-    return parseAstWithStableNodes(previousAst, nextText, options);
+    return parseAstWithStableNodes(previousAst, nextText, options, parseCurrent);
   }
 
   // Correctness-first fallback: full reparse for all non-trivial appends.
   // Incremental append is only used for plain text chunks at the true trailing leaf.
-  return parseAstWithStableNodes(previousAst, nextText, options);
+  return parseAstWithStableNodes(previousAst, nextText, options, parseCurrent);
 };
 
 export const parseMarkdownAst = (

@@ -5,6 +5,7 @@
 #include <optional>
 #include <memory>
 #include <cstddef>
+#include <string_view>
 
 namespace NitroMarkdown {
 
@@ -46,7 +47,7 @@ enum class NodeType {
     HtmlInline
 };
 
-inline std::string nodeTypeToString(NodeType type) {
+inline std::string_view nodeTypeToStringView(NodeType type) {
     switch (type) {
         case NodeType::Document: return "document";
         case NodeType::Heading: return "heading";
@@ -79,6 +80,10 @@ inline std::string nodeTypeToString(NodeType type) {
     return "unknown";
 }
 
+inline std::string nodeTypeToString(NodeType type) {
+    return std::string(nodeTypeToStringView(type));
+}
+
 enum class TextAlign {
     Default,
     Left,
@@ -86,13 +91,17 @@ enum class TextAlign {
     Right
 };
 
-inline std::string textAlignToString(TextAlign align) {
+inline std::string_view textAlignToStringView(TextAlign align) {
     switch (align) {
         case TextAlign::Left: return "left";
         case TextAlign::Center: return "center";
         case TextAlign::Right: return "right";
         default: return "";
     }
+}
+
+inline std::string textAlignToString(TextAlign align) {
+    return std::string(textAlignToStringView(align));
 }
 
 struct MarkdownNode {

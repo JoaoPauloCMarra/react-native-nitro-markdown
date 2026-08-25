@@ -12,19 +12,13 @@
  */
 import { NitroModules } from "react-native-nitro-modules";
 import type { MarkdownParser, ParserOptions } from "./Markdown.nitro";
-import {
-  MAX_PARSE_INPUT_LENGTH,
-  MarkdownError,
-  invalidInputLengthError,
-  inputTooLargeError,
-  toMarkdownError,
-  utf8ByteLength,
-} from "./errors";
+import type { MarkdownSession } from "./specs/MarkdownSession.nitro";
+import { MarkdownError, toMarkdownError } from "./errors";
 import {
   cloneMarkdownNode,
-  assertAcyclicMarkdownNode,
   freezeMarkdownNode,
 } from "./utils/freeze-ast";
+import { assertInputWithinBounds } from "./utils/parse-input";
 
 export type { ParserOptions } from "./Markdown.nitro";
 
@@ -102,6 +96,24 @@ export type MarkdownNode = {
   children?: MarkdownNode[];
 };
 
+/** A parsed AST whose nodes include JavaScript UTF-16 source ranges. */
+export type MarkdownNodeWithSourceOffsets = Omit<
+  MarkdownNode,
+  "beg" | "end" | "children"
+> & {
+  beg: number;
+  end: number;
+  children?: MarkdownNodeWithSourceOffsets[];
+};
+
+/** A parsed AST produced with `sourceOffsets: false`. */
+export type MarkdownNodeWithoutSourceOffsets = Omit<
+  MarkdownNode,
+  "beg" | "end" | "children"
+> & {
+  children?: MarkdownNodeWithoutSourceOffsets[];
+};
+
 function reportNativeParserFailure(methodName: string, error?: unknown): void {
   if (__DEV__) {
     console.error(
@@ -111,28 +123,22 @@ function reportNativeParserFailure(methodName: string, error?: unknown): void {
   }
 }
 
-function resolveMaxInputLength(options?: ParserOptions): number {
-  const value = options?.maxInputLength;
-  if (value === undefined || value === 0) return MAX_PARSE_INPUT_LENGTH;
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw invalidInputLengthError(value);
-  }
-  return Math.min(value, MAX_PARSE_INPUT_LENGTH);
-}
-
-function assertInputWithinBounds(text: string, options?: ParserOptions): void {
-  const maxBytes = resolveMaxInputLength(options);
-  const actualBytes = utf8ByteLength(text);
-  if (actualBytes > maxBytes) {
-    throw inputTooLargeError(actualBytes, maxBytes);
-  }
-}
-
 function parseJsonAst(jsonStr: string, freezeAst = false): MarkdownNode {
   try {
-    const ast = JSON.parse(jsonStr) as MarkdownNode;
-    assertAcyclicMarkdownNode(ast);
-    return freezeAst ? freezeMarkdownNode(ast) : ast;
+    const ast = JSON.parse(jsonStr) as unknown;
+    if (
+      typeof ast !== "object" ||
+      ast === null ||
+      Array.isArray(ast) ||
+      typeof Reflect.get(ast, "type") !== "string"
+    ) {
+      throw new MarkdownError(
+        "invalid_json",
+        "parse",
+        "[NitroMarkdown] native parser returned an invalid root node",
+      );
+    }
+    return freezeAst ? freezeMarkdownNode(ast as MarkdownNode) : (ast as MarkdownNode);
   } catch (error) {
     if (error instanceof MarkdownError) throw error;
     throw new MarkdownError(
@@ -155,21 +161,33 @@ try {
 export { MarkdownParserModule };
 
 /**
- * Parse markdown text into an AST.
+ * Parse markdown text into an AST with JavaScript UTF-16 source ranges.
  * @param text - The markdown text to parse
  * @returns The root node of the parsed AST
  */
-export function parseMarkdown(text: string): MarkdownNode;
+export function parseMarkdown(text: string): MarkdownNodeWithSourceOffsets;
 /**
- * Parse markdown text with custom options.
+ * Parse markdown text without source ranges.
  * @param text - The markdown text to parse
- * @param options - Parser options (gfm, math, html)
+ * @param options - Parser options with `sourceOffsets: false`
  * @returns The root node of the parsed AST
  */
 export function parseMarkdown(
   text: string,
-  options: ParserOptions,
-): MarkdownNode;
+  options: ParserOptions & { sourceOffsets: false },
+): MarkdownNodeWithoutSourceOffsets;
+/**
+ * Parse markdown text with source ranges enabled or with an unknown offset
+ * setting.
+ * @param text - The markdown text to parse
+ * @param options - Parser options (gfm, math, html, sourceOffsets)
+ * @returns The root node of the parsed AST
+ */
+export function parseMarkdown(
+  text: string,
+  options: ParserOptions & { sourceOffsets?: true | undefined },
+): MarkdownNodeWithSourceOffsets;
+export function parseMarkdown(text: string, options: ParserOptions): MarkdownNode;
 export function parseMarkdown(
   text: string,
   options?: ParserOptions,
@@ -198,12 +216,20 @@ export function parseMarkdown(
   );
 }
 
-/**
- * Parse markdown text with custom options.
- * @param text - The markdown text to parse
- * @param options - Parser options (gfm, math, html)
- * @returns The root node of the parsed AST
- */
+/** Parse markdown text with source ranges enabled or with an unknown offset setting. */
+export function parseMarkdownWithOptions(
+  text: string,
+  options: ParserOptions & { sourceOffsets?: true | undefined },
+): MarkdownNodeWithSourceOffsets;
+/** Parse markdown text without source ranges. */
+export function parseMarkdownWithOptions(
+  text: string,
+  options: ParserOptions & { sourceOffsets: false },
+): MarkdownNodeWithoutSourceOffsets;
+export function parseMarkdownWithOptions(
+  text: string,
+  options: ParserOptions,
+): MarkdownNode;
 export function parseMarkdownWithOptions(
   text: string,
   options: ParserOptions,
@@ -227,6 +253,38 @@ export function parseMarkdownWithOptions(
     "parse",
     "[NitroMarkdown] parseMarkdownWithOptions: native parser unavailable — check installation.",
   );
+}
+
+/**
+ * Parse the current native MarkdownSession buffer without copying the full
+ * document from native to JavaScript and back to native.
+ *
+ * Older native installations without the session parser methods fall back to
+ * reading the buffer and using the regular parser.
+ */
+export function parseMarkdownSession(
+  session: MarkdownSession,
+  options?: ParserOptions,
+): MarkdownNode {
+  try {
+    if (options != null && typeof session.parseWithOptions === "function") {
+      return parseJsonAst(
+        session.parseWithOptions(options),
+        options.freezeAst === true,
+      );
+    }
+    if (options == null && typeof session.parse === "function") {
+      return parseJsonAst(session.parse(), false);
+    }
+
+    const text = session.getAllText();
+    return options == null
+      ? parseMarkdown(text)
+      : parseMarkdownWithOptions(text, options);
+  } catch (error) {
+    reportNativeParserFailure("parseMarkdownSession", error);
+    throw toMarkdownError(error, "parse");
+  }
 }
 
 /** Extract flattened plain text from the native parser or parsed AST. */

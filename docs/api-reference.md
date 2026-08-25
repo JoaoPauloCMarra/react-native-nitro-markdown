@@ -74,7 +74,7 @@ type ParserOptions = {
   gfm?: boolean; // default true — tables, strikethrough, task lists, autolinks
   math?: boolean; // default true — inline $..$ and block $$..$$
   html?: boolean; // default false — keep raw HTML nodes
-  sourceOffsets?: boolean; // default true — emit beg/end JavaScript UTF-16 indices
+  sourceOffsets?: boolean; // default true — false omits beg/end and skips the UTF-16 map
   maxInputLength?: number; // default 10,485,760 — maximum input length in UTF-8 bytes
   freezeAst?: boolean; // default false — freeze returned nodes and child arrays
 };
@@ -90,13 +90,20 @@ streaming/incremental rendering, which uses offsets to reuse stable nodes
 between reparses. Enabled offsets match JavaScript `String.length` and
 `String.slice`, including for accented text and emoji.
 
+The public TypeScript overloads reflect literal options: the no-options parser
+returns `MarkdownNodeWithSourceOffsets`, while a literal
+`{ sourceOffsets: false }` returns `MarkdownNodeWithoutSourceOffsets`. A broad
+`ParserOptions` variable keeps the safe optional `beg`/`end` shape because its
+runtime value may be either setting.
+
 `freezeAst` is an additive defensive option. The default AST is mutable for
 compatibility with earlier releases; component and cache boundaries still clone
 trees so mutation of one consumer result cannot poison another cached result.
 
 ## Key types
 
-`MarkdownNode`, `MarkdownNodeType`, `HeadingLevel`, `TableCellAlign`,
+`MarkdownNode`, `MarkdownNodeWithSourceOffsets`, `MarkdownNodeWithoutSourceOffsets`,
+`MarkdownNodeType`, `HeadingLevel`, `TableCellAlign`,
 `ParserOptions`, `MarkdownParser`, `MarkdownProps`, `AstTransform`,
 `MarkdownPlugin`, `MarkdownErrorPhase`, `MarkdownParseCompleteResult`,
 `ParseCacheStats`, `MarkdownVirtualizationOptions`, `CustomRenderers`,

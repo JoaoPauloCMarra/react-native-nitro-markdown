@@ -2,7 +2,6 @@
 #include "../nitromd/nitromd.h"
 
 #include <stack>
-#include <memory_resource>
 #include <vector>
 #include <cstring>
 #include <algorithm>
@@ -82,101 +81,56 @@ static size_t utf8SequenceLength(
     return 1;
 }
 
-static std::vector<OFF> createUtf16OffsetMap(
+struct Utf16OffsetRun {
+    size_t byteBeg;
+    size_t byteEnd;
+    OFF utf16Beg;
+    size_t cumulativeExtra;
+};
+
+static std::vector<Utf16OffsetRun> createUtf16OffsetRuns(
     const char* text,
     size_t size
 ) {
-    std::vector<OFF> offsets(size + 1, 0);
+    std::vector<Utf16OffsetRun> runs;
     const auto* bytes = reinterpret_cast<const unsigned char*>(text);
     size_t byteIndex = 0;
     OFF utf16Index = 0;
+    size_t cumulativeExtra = 0;
 
     while (byteIndex < size) {
         const size_t sequenceLength =
             utf8SequenceLength(bytes + byteIndex, size - byteIndex);
-        for (size_t index = 0; index < sequenceLength; index++) {
-            offsets[byteIndex + index] = utf16Index;
+        if (sequenceLength > 1) {
+            const OFF utf16Length = sequenceLength == 4 ? 2 : 1;
+            cumulativeExtra += sequenceLength - utf16Length;
+            runs.push_back({
+                byteIndex,
+                byteIndex + sequenceLength,
+                utf16Index,
+                cumulativeExtra,
+            });
+            utf16Index += utf16Length;
+        } else {
+            utf16Index += 1;
         }
         byteIndex += sequenceLength;
-        utf16Index += sequenceLength == 4 ? 2 : 1;
-        offsets[byteIndex] = utf16Index;
     }
 
-    return offsets;
+    return runs;
 }
 } // namespace
 
-class MarkdownNodeArena;
-
-template <typename T>
-class MarkdownNodeAllocator {
-public:
-    using value_type = T;
-
-    explicit MarkdownNodeAllocator(std::shared_ptr<MarkdownNodeArena> arena) noexcept
-        : arena_(std::move(arena)) {}
-
-    template <typename U>
-    MarkdownNodeAllocator(const MarkdownNodeAllocator<U>& other) noexcept
-        : arena_(other.arena_) {}
-
-    T* allocate(std::size_t count);
-    void deallocate(T* pointer, std::size_t count) noexcept;
-
-    template <typename U>
-    bool operator==(const MarkdownNodeAllocator<U>& other) const noexcept {
-        return arena_ == other.arena_;
-    }
-
-    template <typename U>
-    bool operator!=(const MarkdownNodeAllocator<U>& other) const noexcept {
-        return !(*this == other);
-    }
-
-private:
-    template <typename>
-    friend class MarkdownNodeAllocator;
-
-    std::shared_ptr<MarkdownNodeArena> arena_;
-};
-
-class MarkdownNodeArena final : public std::enable_shared_from_this<MarkdownNodeArena> {
-public:
-    std::shared_ptr<MarkdownNode> make(NodeType type) {
-        return std::allocate_shared<MarkdownNode>(
-            MarkdownNodeAllocator<MarkdownNode>(shared_from_this()),
-            type
-        );
-    }
-
-private:
-    template <typename>
-    friend class MarkdownNodeAllocator;
-
-    std::pmr::unsynchronized_pool_resource resource_;
-};
-
-template <typename T>
-T* MarkdownNodeAllocator<T>::allocate(std::size_t count) {
-    return static_cast<T*>(
-        arena_->resource_.allocate(count * sizeof(T), alignof(T))
-    );
-}
-
-template <typename T>
-void MarkdownNodeAllocator<T>::deallocate(T* pointer, std::size_t count) noexcept {
-    arena_->resource_.deallocate(pointer, count * sizeof(T), alignof(T));
-}
-
 class MD4CParser::Impl {
 public:
-    std::shared_ptr<MarkdownNodeArena> nodeArena;
     std::shared_ptr<MarkdownNode> root;
     std::stack<std::shared_ptr<MarkdownNode>, std::vector<std::shared_ptr<MarkdownNode>>> nodeStack;
     std::string currentText;
     const char* inputText = nullptr;
     size_t inputTextSize = 0;
-    std::vector<OFF> sourceOffsets;
+    std::vector<Utf16OffsetRun> sourceOffsetRuns;
+    bool sourceOffsetsTracked = false;
+    bool sourceOffsetsIdentity = false;
     OFF currentTextBeg = 0;
     OFF lastTextEnd = 0;
     size_t lastTextByteEnd = 0;
@@ -195,7 +149,7 @@ public:
         }
         nodeCount += 1;
         workCount += 1;
-        return nodeArena->make(type);
+        return std::make_shared<MarkdownNode>(type);
     }
 
     void addChild(
@@ -215,7 +169,6 @@ public:
     }
     
     void reset() {
-        nodeArena = std::make_shared<MarkdownNodeArena>();
         nodeCount = 0;
         childSlotCount = 0;
         workCount = 0;
@@ -234,18 +187,43 @@ public:
     void setInput(const char* text, size_t size, bool trackOffsets) {
         inputText = text;
         inputTextSize = size;
-        if (trackOffsets) {
-            sourceOffsets = createUtf16OffsetMap(text, size);
-        } else {
-            sourceOffsets.clear();
-        }
+        sourceOffsetRuns.clear();
+        sourceOffsetsTracked = trackOffsets;
+        sourceOffsetsIdentity = false;
+        if (!trackOffsets) return;
+
+        sourceOffsetRuns = createUtf16OffsetRuns(text, size);
+        sourceOffsetsIdentity = sourceOffsetRuns.empty();
     }
 
     OFF sourceOffset(size_t byteOffset) const {
-        if (sourceOffsets.empty()) return 0;
         const size_t index =
             byteOffset > inputTextSize ? inputTextSize : byteOffset;
-        return sourceOffsets[index];
+        if (!sourceOffsetsTracked) return 0;
+        if (sourceOffsetsIdentity) return static_cast<OFF>(index);
+        if (sourceOffsetRuns.empty()) return static_cast<OFF>(index);
+
+        size_t low = 0;
+        size_t high = sourceOffsetRuns.size();
+        while (low < high) {
+            const size_t middle = low + (high - low) / 2;
+            if (sourceOffsetRuns[middle].byteEnd <= index) {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+
+        const size_t extraBefore = low == 0
+            ? 0
+            : sourceOffsetRuns[low - 1].cumulativeExtra;
+        if (
+            low < sourceOffsetRuns.size() &&
+            index >= sourceOffsetRuns[low].byteBeg
+        ) {
+            return sourceOffsetRuns[low].utf16Beg;
+        }
+        return static_cast<OFF>(index - extraBefore);
     }
 
     std::pair<OFF, OFF> sourceRange(const char* text, MD_SIZE size) {
@@ -470,6 +448,9 @@ public:
                 impl->pushNode(node, off);
                 break;
             }
+
+            default:
+                break;
         }
 
         return 0;
@@ -572,6 +553,9 @@ public:
 
             case MD_SPAN_WIKILINK:
                 return 0;
+
+            default:
+                break;
         }
 
         return 0;

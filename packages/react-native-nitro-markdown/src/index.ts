@@ -2,6 +2,7 @@ export {
   MarkdownParserModule,
   parseMarkdown,
   parseMarkdownWithOptions,
+  parseMarkdownSession,
   extractPlainText,
   extractPlainTextWithOptions,
   getTextContent,
@@ -12,6 +13,8 @@ export {
 } from "./headless";
 export type {
   MarkdownNode,
+  MarkdownNodeWithSourceOffsets,
+  MarkdownNodeWithoutSourceOffsets,
   MarkdownNodeType,
   HeadingLevel,
   TableCellAlign,
