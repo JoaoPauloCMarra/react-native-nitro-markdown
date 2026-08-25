@@ -79,8 +79,8 @@ Nitro Markdown renders real components, so its render cost scales with the
 document. The default string path keeps the native AST internal, plain inline
 runs collapse to fewer native `Text` nodes, and long documents virtualize so
 only the visible screen mounts. On the same development fixtures,
-mount-to-layout measured 233.56 ms for the rich iOS document, 150.63 ms for its
-virtualized first screen, 262.29 ms for rich Android, and 164.96 ms for its
+mount-to-layout measured 217.24 ms for the rich iOS document, 150.50 ms for its
+virtualized first screen, 291.20 ms for rich Android, and 168.69 ms for its
 virtualized first screen. These are target and workload measurements, not
 release-performance guarantees. The example **Bench** tab tracks Nitro's
 render and first-screen times directly.

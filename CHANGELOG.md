@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
-## [0.12.0] - 2026-08-24
+## [0.12.0] - 2026-08-25
 
 ### Breaking changes
 
@@ -62,6 +62,10 @@ stay safe.
 
 ### Fixed
 
+- Native AST serialization initializes every traversal frame explicitly,
+  preventing undefined frame state while walking nested parser output.
+- Text style overrides now remain applied to inline text rendered beside inline
+  math without changing custom renderer behavior.
 - Markdown JSON serialization now counts actual emitted bytes against the
   64 MiB cap, so valid near-limit output is accepted without estimate-based
   false rejections.
