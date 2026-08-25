@@ -5,10 +5,11 @@
 Most React Native Markdown libraries parse in **JavaScript** (markdown-it,
 marked, commonmark) and render React components. Nitro Markdown moves parsing
 into a **native C++ engine** (md4c, vendored as `nitromd`) over JSI, then renders
-flexible React Native components on top. You get the parse speed of native with
+flexible React Native components on top. You get a native parser boundary with
 the flexibility of components — plus first-class streaming and headless APIs.
 
-- ⚡ **Native C++ parsing** — CommonMark + GFM, multiple times faster than JS parsers.
+- ⚡ **Native C++ parsing** — CommonMark + GFM with a reproducible benchmark
+  harness; measure on the device and build configuration you ship.
 - 🔀 **Streaming** — purpose-built for token-by-token LLM / chat output ([streaming](./streaming.md)).
 - 🧩 **Headless AST** — parse without rendering, for search/validation/indexing ([headless](./headless.md)).
 - 🎨 **Real components** — theme, override per node, or swap whole renderers ([customization](./customization.md)).
@@ -18,19 +19,21 @@ the flexibility of components — plus first-class streaming and headless APIs.
 ## Parse benchmark
 
 Parsing the same ~320 KB Markdown document, measured in the example app's
-**Bench** tab on an iOS Simulator (median of repeated runs; absolute numbers vary
-by device, the ratios are stable):
+**Bench** tab on the iPhone 17 iOS Simulator in a development build. Absolute
+numbers vary by device, build, and workload; use the example benchmark for a
+release decision.
 
-| Parser           | Time       | vs Nitro      |
-| ---------------- | ---------- | ------------- |
-| **Nitro (C++)**  | **~41 ms** | —             |
-| CommonMark (JS)  | ~113 ms    | ~2.8× slower  |
-| Markdown-It (JS) | ~184 ms    | ~4.5× slower  |
-| Marked (JS)      | ~814 ms    | ~19.8× slower |
+| Parser           | Time   |
+| ---------------- | ------ |
+| **Nitro (C++)**  | ~242 ms |
+| CommonMark (JS)  | ~117 ms |
+| Markdown-It (JS) | ~191 ms |
+| Marked (JS)      | ~1,036 ms |
 
-Math rendering (via `ratex-react-native`) is ~10× faster than legacy MathJax/SVG
-(~233 ms vs ~2517 ms in the same run). Reproduce any of this yourself: run the
-example app and tap **Run Benchmark**.
+Math rendering via `ratex-react-native` measured ~350 ms versus ~1,216 ms for
+legacy MathJax/SVG in the same development run. These measurements are not a
+promise of release performance. Reproduce them on your target device by running
+the example app and tapping **Run Benchmark**.
 
 ## Capability matrix
 
