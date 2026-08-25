@@ -444,7 +444,9 @@ void appendNodeJson(
     const uint32_t utf16Length = byteIndex.utf16Length();
 
     std::vector<Frame> frames;
-    frames.push_back({root});
+    Frame rootFrame{};
+    rootFrame.node = root;
+    frames.push_back(std::move(rootFrame));
     size_t nodeCount = 0;
     size_t childSlotCount = 0;
     size_t workCount = 0;
@@ -526,7 +528,9 @@ void appendNodeJson(
                 continue;
             }
 
-            frames.push_back({std::move(child)});
+            Frame nestedFrame{};
+            nestedFrame.node = std::move(child);
+            frames.push_back(std::move(nestedFrame));
             continue;
         }
 

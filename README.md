@@ -9,11 +9,10 @@
 [![Nitro Modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.37.0%20%3C0.38.0-black)](https://nitro.margelo.com/)
 [![TypeScript](https://img.shields.io/badge/typescript-6.0-3178c6)](https://www.typescriptlang.org/)
 
-**The fast Markdown engine for React Native.** Native **C++ parsing** (CommonMark
-
-- GitHub Flavored Markdown), real React Native rendering, first-class
-  **streaming** for LLM/chat output, and a **headless AST** API — powered by
-  [md4c](https://github.com/mity/md4c) and [Nitro Modules](https://nitro.margelo.com/).
+**A native Markdown engine for React Native.** Native **C++ parsing** for
+CommonMark and GitHub Flavored Markdown, real React Native rendering, first-class
+**streaming** for LLM/chat output, and a **headless AST** API — powered by
+[md4c](https://github.com/mity/md4c) and [Nitro Modules](https://nitro.margelo.com/).
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/JoaoPauloCMarra/react-native-nitro-markdown/main/readme/render.png" alt="Nitro Markdown rendering rich GitHub Flavored Markdown natively in React Native" width="250" />
@@ -30,9 +29,10 @@
 
 Most React Native Markdown libraries parse in JavaScript on the JS thread. Nitro
 Markdown parses in a **native C++ engine** over JSI, then renders flexible React
-Native components — so you get native parse speed _and_ component flexibility.
+Native components — giving you a native parser boundary with component flexibility.
 
-- ⚡ **Native C++ parsing** — ~2.8× to ~19× faster than JS parsers ([benchmarks](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/comparison.md)).
+- ⚡ **Native C++ parsing** — CommonMark + GFM with a benchmark harness so you
+  can measure parsing and rendering on your target device ([benchmarks](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/comparison.md)).
 - 🔀 **Streaming** — built for token-by-token LLM / chat output.
 - 🧩 **Headless AST** — parse without UI for search, validation, indexing.
 - 🎨 **Real components** — theme, override per node, or swap whole renderers.
@@ -149,7 +149,7 @@ const ast = parseMarkdown("# Title");
 const mathAst = parseMarkdownWithOptions("Inline $x^2$", { math: true });
 const text = extractPlainText("Hello **world**"); // "Hello world"
 
-// Search / indexing: skip source offsets natively for a leaner, faster AST.
+// Search / indexing: skip source offsets natively for a leaner AST.
 const lean = parseMarkdownWithOptions(doc, { sourceOffsets: false });
 ```
 
@@ -227,17 +227,20 @@ See **[Usage](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blo
 
 ## Performance
 
-Parsing a ~320 KB document (example app, iOS Simulator; ratios are stable):
+Representative development-build measurement for a ~320 KB document on the
+iPhone 17 iOS Simulator (absolute values vary by device, build, and workload):
 
-| Parser           | Time       | vs Nitro |
-| ---------------- | ---------- | -------- |
-| **Nitro (C++)**  | **~41 ms** | —        |
-| CommonMark (JS)  | ~113 ms    | ~2.8×    |
-| Markdown-It (JS) | ~184 ms    | ~4.5×    |
-| Marked (JS)      | ~814 ms    | ~19.8×   |
+| Parser           | Time   |
+| ---------------- | ------ |
+| **Nitro (C++)**  | ~242 ms |
+| CommonMark (JS)  | ~117 ms |
+| Markdown-It (JS) | ~191 ms |
+| Marked (JS)      | ~1,036 ms |
 
-Reproduce it: run the example app and tap **Run Benchmark**. Methodology and a
-full capability matrix: **[Comparison & benchmarks](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/comparison.md)**.
+These are development-build measurements, not a release-performance guarantee.
+Reproduce them on your target device by running the example app and tapping
+**Run Benchmark**. Methodology and a full capability matrix:
+**[Comparison & benchmarks](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/comparison.md)**.
 
 ## Security
 
