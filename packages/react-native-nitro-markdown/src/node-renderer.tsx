@@ -47,6 +47,47 @@ const isInline = (type: MarkdownNode["type"]): boolean => {
   );
 };
 
+const INLINE_MATH_GROUP_STYLE = StyleSheet.create({
+  container: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    flexShrink: 1,
+  },
+});
+
+const getRenderableText = (node: MarkdownNode): string => {
+  if (node.content) return node.content;
+  return getTextContent(node);
+};
+
+const isPlainTextInline = (node: MarkdownNode): boolean => {
+  return (
+    node.type === "text" ||
+    node.type === "soft_break" ||
+    node.type === "line_break"
+  );
+};
+
+const getPlainTextInline = (
+  nodes: readonly MarkdownNode[],
+  start = 0,
+  end = nodes.length,
+): string => {
+  let text = "";
+  for (let index = start; index < end; index += 1) {
+    const node = nodes[index]!;
+    if (node.type === "line_break") {
+      text += "\n";
+    } else if (node.type === "soft_break") {
+      text += " ";
+    } else {
+      text += node.content ?? "";
+    }
+  }
+  return text;
+};
+
 const containsInlineMath = (nodes?: readonly MarkdownNode[]): boolean => {
   if (!nodes || nodes.length === 0) return false;
   const pending = [...nodes];
@@ -58,6 +99,121 @@ const containsInlineMath = (nodes?: readonly MarkdownNode[]): boolean => {
     }
   }
   return false;
+};
+
+type RenderChildNodesOptions = {
+  children: readonly MarkdownNode[] | undefined;
+  childInListItem: boolean;
+  childParentIsText: boolean;
+  depth: number;
+  renderers: ReturnType<typeof useMarkdownContext>["renderers"];
+  baseStyles: BaseStyles;
+  nodeStyles: ReturnType<typeof useMarkdownContext>["styles"];
+};
+
+const renderChildNodes = ({
+  children,
+  childInListItem,
+  childParentIsText,
+  depth,
+  renderers,
+  baseStyles,
+  nodeStyles,
+}: RenderChildNodesOptions): ReactNode => {
+  if (!children || children.length === 0) return null;
+
+  const elements: ReactNode[] = [];
+  let inlineGroupStart = 0;
+
+  const flushInlineGroup = (end: number) => {
+    if (inlineGroupStart >= end) return;
+
+    let plainTextOnly = true;
+    let hasMath = false;
+    for (let index = inlineGroupStart; index < end; index += 1) {
+      const child = children[index]!;
+      plainTextOnly = plainTextOnly && isPlainTextInline(child);
+      hasMath = hasMath || child.type === "math_inline";
+    }
+
+    if (
+      plainTextOnly &&
+      !renderers.text &&
+      !renderers.soft_break &&
+      !renderers.line_break
+    ) {
+      const inlineText = getPlainTextInline(children, inlineGroupStart, end);
+      elements.push(
+        childParentIsText ? (
+          inlineText
+        ) : (
+          <Text
+            key={`inline-group-${elements.length}`}
+            style={[baseStyles.text, nodeStyles?.text]}
+          >
+            {inlineText}
+          </Text>
+        ),
+      );
+      return;
+    }
+
+    const renderedNodes: ReactNode[] = [];
+    for (let index = inlineGroupStart; index < end; index += 1) {
+      const child = children[index]!;
+      renderedNodes.push(
+        <NodeRenderer
+          key={`${child.type}-${index}`}
+          node={child}
+          depth={depth + 1}
+          inListItem={childInListItem}
+          parentIsText={childParentIsText || !hasMath}
+        />,
+      );
+    }
+
+    if (hasMath && !childParentIsText) {
+      elements.push(
+        <View
+          key={`inline-group-${elements.length}`}
+          style={INLINE_MATH_GROUP_STYLE.container}
+        >
+          {renderedNodes}
+        </View>,
+      );
+      return;
+    }
+
+    const Wrapper = childParentIsText ? Fragment : Text;
+    const wrapperProps = childParentIsText
+      ? {}
+      : { style: [baseStyles.text, nodeStyles?.text] };
+    elements.push(
+      <Wrapper key={`inline-group-${elements.length}`} {...wrapperProps}>
+        {renderedNodes}
+      </Wrapper>,
+    );
+  };
+
+  for (let index = 0; index < children.length; index += 1) {
+    const child = children[index]!;
+    if (isInline(child.type)) continue;
+
+    flushInlineGroup(index);
+    inlineGroupStart = index + 1;
+    elements.push(
+      <NodeRenderer
+        key={`${child.type}-${index}`}
+        node={child}
+        depth={depth + 1}
+        inListItem={childInListItem}
+        parentIsText={childParentIsText}
+      />,
+    );
+  }
+
+  flushInlineGroup(children.length);
+  return elements;
 };
 
 const NodeRendererComponent: FC<NodeRendererProps> = ({
@@ -73,84 +229,16 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
     children?: readonly MarkdownNode[],
     childInListItem = false,
     childParentIsText = false,
-  ): ReactNode => {
-    if (!children || children.length === 0) return null;
-
-    const elements: ReactNode[] = [];
-    let currentInlineGroup: MarkdownNode[] = [];
-
-    const flushInlineGroup = () => {
-      if (currentInlineGroup.length > 0) {
-        const hasMath = currentInlineGroup.some(
-          (child) => child.type === "math_inline",
-        );
-
-        if (hasMath && !childParentIsText) {
-          elements.push(
-            <View
-              key={`inline-group-${elements.length}`}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                flexWrap: "wrap",
-                flexShrink: 1,
-              }}
-            >
-              {currentInlineGroup.map((n, idx) => (
-                <NodeRenderer
-                  key={`${n.type}-${idx}`}
-                  node={n}
-                  depth={depth + 1}
-                  inListItem={childInListItem}
-                  parentIsText={false}
-                />
-              ))}
-            </View>,
-          );
-        } else {
-          const Wrapper = childParentIsText ? Fragment : Text;
-          const wrapperProps = childParentIsText
-            ? {}
-            : { style: baseStyles.text };
-
-          elements.push(
-            <Wrapper key={`inline-group-${elements.length}`} {...wrapperProps}>
-              {currentInlineGroup.map((n, idx) => (
-                <NodeRenderer
-                  key={`${n.type}-${idx}`}
-                  node={n}
-                  depth={depth + 1}
-                  inListItem={childInListItem}
-                  parentIsText={true}
-                />
-              ))}
-            </Wrapper>,
-          );
-        }
-        currentInlineGroup = [];
-      }
-    };
-
-    children.forEach((child, index) => {
-      if (isInline(child.type)) {
-        currentInlineGroup.push(child);
-      } else {
-        flushInlineGroup();
-        elements.push(
-          <NodeRenderer
-            key={`${child.type}-${index}`}
-            node={child}
-            depth={depth + 1}
-            inListItem={childInListItem}
-            parentIsText={childParentIsText}
-          />,
-        );
-      }
+  ): ReactNode =>
+    renderChildNodes({
+      children,
+      childInListItem,
+      childParentIsText,
+      depth,
+      renderers,
+      baseStyles,
+      nodeStyles,
     });
-
-    flushInlineGroup();
-    return elements;
-  };
 
   const customRenderer = renderers[node.type] as CustomRenderer | undefined;
   if (customRenderer) {
@@ -181,12 +269,12 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
         ...(node.title ? { title: node.title } : {}),
       }),
       ...(node.type === "code_block" && {
-        content: getTextContent(node),
+        content: getRenderableText(node),
         ...(node.language ? { language: node.language } : {}),
       }),
       ...(node.type === "code_inline" && { content: node.content ?? "" }),
       ...((node.type === "math_inline" || node.type === "math_block") && {
-        content: getTextContent(node),
+        content: getRenderableText(node),
       }),
       ...(node.type === "list" && {
         ordered: node.ordered ?? false,
@@ -241,7 +329,7 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
 
     case "text":
       if (parentIsText) {
-        return <Text>{node.content}</Text>;
+        return node.content ?? "";
       }
       return (
         <Text style={[baseStyles.text, nodeStyles?.text]}>{node.content}</Text>
@@ -303,7 +391,7 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
     case "code_block":
       return (
         <CodeBlock
-          content={getTextContent(node)}
+          content={getRenderableText(node)}
           {...(node.language ? { language: node.language } : {})}
           {...(nodeStyles?.code_block ? { style: nodeStyles.code_block } : {})}
         />
@@ -330,13 +418,13 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
       );
 
     case "line_break":
-      return <Text>{"\n"}</Text>;
+      return parentIsText ? "\n" : <Text>{"\n"}</Text>;
 
     case "soft_break":
-      return <Text> </Text>;
+      return parentIsText ? " " : <Text> </Text>;
 
     case "math_inline": {
-      let mathContent = getTextContent(node);
+      let mathContent = getRenderableText(node);
       if (!mathContent) return null;
       // Native math content excludes the dollar delimiters. Strip them only
       // when a non-native source (e.g. a pre-parsed custom AST) includes them.
@@ -356,7 +444,7 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
     case "math_block":
       return (
         <MathBlock
-          content={getTextContent(node)}
+          content={getRenderableText(node)}
           {...(nodeStyles?.math_block ? { style: nodeStyles.math_block } : {})}
         />
       );

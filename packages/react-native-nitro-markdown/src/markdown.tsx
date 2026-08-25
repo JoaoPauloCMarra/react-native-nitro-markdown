@@ -48,6 +48,7 @@ import {
   materializeMarkdownNode,
   normalizeParserOptions,
   parseWithNativeParser,
+  parseWithNativeParserForRender,
   safeOnError,
   sortPluginsByPriority,
   warnInDev,
@@ -126,9 +127,11 @@ const getCachedParsedAst = (
   cache: Map<string, ParseAstCacheEntry>,
   stats: { hits: number; misses: number; evictions: number },
   freezeAst: boolean,
+  parse: typeof parseWithNativeParser = parseWithNativeParser,
+  cloneAst = true,
 ): MarkdownNode => {
   if (text.length > MAX_CACHEABLE_TEXT_LENGTH) {
-    return parseWithNativeParser(text, options);
+    return parse(text, options);
   }
 
   const cacheKey = `${getParserOptionsKey(options)}|${text.length}|${hashString(text)}`;
@@ -137,14 +140,16 @@ const getCachedParsedAst = (
     stats.hits += 1;
     cache.delete(cacheKey);
     cache.set(cacheKey, cachedEntry);
-    return materializeMarkdownNode(cachedEntry.ast, freezeAst);
+    return cloneAst
+      ? materializeMarkdownNode(cachedEntry.ast, freezeAst)
+      : cachedEntry.ast;
   }
 
   stats.misses += 1;
-  const parsedNode = parseWithNativeParser(text, options);
+  const parsedNode = parse(text, options);
   cache.set(cacheKey, {
     text,
-    ast: materializeMarkdownNode(parsedNode, true),
+    ast: cloneAst ? materializeMarkdownNode(parsedNode, true) : parsedNode,
   });
   if (cache.size > MAX_PARSE_CACHE_ENTRIES) {
     const oldestCacheKey = cache.keys().next().value;
@@ -154,7 +159,7 @@ const getCachedParsedAst = (
     }
   }
 
-  return materializeMarkdownNode(parsedNode, freezeAst);
+  return cloneAst ? materializeMarkdownNode(parsedNode, freezeAst) : parsedNode;
 };
 
 export type MarkdownProps = {
@@ -338,6 +343,17 @@ export const Markdown: FC<MarkdownProps> = ({
       const hasAstTransforms =
         Boolean(astTransform) ||
         sortedPlugins?.some((plugin) => plugin.afterParse) === true;
+      const canUseRenderFastPath =
+        !safeSourceAst &&
+        !astTransform &&
+        !onParseComplete &&
+        !hasAstTransforms &&
+        (!plugins || plugins.length === 0) &&
+        renderers === EMPTY_RENDERERS &&
+        parserOptionFreezeAst !== true;
+      const canOmitRenderOffsets =
+        canUseRenderFastPath &&
+        parserOptionSourceOffsets === undefined;
       const markdownToParse = safeSourceAst
         ? children
         : applyBeforeParsePlugins(children, sortedPlugins, onErrorRef.current);
@@ -348,7 +364,9 @@ export const Markdown: FC<MarkdownProps> = ({
           parserOptionMath === undefined ? null : { math: parserOptionMath },
           parserOptionHtml === undefined ? null : { html: parserOptionHtml },
           parserOptionSourceOffsets === undefined
-            ? null
+            ? canOmitRenderOffsets
+              ? { sourceOffsets: false }
+              : null
             : { sourceOffsets: parserOptionSourceOffsets },
           parserOptionMaxInputLength === undefined
             ? null
@@ -367,8 +385,14 @@ export const Markdown: FC<MarkdownProps> = ({
               parseAstCacheRef.current!,
               cacheStatsRef.current,
               parserOptions?.freezeAst === true,
+              canUseRenderFastPath
+                ? parseWithNativeParserForRender
+                : parseWithNativeParser,
+              !canUseRenderFastPath,
             )
-          : parseWithNativeParser(markdownToParse, parserOptions);
+          : (canUseRenderFastPath
+              ? parseWithNativeParserForRender
+              : parseWithNativeParser)(markdownToParse, parserOptions);
       parsedAst = applyAfterParsePlugins(
         parsedAst,
         sortedPlugins,
@@ -425,6 +449,8 @@ export const Markdown: FC<MarkdownProps> = ({
     parseCache,
     astTransform,
     plugins,
+    renderers,
+    onParseComplete,
   ]);
   /* eslint-enable react-hooks/refs */
 

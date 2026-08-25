@@ -3,7 +3,6 @@
 const { execFileSync, spawn } = require("child_process");
 const fs = require("fs");
 const net = require("net");
-const os = require("os");
 const path = require("path");
 
 const projectRoot = path.resolve(__dirname, "..");
@@ -15,7 +14,6 @@ const bundleId = "com.nitromarkdown.example";
 const packageName = "com.nitromarkdown.example";
 const port = Number(process.env.EXAMPLE_SMOKE_PORT ?? 8081);
 const launchWaitMs = Number(process.env.EXAMPLE_SMOKE_LAUNCH_WAIT_MS ?? 15000);
-const settleWaitMs = Number(process.env.EXAMPLE_SMOKE_SETTLE_WAIT_MS ?? 3000);
 
 const colors = {
   green: (text) => `\x1b[32m${text}\x1b[0m`,
@@ -83,57 +81,37 @@ function wait(ms) {
 }
 
 function runAndroidExpo() {
-  return new Promise((resolve, reject) => {
-    const androidSdkPath =
-      process.env.ANDROID_HOME ??
-      process.env.ANDROID_SDK_ROOT ??
-      path.join(os.homedir(), "Library/Android/sdk");
-    const child = spawn("bun", ["run", "--cwd", "apps/example", "android"], {
-      cwd: projectRoot,
-      env: {
-        ...process.env,
-        ANDROID_HOME: androidSdkPath,
-        ANDROID_SDK_ROOT: androidSdkPath,
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    let resolved = false;
-    const timeout = setTimeout(() => {
-      if (resolved) return;
-      resolved = true;
-      child.kill("SIGTERM");
-      reject(new Error("Android Expo runner timed out"));
-    }, 300000);
-
-    const handleOutput = (chunk) => {
-      const text = chunk.toString();
-      process.stdout.write(text);
-      if (!resolved && text.includes("Android Bundled")) {
-        resolved = true;
-        clearTimeout(timeout);
-        setTimeout(() => {
-          child.kill("SIGTERM");
-          resolve();
-        }, 3000);
-      }
-    };
-
-    child.stdout.on("data", handleOutput);
-    child.stderr.on("data", handleOutput);
-    child.on("error", (error) => {
-      if (resolved) return;
-      resolved = true;
-      clearTimeout(timeout);
-      reject(error);
-    });
-    child.on("close", (code) => {
-      if (resolved) return;
-      resolved = true;
-      clearTimeout(timeout);
-      if (code === 0) resolve();
-      else reject(new Error(`Android Expo runner exited with ${code}`));
-    });
+  const env = {
+    ...process.env,
+    NODE_ENV: "development",
+    ORG_GRADLE_PROJECT_reactNativeDevServerPort: String(port),
+  };
+  run("bun", ["run", "--cwd", "apps/example", "android:assemble"], {
+    env,
+    stdio: "inherit",
   });
+
+  const apk = path.join(
+    exampleDir,
+    "android/app/build/outputs/apk/debug/app-debug.apk",
+  );
+  tryRun("adb", ["uninstall", packageName], { stdio: "ignore" });
+  run("adb", ["install", apk], { stdio: "inherit" });
+  run(
+    "adb",
+    [
+      "shell",
+      "am",
+      "start",
+      "-W",
+      "-a",
+      "android.intent.action.VIEW",
+      "-d",
+      createDevClientUrl("127.0.0.1"),
+      packageName,
+    ],
+    { stdio: "inherit" },
+  );
 }
 
 function isPortOpen(host, targetPort) {
@@ -249,13 +227,14 @@ function createReporter() {
   };
 }
 
-// Android: deterministic UI assertions via uiautomator dumps (stable text
-// identifiers instead of fixed coordinate taps).
 function androidDumpWindow() {
-  tryRun("adb", ["shell", "uiautomator", "dump", "/sdcard/window_dump.xml"], {
+  tryRun("adb", ["shell", "rm", "-f", "/sdcard/window_dump.xml"], {
     stdio: "ignore",
   });
   try {
+    run("adb", ["shell", "uiautomator", "dump", "/sdcard/window_dump.xml"], {
+      stdio: "ignore",
+    });
     return run("adb", ["shell", "cat", "/sdcard/window_dump.xml"]);
   } catch {
     return "";
@@ -323,10 +302,10 @@ async function runAndroidSmoke(reporter) {
   log(`Android screenshot ${screenshot}`, "cyan");
 
   const tabs = [
-    { label: "Bench", expected: "Latest run" },
-    { label: "Default", expected: "Nitro Markdown" },
+    { label: "Bench", expected: "Run Benchmark" },
+    { label: "Default", expected: "Default Renderer" },
     { label: "Styles", expected: "Theming" },
-    { label: "Custom", expected: "Note" },
+    { label: "Custom", expected: "Custom Components" },
     { label: "Stream", expected: "Streaming Performance Lab" },
   ];
 
@@ -337,7 +316,7 @@ async function runAndroidSmoke(reporter) {
         "android",
         `tab ${tab.label} content`,
         "skipped",
-        "uiautomator dump produced no output",
+        "uiautomator dump is unavailable on this device",
       );
       continue;
     }
@@ -367,7 +346,7 @@ async function runAndroidSmoke(reporter) {
     run("adb", ["shell", "input", "tap", String(bounds.x), String(bounds.y)], {
       stdio: "ignore",
     });
-    await wait(settleWaitMs);
+    await wait(3000);
 
     const afterTap = androidDumpWindow();
     if (!afterTap) {
@@ -375,7 +354,7 @@ async function runAndroidSmoke(reporter) {
         "android",
         `tab ${tab.label} content`,
         "skipped",
-        "uiautomator dump produced no output after tap",
+        "uiautomator dump is unavailable after tap",
       );
       continue;
     }
@@ -440,15 +419,12 @@ async function runIosSmoke(reporter) {
   });
   log(`iOS screenshot ${screenshot}`, "cyan");
 
-  // iOS has no supported content-level UI dump API via simctl alone. Content
-  // assertions require idb or a device agent; they are recorded as explicit
-  // skips so the run is never a silent no-op.
   for (const tab of ["Bench", "Default", "Styles", "Custom", "Stream"]) {
     reporter.record(
       "ios",
       `tab ${tab} content`,
       "skipped",
-      "iOS content assertions need idb/a11y dump; screenshot artifact captured",
+      "iOS content assertions require an accessibility driver; screenshot artifact captured",
     );
   }
 }

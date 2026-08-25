@@ -1,8 +1,8 @@
 /*
  * MD4C: Markdown parser for C
- * (http://github.com/mity/md4c)
+ * (https://github.com/mity/md4c)
  *
- * Copyright (c) 2016-2024 Martin Mitáš
+ * Copyright (c) 2016-2026 Martin Mitáš
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -101,7 +101,31 @@ typedef enum MD_BLOCKTYPE {
     MD_BLOCK_TBODY,
     MD_BLOCK_TR,
     MD_BLOCK_TH,
-    MD_BLOCK_TD
+    MD_BLOCK_TD,
+
+    /* Container for all referenced footnote definitions, rendered at the end
+     * of the document.
+     * Detail: NULL.
+     * Note: Used only if extension MD_FLAG_FOOTNOTES is enabled, and only when
+     * at least one footnote definition is referenced. */
+    MD_BLOCK_FOOTNOTE_DEF_SECTION,
+
+    /* A single footnote definition, rendered at the end of the document.
+     * Detail: Structure MD_BLOCK_FOOTNOTE_DEF_DETAIL.
+     * Note: Used only if extension MD_FLAG_FOOTNOTES is enabled.
+     * Only definitions that are actually referenced in the document are
+     * emitted, in order of first reference. */
+    MD_BLOCK_FOOTNOTE_DEF,
+
+    /* Adminition extension.
+     * Detail MD_BLOCK_ADMONITION_DETAIL.
+     * Note: Recognized only when MD_FLAG_ADMONITIONS is enabled. */
+    MD_BLOCK_ADMONITION,
+
+    /* A run of blank lines separating two blocks. Has no contents.
+     * Detail: Structure MD_BLOCK_BLANK_DETAIL.
+     * Note: Emitted only when MD_FLAG_PRESERVEBLANKLINES is enabled. */
+    MD_BLOCK_BLANK
 } MD_BLOCKTYPE;
 
 /* Span represents an in-line piece of a document which should be rendered with
@@ -147,7 +171,34 @@ typedef enum MD_SPANTYPE {
 
     /* <u>...</u>
      * Note: Recognized only when MD_FLAG_UNDERLINE is enabled. */
-    MD_SPAN_U
+    MD_SPAN_U,
+
+    /* Spoiler (hidden content revealed on interaction).
+     * Syntax: ||hidden text||
+     * Note: Recognized only when MD_FLAG_SPOILERS is enabled. */
+    MD_SPAN_SPOILER,
+
+    /* <sup>...</sup>
+     * Syntax: ^superscript^
+     * Note: Recognized only when MD_FLAG_SUPERSCRIPTS is enabled. */
+    MD_SPAN_SUPERSCRIPT,
+
+    /* <sub>...</sub>
+     * Syntax: ~subscript~
+     * Note: Recognized only when MD_FLAG_SUBSCRIPTS is enabled. */
+    MD_SPAN_SUBSCRIPT,
+
+    /* Footnote reference, e.g. [^1] or [^note].
+     * Syntax: [^label]
+     * Note: Recognized only when MD_FLAG_FOOTNOTES is enabled.
+     * The span is self-contained: no MD_TEXT callbacks fire between enter and
+     * leave. All needed information is in MD_SPAN_FOOTNOTE_REF_DETAIL. */
+    MD_SPAN_FOOTNOTE_REF,
+
+    /* <mark>...</mark>
+     * Syntax: ==highlight==
+     * Note: Recognized only when MD_FLAG_HIGHLIGHT is enabled. */
+    MD_SPAN_MARK
 } MD_SPANTYPE;
 
 /* Text is the actual textual contents of span. */
@@ -282,6 +333,11 @@ typedef struct MD_BLOCK_TD_DETAIL {
     MD_ALIGN align;
 } MD_BLOCK_TD_DETAIL;
 
+/* Detailed info for MD_BLOCK_ADMONITION. */
+typedef struct MD_BLOCK_ADMONITION_DETAIL {
+    MD_ATTRIBUTE type;          /* One of "note", "tip", "important", "warning", "caution" */
+} MD_BLOCK_ADMONITION_DETAIL;
+
 /* Detailed info for MD_SPAN_A. */
 typedef struct MD_SPAN_A_DETAIL {
     MD_ATTRIBUTE href;
@@ -300,26 +356,52 @@ typedef struct MD_SPAN_WIKILINK {
     MD_ATTRIBUTE target;
 } MD_SPAN_WIKILINK_DETAIL;
 
+/* Detailed info for MD_SPAN_FOOTNOTE_REF. */
+typedef struct MD_SPAN_FOOTNOTE_REF_DETAIL {
+    unsigned int id;        /* 1-based identifier of the referenced footnote */
+    unsigned int ref_id;    /* 1-based identifier of this reference among references to the same footnote */
+    MD_ATTRIBUTE label;     /* Raw label text, e.g. "1" or "note" */
+} MD_SPAN_FOOTNOTE_REF_DETAIL;
+
+/* Detailed info for MD_BLOCK_FOOTNOTE_DEF. */
+typedef struct MD_BLOCK_FOOTNOTE_DEF_DETAIL {
+    unsigned int id;        /* 1-based identifier of this footnote */
+    unsigned int ref_count; /* Number of references to this footnote */
+    MD_ATTRIBUTE label;     /* Raw label text */
+} MD_BLOCK_FOOTNOTE_DEF_DETAIL;
+
+/* Detailed info for MD_BLOCK_BLANK. */
+typedef struct MD_BLOCK_BLANK_DETAIL {
+    unsigned line_count;    /* Count of blank lines forming the block separation */
+} MD_BLOCK_BLANK_DETAIL;
+
 /* Flags specifying extensions/deviations from CommonMark specification.
  *
  * By default (when MD_PARSER::flags == 0), we follow CommonMark specification.
  * The following flags may allow some extensions or deviations from it.
  */
-#define MD_FLAG_COLLAPSEWHITESPACE          0x0001  /* In MD_TEXT_NORMAL, collapse non-trivial whitespace into single ' ' */
-#define MD_FLAG_PERMISSIVEATXHEADERS        0x0002  /* Do not require space in ATX headers ( ###header ) */
-#define MD_FLAG_PERMISSIVEURLAUTOLINKS      0x0004  /* Recognize URLs as autolinks even without '<', '>' */
-#define MD_FLAG_PERMISSIVEEMAILAUTOLINKS    0x0008  /* Recognize e-mails as autolinks even without '<', '>' and 'mailto:' */
-#define MD_FLAG_NOINDENTEDCODEBLOCKS        0x0010  /* Disable indented code blocks. (Only fenced code works.) */
-#define MD_FLAG_NOHTMLBLOCKS                0x0020  /* Disable raw HTML blocks. */
-#define MD_FLAG_NOHTMLSPANS                 0x0040  /* Disable raw HTML (inline). */
-#define MD_FLAG_TABLES                      0x0100  /* Enable tables extension. */
-#define MD_FLAG_STRIKETHROUGH               0x0200  /* Enable strikethrough extension. */
-#define MD_FLAG_PERMISSIVEWWWAUTOLINKS      0x0400  /* Enable WWW autolinks (even without any scheme prefix, if they begin with 'www.') */
-#define MD_FLAG_TASKLISTS                   0x0800  /* Enable task list extension. */
+#define MD_FLAG_COLLAPSEWHITESPACE          0x1     /* In MD_TEXT_NORMAL, collapse non-trivial whitespace into single ' ' */
+#define MD_FLAG_PERMISSIVEATXHEADERS        0x2     /* Do not require space in ATX headers ( ###header ) */
+#define MD_FLAG_PERMISSIVEURLAUTOLINKS      0x4     /* Recognize URLs as autolinks even without '<', '>' */
+#define MD_FLAG_PERMISSIVEEMAILAUTOLINKS    0x8     /* Recognize e-mails as autolinks even without '<', '>' and 'mailto:' */
+#define MD_FLAG_NOINDENTEDCODEBLOCKS        0x10    /* Disable indented code blocks. (Only fenced code works.) */
+#define MD_FLAG_NOHTMLBLOCKS                0x20    /* Disable raw HTML blocks. */
+#define MD_FLAG_NOHTMLSPANS                 0x40    /* Disable raw HTML (inline). */
+#define MD_FLAG_TABLES                      0x100   /* Enable tables extension. */
+#define MD_FLAG_STRIKETHROUGH               0x200   /* Enable strikethrough extension. */
+#define MD_FLAG_PERMISSIVEWWWAUTOLINKS      0x400   /* Enable WWW autolinks (even without any scheme prefix, if they begin with 'www.') */
+#define MD_FLAG_TASKLISTS                   0x800   /* Enable task list extension. */
 #define MD_FLAG_LATEXMATHSPANS              0x1000  /* Enable $ and $$ containing LaTeX equations. */
 #define MD_FLAG_WIKILINKS                   0x2000  /* Enable wiki links extension. */
 #define MD_FLAG_UNDERLINE                   0x4000  /* Enable underline extension (and disables '_' for normal emphasis). */
 #define MD_FLAG_HARD_SOFT_BREAKS            0x8000  /* Force all soft breaks to act as hard breaks. */
+#define MD_FLAG_SPOILERS                    0x10000 /* Enable ||hidden text|| spoiler spans. */
+#define MD_FLAG_SUPERSCRIPTS                0x20000 /* Enable ^superscript^ spans. */
+#define MD_FLAG_SUBSCRIPTS                  0x40000 /* Enable ~subscript~ spans. */
+#define MD_FLAG_ADMONITIONS                 0x80000 /* Enable admonitions extension. */
+#define MD_FLAG_FOOTNOTES                   0x100000 /* Enable [^label] footnote references. */
+#define MD_FLAG_HIGHLIGHT                   0x200000 /* Enable ==highlight== spans. */
+#define MD_FLAG_PRESERVEBLANKLINES          0x400000 /* Report blank line runs as MD_BLOCK_BLANK. */
 
 #define MD_FLAG_PERMISSIVEAUTOLINKS         (MD_FLAG_PERMISSIVEEMAILAUTOLINKS | MD_FLAG_PERMISSIVEURLAUTOLINKS | MD_FLAG_PERMISSIVEWWWAUTOLINKS)
 #define MD_FLAG_NOHTML                      (MD_FLAG_NOHTMLBLOCKS | MD_FLAG_NOHTMLSPANS)
@@ -334,7 +416,7 @@ typedef struct MD_SPAN_WIKILINK {
  * extensions, bringing the dialect closer to the original, are implemented.
  */
 #define MD_DIALECT_COMMONMARK               0
-#define MD_DIALECT_GITHUB                   (MD_FLAG_PERMISSIVEAUTOLINKS | MD_FLAG_TABLES | MD_FLAG_STRIKETHROUGH | MD_FLAG_TASKLISTS)
+#define MD_DIALECT_GITHUB                   (MD_FLAG_PERMISSIVEAUTOLINKS | MD_FLAG_TABLES | MD_FLAG_STRIKETHROUGH | MD_FLAG_TASKLISTS | MD_FLAG_ADMONITIONS | MD_FLAG_FOOTNOTES)
 
 /* Parser structure.
  */
@@ -380,9 +462,6 @@ typedef struct MD_PARSER {
     void (*debug_log)(const char* /*msg*/, void* /*userdata*/);
 
     /* Reserved. Set to NULL.
-     *
-     * Note: used to be syntax callback, now reused for something else or just kept for ABI?
-     * We don't care about ABI much here since it's static linking for RN.
      */
     void (*syntax)(void);
 } MD_PARSER;

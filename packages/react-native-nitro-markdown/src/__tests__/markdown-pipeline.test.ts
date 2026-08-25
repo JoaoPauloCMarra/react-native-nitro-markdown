@@ -121,7 +121,7 @@ describe("Markdown plugin pipeline", () => {
     const parseError = new Error("native parse failed");
     const onError = jest.fn();
     const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
-    mockParser.parse.mockImplementationOnce(() => {
+    mockParser.parseWithOptions.mockImplementationOnce(() => {
       throw parseError;
     });
 
@@ -137,6 +137,49 @@ describe("Markdown plugin pipeline", () => {
       });
 
       expect(onError).toHaveBeenCalledWith(parseError, "parse", undefined);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it("omits source offsets for the default render fast path", () => {
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+
+    try {
+      act(() => {
+        create(
+          createElement(Markdown, undefined, "default render input"),
+        );
+      });
+
+      expect(mockParser.parse).not.toHaveBeenCalled();
+      expect(mockParser.parseWithOptions).toHaveBeenCalledWith(
+        "default render input",
+        { sourceOffsets: false },
+      );
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it("omits source offsets for the virtualized render fast path", () => {
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+
+    try {
+      act(() => {
+        create(
+          createElement(
+            Markdown,
+            { virtualize: true },
+            "virtualized render input",
+          ),
+        );
+      });
+
+      expect(mockParser.parseWithOptions).toHaveBeenCalledWith(
+        "virtualized render input",
+        { sourceOffsets: false },
+      );
     } finally {
       consoleErrorSpy.mockRestore();
     }
@@ -504,7 +547,7 @@ describe("Markdown plugin pipeline", () => {
         create(createElement(Markdown, {}, markdown));
       });
 
-      expect(mockParser.parse).toHaveBeenCalledTimes(2);
+      expect(mockParser.parseWithOptions).toHaveBeenCalledTimes(2);
     } finally {
       consoleErrorSpy.mockRestore();
     }

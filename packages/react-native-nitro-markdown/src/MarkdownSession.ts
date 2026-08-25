@@ -78,7 +78,11 @@ export function createMarkdownSession(initialText?: string): MarkdownSession {
           }
           return Reflect.apply(value, target, args);
         } catch (error) {
-          throw toMarkdownError(error, "session");
+          const errorSource =
+            prop === "parse" || prop === "parseWithOptions"
+              ? "parse"
+              : "session";
+          throw toMarkdownError(error, errorSource);
         }
       };
     },

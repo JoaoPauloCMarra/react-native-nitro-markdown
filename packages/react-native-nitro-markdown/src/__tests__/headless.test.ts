@@ -3,12 +3,14 @@ import type { MarkdownNode } from "../headless";
 import {
   parseMarkdown,
   parseMarkdownWithOptions,
+  parseMarkdownSession,
   extractPlainText,
   extractPlainTextWithOptions,
   getTextContent,
   getFlattenedText,
   stripSourceOffsets,
 } from "../headless";
+import type { MarkdownSession } from "../specs/MarkdownSession.nitro";
 
 describe("parseMarkdown", () => {
   beforeEach(() => jest.clearAllMocks());
@@ -36,6 +38,33 @@ describe("parseMarkdown", () => {
     const ast = parseMarkdown("");
     expect(ast.type).toBe("document");
     expect(ast.children).toEqual([]);
+  });
+});
+
+describe("parseMarkdownSession", () => {
+  it("uses the native session parser without reading the full buffer", () => {
+    const parse = jest.fn(() =>
+      JSON.stringify({ type: "document", children: [] }),
+    );
+    const getAllText = jest.fn(() => "fallback");
+    const session = { parse, getAllText } as unknown as MarkdownSession;
+
+    const ast = parseMarkdownSession(session);
+
+    expect(ast).toEqual({ type: "document", children: [] });
+    expect(parse).toHaveBeenCalledTimes(1);
+    expect(getAllText).not.toHaveBeenCalled();
+  });
+
+  it("forwards parser options to the native session parser", () => {
+    const parseWithOptions = jest.fn(() =>
+      JSON.stringify({ type: "document", children: [] }),
+    );
+    const session = { parseWithOptions } as unknown as MarkdownSession;
+
+    parseMarkdownSession(session, { sourceOffsets: false });
+
+    expect(parseWithOptions).toHaveBeenCalledWith({ sourceOffsets: false });
   });
 });
 

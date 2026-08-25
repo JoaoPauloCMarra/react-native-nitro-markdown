@@ -13,9 +13,11 @@
 #error NitroModules cannot be found! Are you sure you installed NitroModules properly?
 #endif
 
-
+// Forward declaration of `ParserOptions` to properly resolve imports.
+namespace margelo::nitro::Markdown { struct ParserOptions; }
 
 #include <string>
+#include "ParserOptions.hpp"
 #include <functional>
 
 namespace margelo::nitro::Markdown {
@@ -55,6 +57,8 @@ namespace margelo::nitro::Markdown {
       virtual std::string getAllText() = 0;
       virtual double getLength() = 0;
       virtual std::string getTextRange(double from, double to) = 0;
+      virtual std::string parse() = 0;
+      virtual std::string parseWithOptions(const ParserOptions& options) = 0;
       virtual std::function<void()> addListener(const std::function<void(double /* from */, double /* to */)>& listener) = 0;
       virtual void reset(const std::string& text) = 0;
       virtual double replace(double from, double to, const std::string& text) = 0;

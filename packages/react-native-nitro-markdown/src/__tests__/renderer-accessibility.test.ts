@@ -66,6 +66,58 @@ function renderMarkdown(ast: MarkdownNode, props: Record<string, unknown> = {}) 
 }
 
 describe("Markdown renderer accessibility", () => {
+  it("preserves custom renderers for plain inline nodes", () => {
+    const renderText = jest.fn(({ node }: { node: MarkdownNode }) =>
+      createElement("Text", null, `custom:${node.content ?? ""}`),
+    );
+    const ast: MarkdownNode = {
+      type: "document",
+      children: [
+        {
+          type: "paragraph",
+          children: [{ type: "text", content: "inline text" }],
+        },
+      ],
+    };
+
+    const renderer = renderMarkdown(ast, { renderers: { text: renderText } });
+
+    expect(renderText).toHaveBeenCalledTimes(1);
+    expect(renderer.root.findAllByProps({ children: "custom:inline text" })).toHaveLength(1);
+  });
+
+  it("preserves text style overrides beside inline math", () => {
+    const textStyle = { color: "purple", fontSize: 19 };
+    const ast: MarkdownNode = {
+      type: "document",
+      children: [
+        {
+          type: "paragraph",
+          children: [
+            { type: "text", content: "Before " },
+            {
+              type: "math_inline",
+              children: [{ type: "text", content: "x^2" }],
+            },
+            { type: "text", content: " after" },
+          ],
+        },
+      ],
+    };
+
+    const renderer = renderMarkdown(ast, { styles: { text: textStyle } });
+    const textNodes = renderer.root.findAll(
+      (node) =>
+        node.type === "Text" &&
+        (node.props.children === "Before " || node.props.children === " after"),
+    );
+
+    expect(textNodes).toHaveLength(2);
+    for (const node of textNodes) {
+      expect(node.props.style).toContain(textStyle);
+    }
+  });
+
   it("wires semantic roles for built-in renderers", () => {
     const renderer = renderMarkdown(sourceAst);
 
@@ -203,7 +255,7 @@ describe("Markdown renderer accessibility", () => {
     try {
       const parseError = new Error("mock parse failure");
       jest
-        .spyOn(mockParser, "parse")
+        .spyOn(mockParser, "parseWithOptions")
         .mockImplementationOnce(() => {
           throw parseError;
         });

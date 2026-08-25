@@ -4,6 +4,12 @@ export interface ParserOptions {
   gfm?: boolean;
   math?: boolean;
   html?: boolean;
+  /**
+   * Include `beg`/`end` source ranges in the returned AST.
+   * Defaults to true for the public parser API. Set false when the caller
+   * does not map nodes back to the source text; native parsing then skips the
+   * UTF-16 offset map and omits those fields.
+   */
   sourceOffsets?: boolean;
   /**
    * Maximum accepted input length in UTF-8 bytes.

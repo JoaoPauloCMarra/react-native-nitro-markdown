@@ -6,9 +6,6 @@ import {
   View,
   Platform,
 } from "react-native";
-import { Parser } from "commonmark";
-import MarkdownIt from "markdown-it";
-import { marked } from "marked";
 import {
   Markdown,
   MarkdownStream,
@@ -142,9 +139,9 @@ type BenchmarkResults = {
   nitroP50: number;
   nitroP95: number;
   nitroIterations: number;
-  commonmarkTime: number;
-  markdownItTime: number;
-  markedTime: number;
+  nitroNoOffsetsTime: number;
+  nitroNoOffsetsP50: number;
+  nitroNoOffsetsP95: number;
   mathjaxTime: number | null;
   ratexTime: number | null;
   nitroRenderTime: number | null;
@@ -846,13 +843,17 @@ export default function BenchmarkScreen() {
   const wait = (ms: number) =>
     new Promise((resolve) => setTimeout(resolve, ms));
 
-  const runNitroBenchmark = () => {
-    parseMarkdown("warmup");
+  const runNitroBenchmark = (sourceOffsets: boolean) => {
+    const parse = sourceOffsets
+      ? parseMarkdown
+      : (text: string) =>
+          parseMarkdownWithOptions(text, { sourceOffsets: false });
+    parse("warmup");
     const samples: number[] = [];
 
     for (let index = 0; index < NITRO_BENCHMARK_ITERATIONS; index++) {
       const startNitro = global.performance.now();
-      parseMarkdown(REPEATED_MARKDOWN);
+      parse(REPEATED_MARKDOWN);
       const endNitro = global.performance.now();
       samples.push(endNitro - startNitro);
     }
@@ -969,35 +970,21 @@ export default function BenchmarkScreen() {
 
     await wait(60);
 
-    const nitroBenchmark = await isolate(runNitroBenchmark, {
+    const nitroBenchmark = await isolate(() => runNitroBenchmark(true), {
       average: NaN,
       p50: NaN,
       p95: NaN,
       iterations: 0,
     });
-
-    const commonmarkTime = await isolate(() => {
-      const parser = new Parser();
-      parser.parse("warmup");
-      const start = global.performance.now();
-      parser.parse(REPEATED_MARKDOWN);
-      return global.performance.now() - start;
-    }, NaN);
-
-    const markdownItTime = await isolate(() => {
-      const parser = new MarkdownIt();
-      parser.render("warmup");
-      const start = global.performance.now();
-      parser.render(REPEATED_MARKDOWN);
-      return global.performance.now() - start;
-    }, NaN);
-
-    const markedTime = await isolate(async () => {
-      await marked.parse("warmup");
-      const start = global.performance.now();
-      await marked.parse(REPEATED_MARKDOWN);
-      return global.performance.now() - start;
-    }, NaN);
+    const nitroNoOffsetsBenchmark = await isolate(
+      () => runNitroBenchmark(false),
+      {
+        average: NaN,
+        p50: NaN,
+        p95: NaN,
+        iterations: 0,
+      },
+    );
 
     const mathjaxTime = await isolate(
       () => measureLatexRenderer("legacy-mathjax"),
@@ -1018,9 +1005,9 @@ export default function BenchmarkScreen() {
       nitroP50: nitroBenchmark.p50,
       nitroP95: nitroBenchmark.p95,
       nitroIterations: nitroBenchmark.iterations,
-      commonmarkTime,
-      markdownItTime,
-      markedTime,
+      nitroNoOffsetsTime: nitroNoOffsetsBenchmark.average,
+      nitroNoOffsetsP50: nitroNoOffsetsBenchmark.p50,
+      nitroNoOffsetsP95: nitroNoOffsetsBenchmark.p95,
       mathjaxTime,
       ratexTime,
       nitroRenderTime,
@@ -1095,34 +1082,30 @@ export default function BenchmarkScreen() {
               <Text style={styles.resultGroupTitle}>
                 Parse · {(REPEATED_MARKDOWN.length / 1024).toFixed(0)}KB document
               </Text>
+              <Text style={styles.metricNote}>
+                Nitro-only device measurement. JavaScript baselines run in
+                isolated Node workers with a separate fixture record.
+              </Text>
               <BenchBar
                 label="Nitro C++"
                 ms={benchmarkResults.nitroTime}
-                maxMs={benchmarkResults.markedTime}
+                maxMs={Math.max(benchmarkResults.nitroTime, benchmarkResults.nitroNoOffsetsTime ?? 0)}
                 highlight
               />
               <BenchBar
-                label="CommonMark"
-                ms={benchmarkResults.commonmarkTime}
-                maxMs={benchmarkResults.markedTime}
-                ratio={`${formatRatio(benchmarkResults.commonmarkTime, benchmarkResults.nitroTime)}`}
-              />
-              <BenchBar
-                label="Markdown-It"
-                ms={benchmarkResults.markdownItTime}
-                maxMs={benchmarkResults.markedTime}
-                ratio={`${formatRatio(benchmarkResults.markdownItTime, benchmarkResults.nitroTime)}`}
-              />
-              <BenchBar
-                label="Marked"
-                ms={benchmarkResults.markedTime}
-                maxMs={benchmarkResults.markedTime}
-                ratio={`${formatRatio(benchmarkResults.markedTime, benchmarkResults.nitroTime)}`}
+                label="Nitro C++ · no offsets"
+                ms={benchmarkResults.nitroNoOffsetsTime ?? 0}
+                maxMs={Math.max(benchmarkResults.nitroTime, benchmarkResults.nitroNoOffsetsTime ?? 0)}
+                ratio={`${formatRatio(benchmarkResults.nitroTime, benchmarkResults.nitroNoOffsetsTime ?? 0)}`}
               />
               <Text style={styles.metricNote}>
                 Nitro p50 / p95 over {benchmarkResults.nitroIterations} runs:{" "}
                 {benchmarkResults.nitroP50.toFixed(1)} /{" "}
                 {benchmarkResults.nitroP95.toFixed(1)}ms.
+              </Text>
+              <Text style={styles.metricNote}>
+                No-offset p50 / p95: {(benchmarkResults.nitroNoOffsetsP50 ?? 0).toFixed(1)} /{" "}
+                {(benchmarkResults.nitroNoOffsetsP95 ?? 0).toFixed(1)}ms. This is the renderer fast path; public parse defaults retain offsets.
               </Text>
             </View>
 
