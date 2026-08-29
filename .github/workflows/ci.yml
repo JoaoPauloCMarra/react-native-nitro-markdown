@@ -70,3 +70,6 @@ jobs:
 
       - name: C++ coverage
         run: bun run test:cpp:coverage
+
+      - name: C++ sanitizers
+        run: bun run test:cpp:sanitizers

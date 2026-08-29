@@ -3,6 +3,7 @@
 const { execFileSync, spawn } = require("child_process");
 const fs = require("fs");
 const net = require("net");
+const os = require("os");
 const path = require("path");
 
 const projectRoot = path.resolve(__dirname, "..");
@@ -107,7 +108,7 @@ function runAndroidExpo() {
       "-a",
       "android.intent.action.VIEW",
       "-d",
-      createDevClientUrl("127.0.0.1"),
+      createDevClientUrl("10.0.2.2"),
       packageName,
     ],
     { stdio: "inherit" },
@@ -167,7 +168,7 @@ async function startMetroIfNeeded(enabled) {
   const logFd = fs.openSync(metroLog, "a");
   const child = spawn(
     "bunx",
-    ["expo", "start", "--dev-client", "--localhost", "--port", String(port)],
+    ["expo", "start", "--dev-client", "--port", String(port)],
     {
       cwd: exampleDir,
       detached: true,
@@ -243,10 +244,13 @@ function androidDumpWindow() {
 
 function androidFindTextBounds(dumpXml, text) {
   const escaped = text.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
-  const pattern = new RegExp(
-    `<node[^>]*text="${escaped}"[^>]*bounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"`,
+  const nodes = dumpXml.match(/<node\b[^>]*>/g) ?? [];
+  const node = nodes.find(
+    (candidate) =>
+      candidate.includes(`text="${escaped}"`) ||
+      candidate.includes(`content-desc="${escaped}"`),
   );
-  const match = dumpXml.match(pattern);
+  const match = node?.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
   if (!match) return null;
   const x1 = Number(match[1]);
   const y1 = Number(match[2]);
@@ -259,8 +263,7 @@ function androidFindTextBounds(dumpXml, text) {
 }
 
 function androidDumpContains(dumpXml, text) {
-  const escaped = text.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
-  return new RegExp(`<node[^>]*text="${escaped}"`).test(dumpXml);
+  return androidFindTextBounds(dumpXml, text) !== null;
 }
 
 async function runAndroidSmoke(reporter) {
@@ -302,11 +305,11 @@ async function runAndroidSmoke(reporter) {
   log(`Android screenshot ${screenshot}`, "cyan");
 
   const tabs = [
-    { label: "Bench", expected: "Run Benchmark" },
-    { label: "Default", expected: "Default Renderer" },
-    { label: "Styles", expected: "Theming" },
-    { label: "Custom", expected: "Custom Components" },
-    { label: "Stream", expected: "Streaming Performance Lab" },
+    { label: "Benchmark", expected: "Run Benchmark" },
+    { label: "Standard markdown", expected: "Default Renderer" },
+    { label: "Style overrides", expected: "Theming" },
+    { label: "Custom components", expected: "Custom Components" },
+    { label: "Token stream", expected: "Streaming Performance Lab" },
   ];
 
   for (const tab of tabs) {
@@ -414,9 +417,18 @@ async function runIosSmoke(reporter) {
   );
 
   const screenshot = path.join(outputDir, "ios.png");
-  run("xcrun", ["simctl", "io", udid, "screenshot", screenshot], {
-    stdio: "ignore",
-  });
+  const temporaryScreenshot = path.join(
+    os.tmpdir(),
+    `nitromarkdown-example-smoke-${process.pid}.png`,
+  );
+  try {
+    run("xcrun", ["simctl", "io", udid, "screenshot", temporaryScreenshot], {
+      stdio: "ignore",
+    });
+    fs.copyFileSync(temporaryScreenshot, screenshot);
+  } finally {
+    fs.rmSync(temporaryScreenshot, { force: true });
+  }
   log(`iOS screenshot ${screenshot}`, "cyan");
 
   for (const tab of ["Bench", "Default", "Styles", "Custom", "Stream"]) {

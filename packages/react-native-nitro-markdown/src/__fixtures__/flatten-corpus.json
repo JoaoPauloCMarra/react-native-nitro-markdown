@@ -35,6 +35,11 @@
     "expected": "const x = 1;\n\n"
   },
   {
+    "name": "standalone-math-block",
+    "markdown": "$$\nx + y\n$$",
+    "expected": "x + y\n\n"
+  },
+  {
     "name": "blockquote",
     "markdown": "> Quoted",
     "expected": "Quoted\n\n"

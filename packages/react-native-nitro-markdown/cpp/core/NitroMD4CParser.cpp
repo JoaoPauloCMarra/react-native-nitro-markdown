@@ -383,11 +383,15 @@ public:
 
             case MD_BLOCK_CODE: {
                 auto* d = static_cast<MD_BLOCK_CODE_DETAIL*>(detail);
-                auto node = impl->makeNode(NodeType::CodeBlock);
-                if (d->lang.size > 0) {
-                    node->language = impl->getAttributeText(&d->lang);
+                if (d->fence_char == '$') {
+                    impl->pushNode(impl->makeNode(NodeType::MathBlock), off);
+                } else {
+                    auto node = impl->makeNode(NodeType::CodeBlock);
+                    if (d->lang.size > 0) {
+                        node->language = impl->getAttributeText(&d->lang);
+                    }
+                    impl->pushNode(node, off);
                 }
-                impl->pushNode(node, off);
                 break;
             }
 

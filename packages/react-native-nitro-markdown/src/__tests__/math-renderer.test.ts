@@ -91,6 +91,44 @@ describe("MathBlock renderer", () => {
     }
   });
 
+  it("preserves the RaTeX instance while streamed content changes", () => {
+    let renderer: ReactTestRenderer | undefined;
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    const render = (content: string) =>
+      createElement(
+        MarkdownContext.Provider,
+        {
+          value: {
+            renderers: {},
+            theme: defaultMarkdownTheme,
+            stylingStrategy: "opinionated",
+          },
+        },
+        createElement(MathBlock, { content }),
+      );
+
+    try {
+      act(() => {
+        renderer = create(render("x^2"));
+      });
+
+      const initialRaTeX = renderer!.root.findAllByType("RaTeXView")[0];
+
+      act(() => {
+        renderer!.update(render("x^2 + y^2"));
+      });
+
+      const updatedRaTeX = renderer!.root.findAllByType("RaTeXView")[0];
+      expect(updatedRaTeX).toBe(initialRaTeX);
+      expect(updatedRaTeX.props.latex).toBe("x^2 + y^2");
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
   it("renders inline and block math with RaTeX by default", () => {
     let renderer: ReactTestRenderer | undefined;
     const consoleErrorSpy = jest
@@ -133,6 +171,116 @@ describe("MathBlock renderer", () => {
           fontSize: defaultMarkdownTheme.fontSizes.xl,
         }),
       );
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it("keeps failed inline math on fallback until content changes", () => {
+    let renderer: ReactTestRenderer | undefined;
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    const render = (content: string) =>
+      createElement(
+        MarkdownContext.Provider,
+        {
+          value: {
+            renderers: {},
+            theme: defaultMarkdownTheme,
+            stylingStrategy: "opinionated",
+          },
+        },
+        createElement(MathInline, { content }),
+      );
+
+    try {
+      act(() => {
+        renderer = create(render("bad"));
+      });
+
+      const initialRaTeX = renderer!.root.findAllByType("RaTeXView")[0];
+      const staleOnError = initialRaTeX.props.onError;
+      act(() => {
+        initialRaTeX.props.onError({ nativeEvent: { error: "invalid" } });
+      });
+      expect(renderer!.root.findAllByType("RaTeXView")).toHaveLength(0);
+
+      act(() => {
+        renderer!.update(render("bad"));
+      });
+      expect(renderer!.root.findAllByType("RaTeXView")).toHaveLength(0);
+
+      act(() => {
+        renderer!.update(render("fixed"));
+      });
+      expect(renderer!.root.findAllByType("RaTeXView")).toHaveLength(1);
+
+      act(() => {
+        renderer!.update(render("bad"));
+      });
+      expect(renderer!.root.findAllByType("RaTeXView")).toHaveLength(1);
+
+      act(() => {
+        staleOnError({ nativeEvent: { error: "invalid" } });
+      });
+      expect(renderer!.root.findAllByType("RaTeXView")).toHaveLength(1);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it("keeps failed block math on fallback until content changes", () => {
+    let renderer: ReactTestRenderer | undefined;
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    const render = (content: string) =>
+      createElement(
+        MarkdownContext.Provider,
+        {
+          value: {
+            renderers: {},
+            theme: defaultMarkdownTheme,
+            stylingStrategy: "opinionated",
+          },
+        },
+        createElement(MathBlock, { content }),
+      );
+
+    try {
+      act(() => {
+        renderer = create(render("bad"));
+      });
+
+      const initialRaTeX = renderer!.root.findAllByType("RaTeXView")[0];
+      const staleOnError = initialRaTeX.props.onError;
+      act(() => {
+        initialRaTeX.props.onError({ nativeEvent: { error: "invalid" } });
+      });
+      expect(renderer!.root.findAllByType("RaTeXView")).toHaveLength(0);
+
+      act(() => {
+        renderer!.update(render("bad"));
+      });
+      expect(renderer!.root.findAllByType("RaTeXView")).toHaveLength(0);
+
+      act(() => {
+        renderer!.update(render("fixed"));
+      });
+      expect(renderer!.root.findAllByType("RaTeXView")).toHaveLength(1);
+
+      act(() => {
+        renderer!.update(render("bad"));
+      });
+      expect(renderer!.root.findAllByType("RaTeXView")).toHaveLength(1);
+
+      act(() => {
+        staleOnError({ nativeEvent: { error: "invalid" } });
+      });
+      expect(renderer!.root.findAllByType("RaTeXView")).toHaveLength(1);
     } finally {
       consoleErrorSpy.mockRestore();
     }

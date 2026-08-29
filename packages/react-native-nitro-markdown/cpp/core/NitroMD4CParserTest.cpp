@@ -249,6 +249,9 @@ public:
         testStrikethrough();
         testMathInline();
         testMathBlock();
+        testIssue74PublicDisplayMath();
+        testIssue74StandaloneEqualsDisplayMath();
+        testIssue74StandaloneDisplayMathContract();
         testParserOptionToggles();
         testHtmlDisabledByDefault();
         testHtmlEnabled();
@@ -311,6 +314,45 @@ private:
         }
 
         return nullptr;
+    }
+
+    static size_t countNodes(
+        const std::shared_ptr<MarkdownNode>& node,
+        NodeType type
+    ) {
+        if (!node) return 0;
+
+        size_t count = node->type == type ? 1 : 0;
+        for (const auto& child : node->children) {
+            count += countNodes(child, type);
+        }
+        return count;
+    }
+
+    static bool hasValidMonotonicOffsets(
+        const std::shared_ptr<MarkdownNode>& node,
+        OFF maximumOffset
+    ) {
+        if (!node || node->beg > node->end || node->end > maximumOffset) {
+            return false;
+        }
+
+        OFF previousBeg = 0;
+        OFF previousEnd = 0;
+        bool hasPrevious = false;
+        for (const auto& child : node->children) {
+            if (hasPrevious && (child->beg < previousBeg || child->end < previousEnd)) {
+                return false;
+            }
+            if (!hasValidMonotonicOffsets(child, maximumOffset)) {
+                return false;
+            }
+            previousBeg = child->beg;
+            previousEnd = child->end;
+            hasPrevious = true;
+        }
+
+        return true;
     }
 
     static double percentile(std::vector<double> values, double percentileValue) {
@@ -1705,6 +1747,378 @@ private:
         TestRunner::assertNotNull(textNode.get(), "MathBlock: has text node");
         TestRunner::assertEqual("x^2 + y^2", textNode->content.value_or(""),
             "MathBlock: exact native content without dollars");
+    }
+
+    static void testIssue74PublicDisplayMath() {
+        const std::string markdown =
+            "$$\n"
+            "x_{n+1}-x_n\n"
+            "= \\frac 12\\left(x_n+\\frac{2}{x_n}\\right)-x_n\n"
+            "= \\frac{2-x_n^2}{2x_n}.\n"
+            "$$";
+        ParserOptions options{true, true};
+
+        MD4CParser parser;
+        const auto result = parser.parse(markdown, options);
+        const auto mathBlock = findFirstNode(result, NodeType::MathBlock);
+        TestRunner::assertNotNull(
+            mathBlock.get(),
+            "Issue #74 body: standalone delimiters produce a math_block"
+        );
+    }
+
+    static void testIssue74StandaloneEqualsDisplayMath() {
+        const std::string markdown =
+            "$$\n"
+            "x_{n+1}-x_n\n"
+            "=\n"
+            "\\frac 12\\left(x_n+\\frac{2}{x_n}\\right)-x_n\n"
+            "=\n"
+            "\\frac{2-x_n^2}{2x_n}.\n"
+            "$$";
+        const std::string expectedContent =
+            "x_{n+1}-x_n = \\frac 12\\left(x_n+\\frac{2}{x_n}\\right)-x_n = \\frac{2-x_n^2}{2x_n}.";
+        ParserOptions options{true, true};
+
+        const auto removeWhitespace = [](const std::string& value) {
+            std::string compact;
+            for (unsigned char character : value) {
+                if (character != ' ' && character != '\n' && character != '\r' && character != '\t') {
+                    compact.push_back(static_cast<char>(character));
+                }
+            }
+            return compact;
+        };
+
+        MD4CParser parser;
+        const auto result = parser.parse(markdown, options);
+        const auto mathBlock = findFirstNode(result, NodeType::MathBlock);
+        TestRunner::assertEqual(
+            "1",
+            std::to_string(countNodes(result, NodeType::MathBlock)),
+            "Issue #74: standalone equals produce exactly one math_block"
+        );
+
+        TestRunner::assertEqual(
+            removeWhitespace(expectedContent),
+            mathBlock ? removeWhitespace(flattenNodeText(mathBlock)) : "",
+            "Issue #74: standalone equals math_block contains the full expression"
+        );
+
+        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+        using BindingParserOptions = ::margelo::nitro::Markdown::ParserOptions;
+
+        HybridMarkdownParser publicParser;
+        BindingParserOptions bindingOptions;
+        bindingOptions.math = true;
+        const auto staticJson = publicParser.parseWithOptions(markdown, bindingOptions);
+        const auto streamingJson = publicParser.parseWithOptionsForStreaming(
+            markdown,
+            bindingOptions
+        );
+        const auto countOccurrences = [](const std::string& value, const std::string& needle) {
+            size_t count = 0;
+            size_t offset = 0;
+            while ((offset = value.find(needle, offset)) != std::string::npos) {
+                count += 1;
+                offset += needle.size();
+            }
+            return count;
+        };
+        const auto assertPublicMathBlock = [&](const std::string& json, const std::string& mode) {
+            TestRunner::assertEqual(
+                "1",
+                std::to_string(countOccurrences(json, "\"type\":\"math_block\"")),
+                "Issue #74: public parser " + mode + " output has one math_block"
+            );
+            TestRunner::assertTrue(
+                json.find("x_{n+1}-x_n") != std::string::npos &&
+                json.find("\\\\frac 12\\\\left") != std::string::npos &&
+                json.find("\\\\frac{2-x_n^2}{2x_n}.") != std::string::npos,
+                "Issue #74: public parser " + mode + " math_block contains the full expression"
+            );
+        };
+        assertPublicMathBlock(staticJson, "static");
+        assertPublicMathBlock(streamingJson, "streaming");
+    }
+
+    static void testIssue74StandaloneDisplayMathContract() {
+        MD4CParser parser;
+        ParserOptions options{true, true, true, true};
+
+        const auto parseMath = [&](const std::string& markdown, const std::string& name) {
+            const auto result = parser.parse(markdown, options);
+            TestRunner::assertEqual(
+                "1",
+                std::to_string(countNodes(result, NodeType::MathBlock)),
+                name + ": one math_block"
+            );
+            return result;
+        };
+
+        const std::string opaqueContent =
+            "$$\n"
+            "\n"
+            "= standalone equals\n"
+            "- standalone minus\n"
+            "# heading text\n"
+            "> blockquote text\n"
+            "- list text\n"
+            "``` code-like text\n"
+            "<tag>html-like text</tag>\n"
+            "$$x$$\n"
+            "$$$\n"
+            "$$ not a close\n"
+            "$$\n";
+        const auto opaqueResult = parseMath(opaqueContent, "Issue #74 opaque content");
+        TestRunner::assertEqual(
+            "math_block",
+            nodeTypeToString(opaqueResult->children[0]->type),
+            "Issue #74 opaque content: root block"
+        );
+        for (const auto type : {
+            NodeType::Heading,
+            NodeType::Paragraph,
+            NodeType::HorizontalRule,
+            NodeType::Blockquote,
+            NodeType::List,
+            NodeType::CodeBlock,
+            NodeType::HtmlBlock,
+        }) {
+            TestRunner::assertTrue(
+                countNodes(opaqueResult, type) == 0,
+                "Issue #74 opaque content: no nested Markdown block"
+            );
+        }
+        const std::string opaqueText = flattenNodeText(opaqueResult->children[0]);
+        TestRunner::assertTrue(
+            opaqueText.find("= standalone equals") != std::string::npos &&
+            opaqueText.find("- standalone minus") != std::string::npos &&
+            opaqueText.find("# heading text") != std::string::npos &&
+            opaqueText.find("$$ not a close") != std::string::npos,
+            "Issue #74 opaque content: Markdown-looking lines stay text"
+        );
+
+        for (size_t leadingSpaces = 0; leadingSpaces <= 3; leadingSpaces++) {
+            std::string markdown(leadingSpaces, ' ');
+            markdown += "$$ \t\nx + y\n";
+            markdown += std::string(leadingSpaces, ' ');
+            markdown += "$$\t\n";
+
+            const auto result = parser.parse(markdown, options);
+            const auto math = findFirstNode(result, NodeType::MathBlock);
+            const auto text = findFirstNode(math, NodeType::Text);
+            TestRunner::assertTrue(
+                countNodes(result, NodeType::MathBlock) == 1 &&
+                text && text->content.value_or("") == "x + y\n",
+                "Issue #74 leading spaces " + std::to_string(leadingSpaces) +
+                    ": opener and closer accepted"
+            );
+        }
+
+        const auto fourSpaceOpener = parser.parse("    $$\nx + y\n", options);
+        TestRunner::assertEqual(
+            "0",
+            std::to_string(countNodes(fourSpaceOpener, NodeType::MathBlock)),
+            "Issue #74 leading spaces 4: opener rejected"
+        );
+
+        const auto fourSpaceCloser = parser.parse("$$\nx + y\n    $$\n", options);
+        const auto fourSpaceCloserMath = findFirstNode(fourSpaceCloser, NodeType::MathBlock);
+        TestRunner::assertTrue(
+            countNodes(fourSpaceCloser, NodeType::MathBlock) == 1 &&
+            fourSpaceCloserMath &&
+            flattenNodeText(fourSpaceCloserMath).find("    $$") != std::string::npos,
+            "Issue #74 leading spaces 4: closer remains math content"
+        );
+
+        parseMath("$$ \t\ncontent\n$$\t", "Issue #74 exact whitespace fences");
+        parseMath("> $$\n> x = y\n> $$", "Issue #74 blockquote fence");
+        parseMath("- $$\n  x = y\n  $$\n", "Issue #74 tight-list fence");
+        parseMath(
+            "- before\n\n- $$\n  x = y\n  $$\n",
+            "Issue #74 loose-list fence"
+        );
+
+        const std::vector<std::pair<std::string, bool>> delimiterCases = {
+            {"$$x\ny\n$$", true},
+            {"$$$\nx\n$$", false},
+            {"\\$$\nx\n$$", false},
+            {"$$ other\nx\n", false},
+            {"    $$\nx\n$$", false},
+            {"$$", false},
+            {"$$x$$", true},
+            {"$$\nx\n$$$\n$$ other\n$$\n", true},
+            {"$$\nx\n", true},
+        };
+        for (size_t index = 0; index < delimiterCases.size(); index++) {
+            const auto& [markdown, hasMath] = delimiterCases[index];
+            const auto result = parser.parse(markdown, options);
+            TestRunner::assertTrue(
+                (countNodes(result, NodeType::MathBlock) == (hasMath ? 1u : 0u)),
+                "Issue #74 delimiters: case " + std::to_string(index)
+            );
+        }
+
+        for (const auto& [ending, name] : std::vector<std::pair<std::string, std::string>>{
+            {"\n", "LF"},
+            {"\r\n", "CRLF"},
+            {"\r", "CR"},
+        }) {
+            const auto result = parseMath("$$" + ending + "π" + ending + "$$", "Issue #74 " + name);
+            const auto math = findFirstNode(result, NodeType::MathBlock);
+            TestRunner::assertTrue(
+                math && flattenNodeText(math).find("π") != std::string::npos,
+                "Issue #74 " + name + ": Unicode content"
+            );
+        }
+
+        std::string nulMarkdown = "$$\nπ";
+        nulMarkdown.push_back('\0');
+        nulMarkdown += "x\n$$";
+        const auto nulResult = parseMath(nulMarkdown, "Issue #74 embedded NUL");
+        const auto nulText = flattenNodeText(findFirstNode(nulResult, NodeType::MathBlock));
+        TestRunner::assertTrue(
+            nulText.find(std::string("π\0x", 4)) != std::string::npos,
+            "Issue #74 embedded NUL: content preserved"
+        );
+        TestRunner::assertTrue(
+            nulText.find('\0') != std::string::npos,
+            "Issue #74 embedded NUL: flattened NUL preserved"
+        );
+        TestRunner::assertTrue(
+            canonicalizeNode(nulResult).find("\\u0000") != std::string::npos,
+            "Issue #74 embedded NUL: canonical content contains NUL"
+        );
+
+        const std::string offsetMarkdown = "prefix\n\n$$\nπ\n$$\ntrailing";
+        const auto offsetResult = parser.parse(offsetMarkdown, options);
+        const auto offsetMath = findFirstNode(offsetResult, NodeType::MathBlock);
+        TestRunner::assertEqual(
+            "8",
+            offsetMath ? std::to_string(offsetMath->beg) : "",
+            "Issue #74 offsets: exact math beginning"
+        );
+        TestRunner::assertTrue(
+            offsetResult &&
+            offsetResult->end == 24 &&
+            hasValidMonotonicOffsets(offsetResult, offsetResult->end),
+            "Issue #74 offsets: monotonic UTF-16 ranges"
+        );
+
+        ParserOptions disabled = options;
+        disabled.math = false;
+        const auto disabledResult = parser.parse(opaqueContent, disabled);
+        TestRunner::assertTrue(
+            countNodes(disabledResult, NodeType::MathBlock) == 0,
+            "Issue #74 math=false: no math_block"
+        );
+        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+        using BindingParserOptions = ::margelo::nitro::Markdown::ParserOptions;
+        BindingParserOptions disabledBinding;
+        disabledBinding.math = false;
+        HybridMarkdownParser disabledParser;
+        const auto disabledStatic = disabledParser.parseWithOptions(opaqueContent, disabledBinding);
+        const auto disabledStreaming = disabledParser.parseWithOptionsForStreaming(
+            opaqueContent,
+            disabledBinding
+        );
+        TestRunner::assertEqual(
+            disabledStatic,
+            disabledStreaming,
+            "Issue #74 math=false: static and streaming bytes stay identical"
+        );
+
+        BindingParserOptions bindingOptions;
+        bindingOptions.math = true;
+        const std::string streamingMarkdown = "$$\nπ + 1\n$$\n\ntrailing";
+        const std::string streamingPrefix = streamingMarkdown.substr(0, 8);
+        HybridMarkdownParser warmParser;
+        const auto warmPrefix = warmParser.parseWithOptionsForStreaming(
+            streamingPrefix,
+            bindingOptions
+        );
+        const auto warmFull = warmParser.parseWithOptionsForStreaming(
+            streamingMarkdown,
+            bindingOptions
+        );
+        HybridMarkdownParser coldParser;
+        const auto coldFull = coldParser.parseWithOptionsForStreaming(
+            streamingMarkdown,
+            bindingOptions
+        );
+        const auto staticFull = coldParser.parseWithOptions(streamingMarkdown, bindingOptions);
+        TestRunner::assertTrue(
+            warmPrefix.find("math_block") != std::string::npos &&
+            warmFull == coldFull &&
+            warmFull == staticFull,
+            "Issue #74 streaming: prefixes and warm/cold bytes stay equivalent"
+        );
+
+        const std::string cachedMathPrefix = "$$\nπ + 1\n$$\n\n";
+        const std::string cachedMathDocument = cachedMathPrefix + "trailing paragraph";
+        HybridMarkdownParser cachedWarmParser;
+        const auto cachedBase = cachedWarmParser.parseWithOptionsForStreaming(
+            cachedMathPrefix,
+            bindingOptions
+        );
+        const auto cachedWarm = cachedWarmParser.parseWithOptionsForStreaming(
+            cachedMathDocument,
+            bindingOptions
+        );
+        HybridMarkdownParser cachedColdParser;
+        const auto cachedCold = cachedColdParser.parseWithOptionsForStreaming(
+            cachedMathDocument,
+            bindingOptions
+        );
+        const auto cachedStatic = cachedColdParser.parseWithOptions(
+            cachedMathDocument,
+            bindingOptions
+        );
+        TestRunner::assertTrue(
+            cachedBase.find("math_block") != std::string::npos &&
+            cachedWarm == cachedCold &&
+            cachedWarm == cachedStatic,
+            "Issue #74 serialization cache: math block bytes stay static/streaming equivalent"
+        );
+
+        const std::vector<std::string> structuredTokens = {
+            "$$", "$$ ", "$$\t", "$$$", "$$x", "=", "-", "# h", "> q",
+            "```", "\\$$", "text", "<tag>", std::string("\0", 1),
+        };
+        std::mt19937 rng(74);
+        bool fuzzPassed = true;
+        for (size_t documentIndex = 0; documentIndex < 256; documentIndex++) {
+            std::string document;
+            const size_t lineCount = 1 + (rng() % 24);
+            for (size_t lineIndex = 0; lineIndex < lineCount; lineIndex++) {
+                const auto& token = structuredTokens[rng() % structuredTokens.size()];
+                document.append(token);
+                document.append((lineIndex % 3 == 0) ? "\r\n" : (lineIndex % 3 == 1 ? "\r" : "\n"));
+            }
+            try {
+                const auto first = parser.parse(document, options);
+                const auto second = parser.parse(document, options);
+                fuzzPassed = fuzzPassed && first && second &&
+                    canonicalizeNode(first) == canonicalizeNode(second);
+            } catch (const std::exception&) {
+                fuzzPassed = false;
+                break;
+            }
+        }
+        TestRunner::assertTrue(fuzzPassed, "Issue #74 structured dollar-fence fuzz is deterministic");
+
+        std::string adversarial = "$$\n";
+        adversarial.reserve(700'000);
+        for (size_t index = 0; index < 50'000; index++) {
+            adversarial += "$$$ delimiter-looking content\n";
+        }
+        const auto adversarialResult = parser.parse(adversarial, options);
+        TestRunner::assertEqual(
+            "1",
+            std::to_string(countNodes(adversarialResult, NodeType::MathBlock)),
+            "Issue #74 bounded delimiter scan parses one unclosed block"
+        );
     }
 
     static void testHtmlDisabledByDefault() {

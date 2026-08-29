@@ -18,4 +18,13 @@ describe("flatten differential corpus (JS getFlattenedText)", () => {
     expect(names).toContain("multiple-blocks");
     expect(names.length).toBeGreaterThanOrEqual(10);
   });
+
+  it("models standalone math fences and the math option", () => {
+    const markdown = "   $$ \t\nx + y\n   $$\t";
+
+    expect(getFlattenedText(parseMarkdown(markdown))).toBe("x + y\n\n");
+
+    const disabledAst = parseMarkdown(markdown, { math: false });
+    expect(disabledAst.children?.some((node) => node.type === "math_block")).toBe(false);
+  });
 });

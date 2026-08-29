@@ -675,6 +675,27 @@
     }
   },
   {
+    "name": "standalone-math-block",
+    "markdown": "$$\nx + y\n$$",
+    "options": {
+      "math": true
+    },
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "math_block",
+          "children": [
+            {
+              "type": "text",
+              "content": "x + y\n"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
     "name": "soft-break",
     "markdown": "a\nb",
     "options": {},

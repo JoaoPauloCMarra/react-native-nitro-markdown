@@ -44,17 +44,17 @@ expectValue(
   "package workspace React Native",
   developmentDependency(root, "react-native") ??
     developmentDependency(packageManifest, "react-native"),
-  "0.86.2",
+  "0.86.3",
 );
 expectValue(
   "example Expo",
   dependencyValue(example, "dependencies", "expo"),
-  "~57.0.16",
+  "~57.0.18",
 );
 expectValue(
   "example React Native",
   dependencyValue(example, "dependencies", "react-native"),
-  "0.86.2",
+  "0.86.3",
 );
 expectValue(
   "example React",
@@ -92,10 +92,10 @@ const rootOverrides = root.overrides;
 if (
   rootOverrides != null &&
   typeof rootOverrides === "object" &&
-  (rootOverrides as JsonRecord)["react-native"] !== "0.86.2"
+  (rootOverrides as JsonRecord)["react-native"] !== "0.86.3"
 ) {
   failures.push(
-    "root overrides.react-native must stay pinned to 0.86.2 for the Expo SDK 57 workspace",
+    "root overrides.react-native must stay pinned to 0.86.3 for the Expo SDK 57 workspace",
   );
 }
 
@@ -104,18 +104,18 @@ for (const manifest of [root, packageManifest]) {
     manifest,
     "@react-native/babel-preset",
   );
-  if (babelPreset !== undefined && babelPreset !== "^0.86.2") {
+  if (babelPreset !== undefined && babelPreset !== "^0.86.3") {
     failures.push(
-      `@react-native/babel-preset must use ^0.86.2, got "${String(babelPreset)}"`,
+      `@react-native/babel-preset must use ^0.86.3, got "${String(babelPreset)}"`,
     );
   }
   const jestPreset = developmentDependency(
     manifest,
     "@react-native/jest-preset",
   );
-  if (jestPreset !== undefined && jestPreset !== "0.86.2") {
+  if (jestPreset !== undefined && jestPreset !== "0.86.3") {
     failures.push(
-      `@react-native/jest-preset must use 0.86.2, got "${String(jestPreset)}"`,
+      `@react-native/jest-preset must use 0.86.3, got "${String(jestPreset)}"`,
     );
   }
 }
