@@ -4,8 +4,8 @@
 [![npm downloads](https://img.shields.io/npm/dm/react-native-nitro-markdown?color=22c55e&label=downloads)](https://www.npmjs.com/package/react-native-nitro-markdown)
 [![CI](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/actions/workflows/ci.yml/badge.svg)](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/react-native-nitro-markdown?color=007ec6)](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/LICENSE)
-[![React Native](https://img.shields.io/badge/react--native-0.86.2-61dafb)](https://reactnative.dev/docs/0.86/getting-started-without-a-framework)
-[![Expo](https://img.shields.io/badge/expo-SDK%2057%20%28RN%200.86.2%29-000020)](https://docs.expo.dev/versions/v57.0.0/)
+[![React Native](https://img.shields.io/badge/react--native-0.86.3-61dafb)](https://reactnative.dev/docs/0.86/getting-started-without-a-framework)
+[![Expo](https://img.shields.io/badge/expo-SDK%2057%20%28RN%200.86.3%29-000020)](https://docs.expo.dev/versions/v57.0.0/)
 [![Nitro Modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.37.0%20%3C0.38.0-black)](https://nitro.margelo.com/)
 [![TypeScript](https://img.shields.io/badge/typescript-6.0-3178c6)](https://www.typescriptlang.org/)
 
@@ -135,6 +135,26 @@ so the first frame renders without parsing. Full guide:
 
 Session ranges use JavaScript UTF-16 units. An index inside a surrogate pair
 (including emoji) is rejected with `invalid_range` instead of rounded.
+
+### Display math fences
+
+With `options.math: true`, use a standalone dollar fence for multi-line display
+math:
+
+```text
+$$
+x_{n+1} - x_n = 0
+$$
+```
+
+The opening line must contain `$$` with zero to three leading spaces and only
+spaces or tabs after it, followed by a line ending. The closing line accepts
+zero to three leading spaces, then exactly `$$` with optional trailing spaces
+or tabs; it may end at EOF. Fence contents are treated as opaque math text,
+including blank lines and Markdown-looking lines. Inline display math such as
+`$$x^2$$` keeps its existing behavior. Lines that are not valid standalone
+openers keep the existing inline Markdown behavior. A valid unclosed opener
+consumes its content through EOF as one math block.
 
 ## Headless parsing
 
@@ -339,13 +359,13 @@ for the error-code contract.
 
 | Dependency                                                                | Supported                                                                                           |
 | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| [React Native](https://reactnative.dev/)                                  | `>=0.75` (New Architecture); runtime gate `0.86.2`, RN `0.87` Strict TypeScript compatibility check |
+| [React Native](https://reactnative.dev/)                                  | `>=0.75` (New Architecture); runtime gate `0.86.3`, RN `0.87` Strict TypeScript compatibility check |
 | [Nitro Modules](https://www.npmjs.com/package/react-native-nitro-modules) | `>=0.37.0 <0.38.0`                                                                                  |
 | [RaTeX React Native](https://www.npmjs.com/package/ratex-react-native)    | `>=0.1.4` (example validated with `0.1.14`)                                                         |
-| [Expo](https://docs.expo.dev/versions/v57.0.0/)                           | SDK `57.0.16` development builds with RN `0.86.2`                                                   |
+| [Expo](https://docs.expo.dev/versions/v57.0.0/)                           | SDK `57.0.18` development builds with RN `0.86.3`                                                   |
 | Platforms                                                                 | iOS, Android (Web not supported)                                                                    |
 
-The native package gate and Expo example use React Native `0.86.2`. `check:ci`
+The native package gate and Expo example use React Native `0.86.3`. `check:ci`
 also compiles the public source against React Native `0.87.0`'s Strict
 TypeScript API. Do not override the React Native version selected by Expo.
 

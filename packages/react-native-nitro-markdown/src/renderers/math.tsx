@@ -1,5 +1,5 @@
 import type { FC, ComponentType, ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -45,6 +45,25 @@ type MathStyles = ReturnType<typeof createMathStyles>;
 const mathStylesCache = new WeakMap<MarkdownTheme, MathStyles>();
 const INLINE_DISPLAY_MATH_PATTERN =
   /\\(?:frac|dfrac|tfrac|sqrt|sum|prod|int|lim|begin|matrix|pmatrix|bmatrix|cases)\b/;
+
+type MathRenderBoundaryProps = {
+  content: string;
+  children: (hasRenderError: boolean, onError: () => void) => ReactNode;
+};
+
+const MathRenderBoundary: FC<MathRenderBoundaryProps> = ({
+  content,
+  children,
+}) => {
+  const contentToken = useMemo(() => Symbol(content.length), [content]);
+  const [failedToken, setFailedToken] = useState<symbol | null>(null);
+
+  const onError = useCallback(() => {
+    setFailedToken(contentToken);
+  }, [contentToken]);
+
+  return children(failedToken === contentToken, onError);
+};
 
 function getInlineMathFontSize(content: string, theme: MarkdownTheme) {
   return INLINE_DISPLAY_MATH_PATTERN.test(content)
@@ -239,44 +258,35 @@ const createMathStyles = (theme: MarkdownTheme) =>
 export const MathInline: FC<MathInlineProps> = ({ content, style }) => {
   const { theme } = useMarkdownContext();
   const styles = getCachedStyles(mathStylesCache, theme, createMathStyles);
-  const [hasRenderError, setHasRenderError] = useState(false);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+  const RaTeXView = RaTeXViewComponent;
 
   if (!content) return null;
 
-  if (RaTeXViewComponent && !hasRenderError) {
-    return (
-      <View
-        style={[styles.mathInlineContainer, style]}
-        accessible
-        accessibilityLabel={content}
-      >
-        <RaTeXViewComponent
-          latex={content}
-          fontSize={getInlineMathFontSize(content, theme)}
-          displayMode={false}
-          style={styles.ratexInline}
-          {...(theme.colors.text ? { color: theme.colors.text } : {})}
-          onError={() => {
-            if (!mountedRef.current) return;
-            setHasRenderError(true);
-          }}
-        />
-      </View>
-    );
-  }
-
   return (
-    <View style={[styles.mathInlineFallbackContainer, style]}>
-      <Text style={styles.mathInlineFallback}>{content}</Text>
-    </View>
+    <MathRenderBoundary content={content}>
+      {(hasRenderError, onError) =>
+        RaTeXView && !hasRenderError ? (
+          <View
+            style={[styles.mathInlineContainer, style]}
+            accessible
+            accessibilityLabel={content}
+          >
+            <RaTeXView
+              latex={content}
+              fontSize={getInlineMathFontSize(content, theme)}
+              displayMode={false}
+              style={styles.ratexInline}
+              {...(theme.colors.text ? { color: theme.colors.text } : {})}
+              onError={onError}
+            />
+          </View>
+        ) : (
+          <View style={[styles.mathInlineFallbackContainer, style]}>
+            <Text style={styles.mathInlineFallback}>{content}</Text>
+          </View>
+        )
+      }
+    </MathRenderBoundary>
   );
 };
 
@@ -288,53 +298,44 @@ type MathBlockProps = {
 export const MathBlock: FC<MathBlockProps> = ({ content, style }) => {
   const { theme } = useMarkdownContext();
   const styles = getCachedStyles(mathStylesCache, theme, createMathStyles);
-  const [hasRenderError, setHasRenderError] = useState(false);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+  const RaTeXView = RaTeXViewComponent;
 
   if (!content) return null;
 
-  if (RaTeXViewComponent && !hasRenderError) {
-    return (
-      <View
-        style={[styles.mathBlockContainer, style]}
-        accessible
-        accessibilityLabel={content}
-      >
-        <HorizontalMathViewport
-          style={styles.mathBlockScroll}
-          contentStyle={styles.mathBlockScrollContent}
-        >
-          <RaTeXViewComponent
-            latex={content}
-            fontSize={theme.fontSizes.xl}
-            displayMode
-            style={styles.ratexBlock}
-            {...(theme.colors.text ? { color: theme.colors.text } : {})}
-            onError={() => {
-              if (!mountedRef.current) return;
-              setHasRenderError(true);
-            }}
-          />
-        </HorizontalMathViewport>
-      </View>
-    );
-  }
-
   return (
-    <View style={[styles.mathBlockFallbackContainer, style]}>
-      <HorizontalMathViewport
-        style={styles.mathBlockScroll}
-        contentStyle={styles.mathBlockScrollContent}
-      >
-        <Text style={styles.mathBlockFallback}>{content}</Text>
-      </HorizontalMathViewport>
-    </View>
+    <MathRenderBoundary content={content}>
+      {(hasRenderError, onError) =>
+        RaTeXView && !hasRenderError ? (
+          <View
+            style={[styles.mathBlockContainer, style]}
+            accessible
+            accessibilityLabel={content}
+          >
+            <HorizontalMathViewport
+              style={styles.mathBlockScroll}
+              contentStyle={styles.mathBlockScrollContent}
+            >
+              <RaTeXView
+                latex={content}
+                fontSize={theme.fontSizes.xl}
+                displayMode
+                style={styles.ratexBlock}
+                {...(theme.colors.text ? { color: theme.colors.text } : {})}
+                onError={onError}
+              />
+            </HorizontalMathViewport>
+          </View>
+        ) : (
+          <View style={[styles.mathBlockFallbackContainer, style]}>
+            <HorizontalMathViewport
+              style={styles.mathBlockScroll}
+              contentStyle={styles.mathBlockScrollContent}
+            >
+              <Text style={styles.mathBlockFallback}>{content}</Text>
+            </HorizontalMathViewport>
+          </View>
+        )
+      }
+    </MathRenderBoundary>
   );
 };

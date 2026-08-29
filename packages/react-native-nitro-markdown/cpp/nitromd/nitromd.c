@@ -5343,7 +5343,7 @@ abort:
 }
 
 static int
-md_process_verbatim_block_contents(MD_CTX* ctx, MD_TEXTTYPE text_type, const MD_VERBATIMLINE* lines, MD_SIZE n_lines)
+md_process_verbatim_block_contents(MD_CTX* ctx, MD_TEXTTYPE text_type, const MD_VERBATIMLINE* lines, MD_SIZE n_lines, int replace_null)
 {
     static const CHAR indent_chunk_str[] = _T("                ");
     static const SZ indent_chunk_size = SIZEOF_ARRAY(indent_chunk_str) - 1;
@@ -5357,7 +5357,7 @@ md_process_verbatim_block_contents(MD_CTX* ctx, MD_TEXTTYPE text_type, const MD_
 
         MD_ASSERT(indent >= 0);
 
-        /* Output code indentation. */
+        /* Output block indentation. */
         while(indent > (int) indent_chunk_size) {
             MD_TEXT(text_type, indent_chunk_str, indent_chunk_size);
             indent -= indent_chunk_size;
@@ -5365,8 +5365,11 @@ md_process_verbatim_block_contents(MD_CTX* ctx, MD_TEXTTYPE text_type, const MD_
         if(indent > 0)
             MD_TEXT(text_type, indent_chunk_str, indent);
 
-        /* Output the code line itself. */
-        MD_TEXT_INSECURE(text_type, STR(line->beg), line->end - line->beg);
+        /* Output the block line itself. */
+        if(replace_null)
+            MD_TEXT_INSECURE(text_type, STR(line->beg), line->end - line->beg);
+        else
+            MD_TEXT(text_type, STR(line->beg), line->end - line->beg);
 
         /* Enforce end-of-line. */
         MD_TEXT(text_type, _T("\n"), 1);
@@ -5377,7 +5380,7 @@ abort:
 }
 
 static int
-md_process_code_block_contents(MD_CTX* ctx, int is_fenced, const MD_VERBATIMLINE* lines, MD_SIZE n_lines)
+md_process_code_block_contents(MD_CTX* ctx, int is_fenced, int is_math, const MD_VERBATIMLINE* lines, MD_SIZE n_lines)
 {
     if(is_fenced) {
         /* Skip the first line in case of fenced code: It is the fence.
@@ -5398,7 +5401,7 @@ md_process_code_block_contents(MD_CTX* ctx, int is_fenced, const MD_VERBATIMLINE
     if(n_lines == 0)
         return 0;
 
-    return md_process_verbatim_block_contents(ctx, MD_TEXT_CODE, lines, n_lines);
+    return md_process_verbatim_block_contents(ctx, MD_TEXT_CODE, lines, n_lines, !is_math);
 }
 
 static int
@@ -5526,12 +5529,13 @@ md_process_leaf_block(MD_CTX* ctx, MD_BLOCK* block)
 
         case MD_BLOCK_CODE:
             MD_CHECK(md_process_code_block_contents(ctx, (block->data != 0),
+                            (block->data == 2),
                             (const MD_VERBATIMLINE*)(block + 1), block->n_lines));
             break;
 
         case MD_BLOCK_HTML:
             MD_CHECK(md_process_verbatim_block_contents(ctx, MD_TEXT_HTML,
-                            (const MD_VERBATIMLINE*)(block + 1), block->n_lines));
+                            (const MD_VERBATIMLINE*)(block + 1), block->n_lines, TRUE));
             break;
 
         case MD_BLOCK_TABLE:
@@ -6100,6 +6104,44 @@ md_is_opening_code_fence(MD_CTX* ctx, OFF beg, OFF* p_end)
 }
 
 static int
+md_is_opening_math_fence(MD_CTX* ctx, OFF beg, OFF* p_end)
+{
+    OFF off = beg;
+
+    if(off + 1 >= ctx->size || CH(off) != _T('$') || CH(off + 1) != _T('$'))
+        return FALSE;
+
+    off += 2;
+    while(off < ctx->size && ISBLANK(off))
+        off++;
+
+    if(off >= ctx->size || !ISNEWLINE(off))
+        return FALSE;
+
+    *p_end = off;
+    return TRUE;
+}
+
+static int
+md_is_closing_math_fence(MD_CTX* ctx, OFF beg, OFF* p_end)
+{
+    OFF off = beg;
+
+    if(off + 1 >= ctx->size || CH(off) != _T('$') || CH(off + 1) != _T('$'))
+        return FALSE;
+
+    off += 2;
+    while(off < ctx->size && ISANYOF2(off, _T(' '), _T('\t')))
+        off++;
+
+    if(off < ctx->size && !ISNEWLINE(off))
+        return FALSE;
+
+    *p_end = off;
+    return TRUE;
+}
+
+static int
 md_is_closing_code_fence(MD_CTX* ctx, CHAR ch, OFF beg, OFF* p_end)
 {
     OFF off = beg;
@@ -6610,10 +6652,12 @@ md_analyze_line(MD_CTX* ctx, OFF beg, OFF* p_end,
         if(pivot_line->type == MD_LINE_FENCEDCODE) {
             line->beg = off;
 
-            /* We are another MD_LINE_FENCEDCODE unless we are closing fence
-             * which we transform into MD_LINE_BLANK. */
             if(line->indent < ctx->code_indent_offset) {
-                if(md_is_closing_code_fence(ctx, CH(pivot_line->beg), off, &off)) {
+                const int is_math_fence = (pivot_line->data == 2);
+                const int is_closing_fence = is_math_fence
+                    ? md_is_closing_math_fence(ctx, off, &off)
+                    : md_is_closing_code_fence(ctx, CH(pivot_line->beg), off, &off);
+                if(is_closing_fence) {
                     line->type = MD_LINE_BLANK;
                     ctx->last_line_has_list_loosening_effect = FALSE;
                     break;
@@ -6628,6 +6672,7 @@ md_analyze_line(MD_CTX* ctx, OFF beg, OFF* p_end,
                     line->indent = 0;
 
                 line->type = MD_LINE_FENCEDCODE;
+                line->data = pivot_line->data;
                 break;
             }
         }
@@ -6869,6 +6914,18 @@ md_analyze_line(MD_CTX* ctx, OFF beg, OFF* p_end,
             if(md_is_opening_code_fence(ctx, off, &off)) {
                 line->type = MD_LINE_FENCEDCODE;
                 line->data = 1;
+                line->enforce_new_block = TRUE;
+                break;
+            }
+        }
+
+        if((ctx->parser.flags & MD_FLAG_LATEXMATHSPANS) &&
+                line->indent < ctx->code_indent_offset &&
+                off < ctx->size && CH(off) == _T('$'))
+        {
+            if(md_is_opening_math_fence(ctx, off, &off)) {
+                line->type = MD_LINE_FENCEDCODE;
+                line->data = 2;
                 line->enforce_new_block = TRUE;
                 break;
             }

@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [0.12.1] - 2026-08-29
+
+### Breaking changes
+
+None.
+
+### Fixed
+
+- Standalone `$$` display-math fences now parse as one opaque `math_block` in
+  static and streaming paths while preserving inline display math behavior,
+  resolving [#74](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/issues/74).
+- Math renderers retry changed streamed content after a failed render and
+  ignore delayed errors from stale content.
+
 ## [0.12.0] - 2026-08-25
 
 ### Breaking changes

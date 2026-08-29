@@ -31,6 +31,9 @@ The fork is deliberately minimal so upstream fixes stay easy to re-apply:
    `MD_OFFSET` argument and block range fields that its AST wrapper needs. The
    current upstream parser does not expose those callback offsets, so this
    small ABI-local change is re-applied when syncing upstream.
+4. **Standalone display-math fences** — With the existing math flag enabled,
+   NitroMarkdown recognizes exact line-oriented `$$` fences and reuses the
+   existing fenced-code storage and callbacks to emit opaque math content.
 
 Everything else is stock md4c. The C++ wrapper lives in
 `../core/NitroMD4CParser.{hpp,cpp}` and is the only intended entry point.
@@ -46,6 +49,7 @@ Everything else is stock md4c. The C++ wrapper lives in
 ## Syncing upstream
 
 1. Diff the new upstream `md4c.c` / `md4c.h` against `nitromd.c` / `nitromd.h`.
-2. Re-apply only the two local changes above (the `#include "nitromd.h"` line in
-   `nitromd.c` and the `#define md_parse nitromd_parse` block in `nitromd.h`).
+2. Re-apply only the local changes above (including the `#include
+   "nitromd.h"` line in `nitromd.c` and the `#define md_parse nitromd_parse`
+   block in `nitromd.h`).
 3. Run `bun run test:cpp` and update the synced upstream commit above.

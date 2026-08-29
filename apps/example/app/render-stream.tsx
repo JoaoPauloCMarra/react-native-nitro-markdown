@@ -18,6 +18,7 @@ import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
   useMarkdownSession,
+  Markdown,
   MarkdownStream,
   useMarkdownStreamState,
   type MarkdownNode,
@@ -32,6 +33,7 @@ import {
 } from "../components/example-ui";
 import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 import { EXAMPLE_COLORS } from "../theme";
+import { ISSUE_74_STANDALONE_EQUALS_DISPLAY_MATH_MARKDOWN } from "../markdown-test-data";
 
 const TOKEN_DELAY_MS = 150;
 const RAW_PREVIEW_SYNC_INTERVAL_MS = 60;
@@ -111,6 +113,10 @@ The difference becomes night and day when you have documents spanning thousands 
 We hope you enjoy using **Nitro Markdown**. It is designed to be the *definitive* way to render Markdown in React Native apps, especially those driven by AI.
 
 Happy Coding! 
+
+## Issue #74 Streaming Display Math
+
+${ISSUE_74_STANDALONE_EQUALS_DISPLAY_MATH_MARKDOWN}
 `;
 
 type MarkdownRendererPanelProps = {
@@ -324,6 +330,26 @@ const MarkdownRendererPanel = memo(function MarkdownRendererPanel({
         ) : (
           <HeadlessStreamPreview session={session} />
         )}
+      </ScrollView>
+    </ExamplePanel>
+  );
+});
+
+const Issue74StaticFixture = memo(function Issue74StaticFixture() {
+  return (
+    <ExamplePanel style={[styles.card, styles.issueFixtureCard]}>
+      <Text style={styles.panelTitle}>Issue #74 Static Display Math</Text>
+      <ScrollView
+        style={styles.cardScroll}
+        nestedScrollEnabled
+        bounces={false}
+        alwaysBounceVertical={false}
+        overScrollMode="never"
+        contentContainerStyle={styles.scrollContent}
+      >
+        <Markdown options={STREAM_PARSER_OPTIONS}>
+          {ISSUE_74_STANDALONE_EQUALS_DISPLAY_MATH_MARKDOWN}
+        </Markdown>
       </ScrollView>
     </ExamplePanel>
   );
@@ -591,6 +617,8 @@ export default function TokenStreamScreen() {
             );
           })}
         </View>
+        <ExampleSectionLabel>Issue #74 Regression Fixture</ExampleSectionLabel>
+        <Issue74StaticFixture />
         <ExampleSectionLabel>Raw Token Data</ExampleSectionLabel>
         {isUiActive ? (
           <RawPreviewPanel key={rawPreviewResetKey} session={session} />
@@ -659,6 +687,9 @@ const styles = StyleSheet.create({
   card: {
     height: 200,
     overflow: "hidden",
+  },
+  issueFixtureCard: {
+    height: 240,
   },
   markdownCard: {
     backgroundColor: EXAMPLE_COLORS.surface,

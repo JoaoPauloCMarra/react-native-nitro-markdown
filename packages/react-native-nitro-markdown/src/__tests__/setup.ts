@@ -18,8 +18,41 @@ function stampOffsets(node: MarkdownNode): MarkdownNode {
   return node;
 }
 
-function serializeMockAst(text: string, includeOffsets: boolean): string {
-  const ast = createMockAst(text);
+type MockLine = {
+  content: string;
+  hasLineEnding: boolean;
+};
+
+function splitMockLines(text: string): MockLine[] {
+  const lines: MockLine[] = [];
+  let start = 0;
+
+  for (let index = 0; index < text.length; index++) {
+    const character = text[index];
+    if (character !== "\r" && character !== "\n") continue;
+
+    lines.push({ content: text.slice(start, index), hasLineEnding: true });
+    if (character === "\r" && text[index + 1] === "\n") index++;
+    start = index + 1;
+  }
+
+  if (start < text.length) {
+    lines.push({ content: text.slice(start), hasLineEnding: false });
+  }
+
+  return lines;
+}
+
+function isStandaloneMathFenceLine(line: string): boolean {
+  return /^ {0,3}\$\$[ \t]*$/.test(line);
+}
+
+function serializeMockAst(
+  text: string,
+  includeOffsets: boolean,
+  mathEnabled = true,
+): string {
+  const ast = createMockAst(text, mathEnabled);
   if (includeOffsets) {
     offsetCursor = 0;
     stampOffsets(ast);
@@ -27,21 +60,38 @@ function serializeMockAst(text: string, includeOffsets: boolean): string {
   return JSON.stringify(ast);
 }
 
-function createMockAst(text: string): MarkdownNode {
+function createMockAst(text: string, mathEnabled: boolean): MarkdownNode {
   if (text.length === 0) {
     return { type: "document", children: [] };
   }
 
   const root: MarkdownNode = { type: "document", children: [] };
-  const lines = text.split("\n");
+  const lines = splitMockLines(text);
   let i = 0;
 
   while (i < lines.length) {
-    const line = lines[i];
+    const line = lines[i].content;
     const trimmed = line.trim();
 
     if (trimmed === "") {
       i++;
+      continue;
+    }
+
+    if (mathEnabled && lines[i].hasLineEnding && isStandaloneMathFenceLine(line)) {
+      const contentLines: string[] = [];
+      i++;
+      while (i < lines.length && !isStandaloneMathFenceLine(lines[i].content)) {
+        contentLines.push(lines[i].content);
+        i++;
+      }
+      if (i < lines.length) i++;
+
+      const mathBlock: MarkdownNode = { type: "math_block" };
+      if (contentLines.length > 0) {
+        mathBlock.children = [{ type: "text", content: `${contentLines.join("\n")}\n` }];
+      }
+      root.children!.push(mathBlock);
       continue;
     }
 
@@ -67,8 +117,8 @@ function createMockAst(text: string): MarkdownNode {
       const language = codeBlockMatch[1] || undefined;
       const codeLines: string[] = [];
       i++;
-      while (i < lines.length && !lines[i].trim().startsWith("```")) {
-        codeLines.push(lines[i]);
+      while (i < lines.length && !lines[i].content.trim().startsWith("```")) {
+        codeLines.push(lines[i].content);
         i++;
       }
       i++;
@@ -82,8 +132,8 @@ function createMockAst(text: string): MarkdownNode {
 
     if (trimmed.startsWith(">")) {
       const quoteLines: string[] = [];
-      while (i < lines.length && lines[i].trim().startsWith(">")) {
-        quoteLines.push(lines[i].trim().replace(/^>\s?/, ""));
+      while (i < lines.length && lines[i].content.trim().startsWith(">")) {
+        quoteLines.push(lines[i].content.trim().replace(/^>\s?/, ""));
         i++;
       }
       root.children!.push({
@@ -94,8 +144,8 @@ function createMockAst(text: string): MarkdownNode {
     }
 
     const paragraphLines: string[] = [];
-    while (i < lines.length && lines[i].trim() !== "") {
-      paragraphLines.push(lines[i]);
+    while (i < lines.length && lines[i].content.trim() !== "") {
+      paragraphLines.push(lines[i].content);
       i++;
     }
     if (paragraphLines.length > 0) {
@@ -112,7 +162,7 @@ function createMockAst(text: string): MarkdownNode {
 const mockParser = {
   parse: jest.fn((text: string) => serializeMockAst(text, true)),
   parseWithOptions: jest.fn((text: string, options: MockParserOptions) =>
-    serializeMockAst(text, options.sourceOffsets !== false),
+    serializeMockAst(text, options.sourceOffsets !== false, options.math !== false),
   ),
   extractPlainText: jest.fn((text: string) => text),
   extractPlainTextWithOptions: jest.fn((text: string, _options: MockParserOptions) => text),

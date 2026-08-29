@@ -48,7 +48,7 @@ function commandExists(command) {
 }
 
 function shellQuote(value) {
-  return JSON.stringify(String(value));
+  return `'${String(value).replace(/'/g, "'\\''")}'`;
 }
 
 function jsonEscape(value) {
@@ -190,6 +190,7 @@ function ensureDir(dirPath) {
 async function main() {
   const args = new Set(process.argv.slice(2));
   const collectCoverage = args.has("--coverage");
+  const runSanitizers = args.has("--sanitizers");
   const minLinesArg = process.argv
     .slice(2)
     .find((arg) => arg.startsWith("--min-lines="));
@@ -201,6 +202,11 @@ async function main() {
   const isWindows = process.platform === "win32";
 
   log("Building and running C++ tests for MD4C Parser...");
+
+  if (collectCoverage && runSanitizers) {
+    log("C++ coverage and sanitizer execution cannot run together", "red");
+    process.exit(1);
+  }
 
   if (!commandExists("cmake")) {
     log("CMake not found. Please install CMake:", "red");
@@ -223,6 +229,20 @@ async function main() {
     (!llvmCov || !llvmProfdata || !cCompiler || !cxxCompiler || isWindows)
   ) {
     log("C++ coverage requires llvm-cov and llvm-profdata on macOS/Linux", "red");
+    process.exit(1);
+  }
+
+  const sanitizerCCompiler = runSanitizers
+    ? commandPath(process.env.CC || "clang")
+    : null;
+  const sanitizerCxxCompiler = runSanitizers
+    ? commandPath(process.env.CXX || "clang++")
+    : null;
+  if (runSanitizers && (!sanitizerCCompiler || !sanitizerCxxCompiler || isWindows)) {
+    log(
+      "C++ sanitizer execution is unsupported here; clang/clang++ on macOS or Linux is required",
+      "red",
+    );
     process.exit(1);
   }
 
@@ -320,7 +340,17 @@ protected:
         '-DCMAKE_EXE_LINKER_FLAGS="-fprofile-instr-generate -fcoverage-mapping"',
       ].join(" ")
     : "";
-  const cmakeConfigCommand = `cmake ${cmakeGenerator} ${coverageFlags} "${cppDir}"`.trim();
+  const sanitizerFlags = runSanitizers
+    ? [
+        "-DCMAKE_BUILD_TYPE=Debug",
+        `-DCMAKE_C_COMPILER=${shellQuote(sanitizerCCompiler)}`,
+        `-DCMAKE_CXX_COMPILER=${shellQuote(sanitizerCxxCompiler)}`,
+        '-DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -O1 -g"',
+        '-DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -O1 -g"',
+        '-DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"',
+      ].join(" ")
+    : "";
+  const cmakeConfigCommand = `cmake ${cmakeGenerator} ${coverageFlags} ${sanitizerFlags} "${cppDir}"`.trim();
 
   if (!(await execCommand(cmakeConfigCommand, { cwd: buildDir }))) {
     log("CMake configuration failed", "red");
@@ -360,7 +390,13 @@ protected:
 
   const testEnv = collectCoverage
     ? { ...process.env, LLVM_PROFILE_FILE: path.join(buildDir, "coverage-%p.profraw") }
-    : process.env;
+    : runSanitizers
+      ? {
+          ...process.env,
+          ASAN_OPTIONS: "halt_on_error=1:detect_leaks=0",
+          UBSAN_OPTIONS: "halt_on_error=1:print_stacktrace=1",
+        }
+      : process.env;
 
   if (!(await execCommand(`"${testExecutable}"`, { cwd: buildDir, env: testEnv }))) {
     log("Tests failed", "red");

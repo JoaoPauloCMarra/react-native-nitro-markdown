@@ -397,3 +397,11 @@ This blockquote will look like a gray bar in **Default**, but like an "Alert Inf
 > The Custom renderer replaces the standard \`View\` with a specialized component that includes an icon and different layout logic!
 
 ---`;
+
+export const ISSUE_74_STANDALONE_EQUALS_DISPLAY_MATH_MARKDOWN = `$$
+x_{n+1}-x_n
+=
+\\frac 12\\left(x_n+\\frac{2}{x_n}\\right)-x_n
+=
+\\frac{2-x_n^2}{2x_n}.
+$$`;
