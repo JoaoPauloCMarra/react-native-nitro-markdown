@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [0.12.2] - 2026-09-08
+
+### Breaking changes
+
+None.
+
+### Changed
+
+- Streaming plain-text appends avoid scanning completed document lines when
+  the trailing text node can be extended. Fence checks scan marker lines
+  without splitting the full document into an array of strings.
+
+### Fixed
+
+- Android builds skip the explicit Kotlin plugin when Android Gradle Plugin
+  already provides Kotlin support, avoiding the duplicate `kotlin` extension
+  error with AGP 9 built-in Kotlin.
+
 ## [0.12.1] - 2026-08-29
 
 ### Breaking changes

@@ -306,6 +306,35 @@ describe("incremental AST", () => {
     expect(mockParser.parse).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["```ts\r\nconst a = 1;\r\n", "const b = 2;\r\n", false],
+    ["~~~ts\nconst a = 1;\n", "const b = 2;\n", false],
+    ["```ts\nconst a = 1;\n", "```\n", true],
+    ["~~~ts\nconst a = 1;\n", "~~~\n", true],
+    ["```ts\nconst a = 1;\n", "\n   ```\n", true],
+    ["```ts\nconst a = 1;\n", "\n    ```\n", false],
+    ["```ts\nconst a = 1;\n``", "`\n", true],
+    ["```ts\nconst a = 1;\n```\nAfter", "\nNext", true],
+    ["~~~~ts\nconst a = 1;\n~~~\n", "more\n", false],
+    ["```ts\nconst a = 1;\n~~~\n", "more\n", false],
+    ["~~~ts\nconst a = 1;\n~~~~\nAfter", "\nNext", true],
+    ["    ```ts\nconst a = 1;\n", "more\n", true],
+  ])("preserves fence boundaries for %j plus %j", (previousText, chunk, shouldParse) => {
+    const previousAst = setTrailingPathEnd(
+      parseMarkdownAst(previousText),
+      previousText.length,
+    );
+    jest.clearAllMocks();
+
+    getNextStreamAst({
+      previousAst,
+      previousText,
+      nextText: previousText + chunk,
+    });
+
+    expect(mockParser.parse).toHaveBeenCalledTimes(shouldParse ? 1 : 0);
+  });
+
   it("keeps p95 latency within budget for append-only updates", () => {
     let previousText = "Hello";
     let previousAst = setTrailingPathEnd(
