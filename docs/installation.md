@@ -20,7 +20,7 @@ because parsing and math rendering run in native code.
 ## Expo (development build)
 
 ```sh
-bunx expo install react-native-nitro-markdown react-native-nitro-modules@0.37.0 ratex-react-native@0.1.14
+bunx expo install react-native-nitro-markdown react-native-nitro-modules@0.37.1 ratex-react-native@0.1.14
 bunx expo prebuild
 bunx expo run:ios   # or run:android
 ```
@@ -33,7 +33,7 @@ upgrading the package so the native projects pick up the new module.
 ## Bare React Native
 
 ```sh
-bun add react-native-nitro-markdown react-native-nitro-modules@0.37.0 ratex-react-native@0.1.14
+bun add react-native-nitro-markdown react-native-nitro-modules@0.37.1 ratex-react-native@0.1.14
 cd ios && bundle exec pod install
 ```
 

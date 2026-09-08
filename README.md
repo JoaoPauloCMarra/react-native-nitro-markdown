@@ -47,12 +47,12 @@ Native components — giving you a native parser boundary with component flexibi
 ## Install
 
 ```sh
-bun add react-native-nitro-markdown react-native-nitro-modules@0.37.0 ratex-react-native@0.1.14
+bun add react-native-nitro-markdown react-native-nitro-modules@0.37.1 ratex-react-native@0.1.14
 ```
 
 ```sh
 # Expo development build
-bunx expo install react-native-nitro-markdown react-native-nitro-modules@0.37.0 ratex-react-native@0.1.14
+bunx expo install react-native-nitro-markdown react-native-nitro-modules@0.37.1 ratex-react-native@0.1.14
 bunx expo prebuild
 ```
 
@@ -362,7 +362,7 @@ for the error-code contract.
 | [React Native](https://reactnative.dev/)                                  | `>=0.75` (New Architecture); runtime gate `0.86.3`, RN `0.87` Strict TypeScript compatibility check |
 | [Nitro Modules](https://www.npmjs.com/package/react-native-nitro-modules) | `>=0.37.0 <0.38.0`                                                                                  |
 | [RaTeX React Native](https://www.npmjs.com/package/ratex-react-native)    | `>=0.1.4` (example validated with `0.1.14`)                                                         |
-| [Expo](https://docs.expo.dev/versions/v57.0.0/)                           | SDK `57.0.18` development builds with RN `0.86.3`                                                   |
+| [Expo](https://docs.expo.dev/versions/v57.0.0/)                           | SDK `57.0.21` development builds with RN `0.86.3`                                                   |
 | Platforms                                                                 | iOS, Android (Web not supported)                                                                    |
 
 The native package gate and Expo example use React Native `0.86.3`. `check:ci`
@@ -413,6 +413,10 @@ not launch a native app. `release:preflight` adds example checks and an auth-fre
 dry-run; it does not publish or release the package. Prebuild generates native
 projects, the Android/iOS build commands compile them, and smoke commands are
 the runtime checks. Build and self-check success alone is not runtime proof.
+
+When several devices are available, set `ANDROID_SERIAL` for Android and
+`EXAMPLE_SMOKE_IOS_UDID` for iOS. The iOS smoke check stops if it cannot select
+one booted simulator.
 
 ## Contributing
 

@@ -769,6 +769,37 @@ private:
         TestRunner::assertTrue(unicodeSession->replace(1.0, 3.0, "X") == 3.0, "Session replaces a complete emoji range");
         TestRunner::assertEqual("AXB", unicodeSession->getAllText(), "Session complete emoji replacement preserves ASCII parity");
 
+        auto rangeSession = std::make_shared<HybridMarkdownSession>();
+        rangeSession->reset("A😀BéC");
+        TestRunner::assertEqual("éC", rangeSession->getTextRange(4.0, 6.0), "Session reads Unicode tail");
+        TestRunner::assertEqual("éC", rangeSession->getTextRange(4.0, 6.0), "Session repeats Unicode tail");
+        TestRunner::assertEqual("😀", rangeSession->getTextRange(1.0, 3.0), "Session reads before prior range");
+        rangeSession->append("😀fin");
+        TestRunner::assertEqual("😀fin", rangeSession->getTextRange(6.0, 11.0), "Session reads appended Unicode chunk");
+        rangeSession->replace(0.0, 1.0, "中文字");
+        TestRunner::assertEqual("😀fin", rangeSession->getTextRange(8.0, 13.0), "Session range survives earlier replacement");
+        rangeSession->reset("x😀y");
+        TestRunner::assertEqual("😀y", rangeSession->getTextRange(1.0, 4.0), "Session range survives shorter reset");
+        rangeSession->clear();
+        rangeSession->append("é😀z");
+        TestRunner::assertEqual("😀z", rangeSession->getTextRange(1.0, 4.0), "Session range survives clear and append");
+        bool rangeAfterAppendThrew = false;
+        try {
+            (void)rangeSession->getTextRange(2.0, 3.0);
+        } catch (const std::runtime_error& error) {
+            rangeAfterAppendThrew = std::string(error.what()).find("surrogate pair") != std::string::npos;
+        }
+        TestRunner::assertTrue(rangeAfterAppendThrew, "Session range cursor never permits split surrogates");
+        TestRunner::assertEqual("😀z", rangeSession->getTextRange(1.0, 4.0), "Session valid range survives rejected range");
+        rangeSession->clear();
+        for (size_t index = 0; index < 1000; ++index) {
+            const double start = rangeSession->getLength();
+            rangeSession->append("aé😀");
+            TestRunner::assertEqual("aé😀", rangeSession->getTextRange(start, start + 4.0), "Session growing Unicode append range");
+        }
+        rangeSession->dispose();
+        TestRunner::assertTrue(rangeSession->getExternalMemorySize() == 0, "Session range cursor retains no external memory after disposal");
+
         session->setHighlightPosition(12.0);
         TestRunner::assertTrue(
             session->getHighlightPosition() == 12.0,
@@ -1170,6 +1201,22 @@ private:
                 TestRunner::assertEqual("https://example.com", link->href.value_or(""), "Link href");
                 TestRunner::assertEqual("hi&amp;bye", link->title.value_or(""), "Link title");
             }
+        }
+
+        std::string references = "[label0] [label2047]\n\n";
+        for (size_t index = 0; index < 2048; ++index) {
+            references += "[label" + std::to_string(index) + "]: https://example.com/" +
+                std::to_string(index) + "\n";
+        }
+        const auto expanded = parser.parse(references, options);
+        TestRunner::assertTrue(
+            expanded->children.size() == 1 && expanded->children[0]->children.size() == 3,
+            "Reference table growth preserves both links"
+        );
+        if (expanded->children.size() == 1 && expanded->children[0]->children.size() == 3) {
+            const auto& links = expanded->children[0]->children;
+            TestRunner::assertEqual("https://example.com/0", links.front()->href.value_or(""), "First grown reference target");
+            TestRunner::assertEqual("https://example.com/2047", links.back()->href.value_or(""), "Last grown reference target");
         }
     }
 

@@ -1839,15 +1839,21 @@ md_build_label_hashtable(MD_CTX* ctx, MD_LABEL_HASH_TABLE* table)
          * is sorted. */
         list = (MD_LABEL_HASH_LIST*) *p_bucket;
         if(list->n_entries >= list->alloc_entries) {
-            size_t alloc_entries = list->alloc_entries + list->alloc_entries / 2;
-            MD_LABEL_HASH_LIST* list_tmp = (MD_LABEL_HASH_LIST*) realloc(list,
-                        sizeof(MD_LABEL_HASH_LIST) + alloc_entries * sizeof(MD_LABEL_HASH_ENTRY*));
+            uint64_t alloc_entries = (uint64_t) list->alloc_entries + list->alloc_entries / 2;
+            MD_LABEL_HASH_LIST* list_tmp;
+            if(alloc_entries > UINT_MAX ||
+               alloc_entries > (SIZE_MAX - sizeof(MD_LABEL_HASH_LIST)) / sizeof(MD_LABEL_HASH_ENTRY*)) {
+                MD_LOG("Label hash bucket capacity exceeds the maximum size.");
+                goto abort;
+            }
+            list_tmp = (MD_LABEL_HASH_LIST*) realloc(list,
+                        sizeof(MD_LABEL_HASH_LIST) + (size_t) alloc_entries * sizeof(MD_LABEL_HASH_ENTRY*));
             if(list_tmp == NULL) {
                 MD_LOG("realloc() failed.");
                 goto abort;
             }
             list = list_tmp;
-            list->alloc_entries = alloc_entries;
+            list->alloc_entries = (unsigned) alloc_entries;
             table->buckets[entry->hash % table->n_buckets] = list;
         }
 
@@ -1953,20 +1959,24 @@ md_add_label_def(MD_CTX* ctx, MD_LABEL_HASH_TABLE* table, const CHAR* label, SZ 
     MD_LABEL_HASH_ENTRY* entry;
 
     if(table->n_defs >= table->alloc_defs) {
-        size_t new_alloc_defs;
+        uint64_t new_alloc_defs;
         void* new_defs;
 
         new_alloc_defs = (table->alloc_defs > 0
-                ? table->alloc_defs + table->alloc_defs / 2
+                ? (uint64_t) table->alloc_defs + table->alloc_defs / 2
                 : 8);
-        new_defs = realloc(table->defs, new_alloc_defs * table->def_size);
+        if(new_alloc_defs > UINT_MAX || new_alloc_defs > SIZE_MAX / table->def_size) {
+            MD_LOG("Label definition capacity exceeds the maximum size.");
+            return NULL;
+        }
+        new_defs = realloc(table->defs, (size_t) new_alloc_defs * table->def_size);
         if(new_defs == NULL) {
             MD_LOG("realloc() failed.");
             return NULL;
         }
 
         table->defs = new_defs;
-        table->alloc_defs = new_alloc_defs;
+        table->alloc_defs = (unsigned) new_alloc_defs;
     }
 
     entry = (MD_LABEL_HASH_ENTRY*)((char*)table->defs + table->n_defs * table->def_size);
@@ -5605,7 +5615,7 @@ md_process_all_blocks(MD_CTX* ctx)
 
             case MD_BLOCK_ADMONITION:
                 adm_substr_offsets[0] = 0;
-                adm_substr_offsets[1] = md_strlen(MD_ADMONITION_TAGS[block->data]);
+                adm_substr_offsets[1] = (MD_OFFSET) md_strlen(MD_ADMONITION_TAGS[block->data]);
 
                 det.adm.type.text = MD_ADMONITION_TAGS[block->data];
                 det.adm.type.size = adm_substr_offsets[1];

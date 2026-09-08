@@ -69,7 +69,7 @@ async function main(): Promise<void> {
       "@types/react": "~19.2.18",
       react: "19.2.3",
       "react-native": "0.87.0",
-      "react-native-nitro-modules": "0.37.0",
+      "react-native-nitro-modules": "0.37.1",
       typescript: "6.0.3",
     };
 

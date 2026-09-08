@@ -45,6 +45,8 @@ private:
     mutable std::mutex mutex_;
     std::string buffer_;
     size_t bufferUtf16Length_ = 0;
+    size_t rangeUtf16Offset_ = 0;
+    size_t rangeByteOffset_ = 0;
     std::unique_ptr<HybridMarkdownParser> parser_;
     double highlightPosition_ = 0.0;
     bool disposed_ = false;
@@ -56,7 +58,9 @@ private:
     static size_t utf16Length(const std::string& text) noexcept;
     static size_t byteOffsetForUtf16(
         const std::string& text,
-        size_t utf16Offset
+        size_t utf16Offset,
+        size_t byteIndex = 0,
+        size_t currentOffset = 0
     );
     static std::pair<size_t, size_t> validateAndClampRange(
         double from,

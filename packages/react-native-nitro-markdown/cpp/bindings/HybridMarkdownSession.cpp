@@ -82,8 +82,11 @@ double HybridMarkdownSession::append(const std::string& chunk) {
         }
         from = bufferUtf16Length_;
         to = from + chunkLength;
+        const size_t previousByteLength = buffer_.size();
         buffer_.append(chunk);
         bufferUtf16Length_ = to;
+        rangeUtf16Offset_ = from;
+        rangeByteOffset_ = previousByteLength;
     }
 
     notifyListeners(snapshotListeners(), static_cast<double>(from), static_cast<double>(to));
@@ -96,6 +99,8 @@ void HybridMarkdownSession::clear() {
         ensureActiveLocked();
         buffer_.clear();
         bufferUtf16Length_ = 0;
+        rangeUtf16Offset_ = 0;
+        rangeByteOffset_ = 0;
         highlightPosition_ = 0.0;
     }
 
@@ -125,8 +130,12 @@ std::string HybridMarkdownSession::getTextRange(double from, double to) {
     std::lock_guard<std::mutex> lock(mutex_);
     ensureActiveLocked();
     const auto [start, end] = validateAndClampRange(from, to, bufferUtf16Length_);
-    const size_t startByte = byteOffsetForUtf16(buffer_, start);
-    const size_t endByte = byteOffsetForUtf16(buffer_, end);
+    const size_t startByte = start >= rangeUtf16Offset_
+        ? byteOffsetForUtf16(buffer_, start, rangeByteOffset_, rangeUtf16Offset_)
+        : byteOffsetForUtf16(buffer_, start);
+    const size_t endByte = byteOffsetForUtf16(buffer_, end, startByte, start);
+    rangeUtf16Offset_ = start;
+    rangeByteOffset_ = startByte;
     return buffer_.substr(startByte, endByte - startByte);
 }
 
@@ -180,6 +189,8 @@ void HybridMarkdownSession::reset(const std::string& text) {
         validateBufferSizeLocked(newLength);
         buffer_ = text;
         bufferUtf16Length_ = newLength;
+        rangeUtf16Offset_ = 0;
+        rangeByteOffset_ = 0;
         highlightPosition_ = 0.0;
     }
 
@@ -210,9 +221,11 @@ double HybridMarkdownSession::replace(
         validateBufferSizeLocked(newLength);
 
         const size_t startByte = byteOffsetForUtf16(buffer_, start);
-        const size_t endByte = byteOffsetForUtf16(buffer_, end);
+        const size_t endByte = byteOffsetForUtf16(buffer_, end, startByte, start);
         buffer_.replace(startByte, endByte - startByte, text);
         bufferUtf16Length_ = newLength;
+        rangeUtf16Offset_ = start;
+        rangeByteOffset_ = startByte;
     }
 
     notifyListeners(
@@ -229,6 +242,8 @@ void HybridMarkdownSession::dispose() {
     std::vector<Listener>().swap(listeners_);
     std::string().swap(buffer_);
     bufferUtf16Length_ = 0;
+    rangeUtf16Offset_ = 0;
+    rangeByteOffset_ = 0;
     parser_.reset();
     highlightPosition_ = 0.0;
 }
@@ -277,11 +292,11 @@ size_t HybridMarkdownSession::utf16Length(const std::string& text) noexcept {
 
 size_t HybridMarkdownSession::byteOffsetForUtf16(
     const std::string& text,
-    size_t utf16Offset
+    size_t utf16Offset,
+    size_t byteIndex,
+    size_t currentOffset
 ) {
     const auto* bytes = reinterpret_cast<const unsigned char*>(text.data());
-    size_t byteIndex = 0;
-    size_t currentOffset = 0;
     while (byteIndex < text.size()) {
         const size_t sequenceLength = utf8SequenceLength(bytes + byteIndex, text.size() - byteIndex);
         const size_t sequenceUnits = sequenceLength == 4 ? 2 : 1;

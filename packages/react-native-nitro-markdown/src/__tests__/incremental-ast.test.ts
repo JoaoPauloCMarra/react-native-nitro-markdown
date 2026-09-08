@@ -89,6 +89,46 @@ describe("incremental AST", () => {
     expect(Object.isFrozen(nextAst.children)).toBe(true);
   });
 
+  it.each([
+    ["Visit www", ".example.com"],
+    ["Visit www.", "example.com"],
+    ["Visit https:/", "/example.com"],
+    ["Visit https://example.com", "/guide"],
+    ["Visit https://example.com", "extra"],
+    ["Email user@example", ".com"],
+    ["Email user@example.", "com"],
+    ["Email user@example.com", "extra"],
+  ])("reparses automatic links across %s + %s", (previousText, chunk) => {
+    const previousAst = setTrailingPathEnd(
+      parseMarkdownAst(previousText),
+      previousText.length,
+    );
+    const nextText = previousText + chunk;
+    const parseCurrent = jest.fn(() => parseMarkdownAst(nextText));
+
+    getNextStreamAst({ previousAst, previousText, nextText, parseCurrent });
+
+    expect(parseCurrent).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the plain append shortcut after a completed link token", () => {
+    const previousText = "Visit https://example.com then";
+    const previousAst = setTrailingPathEnd(
+      parseMarkdownAst(previousText),
+      previousText.length,
+    );
+    const parseCurrent = jest.fn();
+
+    getNextStreamAst({
+      previousAst,
+      previousText,
+      nextText: previousText + " continue",
+      parseCurrent,
+    });
+
+    expect(parseCurrent).not.toHaveBeenCalled();
+  });
+
   it("uses JavaScript UTF-16 lengths for accented and emoji appends", () => {
     const previousText = "Olá 👋";
     const previousAst = setTrailingPathEnd(
@@ -304,6 +344,35 @@ describe("incremental AST", () => {
     });
 
     expect(mockParser.parse).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["```ts\r\nconst a = 1;\r\n", "const b = 2;\r\n", false],
+    ["~~~ts\nconst a = 1;\n", "const b = 2;\n", false],
+    ["```ts\nconst a = 1;\n", "```\n", true],
+    ["~~~ts\nconst a = 1;\n", "~~~\n", true],
+    ["```ts\nconst a = 1;\n", "\n   ```\n", true],
+    ["```ts\nconst a = 1;\n", "\n    ```\n", false],
+    ["```ts\nconst a = 1;\n``", "`\n", true],
+    ["```ts\nconst a = 1;\n```\nAfter", "\nNext", true],
+    ["~~~~ts\nconst a = 1;\n~~~\n", "more\n", false],
+    ["```ts\nconst a = 1;\n~~~\n", "more\n", false],
+    ["~~~ts\nconst a = 1;\n~~~~\nAfter", "\nNext", true],
+    ["    ```ts\nconst a = 1;\n", "more\n", true],
+  ])("preserves fence boundaries for %j plus %j", (previousText, chunk, shouldParse) => {
+    const previousAst = setTrailingPathEnd(
+      parseMarkdownAst(previousText),
+      previousText.length,
+    );
+    jest.clearAllMocks();
+
+    getNextStreamAst({
+      previousAst,
+      previousText,
+      nextText: previousText + chunk,
+    });
+
+    expect(mockParser.parse).toHaveBeenCalledTimes(shouldParse ? 1 : 0);
   });
 
   it("keeps p95 latency within budget for append-only updates", () => {

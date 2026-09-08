@@ -7,7 +7,24 @@ import type { ParserOptions } from "../Markdown.nitro";
 import { freezeMarkdownNode } from "./freeze-ast";
 
 const PLAIN_TEXT_APPEND_PATTERN = /[`*_~[\]#!<>()|$\n\r]/;
-const FENCE_LINE_PATTERN = /^ {0,3}(```+|~~~+)/;
+const FENCE_LINE_PATTERN = /(?:^|\n) {0,3}(```+|~~~+)/;
+const FENCE_LINES_PATTERN = /(?:^|\n) {0,3}(```+|~~~+)/g;
+const LINK_BOUNDARY_PATTERN = /[.:/@&\\]/;
+
+const hasAmbiguousLinkBoundary = (
+  previousText: string,
+  appendedChunk: string,
+): boolean => {
+  if (LINK_BOUNDARY_PATTERN.test(appendedChunk)) return true;
+  const trailingText = previousText.slice(previousText.lastIndexOf(" ") + 1);
+  if (!LINK_BOUNDARY_PATTERN.test(trailingText)) return false;
+  const tokenStart = Math.max(
+    trailingText.lastIndexOf("\n"),
+    trailingText.lastIndexOf("\r"),
+    trailingText.lastIndexOf("\t"),
+  ) + 1;
+  return LINK_BOUNDARY_PATTERN.test(trailingText.slice(tokenStart));
+};
 
 const parseAst = (text: string, options?: ParserOptions): MarkdownNode => {
   if (options) {
@@ -22,14 +39,10 @@ const materializeIncrementalAst = (
 ): MarkdownNode => (options?.freezeAst ? freezeMarkdownNode(ast) : ast);
 
 const isInsideFencedCodeBlock = (text: string): boolean => {
-  const lines = text.split(/\r?\n/);
   let openFenceChar: "`" | "~" | null = null;
   let openFenceLength = 0;
 
-  for (const line of lines) {
-    const fenceMatch = line.match(FENCE_LINE_PATTERN);
-    if (!fenceMatch) continue;
-
+  for (const fenceMatch of text.matchAll(FENCE_LINES_PATTERN)) {
     const marker = fenceMatch[1] ?? "";
     const markerChar = marker[0] as "`" | "~";
     const markerLength = marker.length;
@@ -50,7 +63,7 @@ const isInsideFencedCodeBlock = (text: string): boolean => {
 };
 
 const containsFenceLine = (text: string): boolean => {
-  return text.split(/\r?\n/).some((line) => FENCE_LINE_PATTERN.test(line));
+  return FENCE_LINE_PATTERN.test(text);
 };
 
 const getTrailingLine = (text: string): string => {
@@ -192,6 +205,8 @@ export const reuseStableAstNodes = (
   previousNode: MarkdownNode,
   nextNode: MarkdownNode,
 ): MarkdownNode => {
+  if (previousNode === nextNode) return previousNode;
+
   if (previousNode.type !== nextNode.type) {
     return nextNode;
   }
@@ -280,6 +295,25 @@ export const getNextStreamAst = ({
     return previousAst;
   }
 
+  if (hasAmbiguousLinkBoundary(previousText, appendedChunk)) {
+    return parseAstWithStableNodes(previousAst, nextText, options, parseCurrent);
+  }
+
+  if (
+    !PLAIN_TEXT_APPEND_PATTERN.test(appendedChunk) &&
+    !endsAtBlockBoundary(previousText)
+  ) {
+    const textAppendedAst = appendPlainTextToAst(
+      previousAst,
+      appendedChunk,
+      previousText.length,
+    );
+    if (textAppendedAst) {
+      return materializeIncrementalAst(textAppendedAst, options);
+    }
+    return parseAstWithStableNodes(previousAst, nextText, options, parseCurrent);
+  }
+
   const insideFencedCodeBlock = isInsideFencedCodeBlock(previousText);
   const hasFenceBoundary =
     containsFenceLine(appendedChunk) ||
@@ -294,25 +328,6 @@ export const getNextStreamAst = ({
     if (fencedTextAppendAst) {
       return materializeIncrementalAst(fencedTextAppendAst, options);
     }
-  }
-
-  if (!PLAIN_TEXT_APPEND_PATTERN.test(appendedChunk)) {
-    if (endsAtBlockBoundary(previousText)) {
-      return parseAstWithStableNodes(previousAst, nextText, options, parseCurrent);
-    }
-
-    const textAppendedAst = appendPlainTextToAst(
-      previousAst,
-      appendedChunk,
-      previousText.length,
-    );
-    if (textAppendedAst) {
-      return materializeIncrementalAst(textAppendedAst, options);
-    }
-  }
-
-  if (insideFencedCodeBlock) {
-    return parseAstWithStableNodes(previousAst, nextText, options, parseCurrent);
   }
 
   // Correctness-first fallback: full reparse for all non-trivial appends.

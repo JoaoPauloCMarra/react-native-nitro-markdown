@@ -198,13 +198,12 @@ function createReporter() {
       console.log(`  ${icon} [${platform}] ${name}${detail}`);
     },
     finish({ requiredPlatforms, allowSkip }) {
-      const failed = tests.filter((test) => test.status === "failed");
       for (const platform of requiredPlatforms) {
         const executed = tests.some(
           (test) => test.platform === platform && test.status === "passed",
         );
         if (!executed && !allowSkip) {
-          failed.push({
+          tests.push({
             platform,
             name: "platform-smoke-execution",
             status: "failed",
@@ -212,6 +211,7 @@ function createReporter() {
           });
         }
       }
+      const failed = tests.filter((test) => test.status === "failed");
       fs.writeFileSync(reportPath, JSON.stringify({ tests }, null, 2));
       log(`\nSmoke report written to ${reportPath}`, "cyan");
       if (failed.length > 0) {
@@ -380,20 +380,25 @@ async function runIosSmoke(reporter) {
     return;
   }
 
-  const booted = run("xcrun", ["simctl", "list", "devices", "booted"]);
-  const match = booted.match(/\(([0-9A-F-]{36})\) \(Booted\)/);
-  if (!match) {
+  const booted = JSON.parse(
+    run("xcrun", ["simctl", "list", "devices", "booted", "--json"]),
+  );
+  const requestedUdid = process.env.EXAMPLE_SMOKE_IOS_UDID;
+  const candidates = Object.values(booted.devices).flat().filter((device) =>
+    device.state === "Booted" && (!requestedUdid || device.udid === requestedUdid),
+  );
+  if (candidates.length !== 1) {
     reporter.record(
       "ios",
       "booted simulator",
-      "skipped",
-      "no booted iOS simulator found",
+      "failed",
+      "Set EXAMPLE_SMOKE_IOS_UDID to one booted simulator; no unique target was found",
     );
     return;
   }
   reporter.record("ios", "booted simulator", "passed");
 
-  const udid = match[1];
+  const udid = candidates[0].udid;
   const devClientUrl = createDevClientUrl("127.0.0.1");
   log(`Launching iOS example on ${udid}...`, "cyan");
   tryRun("xcrun", ["simctl", "terminate", udid, bundleId], { stdio: "ignore" });

@@ -29,8 +29,11 @@ export type MarkdownErrorSource = "parse" | "extract" | "session" | "render";
 export const MAX_PARSE_INPUT_LENGTH = 10 * 1024 * 1024;
 
 export function utf8ByteLength(value: string): number {
-  let bytes = 0;
-  for (let index = 0; index < value.length; index += 1) {
+  const firstNonAscii = value.search(/[\u0080-\uffff]/);
+  if (firstNonAscii === -1) return value.length;
+
+  let bytes = firstNonAscii;
+  for (let index = firstNonAscii; index < value.length; index += 1) {
     const code = value.charCodeAt(index);
     if (code <= 0x7f) {
       bytes += 1;

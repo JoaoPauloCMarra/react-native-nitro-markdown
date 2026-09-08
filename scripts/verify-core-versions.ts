@@ -49,7 +49,7 @@ expectValue(
 expectValue(
   "example Expo",
   dependencyValue(example, "dependencies", "expo"),
-  "~57.0.18",
+  "~57.0.21",
 );
 expectValue(
   "example React Native",
@@ -64,19 +64,19 @@ expectValue(
 expectValue(
   "example Nitro Modules",
   dependencyValue(example, "dependencies", "react-native-nitro-modules"),
-  "0.37.0",
+  "0.37.1",
 );
 expectValue(
   "Nitrogen",
   developmentDependency(root, "nitrogen") ??
     developmentDependency(packageManifest, "nitrogen"),
-  "0.37.0",
+  "0.37.1",
 );
 expectValue(
   "Nitro Modules",
   developmentDependency(root, "react-native-nitro-modules") ??
     developmentDependency(packageManifest, "react-native-nitro-modules"),
-  "0.37.0",
+  "0.37.1",
 );
 expectValue(
   "Nitro peer range",

@@ -16,6 +16,46 @@ the flexibility of components — plus first-class streaming and headless APIs.
 - 📜 **Virtualization** — bounded memory and time-to-first-screen on long docs.
 - 🧮 **Math + syntax highlighting + GFM tables** out of the box.
 
+## Streaming append check (initial 0.12.2 PR snapshot)
+
+On 2026-09-08, the Android example ran both versions of `getNextStreamAst`
+in the same Hermes runtime on an Android 17 / API 37 arm64 emulator.
+Plain-text appends avoid the full-document fence scan in the new version.
+This table records the initial PR candidate below. Later physical-device
+measurements, additional fixes and remaining rendering limits are recorded in
+[the final v0.12.2 performance report](./performance-v0.12.2.md).
+
+| Document | Before p50 | After p50 | Before p95 | After p95 | Before p99 | After p99 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 28,004 UTF-16 units | 0.341 ms | 0.016 ms | 0.365 ms | 0.026 ms | 0.375 ms | 0.031 ms |
+| 280,004 UTF-16 units | 3.283 ms | 0.033 ms | 3.982 ms | 0.078 ms | 5.148 ms | 0.080 ms |
+
+These are quantiles of batch averages: 30 samples per version, 20 updates per
+sample, alternating execution order, with the first round discarded.
+Both versions produced identical output and parse-fallback decisions for
+5,000 seeded cases covering LF, CRLF, split fences, indentation, and Unicode.
+
+This measures append-helper work only. It does not measure native parsing,
+rendering, frame rate, or physical-device performance. The input contains
+ordinary lines and a trailing text node; formatted or invalid appends can
+still require parsing.
+
+Baseline: `e93be08e7079ca888ab66d60426e833884770191`.
+Candidate `incremental-ast.ts` SHA-256:
+`7c732328ac4bb15142d15b31268dc1535ea931495b6437c2395eb484831b15ec`.
+
+Run a host check, or emit the same experiment for a connected Hermes debugger:
+
+```sh
+bun scripts/benchmark-stream-ast.js e93be08e7079ca888ab66d60426e833884770191
+bun scripts/benchmark-stream-ast.js e93be08e7079ca888ab66d60426e833884770191 /tmp/stream-ast-benchmark.js
+```
+
+The emitted file is a JavaScript expression. Evaluate it in the idle example
+app's debugger and retain the returned report. The harness loads production
+source for both versions and stubs native imports; fallback decisions use a
+fixture AST. It does not replace parser or rendering tests.
+
 ## Parse benchmark
 
 The benchmark has separate records for separate runtimes. Nitro device timing

@@ -88,12 +88,12 @@ const getPlainTextInline = (
   return text;
 };
 
-const containsInlineMath = (nodes?: readonly MarkdownNode[]): boolean => {
+const containsMath = (nodes?: readonly MarkdownNode[]): boolean => {
   if (!nodes || nodes.length === 0) return false;
   const pending = [...nodes];
   while (pending.length > 0) {
     const node = pending.pop()!;
-    if (node.type === "math_inline") return true;
+    if (node.type === "math_inline" || node.type === "math_block") return true;
     if (node.children) {
       for (const child of node.children) pending.push(child);
     }
@@ -308,7 +308,7 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
       );
 
     case "paragraph":
-      if (containsInlineMath(node.children)) {
+      if (containsMath(node.children)) {
         return (
           <Paragraph inListItem={inListItem} style={nodeStyles?.paragraph}>
             {renderChildren(node.children, inListItem, false)}

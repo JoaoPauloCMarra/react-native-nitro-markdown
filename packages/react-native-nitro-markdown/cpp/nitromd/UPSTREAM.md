@@ -34,6 +34,9 @@ The fork is deliberately minimal so upstream fixes stay easy to re-apply:
 4. **Standalone display-math fences** — With the existing math flag enabled,
    NitroMarkdown recognizes exact line-oriented `$$` fences and reuses the
    existing fenced-code storage and callbacks to emit opaque math content.
+5. **Explicit capacity bounds** — Label-table growth checks both the stored
+   unsigned capacity and allocation byte size before narrowing. The fixed
+   admonition tag lengths are explicitly converted to `MD_OFFSET`.
 
 Everything else is stock md4c. The C++ wrapper lives in
 `../core/NitroMD4CParser.{hpp,cpp}` and is the only intended entry point.
