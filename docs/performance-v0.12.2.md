@@ -82,6 +82,9 @@ proof of leak absence; native tests separately verify released session capacity.
 
 ### Rendering limit
 
+The following timing run used candidate `894276d`, before the display-math
+layout correction described below. Its mixed fixture contains no math.
+
 An actual mounted `MarkdownStream` received 60 appends requested 16 ms apart
 after a 16,005-unit mixed document. Final text matched in both configurations:
 
@@ -98,6 +101,21 @@ change per append. Full AST validation/copying and document child reconciliation
 remain significant costs. This release does not promise smooth 60 Hz updates
 for this large workload. A future rendering change needs its own mutation,
 custom-renderer and validation contract tests.
+
+### Visual regression found before release
+
+The full example walkthrough found a blank Pythagorean equation and undersized
+neighboring display formulas on the physical iPhone and iOS simulator. The
+parser returned the complete math AST. Single-line display math was nested in a
+paragraph, but the renderer selected a native `Text` container because it only
+recognized inline math as requiring a view layout. The display-math view then
+became a constrained text attachment.
+
+Paragraphs now use the existing view layout for both inline and display math.
+Two regression cases cover display math alone and beside text; both fail without
+the correction and pass with it. The same simulator fixture then renders all
+three equations at the intended size. This is a layout fix with no parser or
+public API change.
 
 ### Reproduction and verification
 

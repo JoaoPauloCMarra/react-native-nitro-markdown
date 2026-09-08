@@ -34,6 +34,8 @@ None.
   parse when their content arrives across chunk boundaries.
 - Reference-definition storage checks allocation bounds before narrowing
   native sizes.
+- Display math inside paragraphs uses a view layout so equations do not
+  disappear or shrink as native text attachments.
 
 ## [0.12.1] - 2026-08-29
 

@@ -118,6 +118,33 @@ describe("Markdown renderer accessibility", () => {
     }
   });
 
+  it.each([false, true])("keeps display math outside native Text with surrounding text: %s", (withText) => {
+    const formula: MarkdownNode = {
+      type: "math_block",
+      children: [{ type: "text", content: "a^2 + b^2 = c^2" }],
+    };
+    const ast: MarkdownNode = {
+      type: "document",
+      children: [{
+        type: "paragraph",
+        children: withText
+          ? [{ type: "text", content: "Before " }, formula, { type: "text", content: " after" }]
+          : [formula],
+      }],
+    };
+    const renderer = renderMarkdown(ast);
+    const math = renderer.root.findByType("MathBlock");
+
+    expect(math.props.content).toBe("a^2 + b^2 = c^2");
+    for (let parent = math.parent; parent; parent = parent.parent) {
+      expect(parent.type).not.toBe("Text");
+    }
+    if (withText) {
+      expect(renderer.root.findAllByProps({ children: "Before " })).toHaveLength(1);
+      expect(renderer.root.findAllByProps({ children: " after" })).toHaveLength(1);
+    }
+  });
+
   it("wires semantic roles for built-in renderers", () => {
     const renderer = renderMarkdown(sourceAst);
 
