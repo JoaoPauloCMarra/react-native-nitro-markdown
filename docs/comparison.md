@@ -16,11 +16,14 @@ the flexibility of components — plus first-class streaming and headless APIs.
 - 📜 **Virtualization** — bounded memory and time-to-first-screen on long docs.
 - 🧮 **Math + syntax highlighting + GFM tables** out of the box.
 
-## Streaming append check (0.12.2)
+## Streaming append check (initial 0.12.2 PR snapshot)
 
 On 2026-09-08, the Android example ran both versions of `getNextStreamAst`
 in the same Hermes runtime on an Android 17 / API 37 arm64 emulator.
 Plain-text appends avoid the full-document fence scan in the new version.
+This table records the initial PR candidate below. Later physical-device
+measurements, additional fixes and remaining rendering limits are recorded in
+[the final v0.12.2 performance report](./performance-v0.12.2.md).
 
 | Document | Before p50 | After p50 | Before p95 | After p95 | Before p99 | After p99 |
 | --- | --- | --- | --- | --- | --- | --- |

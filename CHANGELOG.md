@@ -20,12 +20,20 @@ None.
 - Streaming plain-text appends avoid scanning completed document lines when
   the trailing text node can be extended. Fence checks scan marker lines
   without splitting the full document into an array of strings.
+- Session range reads reuse a validated UTF-16 cursor for repeated and
+  appended-tail reads while preserving Unicode range checks.
+- ASCII input validation avoids a JavaScript character-by-character scan,
+  and AST reuse returns immediately for identical nodes.
 
 ### Fixed
 
 - Android builds skip the explicit Kotlin plugin when Android Gradle Plugin
   already provides Kotlin support, avoiding the duplicate `kotlin` extension
   error with AGP 9 built-in Kotlin.
+- Streaming automatic URLs and email addresses remain consistent with a full
+  parse when their content arrives across chunk boundaries.
+- Reference-definition storage checks allocation bounds before narrowing
+  native sizes.
 
 ## [0.12.1] - 2026-08-29
 

@@ -9,6 +9,22 @@ import { freezeMarkdownNode } from "./freeze-ast";
 const PLAIN_TEXT_APPEND_PATTERN = /[`*_~[\]#!<>()|$\n\r]/;
 const FENCE_LINE_PATTERN = /(?:^|\n) {0,3}(```+|~~~+)/;
 const FENCE_LINES_PATTERN = /(?:^|\n) {0,3}(```+|~~~+)/g;
+const LINK_BOUNDARY_PATTERN = /[.:/@&\\]/;
+
+const hasAmbiguousLinkBoundary = (
+  previousText: string,
+  appendedChunk: string,
+): boolean => {
+  if (LINK_BOUNDARY_PATTERN.test(appendedChunk)) return true;
+  const trailingText = previousText.slice(previousText.lastIndexOf(" ") + 1);
+  if (!LINK_BOUNDARY_PATTERN.test(trailingText)) return false;
+  const tokenStart = Math.max(
+    trailingText.lastIndexOf("\n"),
+    trailingText.lastIndexOf("\r"),
+    trailingText.lastIndexOf("\t"),
+  ) + 1;
+  return LINK_BOUNDARY_PATTERN.test(trailingText.slice(tokenStart));
+};
 
 const parseAst = (text: string, options?: ParserOptions): MarkdownNode => {
   if (options) {
@@ -189,6 +205,8 @@ export const reuseStableAstNodes = (
   previousNode: MarkdownNode,
   nextNode: MarkdownNode,
 ): MarkdownNode => {
+  if (previousNode === nextNode) return previousNode;
+
   if (previousNode.type !== nextNode.type) {
     return nextNode;
   }
@@ -275,6 +293,10 @@ export const getNextStreamAst = ({
   const appendedChunk = nextText.slice(previousText.length);
   if (appendedChunk.length === 0) {
     return previousAst;
+  }
+
+  if (hasAmbiguousLinkBoundary(previousText, appendedChunk)) {
+    return parseAstWithStableNodes(previousAst, nextText, options, parseCurrent);
   }
 
   if (
