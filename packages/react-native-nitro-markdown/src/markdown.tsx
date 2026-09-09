@@ -566,6 +566,7 @@ export const Markdown: FC<MarkdownProps> = ({
             renderItem={renderVirtualizedItem}
             keyExtractor={keyExtractor}
             style={baseStyles.virtualizedList}
+            maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             initialNumToRender={virtualization?.initialNumToRender ?? 12}
             maxToRenderPerBatch={virtualization?.maxToRenderPerBatch ?? 12}
             windowSize={virtualization?.windowSize ?? 10}
