@@ -1,5 +1,5 @@
 import { StyleSheet, Platform } from "react-native";
-import { Tabs } from "expo-router";
+import { Tabs, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -13,6 +13,8 @@ import { EXAMPLE_COLORS } from "../theme";
 function RootTabs() {
   const tabBarHeight = useBottomTabHeight();
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
+  const hideTabs = pathname === "/e2e" || pathname === "/e2e-render";
 
   return (
     <SafeAreaView edges={["top"]} style={styles.container}>
@@ -21,23 +23,25 @@ function RootTabs() {
         screenOptions={{
           headerShown: false,
           freezeOnBlur: true,
-          tabBarStyle: {
-            position: "absolute",
-            left: 0,
-            right: 0,
-            bottom: 0,
-            borderRadius: 0,
-            borderTopLeftRadius: 22,
-            borderTopRightRadius: 22,
-            borderTopWidth: 0,
-            backgroundColor: EXAMPLE_COLORS.surface,
-            height: tabBarHeight,
-            paddingTop: 8,
-            paddingBottom: insets.bottom + 8,
-            boxShadow: `0px 8px 20px ${EXAMPLE_COLORS.text}24`,
-            borderWidth: 1,
-            borderColor: EXAMPLE_COLORS.border,
-          },
+          tabBarStyle: hideTabs
+            ? { display: "none" }
+            : {
+                position: "absolute",
+                left: 0,
+                right: 0,
+                bottom: 0,
+                borderRadius: 0,
+                borderTopLeftRadius: 22,
+                borderTopRightRadius: 22,
+                borderTopWidth: 0,
+                backgroundColor: EXAMPLE_COLORS.surface,
+                height: tabBarHeight,
+                paddingTop: 8,
+                paddingBottom: insets.bottom + 8,
+                boxShadow: `0px 8px 20px ${EXAMPLE_COLORS.text}24`,
+                borderWidth: 1,
+                borderColor: EXAMPLE_COLORS.border,
+              },
           tabBarActiveTintColor: EXAMPLE_COLORS.accent,
           tabBarInactiveTintColor: EXAMPLE_COLORS.textMuted,
           tabBarLabelStyle: {
@@ -108,6 +112,8 @@ function RootTabs() {
           }}
         />
         <Tabs.Screen name="list-layout" options={{ href: null }} />
+        <Tabs.Screen name="e2e" options={{ href: null }} />
+        <Tabs.Screen name="e2e-render" options={{ href: null }} />
       </Tabs>
     </SafeAreaView>
   );

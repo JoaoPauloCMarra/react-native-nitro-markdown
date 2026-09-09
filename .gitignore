@@ -115,6 +115,7 @@ temp/
 *.temp
 
 .pack-docs-state/
+/.agent-device/
 
 *.md
 !.github/pull_request_template.md

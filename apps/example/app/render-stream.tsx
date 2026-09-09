@@ -549,6 +549,7 @@ export default function TokenStreamScreen() {
         />
         <View style={styles.controlsRow}>
           <ExampleActionButton
+            testID="stream-toggle"
             active={isStreamMode}
             tone="neutral"
             style={styles.btn}
@@ -566,6 +567,7 @@ export default function TokenStreamScreen() {
             {isStreamMode ? "Pause" : streamOffset > 0 ? "Resume" : "Start"}
           </ExampleActionButton>
           <ExampleActionButton
+            testID="stream-clear"
             tone="danger"
             style={styles.clearButton}
             onPress={clearStream}
@@ -600,6 +602,7 @@ export default function TokenStreamScreen() {
             return (
               <ExampleActionButton
                 key={option.key}
+                testID={`stream-mode-${option.key}`}
                 active={active}
                 tone="neutral"
                 style={styles.modeButton}

@@ -1,0 +1,19 @@
+open "com.nitromarkdown.example" --relaunch
+wait "stable"
+wait id="open-e2e-lab"
+press id="open-e2e-lab"
+wait id="e2e-screen"
+press id="open-e2e-render"
+wait id="e2e-render-screen"
+wait text "e2e-ready"
+wait text "ok:ready=8/8:ms="
+wait text "Paragraph with bold"
+press id="e2e-stream-burst"
+wait text "ok:burst="
+scroll bottom
+wait text "Plugin specimen"
+wait text "Token 23"
+scroll top
+press id="e2e-render-remount"
+wait text "ok:ready=8/8:ms="
+close

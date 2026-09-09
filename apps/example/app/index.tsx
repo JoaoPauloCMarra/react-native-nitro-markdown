@@ -30,6 +30,7 @@ import {
   ExamplePanel,
   ExampleScreen,
 } from "../components/example-ui";
+import { E2eGate } from "../components/e2e-gate";
 import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
 import { COMPLEX_MARKDOWN } from "../markdown-test-data";
 import { EXAMPLE_COLORS } from "../theme";
@@ -1020,6 +1021,7 @@ export default function BenchmarkScreen() {
     <ExampleScreen paddingBottom={0} style={styles.screenContent}>
       <View style={styles.buttonRow}>
         <ExampleActionButton
+          testID="run-smoke-tests"
           active={mode === "smoke"}
           style={styles.benchmarkButton}
           onPress={runSmoke}
@@ -1027,6 +1029,7 @@ export default function BenchmarkScreen() {
           Run Smoke Tests
         </ExampleActionButton>
         <ExampleActionButton
+          testID="run-benchmark"
           active={mode === "bench"}
           style={styles.benchmarkButton}
           onPress={runBenchmark}
@@ -1034,6 +1037,7 @@ export default function BenchmarkScreen() {
           Run Benchmark
         </ExampleActionButton>
       </View>
+      <E2eGate />
 
       <ScrollView
         style={styles.resultsScroll}
@@ -1055,6 +1059,9 @@ export default function BenchmarkScreen() {
               return (
                 <Text
                   key={i}
+                  testID={
+                    i === smokeLogs.length - 1 ? "smoke-summary" : undefined
+                  }
                   style={[
                     styles.resultText,
                     log.type === "header" && styles.logHeader,

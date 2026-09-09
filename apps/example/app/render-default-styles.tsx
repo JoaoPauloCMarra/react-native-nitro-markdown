@@ -105,6 +105,7 @@ export default function RenderThemingScreen() {
           return (
             <ExampleActionButton
               key={option.key}
+              testID={`theme-${option.key}`}
               active={active}
               tone="neutral"
               style={styles.tab}
