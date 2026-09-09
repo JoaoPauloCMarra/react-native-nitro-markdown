@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [0.12.3] - 2026-09-08
+
+### Breaking changes
+
+None.
+
+### Fixed
+
+- Virtualized documents preserve the visible scroll position while recycled
+  image and table rows finish laying out.
+
 ## [0.12.2] - 2026-09-08
 
 ### Breaking changes

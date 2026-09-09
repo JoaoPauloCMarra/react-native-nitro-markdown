@@ -89,6 +89,8 @@ screen mounts. This keeps time-to-first-screen and memory bounded:
 ```
 
 Use `virtualize` when `<Markdown>` is the primary scroll container on screen.
+Virtualized lists preserve the visible content position when rows change
+height, including images and tables that finish layout after mounting.
 
 ## Source AST rendering
 
