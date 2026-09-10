@@ -36,7 +36,7 @@ Pod::Spec.new do |s|
       "$(PODS_TARGET_SRCROOT)/cpp/bindings",
       "$(PODS_TARGET_SRCROOT)/nitrogen/generated/shared/c++",
       "$(PODS_TARGET_SRCROOT)/nitrogen/generated/ios"
-    ]
+    ].map { |path| "\"#{path}\"" }.join(" ")
   }
 
   s.dependency "React-Core"
@@ -44,4 +44,5 @@ Pod::Spec.new do |s|
 
   load 'nitrogen/generated/ios/NitroMarkdown+autolinking.rb'
   add_nitrogen_files(s)
+  install_modules_dependencies(s)
 end
