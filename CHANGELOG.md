@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [0.12.4] - 2026-09-10
+
+### Breaking changes
+
+None.
+
+### Fixed
+
+- iOS builds using static frameworks and source-built React Native now resolve
+  Folly and React Native headers when compiling the Nitro Swift/C++ bridge.
+- List-first streaming content no longer collapses inside shrink-wrapped
+  containers. List and task-list content still fills the available width in
+  constrained layouts, including nested items and block content.
+
 ## [0.12.3] - 2026-09-08
 
 ### Breaking changes

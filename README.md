@@ -67,6 +67,10 @@ package and its native peer dependencies, run `expo prebuild` and use an Expo
 development build. See the [Installation guide](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/installation.md)
 for the Expo and bare React Native setup.
 
+iOS static frameworks are supported with source-built React Native. After
+upgrading, regenerate the Expo native project or run `pod install`, then rebuild
+the app so CocoaPods applies the updated header paths.
+
 ## Quick Start
 
 ```tsx

@@ -126,7 +126,8 @@ const createListItemStyles = (theme: MarkdownTheme) =>
       ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
     listItemContent: {
-      flex: 1,
+      flexGrow: 1,
+      flexShrink: 1,
       minWidth: 0,
     },
   });
@@ -161,7 +162,8 @@ const createTaskListItemStyles = (theme: MarkdownTheme) =>
       ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
     taskContent: {
-      flex: 1,
+      flexGrow: 1,
+      flexShrink: 1,
       minWidth: 0,
     },
   });

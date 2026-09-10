@@ -107,6 +107,7 @@ function RootTabs() {
             header: () => null,
           }}
         />
+        <Tabs.Screen name="list-layout" options={{ href: null }} />
       </Tabs>
     </SafeAreaView>
   );

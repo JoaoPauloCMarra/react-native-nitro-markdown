@@ -6,19 +6,14 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Release tag to validate and verify
+        description: Release tag to validate without publishing
         required: true
         type: string
       npm_dist_tag:
-        description: npm dist-tag to publish or verify
+        description: npm dist-tag to validate without publishing
         required: false
         default: latest
         type: string
-      publish:
-        description: Publish the package for an existing release tag (use only for release recovery)
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -178,7 +173,7 @@ jobs:
 
   publish:
     name: Publish package
-    if: ${{ (github.event_name == 'release' || inputs.publish == true) && needs.validate.outputs.already_published != 'true' }}
+    if: ${{ github.event_name == 'release' && needs.validate.outputs.already_published != 'true' }}
     needs: validate
     runs-on: ubuntu-latest
     permissions:
@@ -260,7 +255,7 @@ jobs:
 
   verify:
     name: Verify public registry
-    if: ${{ always() && needs.validate.result == 'success' && (github.event_name == 'release' || inputs.publish == true) }}
+    if: ${{ always() && needs.validate.result == 'success' && github.event_name == 'release' }}
     needs: [validate, publish]
     runs-on: ubuntu-latest
     env:
