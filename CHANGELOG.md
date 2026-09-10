@@ -19,6 +19,9 @@ None.
 
 - iOS builds using static frameworks and source-built React Native now resolve
   Folly and React Native headers when compiling the Nitro Swift/C++ bridge.
+- List-first streaming content no longer collapses inside shrink-wrapped
+  containers. List and task-list content still fills the available width in
+  constrained layouts, including nested items and block content.
 
 ## [0.12.3] - 2026-09-08
 

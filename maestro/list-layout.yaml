@@ -1,0 +1,51 @@
+appId: com.nitromarkdown.example
+name: List-first streaming layout
+---
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Run Benchmark"
+    timeout: 30000
+- openLink: "nitromarkdown://list-layout"
+- extendedWaitUntil:
+    visible: "Bullet list"
+    timeout: 30000
+- tapOn: "Append list tokens"
+- extendedWaitUntil:
+    visible:
+      id: "list-stream-layout"
+      text: "Shrink-wrap layout: PASS.*"
+    timeout: 10000
+- tapOn: "Append list tokens"
+- assertVisible: "All tokens appended"
+- assertVisible: "Nested visible bullet"
+- tapOn: "Next list case"
+- assertVisible: "Ordered list"
+- tapOn: "Append list tokens"
+- extendedWaitUntil:
+    visible:
+      id: "list-stream-layout"
+      text: "Shrink-wrap layout: PASS.*"
+    timeout: 10000
+- tapOn: "Append list tokens"
+- assertVisible: "Nested visible item"
+- tapOn: "Next list case"
+- assertVisible: "Task list"
+- tapOn: "Append list tokens"
+- extendedWaitUntil:
+    visible:
+      id: "list-stream-layout"
+      text: "Shrink-wrap layout: PASS.*"
+    timeout: 10000
+- tapOn: "Append list tokens"
+- assertVisible: "Completed visible task"
+- tapOn: "Next list case"
+- assertVisible: "Block children"
+- tapOn: "Append list tokens"
+- extendedWaitUntil:
+    visible:
+      id: "list-stream-layout"
+      text: "Shrink-wrap layout: PASS.*"
+    timeout: 10000
+- assertVisible: "Quote"
+- assertVisible: "const x = 1;.*"
