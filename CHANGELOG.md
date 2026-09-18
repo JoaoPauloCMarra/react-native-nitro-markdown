@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [0.12.5] - 2026-09-18
+
+### Breaking changes
+
+None.
+
+### Added
+
+- Example device E2E labs at `nitromarkdown://e2e` and
+  `nitromarkdown://e2e-render`. Human demo tabs stay unchanged.
+
+### Changed
+
+- The example Expo pin follows SDK 57.0.24 (`expo-doctor` /
+  `expo install --check`). React Native stays `0.86.3`.
+
 ## [0.12.4] - 2026-09-10
 
 ### Breaking changes

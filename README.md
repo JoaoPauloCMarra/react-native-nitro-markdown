@@ -366,7 +366,7 @@ for the error-code contract.
 | [React Native](https://reactnative.dev/)                                  | `>=0.75` (New Architecture); runtime gate `0.86.3`, RN `0.87` Strict TypeScript compatibility check |
 | [Nitro Modules](https://www.npmjs.com/package/react-native-nitro-modules) | `>=0.37.0 <0.38.0`                                                                                  |
 | [RaTeX React Native](https://www.npmjs.com/package/ratex-react-native)    | `>=0.1.4` (example validated with `0.1.14`)                                                         |
-| [Expo](https://docs.expo.dev/versions/v57.0.0/)                           | SDK `57.0.21` development builds with RN `0.86.3`                                                   |
+| [Expo](https://docs.expo.dev/versions/v57.0.0/)                           | SDK `57.0.24` development builds with RN `0.86.3`                                                   |
 | Platforms                                                                 | iOS, Android (Web not supported)                                                                    |
 
 The native package gate and Expo example use React Native `0.86.3`. `check:ci`
