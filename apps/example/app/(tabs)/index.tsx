@@ -29,11 +29,11 @@ import {
   ExampleActionButton,
   ExamplePanel,
   ExampleScreen,
-} from "../components/example-ui";
-import { E2eGate } from "../components/e2e-gate";
-import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
-import { COMPLEX_MARKDOWN } from "../markdown-test-data";
-import { EXAMPLE_COLORS } from "../theme";
+} from "../../components/example-ui";
+import { E2eGate } from "../../components/e2e-gate";
+import { useBottomTabHeight } from "../../hooks/use-bottom-tab-height";
+import { COMPLEX_MARKDOWN } from "../../markdown-test-data";
+import { EXAMPLE_COLORS } from "../../theme";
 
 const REPEATED_MARKDOWN = COMPLEX_MARKDOWN.repeat(50);
 const NITRO_BENCHMARK_ITERATIONS = 12;

@@ -30,10 +30,10 @@ import {
   ExamplePanel,
   ExampleScreen,
   ExampleSectionLabel,
-} from "../components/example-ui";
-import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
-import { EXAMPLE_COLORS } from "../theme";
-import { ISSUE_74_STANDALONE_EQUALS_DISPLAY_MATH_MARKDOWN } from "../markdown-test-data";
+} from "../../components/example-ui";
+import { useBottomTabHeight } from "../../hooks/use-bottom-tab-height";
+import { EXAMPLE_COLORS } from "../../theme";
+import { ISSUE_74_STANDALONE_EQUALS_DISPLAY_MATH_MARKDOWN } from "../../markdown-test-data";
 
 const TOKEN_DELAY_MS = 150;
 const RAW_PREVIEW_SYNC_INTERVAL_MS = 60;

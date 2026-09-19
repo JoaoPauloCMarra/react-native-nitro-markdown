@@ -16,14 +16,14 @@ import {
   type NodeStyleOverrides,
   type AstTransform,
 } from "react-native-nitro-markdown";
-import { ExampleHeader, ExamplePanel, ExampleScreen } from "../components/example-ui";
-import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
+import { ExampleHeader, ExamplePanel, ExampleScreen } from "../../components/example-ui";
+import { useBottomTabHeight } from "../../hooks/use-bottom-tab-height";
 import {
   COMPLEX_MARKDOWN,
   CUSTOM_RENDER_COMPONENTS,
   HTML_PARSER_MARKDOWN,
-} from "../markdown-test-data";
-import { EXAMPLE_COLORS } from "../theme";
+} from "../../markdown-test-data";
+import { EXAMPLE_COLORS } from "../../theme";
 
 /**
  * Custom heading using the pre-mapped `level` prop.
