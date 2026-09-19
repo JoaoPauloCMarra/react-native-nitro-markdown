@@ -24,6 +24,8 @@ None.
 
 - The example Expo pin follows SDK 57.0.24 (`expo-doctor` /
   `expo install --check`). React Native stays `0.86.3`.
+- The example iOS host uses a `SceneDelegate` so the app can present a window on
+  iOS 27 physical devices.
 
 ## [0.12.4] - 2026-09-10
 

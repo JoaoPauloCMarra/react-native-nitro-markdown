@@ -9,7 +9,20 @@ module.exports = {
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.nitromarkdown.example"
+      "bundleIdentifier": "com.nitromarkdown.example",
+      "infoPlist": {
+        "UIApplicationSceneManifest": {
+          "UIApplicationSupportsMultipleScenes": false,
+          "UISceneConfigurations": {
+            "UIWindowSceneSessionRoleApplication": [
+              {
+                "UISceneConfigurationName": "Default Configuration",
+                "UISceneDelegateClassName": "$(PRODUCT_MODULE_NAME).SceneDelegate"
+              }
+            ]
+          }
+        }
+      }
     },
     "android": {
       "package": "com.nitromarkdown.example",
@@ -36,7 +49,8 @@ module.exports = {
       ],
       "expo-system-ui",
       "expo-status-bar",
-      "./plugins/with-ios-linker-cleanup"
+      "./plugins/with-ios-linker-cleanup",
+      "./plugins/with-ios-scene-lifecycle"
     ],
     "experiments": {
       "reactCompiler": true,
