@@ -355,6 +355,7 @@ for the error-code contract.
 | [Customization](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/customization.md)        | Themes, dark mode, per-node styles, renderers, plugins.    |
 | [Comparison & benchmarks](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/comparison.md) | Why Nitro, parse benchmarks, capability matrix.            |
 | [API reference](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/api-reference.md)        | Full export and type listing.                              |
+| [Native libraries](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/native-libraries.md)  | md4c and the streaming JSON writer; rejected replacements. |
 | [Security policy](./SECURITY.md)                                                                                       | Supported versions, link/image policy, reporting.          |
 | [Changelog](./CHANGELOG.md)                                                                                            | Package changes and migration requirements by version.     |
 | [Troubleshooting](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/troubleshooting.md)    | Common install and runtime issues.                         |

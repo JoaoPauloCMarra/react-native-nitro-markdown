@@ -39,6 +39,7 @@
 - If Nitro specs change, run `bun run codegen` in the package.
 - `nitro.json` autolinking uses `all`/`ios`/`android` object entries; avoid deprecated direct `cpp`/`swift`/`kotlin` keys.
 - Keep parser transport package-level and simple for consumers: JSON parse API only, no runtime transport toggles in app code.
+- Keep vendored md4c and the streaming C++ JSON writer. Do not vendor yyjson, FlatBuffers, tree-sitter-markdown, comrak, or syntect unless the public AST contract changes on purpose. See `docs/native-libraries.md`.
 
 ## Native Code Patterns
 
