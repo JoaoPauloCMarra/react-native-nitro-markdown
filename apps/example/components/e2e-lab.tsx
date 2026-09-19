@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import {
   MarkdownError,
@@ -154,18 +154,14 @@ function runParserLab(): LabResults {
 }
 
 export function MarkdownE2eLab() {
-  const [results, setResults] = useState<LabResults | null>(null);
+  const [results, setResults] = useState<LabResults>(() => runParserLab());
 
-  useEffect(() => {
-    setResults(runParserLab());
-  }, []);
-
-  const parseStatus = results?.parse ?? "running";
-  const extractStatus = results?.extract ?? "running";
-  const sessionStatus = results?.session ?? "running";
-  const comparisonStatus = results?.comparison ?? "running";
-  const errorStatus = results?.error ?? "running";
-  const stressStatus = results?.stress ?? "running";
+  const parseStatus = results.parse;
+  const extractStatus = results.extract;
+  const sessionStatus = results.session;
+  const comparisonStatus = results.comparison;
+  const errorStatus = results.error;
+  const stressStatus = results.stress;
 
   return (
     <View testID="e2e-lab" style={styles.lab} accessibilityLabel="E2E Lab">
