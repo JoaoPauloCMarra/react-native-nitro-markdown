@@ -13,7 +13,7 @@ stay safe.
 
 ### Breaking changes
 
-None.
+- None.
 
 ### Added
 
