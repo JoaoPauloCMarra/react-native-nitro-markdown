@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [0.12.5] - 2026-09-18
+
+### Breaking changes
+
+- None.
+
+### Added
+
+- Example device E2E labs at `nitromarkdown://e2e` and
+  `nitromarkdown://e2e-render`. Human demo tabs stay unchanged.
+
+### Changed
+
+- The example Expo pin follows SDK 57.0.24 (`expo-doctor` /
+  `expo install --check`). React Native stays `0.86.3`.
+- The example iOS host uses a `SceneDelegate` so the app can present a window on
+  iOS 27 physical devices.
+- Evaluated yyjson, FlatBuffers, tree-sitter-markdown, comrak, and syntect for
+  parser/AST/highlight work. Kept md4c and the streaming JSON writer. See
+  [docs/native-libraries.md](docs/native-libraries.md).
+
 ## [0.12.4] - 2026-09-10
 
 ### Breaking changes

@@ -13,9 +13,9 @@ import {
   ExampleHeader,
   ExamplePanel,
   ExampleScreen,
-} from "../components/example-ui";
-import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
-import { EXAMPLE_COLORS } from "../theme";
+} from "../../components/example-ui";
+import { useBottomTabHeight } from "../../hooks/use-bottom-tab-height";
+import { EXAMPLE_COLORS } from "../../theme";
 
 type ThemeKey = "default" | "dark" | "minimal" | "custom";
 
@@ -105,6 +105,7 @@ export default function RenderThemingScreen() {
           return (
             <ExampleActionButton
               key={option.key}
+              testID={`theme-${option.key}`}
               active={active}
               tone="neutral"
               style={styles.tab}

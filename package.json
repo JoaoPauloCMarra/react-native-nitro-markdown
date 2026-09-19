@@ -46,6 +46,15 @@
     "example:android:assemble": "bun run --cwd apps/example android:assemble",
     "example:ios:build": "bun run --cwd apps/example ios:build",
     "example:smoke": "bun scripts/example-smoke.js",
+    "example:e2e": "agent-device test e2e/qa-full-features.ad --retries 1",
+    "example:e2e:android": "agent-device test e2e/qa-full-features.ad --device \"RN Expo MidRange\" --retries 1",
+    "example:e2e:ios": "agent-device test e2e/qa-full-features.ad --device \"iPhone 17 Pro Max (iOS 26.5)\" --retries 1",
+    "example:e2e:render": "agent-device test e2e/qa-render-stress.ad --retries 1",
+    "example:e2e:render:android": "agent-device test e2e/qa-render-stress.ad --device \"RN Expo MidRange\" --retries 1",
+    "example:e2e:render:ios": "agent-device test e2e/qa-render-stress.ad --device \"iPhone 17 Pro Max (iOS 26.5)\" --retries 1",
+    "example:e2e:deeplink": "agent-device test e2e/qa-deeplink.ad --retries 1",
+    "example:e2e:deeplink:android": "agent-device test e2e/qa-deeplink.ad --device \"RN Expo MidRange\" --retries 1",
+    "example:e2e:deeplink:ios": "agent-device test e2e/qa-deeplink.ad --device \"iPhone 17 Pro Max (iOS 26.5)\" --retries 1",
     "example:smoke:android": "bun scripts/example-smoke.js --android",
     "example:smoke:ios": "bun scripts/example-smoke.js --ios"
   },
@@ -75,10 +84,11 @@
     "react-native-safe-area-context": "5.7.0",
     "react-native-screens": "4.26.2",
     "react-native-worklets": "0.10.1",
-    "expo": "~57.0.21",
-    "expo-constants": "~57.0.17",
-    "expo-linking": "~57.0.9",
-    "expo-font": "~57.0.3"
+    "expo": "~57.0.24",
+    "expo-asset": "~57.0.18",
+    "expo-constants": "~57.0.19",
+    "expo-font": "~57.0.4",
+    "expo-linking": "~57.0.10"
   },
   "dependencies": {
     "react-native-nitro-modules": "0.37.1"

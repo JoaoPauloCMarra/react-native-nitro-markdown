@@ -1,0 +1,12 @@
+open "com.nitromarkdown.example" --relaunch --launch-url "nitromarkdown://e2e"
+wait "stable"
+wait id="e2e-screen"
+wait text "e2e-ready"
+wait id="e2e-lab"
+wait text "ok:parse=structure"
+wait text "ok:extract=bold and italic"
+wait text "ok:session=append-replace-reset"
+wait text "ok:comparison"
+wait text "ok:error=input_too_large"
+wait text "ok:parses=40:blocks="
+close

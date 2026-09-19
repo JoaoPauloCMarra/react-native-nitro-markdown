@@ -1,8 +1,8 @@
 import { StyleSheet } from "react-native";
 import { Markdown } from "react-native-nitro-markdown";
-import { ExampleHeader, ExamplePanel, ExampleScreen } from "../components/example-ui";
-import { useBottomTabHeight } from "../hooks/use-bottom-tab-height";
-import { COMPLEX_MARKDOWN, EDGE_CASE_MARKDOWN } from "../markdown-test-data";
+import { ExampleHeader, ExamplePanel, ExampleScreen } from "../../components/example-ui";
+import { useBottomTabHeight } from "../../hooks/use-bottom-tab-height";
+import { COMPLEX_MARKDOWN, EDGE_CASE_MARKDOWN } from "../../markdown-test-data";
 
 export default function RenderScreen() {
   const tabHeight = useBottomTabHeight();

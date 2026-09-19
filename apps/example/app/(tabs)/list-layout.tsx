@@ -5,8 +5,8 @@ import {
   MarkdownStream,
   useMarkdownSession,
 } from "react-native-nitro-markdown";
-import { ExampleActionButton, ExampleHeader } from "../components/example-ui";
-import { EXAMPLE_COLORS } from "../theme";
+import { ExampleActionButton, ExampleHeader } from "../../components/example-ui";
+import { EXAMPLE_COLORS } from "../../theme";
 
 const CASES = [
   {
