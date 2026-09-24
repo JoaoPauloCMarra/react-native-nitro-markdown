@@ -49,7 +49,7 @@ expectValue(
 expectValue(
   "example Expo",
   dependencyValue(example, "dependencies", "expo"),
-  "~57.0.24",
+  "~57.0.25",
 );
 expectValue(
   "example React Native",
