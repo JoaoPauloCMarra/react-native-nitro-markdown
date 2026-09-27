@@ -9,4 +9,6 @@ wait text "ok:session=append-replace-reset"
 wait text "ok:comparison"
 wait text "ok:error=input_too_large"
 wait text "ok:parses=40:blocks="
+wait id="plugin-smoke-status"
+wait text "PASS — Markdown plugin pipeline passed"
 close

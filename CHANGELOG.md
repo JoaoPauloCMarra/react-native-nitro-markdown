@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [0.12.6] - 2026-09-27
+
+### Breaking changes
+
+- None.
+
+### Fixed
+
+- Match configured image hosts against the parsed HTTP(S) hostname, rejecting deceptive userinfo and malformed authorities.
+- Preserve exact UTF-16 source spans for soft and hard line breaks, including CRLF and streamed edits.
+
 ## [0.12.5] - 2026-09-18
 
 ### Breaking changes

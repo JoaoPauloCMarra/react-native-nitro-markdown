@@ -81,19 +81,119 @@ describe("getAllowedImageHref", () => {
         allowedHosts: ["assets.example.com"],
       }),
     ).toBeNull();
-  });
-
-  it("normalizes credentials and IPv6 brackets before host filtering", () => {
     expect(
-      getAllowedImageHref("https://user:pass@assets.example.com/image.png", {
+      getAllowedImageHref("https://assets.example.com.evil/image.png", {
         allowedHosts: ["assets.example.com"],
       }),
-    ).toBe("https://user:pass@assets.example.com/image.png");
+    ).toBeNull();
+  });
+
+  it("filters the complete bracketed IPv6 host", () => {
+    expect(
+      getAllowedImageHref("https://[2001:db8::1]/image.png", {
+        allowedHosts: ["2001:db8::1"],
+      }),
+    ).toBe("https://[2001:db8::1]/image.png");
+    expect(
+      getAllowedImageHref("https://[2001:db8::2]/image.png", {
+        allowedHosts: ["2001:db8::1"],
+      }),
+    ).toBeNull();
+    expect(
+      getAllowedImageHref("https://[2001:db8::1]/image.png", {
+        allowedHosts: ["[2001:db8::1]"],
+      }),
+    ).toBe("https://[2001:db8::1]/image.png");
     expect(
       getAllowedImageHref("https://[2001:db8::1]/image.png", {
         allowedHosts: ["2001"],
       }),
-    ).toBe("https://[2001:db8::1]/image.png");
+    ).toBeNull();
+    expect(
+      getAllowedImageHref("https://2001:db8::1/image.png", {
+        allowedHosts: ["2001:db8::1"],
+      }),
+    ).toBeNull();
+  });
+
+  it("matches normalized DNS and IPv4 hosts while ignoring valid ports", () => {
+    expect(
+      getAllowedImageHref(
+        "https://ASSETS.Example.COM:443/image.png",
+        { allowedHosts: ["assets.example.com"] },
+      ),
+    ).toBe("https://ASSETS.Example.COM:443/image.png");
+    expect(
+      getAllowedImageHref("http://192.0.2.17:8080/image.png", {
+        allowedHosts: ["192.0.2.17"],
+      }),
+    ).toBe("http://192.0.2.17:8080/image.png");
+    expect(
+      getAllowedImageHref("http://192.0.2.18/image.png", {
+        allowedHosts: ["192.0.2.17"],
+      }),
+    ).toBeNull();
+  });
+
+  it("rejects a backslash authority before extracting userinfo", () => {
+    const href = "https://notallowed.example\\@allowed.example/image.png";
+    expect(new URL(href).hostname).toBe("notallowed.example");
+    expect(getAllowedImageHref(href, { allowedHosts: ["allowed.example"] })).toBeNull();
+  });
+
+  it("checks the host after userinfo and rejects malformed authorities", () => {
+    expect(
+      getAllowedImageHref(
+        "https://user:pass@assets.example.com:8443/image.png",
+        { allowedHosts: ["assets.example.com"] },
+      ),
+    ).toBe("https://user:pass@assets.example.com:8443/image.png");
+
+    for (const href of [
+      "https://[2001:db8::1/image.png",
+      "https://[2001:db8::1]suffix/image.png",
+      "https://assets.example.com:abc/image.png",
+      "https://assets.example.com:65536/image.png",
+      "https://assets.example.com:443:444/image.png",
+      "https://assets..example.com/image.png",
+      "https://@/image.png",
+    ]) {
+      expect(
+        getAllowedImageHref(href, { allowedHosts: ["assets.example.com"] }),
+      ).toBeNull();
+    }
+  });
+
+  it.each([
+    ["https://[::ffff:192.0.2.1]/image.png", "::ffff:192.0.2.1"],
+    ["https://[2001:db8:0:0:0:0:0:1]:443/image.png", "2001:db8:0:0:0:0:0:1"],
+    ["https://assets.example.com./image.png", "assets.example.com"],
+  ])("accepts a valid normalized authority %s", (href, host) => {
+    expect(getAllowedImageHref(href, { allowedHosts: [host] })).toBe(href);
+  });
+
+  it.each([
+    "https://[::ffff:999.0.2.1]/image.png",
+    "https://[192.0.2.1]/image.png",
+    "https://[1::2::3]/image.png",
+    "https://[:::1]/image.png",
+    "https://[:1:2:3:4:5:6:7:8]/image.png",
+    "https://[1:2:3:4:5:6:7:8:]/image.png",
+    "https://[fe80::1%25eth0]/image.png",
+    "https://[gggg::1]/image.png",
+    "https://[1:2:3:4:5:6:7]/image.png",
+    "https://[1:2:3:4:5:6:7:8:9]/image.png",
+    "https://[1:2:3:4:5:6:7::8]/image.png",
+    "https://192.00.2.1/image.png",
+    "https://999.0.2.1/image.png",
+    "https://192.0.2/image.png",
+    "https://assets[.example.com/image.png",
+    "https://-assets.example.com/image.png",
+    "https://assets .example.com/image.png",
+    `https://${"a".repeat(64)}.example.com/image.png`,
+    `https://${"a.".repeat(128)}com/image.png`,
+  ])("rejects malformed IP and DNS authorities %s", (href) => {
+    expect(getAllowedImageHref(href)).toBeNull();
   });
 
   it("rejects hostless absolute image URLs when hosts are restricted", () => {

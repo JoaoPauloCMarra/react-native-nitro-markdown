@@ -9,6 +9,7 @@ import {
   parseMarkdownWithOptions,
   type MarkdownNode,
 } from "react-native-nitro-markdown";
+import { MarkdownPipelineSmoke } from "./markdown-pipeline-smoke";
 import { ExampleActionButton } from "./example-ui";
 import { EXAMPLE_COLORS } from "../theme";
 
@@ -187,6 +188,8 @@ export function MarkdownE2eLab() {
       <Text testID="e2e-stress-result" style={styles.result}>
         {stressStatus}
       </Text>
+
+      <MarkdownPipelineSmoke />
 
       <View style={styles.row}>
         <ExampleActionButton
