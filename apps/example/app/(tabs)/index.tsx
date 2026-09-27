@@ -1,4 +1,9 @@
-import { useState, useCallback, useRef, type ComponentType } from "react";
+import {
+  useState,
+  useCallback,
+  useRef,
+  type ComponentType,
+} from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -30,6 +35,7 @@ import {
   ExamplePanel,
   ExampleScreen,
 } from "../../components/example-ui";
+import { MarkdownPipelineSmoke } from "../../components/markdown-pipeline-smoke";
 import { E2eGate } from "../../components/e2e-gate";
 import { useBottomTabHeight } from "../../hooks/use-bottom-tab-height";
 import { COMPLEX_MARKDOWN } from "../../markdown-test-data";
@@ -632,54 +638,10 @@ async function runSmokeTests(): Promise<LogEntry[]> {
   spacer();
 
   header("PLUGIN PIPELINE");
-
-  try {
-    let beforeRan = false;
-    let afterRan = false;
-
-    let md = "REPLACE_ME text";
-    const beforeParse = (input: string) => {
-      beforeRan = true;
-      return input.replace("REPLACE_ME", "replaced");
-    };
-    const afterParse = (ast: MarkdownNode) => {
-      afterRan = true;
-      return ast;
-    };
-
-    md = beforeParse(md);
-    const ast = parseMarkdown(md);
-    afterParse(ast);
-
-    if (beforeRan && md.includes("replaced")) {
-      pass("beforeParse plugin", `"${md}"`);
-    } else {
-      fail("beforeParse plugin");
-    }
-    if (afterRan) {
-      pass("afterParse plugin");
-    } else {
-      fail("afterParse plugin");
-    }
-  } catch (e) {
-    fail("Plugin pipeline", String(e));
-  }
-
-  try {
-    let caught = false;
-    try {
-      throw new Error("boom");
-    } catch {
-      caught = true;
-    }
-    if (caught) {
-      pass("Plugin error isolation", "crash caught gracefully");
-    } else {
-      fail("Plugin error isolation");
-    }
-  } catch (e) {
-    fail("Plugin error isolation", String(e));
-  }
+  info(
+    "Rendered Markdown fixture",
+    "Check the fixture status below for plugin priority, output, error phase, and continuation.",
+  );
 
   spacer();
 
@@ -828,6 +790,7 @@ async function runSmokeTests(): Promise<LogEntry[]> {
 
 export default function BenchmarkScreen() {
   const [smokeLogs, setSmokeLogs] = useState<LogEntry[]>([]);
+  const [pipelineSmokeRunId, setPipelineSmokeRunId] = useState(0);
   const [benchmarkResults, setBenchmarkResults] =
     useState<BenchmarkResults | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -938,6 +901,7 @@ export default function BenchmarkScreen() {
 
   const runSmoke = async () => {
     setMode("smoke");
+    setPipelineSmokeRunId((runId) => runId + 1);
     setError(null);
     setBenchmarkResults(null);
     setIsBenchmarkRunning(false);
@@ -1046,6 +1010,9 @@ export default function BenchmarkScreen() {
         alwaysBounceVertical={false}
         overScrollMode="never"
       >
+        {mode === "smoke" && pipelineSmokeRunId > 0 ? (
+          <MarkdownPipelineSmoke key={pipelineSmokeRunId} />
+        ) : null}
         {error ? (
           <ExamplePanel style={styles.errorBox}>
             <Text style={styles.errorTitle}>Error</Text>

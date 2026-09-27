@@ -146,10 +146,16 @@ async function main() {
     projectRoot,
     "packages/react-native-nitro-markdown",
   );
-  execCommand("bun run codegen", { cwd: packageDir });
+  if (!execCommand("bun run codegen", { cwd: packageDir })) {
+    log("Failed to generate Nitro bindings", "red");
+    process.exit(1);
+  }
 
   log("🔨 Building library...");
-  execCommand("bun run build", { cwd: packageDir });
+  if (!execCommand("bun run build", { cwd: packageDir })) {
+    log("Failed to build library", "red");
+    process.exit(1);
+  }
 
   const assetsDir = path.join(projectRoot, "apps/example/assets");
   const iconPath = path.join(assetsDir, "icon.png");

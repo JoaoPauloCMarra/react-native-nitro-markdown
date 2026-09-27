@@ -258,6 +258,7 @@ public:
         testHeadingLevels2Through6();
         testOrderedListWithCustomStart();
         testSoftBreakAndHardBreak();
+        testBreakSourceOffsets();
         testTableCellAlignment();
         testNestedBlockquotes();
         testAstDepthLimit();
@@ -2278,6 +2279,194 @@ private:
             }
         }
         TestRunner::assertTrue(foundHardBreak, "HardBreak: found line_break node");
+    }
+
+    static void testBreakSourceOffsets() {
+        struct BreakCase {
+            const char* name;
+            std::string markdown;
+            NodeType type;
+            OFF beg;
+            OFF end;
+            std::string sourceSlice;
+        };
+
+        const std::vector<BreakCase> cases = {
+            {
+                "LF soft break", "one\ntwo", NodeType::SoftBreak, 3, 4, "\n"
+            },
+            {
+                "CRLF soft break", "one\r\ntwo", NodeType::SoftBreak, 3, 5,
+                "\r\n"
+            },
+            {
+                "Unicode soft break", "🙂é\nnext", NodeType::SoftBreak, 3, 4,
+                "\n"
+            },
+            {
+                "Unicode CRLF soft break", "🙂a\r\nb", NodeType::SoftBreak, 3,
+                5, "\r\n"
+            },
+            {
+                "two-space hard break", "a  \nb", NodeType::LineBreak, 1, 4,
+                "  \n"
+            },
+            {
+                "two-space CRLF hard break", "a  \r\nb", NodeType::LineBreak,
+                1, 5, "  \r\n"
+            },
+            {
+                "backslash hard break", "a\\\nb", NodeType::LineBreak, 1, 3,
+                "\\\n"
+            },
+            {
+                "Unicode backslash CRLF hard break", "🙂a\\\r\nb",
+                NodeType::LineBreak, 3, 6, "\\\r\n"
+            },
+        };
+
+        const auto sourceSliceForOffsets = [](
+            const std::string& source,
+            OFF beg,
+            OFF end
+        ) {
+            const auto byteOffsetForUtf16 = [&source](OFF target) {
+                size_t byteOffset = 0;
+                OFF utf16Offset = 0;
+                while (byteOffset < source.size() && utf16Offset < target) {
+                    const unsigned char lead = static_cast<unsigned char>(source[byteOffset]);
+                    const size_t characterBytes =
+                        lead < 0x80 ? 1 : (lead < 0xE0 ? 2 : (lead < 0xF0 ? 3 : 4));
+                    utf16Offset += characterBytes == 4 ? 2 : 1;
+                    byteOffset += characterBytes;
+                }
+                return byteOffset;
+            };
+            const size_t byteBeg = byteOffsetForUtf16(beg);
+            const size_t byteEnd = byteOffsetForUtf16(end);
+            return source.substr(byteBeg, byteEnd - byteBeg);
+        };
+
+        MD4CParser parser;
+        ParserOptions options;
+        options.sourceOffsets = true;
+        for (const auto& testCase : cases) {
+            const auto result = parser.parse(testCase.markdown, options);
+            const auto paragraph = findFirstNode(result, NodeType::Paragraph);
+            std::shared_ptr<MarkdownNode> breakNode;
+            if (paragraph) {
+                for (const auto& child : paragraph->children) {
+                    if (child->type == testCase.type) {
+                        breakNode = child;
+                        break;
+                    }
+                }
+            }
+
+            TestRunner::assertTrue(
+                breakNode &&
+                    breakNode->beg == testCase.beg && breakNode->end == testCase.end,
+                std::string("Break offsets: ") + testCase.name
+            );
+            TestRunner::assertEqual(
+                testCase.sourceSlice,
+                breakNode
+                    ? sourceSliceForOffsets(
+                          testCase.markdown, breakNode->beg, breakNode->end
+                      )
+                    : std::string(),
+                std::string("Break offsets select original source: ") +
+                    testCase.name
+            );
+        }
+
+        const std::string consecutiveMarkdown = "a\nb\nc";
+        const auto consecutive = parser.parse(consecutiveMarkdown, options);
+        const auto paragraph = findFirstNode(consecutive, NodeType::Paragraph);
+        std::vector<std::shared_ptr<MarkdownNode>> breaks;
+        if (paragraph) {
+            for (const auto& child : paragraph->children) {
+                if (child->type == NodeType::SoftBreak) breaks.push_back(child);
+            }
+        }
+        TestRunner::assertTrue(
+            breaks.size() == 2 &&
+                breaks[0]->beg == 1 && breaks[0]->end == 2 &&
+                breaks[1]->beg == 3 && breaks[1]->end == 4,
+            "Break offsets: consecutive line breaks stay ordered"
+        );
+
+        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+        using BindingParserOptions = ::margelo::nitro::Markdown::ParserOptions;
+
+        const std::string serializedMarkdown = "🙂a\nb";
+        BindingParserOptions bindingOptions;
+        bindingOptions.sourceOffsets = true;
+        HybridMarkdownParser serializer;
+        const std::string normalJson = serializer.parseWithOptions(
+            serializedMarkdown,
+            bindingOptions
+        );
+        const std::string fastJson = serializer.parseWithOptionsForStreaming(
+            serializedMarkdown,
+            bindingOptions
+        );
+        const std::string serializedBreak =
+            "\"type\":\"soft_break\",\"beg\":3,\"end\":4";
+        TestRunner::assertTrue(
+            normalJson.find(serializedBreak) != std::string::npos,
+            "Break offsets: normal serializer preserves UTF-16 range"
+        );
+        TestRunner::assertTrue(
+            fastJson.find(serializedBreak) != std::string::npos,
+            "Break offsets: fast serializer preserves UTF-16 range"
+        );
+
+        BindingParserOptions withoutOffsets;
+        withoutOffsets.sourceOffsets = false;
+        HybridMarkdownParser noOffsetSerializer;
+        const std::string normalWithoutOffsets = noOffsetSerializer.parseWithOptions(
+            "a\nb",
+            withoutOffsets
+        );
+        const std::string fastWithoutOffsets =
+            noOffsetSerializer.parseWithOptionsForStreaming("a\nb", withoutOffsets);
+        TestRunner::assertTrue(
+            normalWithoutOffsets.find("\"beg\":") == std::string::npos &&
+                normalWithoutOffsets.find("\"end\":") == std::string::npos &&
+                normalWithoutOffsets.find("\"type\":\"soft_break\"") != std::string::npos,
+            "Break offsets: normal serializer omits offsets when disabled"
+        );
+        TestRunner::assertTrue(
+            fastWithoutOffsets.find("\"beg\":") == std::string::npos &&
+                fastWithoutOffsets.find("\"end\":") == std::string::npos &&
+                fastWithoutOffsets.find("\"type\":\"soft_break\"") != std::string::npos,
+            "Break offsets: fast serializer omits offsets when disabled"
+        );
+
+        using ::margelo::nitro::Markdown::HybridMarkdownSession;
+        auto session = std::make_shared<HybridMarkdownSession>();
+        session->append("🙂a\n");
+        session->append("b");
+        const std::string appendedJson = session->parseWithOptions(bindingOptions);
+        TestRunner::assertTrue(
+            appendedJson.find(serializedBreak) != std::string::npos,
+            "Break offsets: incremental append keeps source range"
+        );
+        session->replace(0, 0, "X");
+        TestRunner::assertTrue(
+            session->parseWithOptions(bindingOptions).find(
+                "\"type\":\"soft_break\",\"beg\":4,\"end\":5"
+            ) != std::string::npos,
+            "Break offsets: incremental replace shifts source range"
+        );
+        session->reset("a\r\nb");
+        TestRunner::assertTrue(
+            session->parseWithOptions(bindingOptions).find(
+                "\"type\":\"soft_break\",\"beg\":1,\"end\":3"
+            ) != std::string::npos,
+            "Break offsets: incremental reset replaces source range"
+        );
     }
 
     static void testHorizontalRule() {

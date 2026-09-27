@@ -73,3 +73,15 @@ jobs:
 
       - name: C++ sanitizers
         run: bun run test:cpp:sanitizers
+
+      - name: Test lifecycle and release contracts
+        run: bun run test:lifecycle
+
+      - name: Build package artifacts
+        run: bun run build
+
+      - name: Audit package contents
+        run: bun run audit:package
+
+      - name: Validate auth-free publication
+        run: bun run publish-package:dry-run

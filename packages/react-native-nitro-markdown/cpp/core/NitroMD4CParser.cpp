@@ -134,6 +134,7 @@ public:
     OFF currentTextBeg = 0;
     OFF lastTextEnd = 0;
     size_t lastTextByteEnd = 0;
+    size_t nextBreakSearchByteOffset = 0;
     bool forceCallbackFailure = false;
     std::string callbackError;
     size_t nodeCount = 0;
@@ -180,6 +181,7 @@ public:
         currentTextBeg = 0;
         lastTextEnd = 0;
         lastTextByteEnd = 0;
+        nextBreakSearchByteOffset = 0;
         forceCallbackFailure = false;
         callbackError.clear();
     }
@@ -187,6 +189,7 @@ public:
     void setInput(const char* text, size_t size, bool trackOffsets) {
         inputText = text;
         inputTextSize = size;
+        nextBreakSearchByteOffset = 0;
         sourceOffsetRuns.clear();
         sourceOffsetsTracked = trackOffsets;
         sourceOffsetsIdentity = false;
@@ -237,6 +240,53 @@ public:
         if (byteEnd > inputTextSize) {
             byteEnd = inputTextSize;
         }
+        lastTextByteEnd = byteEnd;
+        lastTextEnd = sourceOffset(byteEnd);
+        return {sourceOffset(byteBeg), lastTextEnd};
+    }
+
+    std::pair<OFF, OFF> sourceBreakRange(bool hardBreak) {
+        if (!sourceOffsetsTracked) return {0, 0};
+
+        const size_t searchBeg = std::min(
+            std::max(nextBreakSearchByteOffset, lastTextByteEnd), inputTextSize
+        );
+        size_t lineEndingBeg = searchBeg;
+        while (
+            lineEndingBeg < inputTextSize &&
+            inputText[lineEndingBeg] != '\n' &&
+            inputText[lineEndingBeg] != '\r'
+        ) {
+            lineEndingBeg += 1;
+        }
+        if (lineEndingBeg == inputTextSize) return {0, 0};
+
+        size_t byteEnd = lineEndingBeg + 1;
+        if (
+            inputText[lineEndingBeg] == '\r' &&
+            byteEnd < inputTextSize &&
+            inputText[byteEnd] == '\n'
+        ) {
+            byteEnd += 1;
+        }
+
+        size_t byteBeg = lineEndingBeg;
+        if (hardBreak) {
+            size_t markerEnd = lineEndingBeg;
+            while (markerEnd > searchBeg && inputText[markerEnd - 1] == ' ') {
+                markerEnd -= 1;
+            }
+            if (lineEndingBeg - markerEnd >= 2) {
+                byteBeg = markerEnd;
+            } else if (
+                markerEnd > searchBeg &&
+                inputText[markerEnd - 1] == '\\'
+            ) {
+                byteBeg = markerEnd - 1;
+            }
+        }
+
+        nextBreakSearchByteOffset = byteEnd;
         lastTextByteEnd = byteEnd;
         lastTextEnd = sourceOffset(byteEnd);
         return {sourceOffset(byteBeg), lastTextEnd};
@@ -620,17 +670,27 @@ public:
 
             case MD_TEXT_BR:
                 impl->flushText();
-                if (!impl->nodeStack.empty()) {
-                    impl->addChild(impl->nodeStack.top(),
-                        impl->makeNode(NodeType::LineBreak));
+                {
+                    const auto [beg, end] = impl->sourceBreakRange(true);
+                    if (!impl->nodeStack.empty()) {
+                        auto node = impl->makeNode(NodeType::LineBreak);
+                        node->beg = beg;
+                        node->end = end;
+                        impl->addChild(impl->nodeStack.top(), std::move(node));
+                    }
                 }
                 break;
 
             case MD_TEXT_SOFTBR:
                 impl->flushText();
-                if (!impl->nodeStack.empty()) {
-                    impl->addChild(impl->nodeStack.top(),
-                        impl->makeNode(NodeType::SoftBreak));
+                {
+                    const auto [beg, end] = impl->sourceBreakRange(false);
+                    if (!impl->nodeStack.empty()) {
+                        auto node = impl->makeNode(NodeType::SoftBreak);
+                        node->beg = beg;
+                        node->end = end;
+                        impl->addChild(impl->nodeStack.top(), std::move(node));
+                    }
                 }
                 break;
 

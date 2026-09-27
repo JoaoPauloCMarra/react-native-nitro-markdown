@@ -186,6 +186,8 @@ existing consumers keep receiving `beg`/`end`; changing that default would be a
 breaking AST-shape change. The ordinary string `<Markdown>` fast path chooses
 `false` internally when no consumer-facing AST or source ranges are needed.
 
+Soft and hard break spans include the original LF or CRLF bytes expressed as UTF-16 indices; hard-break markers remain part of their source span.
+
 The TypeScript return type follows the option: `parseMarkdown("...")` exposes
 required UTF-16 `beg`/`end` fields, while a literal
 `{ sourceOffsets: false }` returns a node type without those fields. If an
@@ -325,7 +327,9 @@ Methodology and the full capability matrix:
   validated HTTP(S), mail, and telephone URLs. Remote images load by default
   for compatibility — set `imageOptions={{ remoteImages: "deny" }}` (and/or
   `allowedHosts`) when rendering untrusted markdown in privacy- or SSRF-sensitive
-  apps.
+  apps. Host allowlists compare complete normalized hostnames, including bracketed
+  IPv6 addresses; ports do not change the hostname. Malformed authorities and
+  backslash-based URL parser ambiguities are rejected.
 - The C++ parser is fuzzed with a seeded, deterministic corpus and checked
   against a CommonMark/GFM conformance corpus in `bun run check`.
 

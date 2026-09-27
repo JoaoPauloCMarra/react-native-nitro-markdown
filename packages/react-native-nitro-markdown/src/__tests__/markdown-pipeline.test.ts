@@ -72,6 +72,105 @@ describe("Markdown plugin pipeline", () => {
     }
   });
 
+  it("renders priority-ordered plugin output and continues after a named failure", () => {
+    const executionOrder: string[] = [];
+    const pluginError = new Error("intentional plugin failure");
+    const onError = jest.fn();
+    const onParseComplete = jest.fn();
+    const replaceText = (node: MarkdownNode, content: string): MarkdownNode => {
+      if (node.type === "text") return { ...node, content };
+      return {
+        ...node,
+        ...(node.children
+          ? { children: node.children.map((child) => replaceText(child, content)) }
+          : {}),
+      };
+    };
+    const plugins: MarkdownPlugin[] = [
+      {
+        name: "low-priority",
+        priority: 0,
+        beforeParse: (markdown) => {
+          executionOrder.push("before-low");
+          return `${markdown} continued`;
+        },
+        afterParse: (ast) => {
+          executionOrder.push("after-low");
+          return ast;
+        },
+      },
+      {
+        name: "throwing-plugin",
+        priority: 20,
+        afterParse: () => {
+          executionOrder.push("after-throwing");
+          throw pluginError;
+        },
+      },
+      {
+        name: "high-priority",
+        priority: 30,
+        beforeParse: (markdown) => {
+          executionOrder.push("before-high");
+          return markdown.replace("source", "prepared");
+        },
+        afterParse: (ast) => {
+          executionOrder.push("after-high");
+          return ast;
+        },
+      },
+      {
+        name: "continuation",
+        priority: 10,
+        afterParse: (ast) => {
+          executionOrder.push("after-continuation");
+          return replaceText(ast, "rendered plugin output");
+        },
+      },
+    ];
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+    let renderer: ReactTestRenderer | undefined;
+
+    try {
+      act(() => {
+        renderer = create(
+          createElement(
+            Markdown,
+            { plugins, onError, onParseComplete, parseCache: false },
+            "source fixture",
+          ),
+        );
+      });
+
+      expect(executionOrder).toEqual([
+        "before-high",
+        "before-low",
+        "after-high",
+        "after-throwing",
+        "after-continuation",
+        "after-low",
+      ]);
+      expect(mockParser.parse).toHaveBeenCalledWith(
+        "prepared fixture continued",
+      );
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(
+        pluginError,
+        "after-plugin",
+        "throwing-plugin",
+      );
+      expect(onParseComplete).toHaveBeenCalledWith(
+        expect.objectContaining({ text: "rendered plugin output\n\n" }),
+      );
+      expect(JSON.stringify(renderer!.toJSON())).toContain(
+        "rendered plugin output",
+      );
+    } finally {
+      if (renderer) act(() => renderer!.unmount());
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
   it("bypasses parse cache when parseCache is false", () => {
     const onParseComplete = jest.fn();
     let renderer: ReactTestRenderer | undefined;
