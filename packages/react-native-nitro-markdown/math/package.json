@@ -1,0 +1,7 @@
+{
+  "main": "../lib/commonjs/math.js",
+  "module": "../lib/module/math.js",
+  "types": "../lib/typescript/commonjs/math.d.ts",
+  "react-native": "../src/math.tsx",
+  "source": "../src/math.tsx"
+}

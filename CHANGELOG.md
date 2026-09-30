@@ -90,6 +90,11 @@ stay safe.
   dependencies. Android compiles with Java 17.
 - The built-in image renderer no longer special-cases `picsum.photos` URLs.
 - `package.json` exports `./package.json`.
+- `react-native-nitro-markdown/headless` and `react-native-nitro-markdown/math`
+  also resolve without package `exports` support. React Native 0.76–0.78
+  (including Expo SDK 52) have Metro package exports off by default, so the
+  package now ships `headless/package.json` and `math/package.json` stubs that
+  point at the built files.
 
 ## [0.12.6] - 2026-09-27
 

@@ -79,6 +79,15 @@ the `/math` subpath; math stays readable as monospace text. The main entry and
 `/headless` never load `ratex-react-native`, so apps that do not use math do
 not need it.
 
+## Subpath imports on older Metro
+
+`react-native-nitro-markdown/headless` and `react-native-nitro-markdown/math`
+resolve through package `exports` on Metro versions that enable them, and
+through `headless/package.json` and `math/package.json` stub folders
+otherwise. React Native 0.76–0.78 (including Expo SDK 52) keep Metro package
+exports off by default; the stubs make the subpaths work there without Metro
+config changes.
+
 ## Verifying the install
 
 ```ts

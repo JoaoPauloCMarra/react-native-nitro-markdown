@@ -46,6 +46,8 @@
   "files": [
     "src",
     "lib",
+    "headless/package.json",
+    "math/package.json",
     "cpp",
     "android",
     "nitrogen",

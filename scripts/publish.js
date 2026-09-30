@@ -309,6 +309,8 @@ async function validatePackedFiles() {
     "src/index.ts",
     "src/headless.ts",
     "src/math.tsx",
+    "headless/package.json",
+    "math/package.json",
     `${PACKAGE_NAME}.podspec`,
   ];
 
@@ -323,6 +325,8 @@ async function validatePackedFiles() {
 
   console.log(`  ✓ ${PACKAGE_NAME} pack contains all required package files`);
   console.log(`  ✓ headless JS, declarations, and source are packed`);
+  assertSubpathStubs(files);
+  console.log("  ✓ headless and math subpath stubs resolve to packed files");
   assertEntryGraphExcludes(["lib/commonjs/index.js", "lib/module/index.js", "lib/commonjs/headless.js", "lib/module/headless.js"], OPTIONAL_MATH_PEER);
   assertEntryGraphIncludes("lib/commonjs/math.js", OPTIONAL_MATH_PEER);
   console.log(`  ✓ main and headless entries do not load ${OPTIONAL_MATH_PEER}`);
@@ -359,6 +363,39 @@ function collectEntryGraph(entry) {
     }
   }
   return externals;
+}
+
+const SUBPATH_STUB_FIELDS = ["main", "module", "types", "react-native", "source"];
+
+function assertSubpathStubs(packedFiles) {
+  for (const subpath of ["headless", "math"]) {
+    const stubPath = path.join(packageDir, subpath, "package.json");
+    const stub = JSON.parse(fs.readFileSync(stubPath, "utf8"));
+    const exported = getPackageJson().exports?.[`./${subpath}`];
+    if (!exported) {
+      throw new Error(`package.json exports is missing ./${subpath}`);
+    }
+    for (const field of SUBPATH_STUB_FIELDS) {
+      const target = stub[field];
+      if (typeof target !== "string") {
+        throw new Error(`${subpath}/package.json is missing "${field}"`);
+      }
+      const packedPath = path.posix.normalize(path.posix.join(subpath, target));
+      if (!packedFiles.has(packedPath)) {
+        throw new Error(
+          `${subpath}/package.json "${field}" points at ${packedPath}, which is not packed`,
+        );
+      }
+    }
+    const expectedMain = exported.require?.default?.replace(/^\.\//, "");
+    const expectedSource = exported["react-native"]?.replace(/^\.\//, "");
+    if (path.posix.join(subpath, stub.main) !== path.posix.normalize(expectedMain)) {
+      throw new Error(`${subpath}/package.json main does not match exports`);
+    }
+    if (path.posix.join(subpath, stub["react-native"]) !== path.posix.normalize(expectedSource)) {
+      throw new Error(`${subpath}/package.json react-native does not match exports`);
+    }
+  }
 }
 
 function assertEntryGraphExcludes(entries, specifier) {
