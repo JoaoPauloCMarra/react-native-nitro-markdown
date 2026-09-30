@@ -325,6 +325,8 @@ function sameIdentity(expected, actual) {
   );
 }
 
+const FORCE_KILL_REAP_MS = 2_000;
+
 async function captureProcessGroup(child, detached, identityMode) {
   if (
     !isProcessGroupSupported(detached, identityMode) ||
@@ -591,7 +593,7 @@ async function terminateProcessTree({
       completion,
       completionState,
       group,
-      graceMs,
+      Math.max(graceMs, FORCE_KILL_REAP_MS),
     );
   }
 
