@@ -13,7 +13,8 @@ import {
   type StyleProp,
   type TextStyle,
 } from "react-native";
-import { getTextContent, type MarkdownNode } from "./headless";
+import type { MarkdownNode } from "./headless";
+import { readTextContent } from "./utils/text-content";
 import {
   useMarkdownContext,
   type CustomRenderer,
@@ -62,7 +63,7 @@ const INLINE_MATH_GROUP_STYLE = StyleSheet.create({
 
 const getRenderableText = (node: MarkdownNode): string => {
   if (node.content) return node.content;
-  return getTextContent(node);
+  return readTextContent(node);
 };
 
 const isPlainTextInline = (node: MarkdownNode): boolean => {

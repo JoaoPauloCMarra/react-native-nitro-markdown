@@ -6,6 +6,7 @@ import { MarkdownError } from "../errors";
 import { mockParser } from "./setup";
 
 jest.mock("../renderers/math", () => ({
+  ...jest.requireActual("../renderers/math"),
   MathInline: "MathInline",
   MathBlock: "MathBlock",
 }));

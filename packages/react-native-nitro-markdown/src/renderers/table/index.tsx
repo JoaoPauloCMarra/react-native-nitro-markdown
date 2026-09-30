@@ -28,7 +28,7 @@ import {
   computeMeasuredColumnWidths,
   expectedCellKeysOf,
 } from "./table-measurement";
-import { getTextContent } from "../../headless";
+import { readTextContent } from "../../utils/text-content";
 import {
   useMarkdownContext,
   type NodeRendererProps,
@@ -202,7 +202,7 @@ export const TableRenderer: FC<TableRendererProps> = ({
   );
 
   const tableAccessibilityLabel = useMemo(
-    () => `Table: ${headers.map((cell) => getTextContent(cell).trim()).filter(Boolean).join(", ")}`,
+    () => `Table: ${headers.map((cell) => readTextContent(cell).trim()).filter(Boolean).join(", ")}`,
     [headers],
   );
 

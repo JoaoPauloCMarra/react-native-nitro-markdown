@@ -9,7 +9,7 @@ import {
   type TextStyle,
 } from "react-native";
 import { getCachedStyles } from "./style-cache";
-import { getTextContent } from "../headless";
+import { readTextContent } from "../utils/text-content";
 import { useMarkdownContext } from "../MarkdownContext";
 import {
   defaultHighlighter,
@@ -41,7 +41,7 @@ export const CodeBlock: FC<CodeBlockProps> = ({
         ? ctx.highlightCode
         : null;
 
-  const displayContent = content ?? (node ? getTextContent(node) : "");
+  const displayContent = content ?? (node ? readTextContent(node) : "");
   const highlightedTokens = useMemo(
     () =>
       highlighter && language ? highlighter(language, displayContent) : null,
@@ -101,7 +101,7 @@ export const InlineCode: FC<InlineCodeProps> = ({
   const { theme } = useMarkdownContext();
 
   const displayContent =
-    content ?? children ?? (node ? getTextContent(node) : "");
+    content ?? children ?? (node ? readTextContent(node) : "");
 
   const styles = getCachedStyles(
     inlineCodeStylesCache,
