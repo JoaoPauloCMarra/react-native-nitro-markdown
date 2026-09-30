@@ -135,3 +135,10 @@ Dependency freshness (npm registry, 2026-09-30): `react-native-nitro-modules`/`n
 - `input_too_complex` does not cover AST depth; depth stays `invalid_ast`.
 - Remote tag `v.05.2` (`80f01e56a9856159d0f5b518117161f74adb21d5`) listed only; deleting remote tags needs the owner.
 - `scripts/package-doc-lifecycle.js` replacement: cross-repo follow-up.
+
+## Review follow-ups (v0.13.0)
+
+- [x] Nested images multiplied alt text up to 64 MiB. Receipt `280c87c`: cumulative alt cap is `max(input bytes, 4096) * 2`; the 200-deep, 320,000-character repro now fails fast with `input_too_complex`.
+- [x] Custom dark themes inherit the new light token palette. Receipt `40e9b6d`: CHANGELOG breaking note and README migration (`codeTokenColors: darkMarkdownTheme.colors.codeTokenColors`).
+- [x] Subpaths failed on Metro without package exports (RN 0.76–0.78, Expo SDK 52). Receipt `9ce937e`: `headless/` and `math/` stub `package.json` files, in `files`, validated by the pack audit.
+- [x] `useMarkdownSession` could return a null session during a StrictMode reconnect and memoized consumers kept the disposed one. Receipt `c4bb97a`: lazy `getSession()`, `sessionGeneration` in the controller memo; CHANGELOG states streamed text is lost on Fast Refresh.
