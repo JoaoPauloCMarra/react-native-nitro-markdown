@@ -18,7 +18,7 @@ namespace {
 // Hard input cap: oversized documents fail deterministically instead of
 // exhausting memory. The JavaScript boundary enforces the same cap earlier.
 static constexpr size_t kMaxInputBytes = 10 * 1024 * 1024;
-static constexpr size_t kMaxImageAltBytes = 64 * 1024 * 1024;
+static constexpr size_t kMinImageAltBudgetBytes = 4096;
 
 size_t clampInputSize(size_t inputSize) {
     size_t maxSize = static_cast<size_t>(std::numeric_limits<MD_SIZE>::max());
@@ -390,10 +390,12 @@ public:
             throw;
         }
         alt += currentText;
-        if (alt.size() > kMaxImageAltBytes - imageAltBytes) {
+        const size_t maxImageAltBytes =
+            std::max(inputTextSize, kMinImageAltBudgetBytes) * 2;
+        if (alt.size() > maxImageAltBytes - std::min(imageAltBytes, maxImageAltBytes)) {
             callbackError =
                 "Markdown flattened text exceeds the maximum of " +
-                std::to_string(kMaxImageAltBytes) + " bytes";
+                std::to_string(maxImageAltBytes) + " bytes";
             throw std::runtime_error(callbackError);
         }
         imageAltBytes += alt.size();

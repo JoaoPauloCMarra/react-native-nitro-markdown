@@ -689,6 +689,36 @@ private:
             binding.extractPlainText("![**bold** alt](u)"),
             "Image alt flattens subtree: extractPlainText"
         );
+
+        std::string nested;
+        for (int index = 0; index < 200; index++) nested += "![";
+        nested += std::string(320000, 'x');
+        for (int index = 0; index < 200; index++) nested += "](u)";
+        std::string nestedError;
+        try {
+            parser.parse(nested, options);
+        } catch (const std::exception& error) {
+            nestedError = error.what();
+        }
+        TestRunner::assertTrue(
+            nestedError.rfind("Markdown flattened text exceeds the maximum of", 0) == 0,
+            "Image alt cap scales with input size for nested images: " + nestedError
+        );
+
+        std::string wide;
+        for (int index = 0; index < 64; index++) {
+            wide += "![" + std::string(512, 'a') + "](u) ";
+        }
+        const auto wideAst = parser.parse(wide, options);
+        TestRunner::assertTrue(
+            findFirstNode(wideAst, NodeType::Image) != nullptr,
+            "Image alt cap accepts many sibling images within input size"
+        );
+        TestRunner::assertEqual(
+            "x y z\n\n",
+            binding.extractPlainText("![x ![y](v) z](u)"),
+            "Image alt cap keeps modest nesting"
+        );
     }
 
     static void testSessionStreamingMatchesColdParse() {
