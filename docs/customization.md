@@ -47,7 +47,12 @@ or pass a bare partial (`{ colors: { text: "#e5e7eb" } }`) for a one-off overrid
 | ---------------------- | ---------------------------------------------------------------------------- |
 | `defaultMarkdownTheme` | Opinionated light defaults (the baseline).                                   |
 | `darkMarkdownTheme`    | Ready-made dark palette.                                                     |
-| `minimalMarkdownTheme` | Near-unstyled baseline you fully control (also `stylingStrategy="minimal"`). |
+| `minimalMarkdownTheme` | Near-unstyled baseline you fully control. |
+
+`stylingStrategy="minimal"` uses `minimalMarkdownTheme` as the base.
+`theme={minimalMarkdownTheme}` is different: it merges over the default theme,
+so values the minimal theme does not set (such as `codeTokenColors`) keep their
+default values.
 
 ## Per-node style overrides
 
@@ -92,6 +97,15 @@ function CodeBlock({ content, language }: CodeBlockRendererProps) {
 
 For `html_inline` and `html_block`, read `node.content` directly.
 
+To draw math with RaTeX, spread `mathRenderers` from the optional `/math`
+subpath into your renderers (see [installation](./installation.md#math-rendering-optional)):
+
+```tsx
+import { mathRenderers } from "react-native-nitro-markdown/math";
+
+const renderers = { ...mathRenderers, blockquote: MyCallout };
+```
+
 ## Plugin pipeline
 
 Plugins preprocess source text (`beforeParse`) and/or post-process the AST
@@ -125,7 +139,9 @@ plugins → `astTransform` → render. Higher `priority` runs first (stable sort
 ```
 
 Pass `highlightCode={true}` for the built-in tokenizer, or a custom
-`CodeHighlighter` function for your own theme/grammar.
+`CodeHighlighter` function for your own theme/grammar. Token colors come from
+`theme.colors.codeTokenColors`. The default (light) and dark themes ship
+palettes with at least 4.5:1 contrast against their `codeBackground`.
 
 ## See also
 

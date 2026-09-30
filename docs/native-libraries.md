@@ -8,7 +8,7 @@ C++ JSON writer plus `JSON.parse` on the JavaScript side.
 | Library | Where | Why |
 | --- | --- | --- |
 | md4c | `cpp/core/NitroMD4CParser` | CommonMark/GFM AST already matches the public node types. |
-| Streaming `JsonWriter` | `HybridMarkdownParser.cpp` | Writes JSON without building a DOM. Faster than allocating a yyjson/FlatBuffers tree for the same payload. |
+| Streaming `JsonWriter` | `HybridMarkdownParser.cpp` | Writes JSON while walking the AST, without building an intermediate DOM tree. |
 
 ## Evaluated and not shipped
 

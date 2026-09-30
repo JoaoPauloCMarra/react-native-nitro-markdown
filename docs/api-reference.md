@@ -1,9 +1,12 @@
 # API reference
 
-Two entry points:
+Three entry points:
 
 - `react-native-nitro-markdown` — components, hooks, theme, renderers, types.
 - `react-native-nitro-markdown/headless` — parser-only (no React), see [headless](./headless.md).
+- `react-native-nitro-markdown/math` — RaTeX math renderers. Requires the
+  optional peer `ratex-react-native` (React Native `>=0.84`). See
+  [installation](./installation.md#math-rendering-optional).
 
 ## Components
 
@@ -11,7 +14,16 @@ Two entry points:
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | `Markdown`                                                                                                                                                                         | Render a complete Markdown string. See [usage](./usage.md).      |
 | `MarkdownStream`                                                                                                                                                                   | Incremental / streaming render. See [streaming](./streaming.md). |
-| `Heading`, `Paragraph`, `Link`, `Blockquote`, `HorizontalRule`, `CodeBlock`, `InlineCode`, `List`, `ListItem`, `TaskListItem`, `TableRenderer`, `Image`, `MathInline`, `MathBlock` | Individual renderer components (compose your own tree).          |
+| `Heading`, `Paragraph`, `Link`, `Blockquote`, `HorizontalRule`, `CodeBlock`, `InlineCode`, `List`, `ListItem`, `TaskListItem`, `TableRenderer`, `Image`, `HtmlBlock`, `HtmlInline`, `MathInline`, `MathBlock` | Individual renderer components (compose your own tree). `MathInline` / `MathBlock` from the main entry render monospace text. |
+
+## Math subpath (`react-native-nitro-markdown/math`)
+
+| Export                              | Description                                                                                          |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `mathRenderers`                     | `math_inline` / `math_block` renderers that draw LaTeX with RaTeX. Pass as `renderers`, or spread into your own renderers. |
+| `RaTeXMathInline`, `RaTeXMathBlock` | RaTeX-backed math components (`content`, `style`) for custom trees.                                  |
+| `RaTeXMathProps`                    | Props type for the two components.                                                                   |
+| `LatexViewComponent`, `LatexViewProps` | Shape of the LaTeX view the math components accept.                                               |
 
 ### `MarkdownProps` (selected)
 
@@ -31,7 +43,7 @@ large initial content), `options`, `plugins`, `onError`, `renderMarkdown`.
 
 | Export                                     | Description                                                                                                                                                                                                                                                                     |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `useMarkdownSession()`                     | Owns a streaming session; `reset` / `append` / `getSession()`.                                                                                                                                                                                                                  |
+| `useMarkdownSession(initialText?)`         | Owns a streaming session. Returns `getSession()`, `reset(text)`, `replace(from, to, text)`, `clear()`, `setHighlight(position)`, `stop()`, `isStreaming` and `setIsStreaming`. Append tokens with `getSession().append(chunk)`. Safe under React StrictMode and Fast Refresh. |
 | `useMarkdownStreamState(options)`          | Headless streaming text + source AST state.                                                                                                                                                                                                                                     |
 | `useStream()`                              | Timestamped stream state.                                                                                                                                                                                                                                                       |
 | `createMarkdownSession()`                  | Imperative session outside React. Session failures throw typed `MarkdownError`s with `source: "session"`. `getTextRange` and `replace` use `[from, to)` JavaScript UTF-16 units; an index inside a surrogate pair (including emoji) throws `invalid_range` instead of rounding. |
@@ -48,17 +60,31 @@ large initial content), `options`, `plugins`, `onError`, `renderMarkdown`.
 
 ## Headless exports
 
-`parseMarkdown`, `parseMarkdownWithOptions`, `extractPlainText`,
-`extractPlainTextWithOptions`, `getTextContent`, `getFlattenedText`,
-`stripSourceOffsets`. See [headless](./headless.md).
+`parseMarkdown`, `parseMarkdownWithOptions`, `parseMarkdownSession`,
+`extractPlainText`, `extractPlainTextWithOptions`, `getTextContent`,
+`getFlattenedText`, `stripSourceOffsets`, `MarkdownParserModule`,
+`MarkdownError`, `MAX_PARSE_INPUT_LENGTH`. See [headless](./headless.md).
 
 `parseMarkdown` and `parseMarkdownWithOptions` throw when native parsing cannot
-produce a complete valid AST. Failures are typed `MarkdownError`s with stable
-`code` (`input_too_large`, `invalid_ast`, `parse_failed`, `invalid_json`,
-`native_unavailable`, `extraction_failed`, `buffer_limit`, `invalid_range`,
-`destroyed`) and
-`source` (`parse` | `extract` | `session` | `render`). `<Markdown>` and
-`<MarkdownStream>` surface the same failures through `onError(error, "parse")`.
+produce a complete valid AST. Failures are typed `MarkdownError`s with a stable
+`code` and `source`. `<Markdown>` and `<MarkdownStream>` surface the same
+failures through `onError(error, "parse")`.
+
+| `code`               | When                                                                                                                                                              |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `input_too_large`    | Input is larger than `options.maxInputLength` (default 10,485,760 UTF-8 bytes), or `maxInputLength` itself is not a finite non-negative integer.                  |
+| `input_too_complex`  | Input is within the size cap but exceeds a native parser budget: 100,000 AST nodes, 250,000 child slots, 500,000 units of AST work, 64 MiB of AST JSON, or 64 MiB of flattened text. For example, about 650 KB of short paragraphs can reach the node budget. Split the document or render it in parts. |
+| `invalid_ast`        | AST depth exceeds 256 levels, or a supplied or transformed AST is cyclic (`source: "render"`).                                                                     |
+| `invalid_json`       | Native output was not valid AST JSON.                                                                                                                             |
+| `parse_failed`       | Any other native parse failure.                                                                                                                                   |
+| `native_unavailable` | The native module is not linked (Expo Go, web, or a stale native build).                                                                                         |
+| `buffer_limit`       | A session write would grow the buffer above 10,485,760 UTF-8 bytes.                                                                                               |
+| `invalid_range`      | A session range is not finite, is reversed, or splits a UTF-16 surrogate pair.                                                                                    |
+| `destroyed`          | A session was used after `dispose()`.                                                                                                                             |
+| `extraction_failed`  | Reserved. Not produced in this release: plain-text extraction falls back to JavaScript flattening (see [headless](./headless.md)).                                |
+
+`source` is `parse`, `session` or `render`. `"extract"` is reserved and is not
+produced in this release.
 Parser text nodes preserve verbatim entity text such as `&amp;`; entity text is
 not decoded before it reaches the AST or renderer.
 
@@ -118,7 +144,11 @@ trees so mutation of one consumer result cannot poison another cached result.
 `MarkdownStreamSourceAstStatus`, `MarkdownStreamSourceAstDisabledReason`,
 `UseMarkdownStreamStateOptions`, `CodeHighlighter`, `HighlightedToken`,
 `TokenType`, `UrlSafetyOptions`, `MarkdownError`, `MarkdownErrorCode`,
-`MarkdownErrorSource`, `SUPPORTED_HIGHLIGHT_LANGUAGES`.
+`MarkdownErrorSource`, `BaseCustomRendererProps`, `EnhancedRendererProps`,
+`MarkdownContextValue`, `CustomRendererProps`.
+
+Values: `defaultHighlighter`, `SUPPORTED_HIGHLIGHT_LANGUAGES`,
+`MAX_PARSE_INPUT_LENGTH`.
 
 > Prefer importing these types over local object shapes so editors and AI tools
 > catch invalid parser options, node names, renderer props, and session usage.

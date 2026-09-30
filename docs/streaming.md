@@ -48,12 +48,20 @@ session.getSession().append("**world**");
 Pass the controller from `useMarkdownSession()` directly. Use
 `session.getSession()` only when another API needs the raw native session.
 
+`useMarkdownSession()` owns the native session and disposes it on unmount.
+When React StrictMode or Fast Refresh replays effects, the hook creates a fresh
+session (seeded with `initialText`) and re-renders its owner, so
+`MarkdownStream` and the controller methods keep working. Text appended before
+the replay is not carried over.
+
 ## How incremental parsing works
 
 `MarkdownStream` avoids full-buffer re-parsing only for the two safe fast paths:
 
 - **Trailing plain text** — appends that only extend the final text node are
-  merged into the existing AST without calling the parser.
+  merged into the existing AST without calling the parser. If the last line of
+  the previous text could start a block once more text arrives (a lone `*`,
+  `+`, `-`, `#`, or an ordinal such as `1.`), the append is re-parsed instead.
 - **Fenced code content** — appends inside an open fenced code block are
   appended to the code text node.
 
@@ -63,13 +71,24 @@ The fast paths are covered by deterministic call-count tests in
 `src/__tests__/markdown-stream.test.ts` — a plain-text append never re-parses,
 a structural append always does.
 
-`MarkdownStream` also uses native range reads for append-only updates and only
-falls back to a full session read for reset-like changes, replacements inside
-existing text, or a native range-read failure.
+`MarkdownStream` reads only the changed range when a batch ends at the end of
+the buffer and starts either at the previous end (an append) or at offset 0 (a
+reset). Every other batch, including a replace at offset 0 that keeps later
+text or an insert inside the batch, reads the full session text, as does a
+native range-read failure.
+
+If you change `updateIntervalMs`, `updateStrategy`, `useTransitionUpdates` or
+`incrementalParsing` while a batch is pending, the stream re-subscribes and
+flushes that batch with a full read, so no chunk is lost.
 
 Session ranges are JavaScript UTF-16 `[from, to)` units. Boundaries inside a
 surrogate pair (including emoji) are rejected with `invalid_range`; they are
 never rounded to consume or replace the whole code point.
+
+The session buffer cap is measured in UTF-8 bytes (10,485,760), the same unit
+as the parser's `maxInputLength`. A write that would grow the buffer above the
+cap throws `buffer_limit`. For example, 4,000,000 CJK characters are 12,000,000
+UTF-8 bytes and are rejected even though they are only 4,000,000 UTF-16 units.
 
 If any plugin defines `beforeParse`, incremental AST reuse is disabled so the
 full pipeline runs correctly (see `sourceAstStatus` below).

@@ -10,7 +10,7 @@ This is a monorepo using [Bun](https://bun.sh/) workspaces.
 
 - [Bun](https://bun.sh/)
 - iOS: Xcode and CocoaPods
-- Android: Android Studio and NDK
+- Android: Android Studio and NDK 27 or later
 
 ### Setup
 
@@ -20,7 +20,7 @@ This is a monorepo using [Bun](https://bun.sh/) workspaces.
    bun run setup
    ```
 
-This will install dependencies, download the `md4c` source code, generate Nitro bindings, and build the library.
+This installs dependencies, generates Nitro bindings, and builds the library. The md4c parser is vendored in `packages/react-native-nitro-markdown/cpp/nitromd`; nothing is downloaded.
 
 ### Running the Example App
 
@@ -41,8 +41,9 @@ bun run android # for Android
 Before submitting a PR, please make sure all tests pass:
 
 ```bash
-bun test        # Runs Jest tests
+bun run test     # Runs the package Jest tests
 bun run test:cpp # Runs C++ unit tests
+bun run check    # Lint, typecheck, JS tests, C++ tests and script tests
 ```
 
 ## Pull Request Process

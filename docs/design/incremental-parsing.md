@@ -14,18 +14,14 @@ Each flush currently costs:
    cross-block structure), and
 2. serialization of the whole AST to JSON plus a JS-side `JSON.parse`.
 
-Cost 2 has already been addressed. The parser binding keeps a bounded LRU
-cache (512 entries, 4 MiB) that maps a top-level block's exact source byte
-slice, absolute start offset, parser flags, and node type to its serialized
-JSON fragment, so unchanged prefix blocks are not re-serialized on re-parse.
-Documents that may contain link reference definitions bypass the cache, and
-blocks terminated by end-of-input are never cached, because their extent can
-depend on EOF rather than on the slice alone. On the C++ flush benchmark this
-keeps warm re-parse cost at roughly 0.68x of cold cost while output stays
-byte-identical (see `testSerializationCacheFlushBudget` in
-`cpp/core/NitroMD4CParserTest.cpp`).
+Cost 2 is not cached. Earlier releases kept a serialization cache of
+top-level JSON fragments, but it could return stale fragments for reference
+definitions inside containers and for lazily continued blocks, so 0.13.0
+removed it. Every flush serializes the whole AST again with the streaming JSON
+writer. `MarkdownStream` reduces how often this happens by batching updates and
+by appending plain text to the previous AST in JavaScript when that is safe.
 
-Cost 1 remains O(document) per flush: the full parse still runs every time.
+Cost 1 is also O(document) per flush: the full parse still runs every time.
 This document designs the next step — true O(tail) parsing — and explains why
 it requires changes inside the vendored `nitromd` engine rather than another
 layer around it.
@@ -124,8 +120,7 @@ int nitromd_parse_resume(const MD_PARSER* parser,
 The wrapper (`cpp/core/NitroMD4CParser.cpp`) owns checkpoint lifetime on the
 session, validates `prefixHash` and `parserFlags` before resuming, and falls
 back to a full parse on any mismatch. Emitted `beg`/`end` offsets continue to
-be absolute UTF-16 positions, so downstream consumers (including the
-serialization cache, whose keys include absolute offsets) are unaffected.
+be absolute UTF-16 positions, so downstream consumers are unaffected.
 
 ## Correctness envelope
 

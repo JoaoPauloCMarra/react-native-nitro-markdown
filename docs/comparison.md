@@ -84,9 +84,13 @@ These Node and device records must not be converted into a cross-runtime speed
 ratio. Absolute values vary by device, runtime, build, and workload; use the
 same record type for regression decisions.
 
-Math rendering via `ratex-react-native` measured 384 ms on iOS and 283 ms on
+Math rendering via `ratex-react-native` (the optional
+`react-native-nitro-markdown/math` subpath) measured 384 ms on iOS and 283 ms on
 Android versus 2,533 ms and 2,910 ms respectively for legacy MathJax/SVG in
-the same development runs. These measurements are not a promise of release
+the same development runs. Those runs used the 0.12.x harness, which stopped
+the clock 120 ms after layout, so each value includes that fixed delay; the
+difference between the two renderers is not affected. The 0.13.0 harness stops
+the clock at layout. These measurements are not a promise of release
 performance. Reproduce them on your target device by running the example app
 and tapping **Run Benchmark**.
 
