@@ -25,7 +25,7 @@ function createFixture() {
   const exampleDir = join(root, "apps/example");
   const binaryDir = join(root, "bin");
   mkdirSync(scriptDir, { recursive: true });
-  mkdirSync(join(packageDir, "cpp/md4c"), { recursive: true });
+  mkdirSync(packageDir, { recursive: true });
   mkdirSync(exampleDir, { recursive: true });
   mkdirSync(binaryDir, { recursive: true });
 
@@ -48,25 +48,6 @@ exit 0
   );
   chmodSync(bunShim, 0o755);
 
-  const preloadPath = join(root, "mock-network.cjs");
-  writeFileSync(
-    preloadPath,
-    `const { EventEmitter } = require("node:events");
-const { Readable } = require("node:stream");
-const https = require("node:https");
-https.get = (_url, callback) => {
-  const request = new EventEmitter();
-  process.nextTick(() => {
-    const response = Readable.from(["fixture download"]);
-    response.statusCode = 200;
-    response.headers = {};
-    callback(response);
-  });
-  return request;
-};
-`,
-  );
-
   const result = (failure = "") =>
     spawnSync(process.execPath, [join(scriptDir, "setup.js")], {
       cwd: root,
@@ -74,7 +55,6 @@ https.get = (_url, callback) => {
       env: {
         ...process.env,
         PATH: `${binaryDir}:${process.env.PATH ?? ""}`,
-        NODE_OPTIONS: `--require=${preloadPath}`,
         NITRO_SETUP_COMMAND_LOG: commandLog,
         NITRO_SETUP_FAIL: failure,
       },
@@ -145,8 +125,7 @@ describe("setup script lifecycle", () => {
         existsSync(join(fixture.root, "apps/example/assets", asset)),
       ).toBe(true);
     }
-    expect(
-      existsSync(join(fixture.packageDir, "cpp/md4c/md4c.h")),
-    ).toBe(true);
+    expect(existsSync(join(fixture.packageDir, "cpp/md4c"))).toBe(false);
+    expect(result.stdout).not.toContain("Downloading");
   });
 });

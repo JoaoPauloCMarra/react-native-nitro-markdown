@@ -2,7 +2,6 @@
 
 const { execSync } = require("child_process");
 const fs = require("fs");
-const https = require("https");
 const path = require("path");
 
 const colors = {
@@ -45,39 +44,6 @@ function commandExists(command) {
   }
 }
 
-function downloadFile(url, destPath) {
-  return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(destPath);
-    https
-      .get(url, (response) => {
-        // Handle redirects
-        if (response.statusCode === 301 || response.statusCode === 302) {
-          file.close();
-          fs.unlinkSync(destPath);
-          downloadFile(response.headers.location, destPath)
-            .then(resolve)
-            .catch(reject);
-          return;
-        }
-
-        if (response.statusCode !== 200) {
-          reject(new Error(`Failed to download: ${response.statusCode}`));
-          return;
-        }
-
-        response.pipe(file);
-        file.on("finish", () => {
-          file.close();
-          resolve();
-        });
-      })
-      .on("error", (err) => {
-        fs.unlink(destPath, () => {});
-        reject(err);
-      });
-  });
-}
-
 function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true });
@@ -109,36 +75,6 @@ async function main() {
   if (!execCommand("bun install")) {
     log("Failed to install dependencies", "red");
     process.exit(1);
-  }
-
-  const md4cDir = path.join(
-    projectRoot,
-    "packages/react-native-nitro-markdown/cpp/md4c",
-  );
-  log("📥 Downloading md4c source files...");
-
-  ensureDir(md4cDir);
-
-  const md4cFiles = [
-    {
-      name: "md4c.h",
-      url: "https://raw.githubusercontent.com/mity/md4c/master/src/md4c.h",
-    },
-    {
-      name: "md4c.c",
-      url: "https://raw.githubusercontent.com/mity/md4c/master/src/md4c.c",
-    },
-  ];
-
-  for (const file of md4cFiles) {
-    const destPath = path.join(md4cDir, file.name);
-    try {
-      await downloadFile(file.url, destPath);
-      console.log(`   ✓ Downloaded ${file.name}`);
-    } catch (error) {
-      log(`   ✗ Failed to download ${file.name}: ${error.message}`, "red");
-      process.exit(1);
-    }
   }
 
   log("⚡ Generating Nitro bindings...");
