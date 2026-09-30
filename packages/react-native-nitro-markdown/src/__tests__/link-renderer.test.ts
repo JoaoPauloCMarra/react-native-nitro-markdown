@@ -25,7 +25,7 @@ function renderLink(href: string, onLinkPress?: (url: string) => void) {
               ...(onLinkPress ? { onLinkPress } : {}),
             },
           },
-          createElement(Link, { href }, "Example"),
+          createElement(Link, { href, children: "Example" }),
         ),
       );
     });

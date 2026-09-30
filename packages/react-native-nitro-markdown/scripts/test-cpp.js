@@ -73,12 +73,19 @@ function jsonEscape(value) {
 }
 
 function cLiteral(value) {
-  return value
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, "\\n")
-    .replace(/\r/g, "\\r")
-    .replace(/\t/g, "\\t");
+  let literal = "";
+  for (const character of String(value)) {
+    const code = character.codePointAt(0);
+    if (character === "\\") literal += "\\\\";
+    else if (character === '"') literal += '\\"';
+    else if (character === "\n") literal += "\\n";
+    else if (character === "\r") literal += "\\r";
+    else if (character === "\t") literal += "\\t";
+    else if (code < 0x20 || code === 0x7f) {
+      literal += `\\${code.toString(8).padStart(3, "0")}`;
+    } else literal += character;
+  }
+  return literal;
 }
 
 function canonicalizeNode(node) {
@@ -103,7 +110,7 @@ function canonicalizeNode(node) {
 
 function generateCorpusHeader(corpusPath, entries) {
   const lines = entries.map((entry) => {
-    return `  {"${entry.name}", "${cLiteral(entry.markdown)}", "${cLiteral(
+    return `  {"${cLiteral(entry.name)}", "${cLiteral(entry.markdown)}", "${cLiteral(
       entry.expected,
     )}"},`;
   });
@@ -122,7 +129,7 @@ ${lines.join("\n")}
 
 function generateConformanceHeader(corpusPath, entries) {
   const lines = entries.map((entry) => {
-    return `  {"${entry.name}", "${cLiteral(entry.markdown)}", "${cLiteral(
+    return `  {"${cLiteral(entry.name)}", "${cLiteral(entry.markdown)}", "${cLiteral(
       canonicalizeNode(entry.expected),
     )}", "${cLiteral(JSON.stringify(entry.options ?? {}))}"},`;
   });
@@ -411,7 +418,15 @@ protected:
       .map((file) => `"${path.join(buildDir, file)}"`)
       .join(" ");
     const profilePath = path.join(buildDir, "coverage.profdata");
-    const parserSource = path.join(cppDir, "core", "NitroMD4CParser.cpp");
+    const coveredSources = ["core", "bindings"]
+      .flatMap((directory) =>
+        fs
+          .readdirSync(path.join(cppDir, directory))
+          .filter((file) => file.endsWith(".cpp") && !file.endsWith("Test.cpp"))
+          .sort()
+          .map((file) => `"${path.join(cppDir, directory, file)}"`),
+      )
+      .join(" ");
 
     if (!rawProfiles) {
       log("No coverage profiles were produced", "red");
@@ -428,7 +443,7 @@ protected:
     }
 
     const report = execSync(
-      `"${llvmCov}" report "${testExecutable}" -instr-profile="${profilePath}" "${parserSource}"`,
+      `"${llvmCov}" report "${testExecutable}" -instr-profile="${profilePath}" ${coveredSources}`,
       { cwd: buildDir, encoding: "utf8" },
     );
     process.stdout.write(report);

@@ -37,7 +37,8 @@ Native components — giving you a native parser boundary with component flexibi
 - 🧩 **Headless AST** — parse without UI for search, validation, indexing.
 - 🎨 **Real components** — theme, override per node, or swap whole renderers.
 - 📜 **Virtualization** — bounded memory and fast first screen on long docs.
-- 📊 **GFM tables, task lists, inline & block math, syntax highlighting** built in.
+- 📊 **GFM tables, task lists, inline & block math, syntax highlighting** built in
+  (LaTeX drawing through the optional `/math` subpath).
 - 🛡️ **Type-safe** — full TypeScript types for nodes, renderers, options.
 - 🔒 **Safe by default** — bounded parse input (default 10 MiB UTF-8 bytes, overridable via
   `options.maxInputLength`), a hard C++ cap, seeded fuzzing and a CommonMark/GFM
@@ -47,18 +48,41 @@ Native components — giving you a native parser boundary with component flexibi
 ## Install
 
 ```sh
-bun add react-native-nitro-markdown react-native-nitro-modules@0.37.1 ratex-react-native@0.1.14
+bun add react-native-nitro-markdown react-native-nitro-modules@0.37.1
 ```
 
 ```sh
 # Expo development build
-bunx expo install react-native-nitro-markdown react-native-nitro-modules@0.37.1 ratex-react-native@0.1.14
+bunx expo install react-native-nitro-markdown react-native-nitro-modules@0.37.1
 bunx expo prebuild
 ```
 
-`react-native-nitro-modules` and `ratex-react-native` are peer dependencies
-(parsing and math rendering use native code). Expo Go cannot load Nitro
-modules — use a development build. Full guide: **[Installation](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/installation.md)**.
+`react-native-nitro-modules` is a required peer dependency (parsing runs in
+native code). Expo Go cannot load Nitro modules — use a development build.
+Full guide: **[Installation](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/installation.md)**.
+
+### Math rendering (optional)
+
+Math nodes render as monospace text by default. To draw LaTeX with RaTeX,
+install the optional peer `ratex-react-native` and pass the renderers from the
+`/math` subpath:
+
+```sh
+bunx expo install ratex-react-native@0.1.14   # or: bun add ratex-react-native@0.1.14
+```
+
+```tsx
+import { Markdown } from "react-native-nitro-markdown";
+import { mathRenderers } from "react-native-nitro-markdown/math";
+
+<Markdown options={{ math: true }} renderers={mathRenderers}>
+  {"Euler: $e^{i\\pi} + 1 = 0$"}
+</Markdown>;
+```
+
+`ratex-react-native@0.1.14` requires React Native `>=0.84` and React `>=19.2`.
+On React Native 0.77–0.83, skip it; math stays readable as monospace text. The
+main entry and `/headless` never load `ratex-react-native`.
 
 ## Expo Config
 
@@ -244,8 +268,10 @@ import { Markdown, darkMarkdownTheme } from "react-native-nitro-markdown";
 <Markdown renderers={{ blockquote: MyCallout }}>{content}</Markdown>;
 ```
 
-Presets: `defaultMarkdownTheme`, `darkMarkdownTheme`, `minimalMarkdownTheme` (or
-`stylingStrategy="minimal"`). Compose with `mergeThemes`. Full guide:
+Presets: `defaultMarkdownTheme`, `darkMarkdownTheme` and `minimalMarkdownTheme`.
+`stylingStrategy="minimal"` uses the minimal theme as the base, while
+`theme={minimalMarkdownTheme}` merges over the default theme and keeps the
+default code token colors. Compose with `mergeThemes`. Full guide:
 **[Customization](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/customization.md)**.
 
 ## Common options
@@ -256,9 +282,9 @@ Presets: `defaultMarkdownTheme`, `darkMarkdownTheme`, `minimalMarkdownTheme` (or
 | `options.math`           | `true`                     | Inline and block math nodes.                                                                                                                                                                                                                                                                        |
 | `options.html`           | `false`                    | Preserve raw HTML nodes for custom renderers.                                                                                                                                                                                                                                                       |
 | `options.sourceOffsets`  | `true`                     | Optional source mapping. `true` emits per-node `beg`/`end` as JavaScript UTF-16 indices; `false` omits them and skips the native UTF-16 map. Headless consumers should choose `false` unless they need source ranges. The ordinary string render fast path chooses `false` automatically when safe. |
-| `options.maxInputLength` | `10485760`                 | Maximum accepted input length in UTF-8 bytes. Oversized inputs fail with a typed `input_too_large` error instead of being parsed. Values above the hard cap are clamped.                                                                                                                            |
+| `options.maxInputLength` | `10485760`                 | Maximum accepted input length in UTF-8 bytes. Oversized inputs fail with a typed `input_too_large` error instead of being parsed. Values above the hard cap are clamped. Documents inside the cap that exceed the native AST budgets (100,000 nodes, 500,000 units of AST work) fail with `input_too_complex`. |
 | `options.freezeAst`      | `false`                    | Freeze parsed AST nodes and child arrays before exposing them to plugins, transforms, renderers, and callbacks.                                                                                                                                                                                     |
-| `parseCache`             | `true`                     | Reuse parsed ASTs for repeated content. The cache is scoped per `<Markdown>` instance (max 32 entries); per-instance hit/miss/eviction counters are reported via `onParseComplete`'s `cacheStats`.                                                                                                  |
+| `parseCache`             | `true`                     | Reuse parsed ASTs for repeated content. The cache is scoped per `<Markdown>` instance (max 32 entries) and only holds documents up to 24,000 UTF-16 characters; longer documents are not cached or counted. Per-instance hit/miss/eviction counters are reported via `onParseComplete`'s `cacheStats`. |
 | `sourceAst`              | `undefined`                | Render a pre-parsed AST instead of parsing `children`.                                                                                                                                                                                                                                              |
 | `onParsingInProgress`    | `undefined`                | Deprecated compatibility callback invoked after the current parse render commits. Use `onParseComplete` or `MarkdownStream` state for new code.                                                                                                                                                     |
 | `onError`                | `undefined`                | Receive parser and plugin failures as `(error, phase, pluginName?)`. Native parse and session failures are typed `MarkdownError`s with stable `code` and `source`.                                                                                                                                  |
@@ -277,20 +303,22 @@ cloning, omits source-offset serialization when it is safe, and collapses
 contiguous plain-text runs into fewer native `Text` nodes. Use `virtualize` for
 long documents so only the visible top-level blocks mount initially.
 
-Representative development-build measurements for a ~320 KB document after
-these optimizations (mount-to-layout time; absolute values vary by device,
-build, and workload):
+Representative development-build render measurements (mount-to-layout time;
+absolute values vary by device, build, and workload):
 
-| Render path                       | iPhone 17 iOS Simulator | Pixel 7 Android Emulator |
-| --------------------------------- | ----------------------- | ------------------------ |
-| Rich document                     | 217.24 ms               | 291.20 ms                |
-| Long document with virtualization | 150.50 ms               | 168.69 ms                |
+| Render path                                             | iPhone 17 iOS Simulator | Pixel 7 Android Emulator |
+| ------------------------------------------------------- | ----------------------- | ------------------------ |
+| Rich document (2,837 characters)                        | 217.24 ms               | 291.20 ms                |
+| Long document with virtualization (13,540 characters)   | 150.50 ms               | 168.69 ms                |
 
-These are development-build measurements from isolated fresh runs, not a
-release-performance guarantee.
+These are development-build measurements from isolated fresh runs of the 0.12.x
+harness, not a release-performance guarantee. That harness stopped the clock
+120 ms after layout, so each value includes a fixed 120 ms delay. The 0.13.0
+harness stops the clock at layout; tap **Run Benchmark** in the example app for
+current numbers on your device.
 
-The parser-only comparison uses isolated records. The example app measures
-Nitro only on the target device:
+The parser-only comparison uses isolated records on a 327,750-character
+(~328 KB) document. The example app measures Nitro only on the target device:
 
 | Nitro device path | iPhone 17 iOS Simulator | Pixel 7 Android Emulator |
 | ----------------- | ----------------------- | ------------------------ |
@@ -321,10 +349,15 @@ Methodology and the full capability matrix:
 
 - Parse input is bounded: the JavaScript boundary rejects documents above
   `options.maxInputLength` (default 10 MiB UTF-8 bytes) with a typed error, and the
-  C++ parser enforces the same hard cap in bytes plus a 64 MB JSON output cap.
-- Custom `onLinkPress` handlers receive the original href so apps can handle
-  routes and custom schemes. The built-in `Linking` fallback opens only
-  validated HTTP(S), mail, and telephone URLs. Remote images load by default
+  C++ parser enforces the same hard cap in bytes plus AST budgets and a 64 MiB
+  JSON output cap (`input_too_complex`). Session buffers use the same UTF-8
+  byte cap.
+- Custom `onLinkPress` handlers receive the original, unvalidated href so apps
+  can handle routes and custom schemes. Handle only links you recognize and
+  return `false` for them; return `true` or nothing to let the built-in
+  fallback open the link. The fallback opens only validated HTTP(S), mail,
+  telephone and SMS URLs. Do not pass an untrusted href to `Linking.openURL`
+  yourself without checking its scheme. Remote images load by default
   for compatibility — set `imageOptions={{ remoteImages: "deny" }}` (and/or
   `allowedHosts`) when rendering untrusted markdown in privacy- or SSRF-sensitive
   apps. Host allowlists compare complete normalized hostnames, including bracketed
@@ -366,20 +399,55 @@ for the error-code contract.
 
 ## Platform Support
 
-| Dependency                                                                | Supported                                                                                           |
-| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| [React Native](https://reactnative.dev/)                                  | `>=0.75` (New Architecture); runtime gate `0.86.3`, RN `0.87` Strict TypeScript compatibility check |
-| [Nitro Modules](https://www.npmjs.com/package/react-native-nitro-modules) | `>=0.37.0 <0.38.0`                                                                                  |
-| [RaTeX React Native](https://www.npmjs.com/package/ratex-react-native)    | `>=0.1.4` (example validated with `0.1.14`)                                                         |
-| [Expo](https://docs.expo.dev/versions/v57.0.0/)                           | SDK `57.0.25` development builds with RN `0.86.3`                                                   |
-| Platforms                                                                 | iOS, Android (Web not supported)                                                                    |
+| Dependency                                                                | Supported                                                                                                      |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| [React Native](https://reactnative.dev/)                                  | `>=0.77` (New Architecture; Nitro 0.37 minimum). Tested on `0.86.3`; RN `0.87` Strict TypeScript compatibility check |
+| [Expo](https://docs.expo.dev/versions/v57.0.0/)                           | SDK `>=53` development builds. Tested on SDK 57 (`57.0.26`, RN `0.86.3`)                                        |
+| [Nitro Modules](https://www.npmjs.com/package/react-native-nitro-modules) | `>=0.37.0 <0.38.0`                                                                                             |
+| [RaTeX React Native](https://www.npmjs.com/package/ratex-react-native)    | Optional, only for `react-native-nitro-markdown/math`. `0.1.14` needs RN `>=0.84` and React `>=19.2`            |
+| iOS                                                                       | The app's React Native iOS floor (`min_ios_version_supported`, 15.1 on RN 0.77–0.86)                           |
+| Android                                                                   | `minSdkVersion` 24                                                                                             |
+| Platforms                                                                 | iOS, Android (Web not supported)                                                                               |
 
-The native package gate and Expo example use React Native `0.86.3`. `check:ci`
-also compiles the public source against React Native `0.87.0`'s Strict
-TypeScript API. Do not override the React Native version selected by Expo.
+Supports React Native >= 0.77 / Expo SDK >= 53 (the Nitro Modules 0.37
+minimum); tested on React Native 0.86.3 / Expo SDK 57. `check:ci` also
+compiles the public source against React Native `0.87.0`'s Strict TypeScript
+API. Do not override the React Native version selected by Expo.
 
 Web and Expo Go are not supported runtime targets because the parser requires
 Nitro Modules (JSI). See the [installation platform matrix](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/installation.md#platform-support).
+
+### Upgrading from 0.12.x
+
+Version `0.13.0` moves RaTeX math rendering to an optional subpath:
+
+1. If you render math with RaTeX, keep `ratex-react-native` installed and pass
+   `renderers={mathRenderers}` (from `react-native-nitro-markdown/math`) to
+   every `<Markdown>` and `<MarkdownStream>` that shows math. Spread
+   `mathRenderers` into your own `renderers` object when you have one.
+2. If you do not need LaTeX drawing, you can uninstall `ratex-react-native`;
+   math renders as monospace text.
+3. If you switch on error codes, handle the new `input_too_complex` code.
+   Documents that exceed the native AST budgets used to report
+   `parse_failed`.
+4. Session buffers are now capped at 10,485,760 UTF-8 bytes instead of UTF-16
+   units, and the error message says `bytes`.
+5. The React Native peer floor is now `>=0.77` (Expo SDK `>=53`), the minimum
+   that `react-native-nitro-modules` 0.37 compiles against.
+6. The default code token palette is now a light palette. If you use a custom
+   dark theme that sets `codeBackground` but not every `codeTokenColors` entry,
+   add the dark palette explicitly:
+
+   ```tsx
+   import { darkMarkdownTheme } from "react-native-nitro-markdown";
+
+   const theme = {
+     colors: {
+       codeBackground: "#111827",
+       codeTokenColors: darkMarkdownTheme.colors.codeTokenColors,
+     },
+   };
+   ```
 
 ### Upgrading from 0.11.x and earlier
 
@@ -416,12 +484,21 @@ bun run example:smoke:android
 bun run example:smoke:ios
 ```
 
-`check` runs package lint, typecheck, tests, and C++ tests. `check:ci` adds
-compatibility, harness, and React Native 0.87 type-compatibility checks; it does
-not launch a native app. `release:preflight` adds example checks and an auth-free publish
-dry-run; it does not publish or release the package. Prebuild generates native
-projects, the Android/iOS build commands compile them, and smoke commands are
-the runtime checks. Build and self-check success alone is not runtime proof.
+`check` runs package lint, typecheck (including test files), JS tests, C++
+tests, and script tests. `check:ci` is the single CI gate: it adds version
+alignment, the harness (codegen check, public types, size budgets, coverage,
+benchmark, C++ coverage), React Native 0.87 type compatibility, C++ sanitizers
+and the package audit; it does not launch a native app. `release:preflight`
+adds example checks and an auth-free pack check; it does not publish or release
+the package. Prebuild generates native projects, the Android/iOS build commands
+compile them, and smoke commands are the runtime checks. Build and self-check
+success alone is not runtime proof.
+
+The smoke report counts only rendered-content checks as proof for a platform.
+The iOS smoke run captures a screenshot but cannot assert rendered content yet,
+so `example:smoke:ios` fails unless you pass `--allow-skip`
+(`bun scripts/example-smoke.js --ios --allow-skip`); use the agent-device E2E
+flows (`bun run example:e2e:ios`) for iOS content checks.
 
 When several devices are available, set `ANDROID_SERIAL` for Android and
 `EXAMPLE_SMOKE_IOS_UDID` for iOS. The iOS smoke check stops if it cannot select

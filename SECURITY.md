@@ -4,7 +4,7 @@
 
 | Version | Supported |
 | ------- | --------- |
-| 0.12.x  | ✅ |
+| 0.13.x  | ✅ |
 
 The package follows a rolling support window: only the latest minor release
 line receives security fixes. Older lines are unsupported.
@@ -26,16 +26,25 @@ documented here so app owners can reason about what is and is not guaranteed.
     10,485,760 UTF-8 bytes) are rejected with a typed `input_too_large` error
     before any native call.
   - C++ boundary: the parser rejects inputs above the same hard cap (measured
-    in bytes) and rejects serialized AST output above 64 MB.
-- The native session (`MarkdownSession`) bounds its buffer at 10 MB and rejects
-  invalid ranges with typed errors.
+    in bytes), and rejects documents that exceed its AST budgets (100,000
+    nodes, 500,000 units of AST work, 64 MiB of serialized AST JSON) with a
+    typed `input_too_complex` error.
+- The native session (`MarkdownSession`) bounds its buffer at 10,485,760 UTF-8
+  bytes, the same unit as the parser cap, and rejects invalid ranges with
+  typed errors. Session ranges are JavaScript UTF-16 units.
 
 ### Links and images
 
-- Link URLs are validated before they reach `onLinkPress` or `Linking`.
+- The built-in link fallback validates URLs before it calls `Linking`.
   Allowed protocols: `http:`, `https:`, `mailto:`, `tel:`, `sms:`. Other
-  schemes (e.g. `javascript:`, `data:`, `file:`) are never opened and are never
-  passed to custom link handlers.
+  schemes (e.g. `javascript:`, `data:`, `file:`, `intent:`) are never opened by
+  the package.
+- A custom `onLinkPress` handler receives the **original, unvalidated** href,
+  including unsafe schemes, so apps can route in-app links. The handler is
+  responsible for what it opens: handle only links you recognize and return
+  `false` for them, or return `true`/nothing to let the validated fallback
+  open the link. Never pass an untrusted href to `Linking.openURL` without
+  checking its scheme.
 - Remote images load by default for compatibility (`http:`/`https:` only).
   When rendering untrusted markdown in privacy- or SSRF-sensitive apps, set
   `imageOptions={{ remoteImages: "deny" }}` to disable remote image loading
@@ -51,17 +60,17 @@ documented here so app owners can reason about what is and is not guaranteed.
   upstream revision and synchronization policy are recorded in
   `cpp/nitromd/UPSTREAM.md`. Upstream security updates require a synchronized
   update of the vendored copy.
-- Runtime peer dependencies (`react-native-nitro-modules`,
-  `ratex-react-native`) are updated on the package's release cadence; see the
-  package `README.md` compatibility table for supported ranges.
+- Runtime peer dependencies (`react-native-nitro-modules`, and the optional
+  `ratex-react-native` used only by the `/math` subpath) are updated on the
+  package's release cadence; see the package `README.md` compatibility table
+  for supported ranges.
 
 ## Reporting a Vulnerability
 
-Report security issues privately — do not open a public issue:
+Report security issues privately through GitHub private vulnerability
+reporting. Do not open a public issue, pull request or discussion:
 
-- Open a GitHub Security Advisory at
-  https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/security/advisories/new
-- Or email the maintainers via the repository contact.
+- https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/security/advisories/new
 
 Include the affected version, the markdown input that triggers the issue, the
 platform (iOS/Android), and a minimal reproducer. You will receive a response

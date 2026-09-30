@@ -10,13 +10,11 @@ module.exports = {
   setupFilesAfterEnv: ["<rootDir>/src/__tests__/setup.ts"],
   collectCoverageFrom: [
     "src/**/*.ts",
+    "src/markdown-stream.tsx",
     "!src/**/*.nitro.ts",
     "!src/**/__tests__/**",
-    "!src/**/*.tsx",
     "!src/MarkdownContext.ts",
-    "!src/use-markdown-stream.ts",
     "!src/markdown.tsx",
-    "!src/markdown-stream.tsx",
     "!src/renderers/**/*.tsx",
   ],
   coverageThreshold: {

@@ -4,8 +4,10 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { Markdown } from "../markdown";
 import type { MarkdownNode } from "../headless";
 import { mockParser } from "./setup";
+import { hostType } from "./host-type";
 
 jest.mock("../renderers/math", () => ({
+  ...jest.requireActual("../renderers/math"),
   MathInline: "MathInline",
   MathBlock: "MathBlock",
 }));
@@ -56,7 +58,11 @@ function renderMarkdown(ast: MarkdownNode, props: Record<string, unknown> = {}) 
   try {
     act(() => {
       renderer = create(
-        createElement(Markdown, { sourceAst: ast, ...props }, "ignored"),
+        createElement(Markdown, {
+          sourceAst: ast,
+          ...props,
+          children: "ignored",
+        }),
       );
     });
     return renderer!;
@@ -108,7 +114,7 @@ describe("Markdown renderer accessibility", () => {
     const renderer = renderMarkdown(ast, { styles: { text: textStyle } });
     const textNodes = renderer.root.findAll(
       (node) =>
-        node.type === "Text" &&
+        node.type === hostType("Text") &&
         (node.props.children === "Before " || node.props.children === " after"),
     );
 
@@ -133,7 +139,7 @@ describe("Markdown renderer accessibility", () => {
       }],
     };
     const renderer = renderMarkdown(ast);
-    const math = renderer.root.findByType("MathBlock");
+    const math = renderer.root.findByType(hostType("MathBlock"));
 
     expect(math.props.content).toBe("a^2 + b^2 = c^2");
     for (let parent = math.parent; parent; parent = parent.parent) {
@@ -150,18 +156,18 @@ describe("Markdown renderer accessibility", () => {
 
     expect(
       renderer.root.findAll(
-        (node) => node.type === "Text" && node.props.accessibilityRole === "header",
+        (node) => node.type === hostType("Text") && node.props.accessibilityRole === "header",
       ),
     ).toHaveLength(1);
     expect(
       renderer.root.findAll(
-        (node) => node.type === "Text" && node.props.accessibilityRole === "link",
+        (node) => node.type === hostType("Text") && node.props.accessibilityRole === "link",
       ),
     ).toHaveLength(1);
     expect(
       renderer.root.findAll(
         (node) =>
-          node.type === "View" &&
+          node.type === hostType("View") &&
           node.props.accessibilityRole === "checkbox" &&
           node.props.accessibilityState?.checked === true,
       ),
@@ -169,7 +175,7 @@ describe("Markdown renderer accessibility", () => {
     expect(
       renderer.root.findAll(
         (node) =>
-          node.type === "View" &&
+          node.type === hostType("View") &&
           node.props.accessibilityRole === "image" &&
           node.props.accessibilityLabel === "Unsafe image",
       ),
@@ -177,7 +183,7 @@ describe("Markdown renderer accessibility", () => {
     expect(
       renderer.root.findAll(
         (node) =>
-          node.type === "View" &&
+          node.type === hostType("View") &&
           node.props.accessibilityElementsHidden === true &&
           node.props.importantForAccessibility === "no-hide-descendants",
       ),
@@ -191,7 +197,7 @@ describe("Markdown renderer accessibility", () => {
     }));
     const renderer = renderMarkdown({ type: "document", children }, { virtualize: true });
 
-    const list = renderer.root.findByType("FlatList");
+    const list = renderer.root.findByType(hostType("FlatList"));
     expect(list.props.removeClippedSubviews).toBe(false);
   });
 
@@ -247,7 +253,7 @@ describe("Markdown renderer accessibility", () => {
 
     const renderer = renderMarkdown(tableAst);
     const grid = renderer.root.find(
-      (node) => node.type === "View" && node.props.role === "grid",
+      (node) => node.type === hostType("View") && node.props.role === "grid",
     );
     expect(grid.props.accessibilityLabel).toBe("Table: Name, Age");
   });
@@ -272,7 +278,7 @@ describe("Markdown renderer accessibility", () => {
     const renderer = renderMarkdown(imageAst);
     const image = renderer.root.find(
       (node) =>
-        node.type === "View" && node.props.accessibilityRole === "image",
+        node.type === hostType("View") && node.props.accessibilityRole === "image",
     );
     expect(image.props.accessibilityLabel).toBe("Bold code italic");
   });
@@ -290,16 +296,15 @@ describe("Markdown renderer accessibility", () => {
       let renderer: ReactTestRenderer | null = null;
       act(() => {
         renderer = create(
-          createElement(
-            Markdown,
-            { errorText: "Fehler beim Parsen" },
-            "# Broken",
-          ),
+          createElement(Markdown, {
+            errorText: "Fehler beim Parsen",
+            children: "# Broken",
+          }),
         );
       });
 
       const errorText = renderer!.root.findAll(
-        (node) => node.type === "Text" && node.props.children === "Fehler beim Parsen",
+        (node) => node.type === hostType("Text") && node.props.children === "Fehler beim Parsen",
       );
       expect(errorText).toHaveLength(1);
     } finally {
@@ -324,9 +329,9 @@ describe("Markdown renderer accessibility", () => {
     };
 
     const renderer = renderMarkdown(mathAst);
-    const mathNodes = renderer.root.findAllByType("MathInline");
+    const mathNodes = renderer.root.findAllByType(hostType("MathInline"));
     expect(mathNodes).toHaveLength(1);
-    expect(mathNodes[0].props.content).toBe("x^2");
+    expect(mathNodes[0]!.props.content).toBe("x^2");
   });
 
   it("strips dollar delimiters only when a non-native shape includes them", () => {
@@ -346,7 +351,7 @@ describe("Markdown renderer accessibility", () => {
     };
 
     const renderer = renderMarkdown(mathAst);
-    const mathNodes = renderer.root.findAllByType("MathInline");
-    expect(mathNodes[0].props.content).toBe("x^2");
+    const mathNodes = renderer.root.findAllByType(hostType("MathInline"));
+    expect(mathNodes[0]!.props.content).toBe("x^2");
   });
 });

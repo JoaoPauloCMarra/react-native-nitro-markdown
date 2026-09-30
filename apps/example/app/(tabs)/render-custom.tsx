@@ -16,6 +16,7 @@ import {
   type NodeStyleOverrides,
   type AstTransform,
 } from "react-native-nitro-markdown";
+import { mathRenderers } from "react-native-nitro-markdown/math";
 import { ExampleHeader, ExamplePanel, ExampleScreen } from "../../components/example-ui";
 import { useBottomTabHeight } from "../../hooks/use-bottom-tab-height";
 import {
@@ -238,6 +239,7 @@ export default function RenderCustomScreen() {
             windowSize: 7,
           }}
           renderers={{
+            ...mathRenderers,
             paragraph: HtmlAwareParagraph,
             heading: CustomHeading,
             blockquote: CustomBlockquote,

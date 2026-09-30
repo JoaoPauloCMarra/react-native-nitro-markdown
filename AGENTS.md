@@ -5,10 +5,10 @@
 - Monorepo layout: `packages/*` for libraries, `apps/*` for apps.
 - Primary package: `packages/react-native-nitro-markdown`.
 - Example app (Expo Router): `apps/example`.
-- Native modules:
-  - iOS: `packages/react-native-nitro-markdown/ios`
-  - Android: `packages/react-native-nitro-markdown/android`
-  - C++ core: `packages/react-native-nitro-markdown/cpp`
+- Native modules (all logic is C++; there is no `ios/` directory):
+  - C++ core and bindings: `packages/react-native-nitro-markdown/cpp`
+  - Android shell (CMake, package registration): `packages/react-native-nitro-markdown/android`
+  - iOS: the podspec compiles `cpp/**` and the Nitro-generated files directly.
 
 ## Tooling
 
@@ -16,7 +16,7 @@
 - Repo scripts live in `package.json` (root) and per-package `package.json`.
 - Bun workspaces are the only orchestration layer; root scripts delegate with `bun run --cwd ...` (no Turborepo).
 - Dependency updates should run from monorepo root, sequentially. Running `bun update` in multiple workspaces at once can race on the shared lockfile/node_modules and trigger `EEXIST` link errors.
-- Lint config uses `eslint-config-expo-magic` via root `eslint.config.js`; formatting is handled by lint (no separate prettier).
+- Lint config uses `eslint-config-expo` (`eslint-config-expo/flat`) via root `eslint.config.js`; formatting is handled by lint (no separate prettier).
 - Generated outputs (`lib/**`, `nitrogen/generated/**`) are excluded from lint.
 - Node scripts under `scripts/**` and `packages/*/scripts/**` run with script globals (`require`, `module`, `process`, `__dirname`, `Buffer`) and allow `console` logging; keep these overrides in `eslint.config.js`.
 - Example app styles should prefer `boxShadow` over legacy shadow props to satisfy `expo/prefer-box-shadow`.
@@ -46,7 +46,7 @@
 - **C++ virtual inheritance**: `HybridObject(TAG)` must be called in the most-derived class constructor, not just in the spec base class.
 - **Android native init**: `NitroMarkdownOnLoad.initializeNative()` is called in `NitroMarkdownPackage.init {}` (runs during React Native autolinking).
 - **Kotlin 2.0**: `finalize()` is removed. Use `HybridObject.dispose()` for cleanup.
-- **Thread safety**: iOS uses `NSLock`, Android uses `synchronized(lock)`. Listeners are notified outside locks to prevent deadlock.
+- **Thread safety**: `HybridMarkdownSession` guards its buffer with a `std::mutex`. Listeners are notified outside the lock to prevent deadlock.
 - **Nitro callbacks**: Native-to-JS callback dispatch is asynchronous. Tests must await or use timeouts.
 - Guard `static_cast<int>` from float/double against NaN/Inf.
 
@@ -74,7 +74,7 @@
 ## Renderer Notes
 
 - Default renderers should look consistent on iOS/Android.
-- Math rendering is package-level RaTeX only; keep the previous MathJax/SVG renderer confined to the example benchmark.
+- RaTeX math rendering lives only in the `react-native-nitro-markdown/math` subpath (`mathRenderers`). The main entry and `/headless` must never import `ratex-react-native` (a test and the pack audit enforce this); without the subpath, math renders as monospace text. Keep the previous MathJax/SVG renderer confined to the example benchmark.
 - Use platform-neutral visuals for task checkboxes (no OS glyphs).
 - Table renderer renders immediately with estimated widths, then refines after measurement (never gates on layout).
 - Table measurement is debounced to avoid stream-time thrashing.

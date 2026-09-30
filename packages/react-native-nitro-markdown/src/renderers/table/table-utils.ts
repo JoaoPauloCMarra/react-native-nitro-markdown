@@ -1,4 +1,5 @@
-import { getTextContent, type MarkdownNode } from "../../headless";
+import type { MarkdownNode } from "../../headless";
+import { readTextContent } from "../../utils/text-content";
 
 const COLUMN_MEASUREMENT_PADDING = 8;
 const APPROX_CHAR_WIDTH = 7;
@@ -52,7 +53,7 @@ export const estimateColumnWidths = (
 
   for (let col = 0; col < columnCount; col++) {
     const headerChars = Math.min(
-      getTextContent(headers[col] ?? { type: "text", content: "" }).trim()
+      readTextContent(headers[col] ?? { type: "text", content: "" }).trim()
         .length,
       MAX_ESTIMATED_CHARS,
     );
@@ -62,7 +63,7 @@ export const estimateColumnWidths = (
       const cell = rows[row]?.[col];
       if (!cell) continue;
       const cellChars = Math.min(
-        getTextContent(cell).trim().length,
+        readTextContent(cell).trim().length,
         MAX_ESTIMATED_CHARS,
       );
       if (cellChars > maxChars) {

@@ -56,8 +56,8 @@ A sentence with *multiple* **formatting** ***options*** mixed ~~together~~.
 | Feature | Description | Status | Performance |
 |:--------|:------------|:-------|:------------|
 | JSI Binding | Direct JS ↔️ C++ communication | ✅ | Microseconds |
-| Native Threading | Background processing | ✅ | Optimized |
-| Zero-Copy | No data duplication | ✅ | Memory efficient |
+| Native Session | Streaming text buffer | ✅ | Batched updates |
+| Headless API | AST without rendering | ✅ | Complete |
 | Math Support | LaTeX expressions | ✅ | Full featured |
 | GFM Tables | Advanced table rendering | ✅ | Complete spec |
 

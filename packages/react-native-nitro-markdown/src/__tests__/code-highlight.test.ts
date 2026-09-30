@@ -79,12 +79,12 @@ describe("defaultHighlighter", () => {
 
     it("highlights # comment in shell", () => {
       const tokens = defaultHighlighter("bash", "# comment");
-      expect(tokens[0].type).toBe("comment");
+      expect(tokens[0]!.type).toBe("comment");
     });
 
     it("highlights # comment in Python", () => {
       const tokens = defaultHighlighter("python", "# comment");
-      expect(tokens[0].type).toBe("comment");
+      expect(tokens[0]!.type).toBe("comment");
     });
   });
 

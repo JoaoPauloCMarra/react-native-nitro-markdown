@@ -25,8 +25,8 @@ CommonMark plus GitHub Flavored Markdown:
 - Links and images (with caching)
 - Blockquotes, ordered / unordered / nested lists, task lists
 - Fenced code blocks (with optional syntax highlighting)
-- GFM tables with column alignment, horizontal scroll, and a copy menu
-- Inline `$math$` and block `$$math$$` (via `ratex-react-native`)
+- GFM tables with column alignment and horizontal scroll
+- Inline `$math$` and block `$$math$$` (monospace text by default; LaTeX drawing through the optional [`/math` subpath](./installation.md#math-rendering-optional))
 - Thematic breaks (`---`)
 - Raw HTML nodes (opt-in via `options.html`) for custom renderers
 
@@ -55,7 +55,15 @@ CommonMark plus GitHub Flavored Markdown:
 `parseCache` keeps an internal AST cache per `<Markdown>` instance keyed by
 content + parser options, so re-rendering the same Markdown avoids re-parsing.
 The cache is bounded (32 entries) and per-instance hit/miss/eviction counters
-are reported through `onParseComplete`'s `cacheStats`.
+are reported through `onParseComplete`'s `cacheStats`. Only documents up to
+24,000 UTF-16 characters are cached; longer documents are parsed on every parse
+cycle and are not counted as hits or misses.
+
+`onParseComplete` and `renderers` are read through refs, so passing new inline
+functions or objects on every render does not re-parse the document.
+`onParseComplete` runs again only when the parsed result changes. `plugins` and
+`astTransform` still re-run the pipeline when their identity changes, so
+memoize them (`useMemo` / `useCallback` or module constants).
 
 AST nodes are mutable by default, and plugin/transform inputs are isolated from
 the parser cache. Set `options.freezeAst` to freeze nodes and child arrays
@@ -116,19 +124,27 @@ already happened. `afterParse` plugins and `astTransform` still run.
 ## Link handling
 
 ```tsx
-import { Linking } from "react-native";
+import { router } from "expo-router";
 
 <Markdown
   onLinkPress={(href) => {
-    Linking.openURL(href);
-    return false;
+    if (href.startsWith("/")) {
+      router.push(href);
+      return false;
+    }
+    return true;
   }}
 >
-  {"[Docs](https://reactnative.dev)"}
+  {"[Docs](https://reactnative.dev) · [Settings](/settings)"}
 </Markdown>;
 ```
 
-Return `false` from `onLinkPress` to suppress the default open-URL behavior.
+`onLinkPress` receives the **original, unvalidated** `href`, including unsafe
+schemes such as `javascript:`, `intent:` or `file:`. Handle only the links you
+recognize and return `false` for them. Return anything else (for example
+`true` or nothing) to let the built-in fallback open the link: it opens only
+validated `http:`, `https:`, `mailto:`, `tel:` and `sms:` URLs. Do not pass the
+raw `href` to `Linking.openURL` yourself unless you validate its scheme first.
 
 ## See also
 

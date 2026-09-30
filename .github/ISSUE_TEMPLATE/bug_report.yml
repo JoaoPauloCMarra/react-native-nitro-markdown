@@ -57,7 +57,7 @@ body:
     attributes:
       label: Versions
       description: Include react-native-nitro-markdown, React Native, react-native-nitro-modules, Expo if used, and OS/toolchain versions.
-      placeholder: "react-native-nitro-markdown 0.11.0, RN 0.87.0, Nitro 0.36.5, Expo 57, iOS 26"
+      placeholder: "react-native-nitro-markdown 0.13.0, RN 0.86.3, Nitro 0.37.1, Expo 57, iOS 26"
     validations:
       required: true
   - type: textarea

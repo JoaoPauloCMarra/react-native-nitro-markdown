@@ -10,30 +10,49 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCodegen } from "./check-codegen.ts";
 
+async function withTempGeneratedDirectory<T>(
+  run: (generatedDirectory: string) => Promise<T>,
+): Promise<T> {
+  const parent = await mkdtemp(join(tmpdir(), "nitro-markdown-codegen-guard-"));
+  const generatedDirectory = join(parent, "generated");
+  await mkdir(generatedDirectory);
+  try {
+    return await run(generatedDirectory);
+  } finally {
+    await rm(parent, { force: true, recursive: true });
+  }
+}
+
 describe("codegen check process guard", () => {
   test("terminates a hanging child within the configured timeout", async () => {
-    const result = await runCodegen({
-      command: process.execPath,
-      args: ["-e", "setTimeout(() => {}, 200)"],
-      timeoutMs: 20,
-      killGraceMs: 20,
-      stdout: "ignore",
-      stderr: "ignore",
-    });
+    const result = await withTempGeneratedDirectory((generatedDirectory) =>
+      runCodegen({
+        generatedDirectory,
+        command: process.execPath,
+        args: ["-e", "setTimeout(() => {}, 200)"],
+        timeoutMs: 20,
+        killGraceMs: 20,
+        stdout: "ignore",
+        stderr: "ignore",
+      }),
+    );
 
     expect(result.timedOut).toBe(true);
     expect(result.exitCode).toBe(124);
   });
 
   test("preserves a normal child failure code", async () => {
-    const result = await runCodegen({
-      command: process.execPath,
-      args: ["-e", "process.exit(7)"],
-      timeoutMs: 1000,
-      killGraceMs: 20,
-      stdout: "ignore",
-      stderr: "ignore",
-    });
+    const result = await withTempGeneratedDirectory((generatedDirectory) =>
+      runCodegen({
+        generatedDirectory,
+        command: process.execPath,
+        args: ["-e", "process.exit(7)"],
+        timeoutMs: 1000,
+        killGraceMs: 20,
+        stdout: "ignore",
+        stderr: "ignore",
+      }),
+    );
 
     expect(result).toMatchObject({
       exitCode: 7,
@@ -45,17 +64,20 @@ describe("codegen check process guard", () => {
   test("preserves a signal received while codegen is running", async () => {
     if (process.platform === "win32") return;
 
-    const result = await runCodegen({
-      command: process.execPath,
-      args: [
-        "-e",
-        "setTimeout(() => process.kill(process.ppid, 'SIGTERM'), 20); setTimeout(() => {}, 1000)",
-      ],
-      timeoutMs: 1000,
-      killGraceMs: 40,
-      stdout: "ignore",
-      stderr: "ignore",
-    });
+    const result = await withTempGeneratedDirectory((generatedDirectory) =>
+      runCodegen({
+        generatedDirectory,
+        command: process.execPath,
+        args: [
+          "-e",
+          "setTimeout(() => process.kill(process.ppid, 'SIGTERM'), 20); setTimeout(() => {}, 1000)",
+        ],
+        timeoutMs: 1000,
+        killGraceMs: 40,
+        stdout: "ignore",
+        stderr: "ignore",
+      }),
+    );
 
     expect(result).toMatchObject({
       exitCode: 143,

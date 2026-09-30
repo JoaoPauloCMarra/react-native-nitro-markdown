@@ -3,7 +3,7 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { NitroModules } from "react-native-nitro-modules";
 import { createMarkdownSession } from "../MarkdownSession";
-import { useMarkdownSession } from "../use-markdown-stream";
+import { useMarkdownSession, useStream } from "../use-markdown-stream";
 import { MarkdownError, toMarkdownError } from "../errors";
 
 describe("toMarkdownError legacy classification", () => {
@@ -16,6 +16,23 @@ describe("toMarkdownError legacy classification", () => {
       ["Buffer size limit exceeded (max 10485760 chars)", "buffer_limit"],
       ["Invalid range: from=NaN and to=0 must be finite", "invalid_range"],
       ["HybridMarkdownSession is destroyed", "destroyed"],
+      ["Buffer size limit exceeded (max 10485760 bytes)", "buffer_limit"],
+      [
+        "Markdown AST node/work budget exceeds the maximum of 500000",
+        "input_too_complex",
+      ],
+      [
+        "Markdown AST child/work budget exceeds the maximum of 500000",
+        "input_too_complex",
+      ],
+      [
+        "Markdown JSON output size 67108865 bytes exceeds the maximum of 67108864 bytes",
+        "input_too_complex",
+      ],
+      [
+        "Markdown flattened text exceeds the maximum of 10485760 bytes",
+        "input_too_complex",
+      ],
     ];
     for (const [message, code] of cases) {
       const error = toMarkdownError(new Error(message), "session");
@@ -180,7 +197,7 @@ describe("createMarkdownSession", () => {
       renderer = TestRenderer.create(React.createElement(SessionOwner));
     });
 
-    const session = createHybridObjectMock.mock.results[0].value;
+    const session = createHybridObjectMock.mock.results[0]!.value;
 
     act(() => {
       renderer!.unmount();
@@ -303,6 +320,30 @@ describe("createMarkdownSession", () => {
     expect(nativeAppend).not.toHaveBeenCalled();
   });
 
+  it("measures the single-call buffer cap in UTF-8 bytes", () => {
+    const session = createMarkdownSession();
+    const nativeSession = createHybridObjectMock.mock.results.at(-1)!.value;
+    const cjk = "\u4e00".repeat(4_000_000);
+
+    let caught: unknown;
+    try {
+      session.append(cjk);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(MarkdownError);
+    expect((caught as MarkdownError).code).toBe("buffer_limit");
+    expect((caught as MarkdownError).message).toBe(
+      "Buffer size limit exceeded (max 10485760 bytes)",
+    );
+    expect(nativeSession.append).not.toHaveBeenCalled();
+    expect(() => session.replace(0, 0, cjk)).toThrow(
+      expect.objectContaining({ code: "buffer_limit" }),
+    );
+    expect(() => session.reset("\u4e00".repeat(3_000_000))).not.toThrow();
+  });
+
   it("throws typed destroyed errors after dispose without calling the native session", () => {
     const session = createMarkdownSession();
     session.reset("hello");
@@ -344,5 +385,239 @@ describe("createMarkdownSession", () => {
     expect(caught).toBeInstanceOf(MarkdownError);
     expect((caught as MarkdownError).code).toBe("buffer_limit");
     expect((caught as MarkdownError).source).toBe("session");
+  });
+});
+
+describe("useMarkdownSession under StrictMode", () => {
+  let consoleErrorSpy: jest.SpyInstance;
+  let consoleWarnSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
+  });
+
+  it("keeps a usable session after the StrictMode effect replay and disposes it on unmount", () => {
+    const controllers: Array<ReturnType<typeof useMarkdownSession>> = [];
+    function Owner() {
+      const controller = useMarkdownSession("seed");
+      controllers.push(controller);
+      return null;
+    }
+
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+    act(() => {
+      renderer = TestRenderer.create(
+        React.createElement(React.StrictMode, null, React.createElement(Owner)),
+      );
+    });
+
+    const controller = controllers[controllers.length - 1]!;
+    const session = controller.getSession();
+    expect(session).not.toBeNull();
+    expect(session.getAllText()).toBe("seed");
+    expect(() => controller.reset("next")).not.toThrow();
+    expect(controller.getSession().getAllText()).toBe("next");
+    expect(() => controller.replace(0, 4, "NEXT")).not.toThrow();
+    expect(() => controller.clear()).not.toThrow();
+
+    const liveSession = controller.getSession();
+    expect(() => {
+      act(() => {
+        renderer!.unmount();
+      });
+    }).not.toThrow();
+    expect(() => liveSession.getAllText()).toThrow(
+      expect.objectContaining({ code: "destroyed" }),
+    );
+  });
+
+  it("re-renders consumers with the replacement session after the StrictMode replay", () => {
+    const seen: Array<ReturnType<typeof useMarkdownSession>["getSession"]> = [];
+    let latestSession: unknown = null;
+    function Owner() {
+      const controller = useMarkdownSession("seed");
+      seen.push(controller.getSession);
+      React.useEffect(() => {
+        latestSession = controller.getSession();
+      });
+      return null;
+    }
+
+    act(() => {
+      TestRenderer.create(
+        React.createElement(React.StrictMode, null, React.createElement(Owner)),
+      );
+    });
+
+    const session = latestSession as ReturnType<typeof createMarkdownSession>;
+    expect(() => session.getAllText()).not.toThrow();
+    expect(session.getAllText()).toBe("seed");
+  });
+});
+
+describe("useStream", () => {
+  let consoleErrorSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("syncs the highlight position from timestamps and ignores unchanged positions", () => {
+    let stream: ReturnType<typeof useStream> | null = null;
+    const timestamps = { 0: 0, 5: 100, 10: 200 };
+    function Owner() {
+      stream = useStream(timestamps);
+      return null;
+    }
+
+    act(() => {
+      TestRenderer.create(React.createElement(Owner));
+    });
+
+    const session = stream!.getSession();
+    act(() => {
+      stream!.sync(150);
+    });
+    expect(session.highlightPosition).toBe(6);
+
+    session.highlightPosition = 42;
+    act(() => {
+      stream!.sync(160);
+    });
+    expect(session.highlightPosition).toBe(42);
+
+    act(() => {
+      stream!.sync(250);
+    });
+    expect(session.highlightPosition).toBe(11);
+
+    act(() => {
+      stream!.setIsPlaying(true);
+    });
+    expect(stream!.isPlaying).toBe(true);
+  });
+
+  it("does nothing on sync without timestamps", () => {
+    let stream: ReturnType<typeof useStream> | null = null;
+    function Owner() {
+      stream = useStream();
+      return null;
+    }
+
+    act(() => {
+      TestRenderer.create(React.createElement(Owner));
+    });
+
+    stream!.setHighlight(3);
+    act(() => {
+      stream!.sync(1000);
+    });
+    expect(stream!.getSession().highlightPosition).toBe(3);
+  });
+
+  it("clears the session and resets the highlight", () => {
+    let controller: ReturnType<typeof useMarkdownSession> | null = null;
+    function Owner() {
+      controller = useMarkdownSession("text");
+      return null;
+    }
+    act(() => {
+      TestRenderer.create(React.createElement(Owner));
+    });
+
+    controller!.setHighlight(4);
+    act(() => {
+      controller!.setIsStreaming(true);
+    });
+    act(() => {
+      controller!.clear();
+    });
+    expect(controller!.getSession().getAllText()).toBe("");
+    expect(controller!.getSession().highlightPosition).toBe(0);
+    expect(controller!.isStreaming).toBe(false);
+  });
+});
+
+describe("useMarkdownSession StrictMode reconnect", () => {
+  let consoleErrorSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("gives memoized consumers a new controller with the live session", () => {
+    const seen: ReturnType<typeof createMarkdownSession>[] = [];
+    const Child = React.memo(function Child({
+      controller,
+    }: {
+      controller: ReturnType<typeof useMarkdownSession>;
+    }) {
+      seen.push(controller.getSession());
+      return null;
+    });
+    function Owner() {
+      const controller = useMarkdownSession("seed");
+      return React.createElement(Child, { controller });
+    }
+
+    act(() => {
+      TestRenderer.create(
+        React.createElement(React.StrictMode, null, React.createElement(Owner)),
+      );
+    });
+
+    const latest = seen[seen.length - 1]!;
+    expect(() => latest.getAllText()).not.toThrow();
+    expect(latest.getAllText()).toBe("seed");
+  });
+
+  it("never returns a null session from getSession during the effect replay", () => {
+    const seen: unknown[] = [];
+    function Child({
+      controller,
+    }: {
+      controller: ReturnType<typeof useMarkdownSession>;
+    }) {
+      React.useEffect(() => {
+        seen.push(controller.getSession());
+      });
+      return null;
+    }
+    function Owner() {
+      const controller = useMarkdownSession("seed");
+      return React.createElement(Child, { controller });
+    }
+
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+    act(() => {
+      renderer = TestRenderer.create(
+        React.createElement(React.StrictMode, null, React.createElement(Owner)),
+      );
+    });
+
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((session) => session != null)).toBe(true);
+    const latest = seen[seen.length - 1] as ReturnType<typeof createMarkdownSession>;
+    expect(latest.getAllText()).toBe("seed");
+    act(() => {
+      renderer!.unmount();
+    });
+    expect(() => latest.getAllText()).toThrow(
+      expect.objectContaining({ code: "destroyed" }),
+    );
   });
 });

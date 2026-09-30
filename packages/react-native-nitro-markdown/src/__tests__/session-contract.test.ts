@@ -3,7 +3,7 @@ import { createMarkdownSession } from "../MarkdownSession";
 import {
   runSessionScenarioCorpus,
   SESSION_SCENARIO_CORPUS,
-} from "../utils/session-contract";
+} from "./session-contract";
 
 describe("shared session contract corpus (JS adapter and C++ harness)", () => {
   it("runs every scenario in the corpus against the JS adapter", () => {

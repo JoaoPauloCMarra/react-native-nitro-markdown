@@ -5,6 +5,7 @@ import type {
   MarkdownErrorSource,
   MarkdownParseCompleteResult,
   MarkdownProps,
+  MarkdownRenderers,
   MarkdownSession,
   MarkdownStreamProps,
   MarkdownStreamSourceAstDisabledReason,
@@ -21,6 +22,12 @@ import {
   type MarkdownNodeWithSourceOffsets,
   type MarkdownNodeWithoutSourceOffsets,
 } from "react-native-nitro-markdown/headless";
+import {
+  mathRenderers,
+  RaTeXMathBlock,
+  RaTeXMathInline,
+  type RaTeXMathProps,
+} from "react-native-nitro-markdown/math";
 
 declare const session: MarkdownSession;
 
@@ -92,6 +99,9 @@ const missingOffset: number = noOffsetNode.beg;
 declare const markdownError: MarkdownError;
 const errorCode: MarkdownErrorCode = markdownError.code;
 const errorSource: MarkdownErrorSource = markdownError.source;
+const complexityCode: MarkdownErrorCode = "input_too_complex";
+// @ts-expect-error — unknown error codes are rejected
+const unknownCode: MarkdownErrorCode = "too_complex";
 const inputLimit: number = MAX_PARSE_INPUT_LENGTH;
 const mutableNode: MarkdownNode = { type: "document", children: [] };
 mutableNode.children?.push({ type: "paragraph" });
@@ -108,6 +118,8 @@ void [
   noOffsetNode,
   sessionNode,
   offset,
+  complexityCode,
+  unknownCode,
   missingOffset,
   errorCode,
   errorSource,
@@ -125,3 +137,23 @@ const invalidImageOptions: MarkdownProps = {
   imageOptions: { remoteImages: "maybe" },
 };
 void [invalidOptions, invalidImageOptions];
+
+const mathMarkdownProps = {
+  children: "$x^2$",
+  renderers: mathRenderers,
+} satisfies MarkdownProps;
+const combinedRenderers: MarkdownRenderers = {
+  ...mathRenderers,
+  heading: ({ children }) => children,
+};
+const mathComponentProps: RaTeXMathProps = { content: "x^2" };
+// @ts-expect-error — RaTeX math components take a string content
+const invalidMathProps: RaTeXMathProps = { content: 42 };
+void [
+  mathMarkdownProps,
+  combinedRenderers,
+  mathComponentProps,
+  invalidMathProps,
+  RaTeXMathBlock,
+  RaTeXMathInline,
+];

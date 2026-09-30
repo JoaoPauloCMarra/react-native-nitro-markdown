@@ -8,6 +8,7 @@ import {
   type PartialMarkdownTheme,
   type StylingStrategy,
 } from "react-native-nitro-markdown";
+import { mathRenderers } from "react-native-nitro-markdown/math";
 import {
   ExampleActionButton,
   ExampleHeader,
@@ -136,6 +137,7 @@ export default function RenderThemingScreen() {
             styles={overrides}
             stylingStrategy={stylingStrategy}
             options={{ gfm: true, math: true }}
+            renderers={mathRenderers}
             highlightCode
           >
             {SHOWCASE}

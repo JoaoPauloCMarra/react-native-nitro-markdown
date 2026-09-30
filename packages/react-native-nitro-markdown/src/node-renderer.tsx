@@ -13,7 +13,8 @@ import {
   type StyleProp,
   type TextStyle,
 } from "react-native";
-import { getTextContent, type MarkdownNode } from "./headless";
+import type { MarkdownNode } from "./headless";
+import { readTextContent } from "./utils/text-content";
 import {
   useMarkdownContext,
   type CustomRenderer,
@@ -27,7 +28,11 @@ import { HtmlBlock, HtmlInline } from "./renderers/html";
 import { Image } from "./renderers/image";
 import { Link } from "./renderers/link";
 import { List, ListItem, TaskListItem } from "./renderers/list";
-import { MathInline, MathBlock } from "./renderers/math";
+import {
+  MathInline,
+  MathBlock,
+  normalizeInlineMathContent,
+} from "./renderers/math";
 import { Paragraph } from "./renderers/paragraph";
 import { TableRenderer } from "./renderers/table";
 import type { MarkdownTheme } from "./theme";
@@ -58,7 +63,7 @@ const INLINE_MATH_GROUP_STYLE = StyleSheet.create({
 
 const getRenderableText = (node: MarkdownNode): string => {
   if (node.content) return node.content;
-  return getTextContent(node);
+  return readTextContent(node);
 };
 
 const isPlainTextInline = (node: MarkdownNode): boolean => {
@@ -424,13 +429,8 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
       return parentIsText ? " " : <Text> </Text>;
 
     case "math_inline": {
-      let mathContent = getRenderableText(node);
+      const mathContent = normalizeInlineMathContent(getRenderableText(node));
       if (!mathContent) return null;
-      // Native math content excludes the dollar delimiters. Strip them only
-      // when a non-native source (e.g. a pre-parsed custom AST) includes them.
-      if (mathContent.startsWith("$") || mathContent.endsWith("$")) {
-        mathContent = mathContent.replace(/^\$+|\$+$/g, "").trim();
-      }
       return (
         <MathInline
           content={mathContent}

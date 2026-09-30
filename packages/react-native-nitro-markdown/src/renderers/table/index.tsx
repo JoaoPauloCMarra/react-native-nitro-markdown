@@ -28,7 +28,7 @@ import {
   computeMeasuredColumnWidths,
   expectedCellKeysOf,
 } from "./table-measurement";
-import { getTextContent } from "../../headless";
+import { readTextContent } from "../../utils/text-content";
 import {
   useMarkdownContext,
   type NodeRendererProps,
@@ -43,10 +43,6 @@ type TableRendererProps = {
 };
 
 const COLUMN_MEASUREMENT_PADDING = 8;
-
-const IS_ACT_TEST_ENVIRONMENT =
-  Reflect.get(globalThis, "IS_REACT_ACT_ENVIRONMENT") === true;
-const SHOULD_DEBOUNCE_MEASUREMENT = !IS_ACT_TEST_ENVIRONMENT;
 
 export const TableRenderer: FC<TableRendererProps> = ({
   node,
@@ -124,7 +120,7 @@ export const TableRenderer: FC<TableRendererProps> = ({
       }
     }
 
-    if (!SHOULD_DEBOUNCE_MEASUREMENT) {
+    if (measurementStabilizeMs <= 0) {
       setNeedsMeasurement(true);
       return;
     }
@@ -202,7 +198,7 @@ export const TableRenderer: FC<TableRendererProps> = ({
   );
 
   const tableAccessibilityLabel = useMemo(
-    () => `Table: ${headers.map((cell) => getTextContent(cell).trim()).filter(Boolean).join(", ")}`,
+    () => `Table: ${headers.map((cell) => readTextContent(cell).trim()).filter(Boolean).join(", ")}`,
     [headers],
   );
 

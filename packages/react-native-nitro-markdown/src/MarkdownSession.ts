@@ -4,12 +4,13 @@ import {
   MAX_PARSE_INPUT_LENGTH,
   MarkdownError,
   toMarkdownError,
+  utf8ByteLength,
 } from "./errors";
 
 export type MarkdownSession = MarkdownSessionSpec;
 
 const DESTROYED_MESSAGE = "HybridMarkdownSession is destroyed";
-const BUFFER_LIMIT_MESSAGE = `Buffer size limit exceeded (max ${MAX_PARSE_INPUT_LENGTH} chars)`;
+const BUFFER_LIMIT_MESSAGE = `Buffer size limit exceeded (max ${MAX_PARSE_INPUT_LENGTH} bytes)`;
 
 function assertValidReplaceRange(from: number, to: number): void {
   if (
@@ -27,8 +28,12 @@ function assertValidReplaceRange(from: number, to: number): void {
   }
 }
 
-function assertWithinBufferLimit(size: number): void {
-  if (size > MAX_PARSE_INPUT_LENGTH) {
+function assertWithinBufferLimit(text: string): void {
+  if (
+    text.length > MAX_PARSE_INPUT_LENGTH ||
+    (text.length * 3 > MAX_PARSE_INPUT_LENGTH &&
+      utf8ByteLength(text) > MAX_PARSE_INPUT_LENGTH)
+  ) {
     throw new MarkdownError("buffer_limit", "session", BUFFER_LIMIT_MESSAGE);
   }
 }
@@ -71,10 +76,10 @@ export function createMarkdownSession(initialText?: string): MarkdownSession {
         }
         try {
           if (prop === "append" || prop === "reset") {
-            assertWithinBufferLimit(String(args[0] ?? "").length);
+            assertWithinBufferLimit(String(args[0] ?? ""));
           } else if (prop === "replace") {
             assertValidReplaceRange(Number(args[0]), Number(args[1]));
-            assertWithinBufferLimit(String(args[2] ?? "").length);
+            assertWithinBufferLimit(String(args[2] ?? ""));
           }
           return Reflect.apply(value, target, args);
         } catch (error) {

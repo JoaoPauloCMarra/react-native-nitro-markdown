@@ -6,10 +6,24 @@ The native build did not link the module. Re-run `bunx expo prebuild` (Expo) or
 `pod install` (bare), then rebuild the app. Nitro modules cannot load in
 **Expo Go** — use a development build.
 
-### Math does not render
+### Math renders as monospace text
 
-Ensure `ratex-react-native` is installed (it is a peer dependency) and the
-native app has been rebuilt after install.
+That is the default. To draw LaTeX, install the optional peer
+`ratex-react-native` (React Native `>=0.84`), rebuild the native app, and pass
+`mathRenderers` from `react-native-nitro-markdown/math` through `renderers`.
+See [installation](./installation.md#math-rendering-optional).
+
+### Metro cannot resolve `ratex-react-native`
+
+Only `react-native-nitro-markdown/math` imports `ratex-react-native`. Either
+install `ratex-react-native` or remove the `/math` import. The main entry and
+`/headless` never load it.
+
+### Parse fails with `input_too_complex`
+
+The document is within the byte cap but exceeds a native AST budget (100,000
+nodes or 500,000 units of AST work). Split very long documents, or render them
+in parts. See the [error codes](./api-reference.md#headless-exports).
 
 ### Streaming updates too often / janky
 
@@ -39,8 +53,12 @@ behind `Platform.OS !== "web"` or a `.native.tsx` entry.
 
 ### Links don't open / open the wrong way
 
-Provide `onLinkPress(href)` and call `Linking.openURL` yourself; return `false`
-to suppress the default behavior.
+Provide `onLinkPress(href)`. It receives the raw, unvalidated `href`. Return
+`false` only for links you handle yourself (for example in-app routes); return
+`true` or nothing to let the built-in fallback open validated `http:`,
+`https:`, `mailto:`, `tel:` and `sms:` URLs. If you call `Linking.openURL`
+yourself, check the scheme first; never open an arbitrary `href` from untrusted
+Markdown.
 
 Still stuck? Open an issue:
 <https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/issues>.

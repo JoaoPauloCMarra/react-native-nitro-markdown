@@ -325,6 +325,8 @@ function sameIdentity(expected, actual) {
   );
 }
 
+const FORCE_KILL_REAP_MS = 2_000;
+
 async function captureProcessGroup(child, detached, identityMode) {
   if (
     !isProcessGroupSupported(detached, identityMode) ||
@@ -403,13 +405,6 @@ async function verifiedSurvivors(group) {
     if (sameIdentity(member, current)) survivors.push(member);
   }
   return survivors;
-}
-
-async function processGroupHasOwnedSurvivors(group) {
-  if (!group) return false;
-  const discovered = await refreshProcessGroup(group);
-  if (!discovered || group.identityCompromised) return true;
-  return (await verifiedSurvivors(group)).length > 0;
 }
 
 async function sendVerifiedMembers(group, signal) {
@@ -598,7 +593,7 @@ async function terminateProcessTree({
       completion,
       completionState,
       group,
-      graceMs,
+      Math.max(graceMs, FORCE_KILL_REAP_MS),
     );
   }
 
@@ -764,9 +759,14 @@ async function runProcess({
       );
       if (!treeStatus.treeGone) terminated = await requestTermination();
     } else if (isProcessGroupSupported(detached, identityMode)) {
-      throw new ProcessTreeTerminationError(
-        `Could not prove process identity for ${child.pid ?? "unknown"}`,
-      );
+      const survivors = completion.state.settled
+        ? await listProcessGroupMembers(child.pid, identityMode)
+        : null;
+      if (!survivors || survivors.length > 0) {
+        throw new ProcessTreeTerminationError(
+          `Could not prove process identity for ${child.pid ?? "unknown"}`,
+        );
+      }
     }
 
     const result = await completion.promise;

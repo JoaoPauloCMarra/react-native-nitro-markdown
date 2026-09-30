@@ -1,0 +1,7 @@
+{
+  "main": "../lib/commonjs/headless.js",
+  "module": "../lib/module/headless.js",
+  "types": "../lib/typescript/commonjs/headless.d.ts",
+  "react-native": "../src/headless.ts",
+  "source": "../src/headless.ts"
+}

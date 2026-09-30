@@ -16,10 +16,8 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import {
-  getFlattenedText,
-  type MarkdownNode,
-} from "./headless";
+import type { MarkdownNode } from "./headless";
+import { readFlattenedText } from "./utils/text-content";
 import type { ParserOptions } from "./Markdown.nitro";
 import {
   MarkdownContext,
@@ -317,6 +315,10 @@ export const Markdown: FC<MarkdownProps> = ({
   /* eslint-disable react-hooks/refs -- Refs updated/read intentionally to avoid re-parsing on callback identity changes */
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
+  const onParseCompleteRef = useRef(onParseComplete);
+  onParseCompleteRef.current = onParseComplete;
+  const hasParseCompleteHandler = onParseComplete !== undefined;
+  const hasCustomRenderers = renderers !== EMPTY_RENDERERS;
 
   const parseAstCacheRef = useRef<Map<string, ParseAstCacheEntry> | null>(null);
   const validatedSourceAstRef = useRef<MarkdownNode | null>(null);
@@ -346,10 +348,10 @@ export const Markdown: FC<MarkdownProps> = ({
       const canUseRenderFastPath =
         !safeSourceAst &&
         !astTransform &&
-        !onParseComplete &&
+        !hasParseCompleteHandler &&
         !hasAstTransforms &&
         (!plugins || plugins.length === 0) &&
-        renderers === EMPTY_RENDERERS &&
+        !hasCustomRenderers &&
         parserOptionFreezeAst !== true;
       const canOmitRenderOffsets =
         canUseRenderFastPath &&
@@ -449,8 +451,8 @@ export const Markdown: FC<MarkdownProps> = ({
     parseCache,
     astTransform,
     plugins,
-    renderers,
-    onParseComplete,
+    hasCustomRenderers,
+    hasParseCompleteHandler,
   ]);
   /* eslint-enable react-hooks/refs */
 
@@ -468,7 +470,8 @@ export const Markdown: FC<MarkdownProps> = ({
   ]);
 
   useEffect(() => {
-    if (!parseResult.ast || !onParseComplete) return;
+    const handleParseComplete = onParseCompleteRef.current;
+    if (!parseResult.ast || !handleParseComplete) return;
 
     const cacheStats: ParseCacheStats = parseCache
       ? {
@@ -484,13 +487,13 @@ export const Markdown: FC<MarkdownProps> = ({
           size: 0,
         };
 
-    onParseComplete({
+    handleParseComplete({
       raw: children,
       ast: parseResult.ast,
-      text: getFlattenedText(parseResult.ast),
+      text: readFlattenedText(parseResult.ast),
       ...(parseCache ? { cacheStats } : {}),
     });
-  }, [children, onParseComplete, parseResult.ast, parseCache]);
+  }, [children, hasParseCompleteHandler, parseResult.ast, parseCache]);
 
   const theme = useMemo(() => {
     const base =
@@ -536,11 +539,10 @@ export const Markdown: FC<MarkdownProps> = ({
   const shouldVirtualize =
     parseResult.ast !== null && shouldVirtualizeBySetting;
 
-  const keyExtractor = useCallback((node: MarkdownNode, index: number) => {
-    const beg = typeof node.beg === "number" ? node.beg : index;
-    const end = typeof node.end === "number" ? node.end : index;
-    return `${node.type}:${beg}:${end}:${index}`;
-  }, []);
+  const keyExtractor = useCallback(
+    (node: MarkdownNode, index: number) => `${node.type}:${index}`,
+    [],
+  );
 
   const renderVirtualizedItem = useCallback(
     ({ item }: ListRenderItemInfo<MarkdownNode>): ReactElement => (

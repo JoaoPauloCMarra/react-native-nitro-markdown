@@ -10,23 +10,36 @@ export type MarkdownSession = ReturnType<typeof createMarkdownSession>;
 
 export function useMarkdownSession(initialText?: string) {
   const sessionRef = useRef<MarkdownSession | null>(null);
+  const adoptedSessionRef = useRef<MarkdownSession | null>(null);
   const initialTextRef = useRef(initialText);
   if (sessionRef.current === null) {
     sessionRef.current = createMarkdownSession(initialText);
   }
 
   const [isStreaming, setIsStreaming] = useState(false);
+  const [sessionGeneration, setSessionGeneration] = useState(0);
+
+  const getSession = useCallback((): MarkdownSession => {
+    if (sessionRef.current === null) {
+      sessionRef.current = createMarkdownSession(initialTextRef.current);
+    }
+    return sessionRef.current;
+  }, []);
 
   useEffect(() => {
-    const session = sessionRef.current!;
+    const session = getSession();
+    const previousSession = adoptedSessionRef.current;
+    adoptedSessionRef.current = session;
+    if (previousSession !== null && previousSession !== session) {
+      setSessionGeneration((generation) => generation + 1);
+    }
     return () => {
-      try {
-        session.dispose();
-      } finally {
+      if (sessionRef.current === session) {
         sessionRef.current = null;
       }
+      session.dispose();
     };
-  }, []);
+  }, [getSession]);
 
   useEffect(() => {
     if (initialText === undefined || initialTextRef.current === initialText) {
@@ -34,8 +47,8 @@ export function useMarkdownSession(initialText?: string) {
     }
 
     initialTextRef.current = initialText;
-    sessionRef.current!.reset(initialText);
-  }, [initialText]);
+    getSession().reset(initialText);
+  }, [getSession, initialText]);
 
   const stop = useCallback(() => {
     setIsStreaming(false);
@@ -43,23 +56,30 @@ export function useMarkdownSession(initialText?: string) {
 
   const clear = useCallback(() => {
     stop();
-    sessionRef.current!.clear();
-    sessionRef.current!.highlightPosition = 0;
-  }, [stop]);
+    const session = getSession();
+    session.clear();
+    session.highlightPosition = 0;
+  }, [getSession, stop]);
 
-  const setHighlight = useCallback((position: number) => {
-    sessionRef.current!.highlightPosition = position;
-  }, []);
+  const setHighlight = useCallback(
+    (position: number) => {
+      getSession().highlightPosition = position;
+    },
+    [getSession],
+  );
 
-  const getSession = useCallback(() => sessionRef.current!, []);
+  const reset = useCallback(
+    (text: string) => {
+      getSession().reset(text);
+    },
+    [getSession],
+  );
 
-  const reset = useCallback((text: string) => {
-    sessionRef.current!.reset(text);
-  }, []);
-
-  const replace = useCallback((from: number, to: number, text: string) => {
-    return sessionRef.current!.replace(from, to, text);
-  }, []);
+  const replace = useCallback(
+    (from: number, to: number, text: string) =>
+      getSession().replace(from, to, text),
+    [getSession],
+  );
 
   return useMemo(
     () => ({
@@ -71,6 +91,7 @@ export function useMarkdownSession(initialText?: string) {
       setHighlight,
       reset,
       replace,
+      sessionGeneration,
     }),
     [
       clear,
@@ -78,6 +99,7 @@ export function useMarkdownSession(initialText?: string) {
       isStreaming,
       replace,
       reset,
+      sessionGeneration,
       setHighlight,
       setIsStreaming,
       stop,

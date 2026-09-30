@@ -40,12 +40,16 @@ native iOS or Android runtime; it does not run on Node.js, servers, or web.
 > **Input bounds.** Inputs larger than `options.maxInputLength` (default
 > 10,485,760 UTF-8 bytes) are rejected with a typed `input_too_large` error
 > before any native call. The native parser enforces the same hard cap in
-> bytes, plus a 64 MB JSON output cap.
+> bytes, plus AST budgets (100,000 nodes, 500,000 units of AST work, 64 MiB of
+> AST JSON). A document inside the byte cap that exceeds a budget fails with
+> `input_too_complex`.
 
-> **Extraction policy.** `extractPlainText*` never silently falls back to
-> JavaScript flattening. Native extraction failures throw a typed
-> `MarkdownError` (`extraction_failed`); if you want JS-side flattening, parse
-> explicitly and call `getFlattenedText` yourself.
+> **Extraction fallback.** If native plain-text extraction fails,
+> `extractPlainText*` falls back to parsing the text and flattening the AST in
+> JavaScript (`getFlattenedText`). In development builds the native failure is
+> logged with `console.warn`. If that parse also fails, the call throws the
+> parse error (`source: "parse"`). The `extraction_failed` code and the
+> `"extract"` source are reserved and are not produced in this release.
 
 > **Tip:** for one-shot parses that never map a node back to the source text,
 > pass `{ sourceOffsets: false }`. The native parser skips building the UTF-16

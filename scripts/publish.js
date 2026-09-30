@@ -293,6 +293,10 @@ async function validatePackedFiles() {
     "lib/typescript/module/headless.d.ts",
     "lib/typescript/commonjs/index.d.ts",
     "lib/typescript/commonjs/headless.d.ts",
+    "lib/module/math.js",
+    "lib/commonjs/math.js",
+    "lib/typescript/module/math.d.ts",
+    "lib/typescript/commonjs/math.d.ts",
     "nitrogen/generated/ios/NitroMarkdown+autolinking.rb",
     "nitrogen/generated/android/NitroMarkdown+autolinking.gradle",
     "nitrogen/generated/android/NitroMarkdownOnLoad.cpp",
@@ -304,6 +308,9 @@ async function validatePackedFiles() {
     "nitrogen/generated/shared/c++/ParserOptions.hpp",
     "src/index.ts",
     "src/headless.ts",
+    "src/math.tsx",
+    "headless/package.json",
+    "math/package.json",
     `${PACKAGE_NAME}.podspec`,
   ];
 
@@ -318,7 +325,91 @@ async function validatePackedFiles() {
 
   console.log(`  ✓ ${PACKAGE_NAME} pack contains all required package files`);
   console.log(`  ✓ headless JS, declarations, and source are packed`);
+  assertSubpathStubs(files);
+  console.log("  ✓ headless and math subpath stubs resolve to packed files");
+  assertEntryGraphExcludes(["lib/commonjs/index.js", "lib/module/index.js", "lib/commonjs/headless.js", "lib/module/headless.js"], OPTIONAL_MATH_PEER);
+  assertEntryGraphIncludes("lib/commonjs/math.js", OPTIONAL_MATH_PEER);
+  console.log(`  ✓ main and headless entries do not load ${OPTIONAL_MATH_PEER}`);
   console.log("");
+}
+
+const OPTIONAL_MATH_PEER = "ratex-react-native";
+const MODULE_SPECIFIER_PATTERN =
+  /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)["']([^"']+)["']/g;
+
+function collectEntryGraph(entry) {
+  const visited = new Set();
+  const externals = new Set();
+  const pending = [path.join(packageDir, entry)];
+  while (pending.length > 0) {
+    const file = pending.pop();
+    if (visited.has(file)) continue;
+    visited.add(file);
+    const source = fs.readFileSync(file, "utf8");
+    for (const match of source.matchAll(MODULE_SPECIFIER_PATTERN)) {
+      const specifier = match[1];
+      if (!specifier.startsWith(".")) {
+        externals.add(specifier);
+        continue;
+      }
+      const base = path.resolve(path.dirname(file), specifier);
+      const resolved = [base, `${base}.js`, path.join(base, "index.js")].find(
+        (candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile(),
+      );
+      if (!resolved) {
+        throw new Error(`Cannot resolve ${specifier} from ${path.relative(packageDir, file)}`);
+      }
+      pending.push(resolved);
+    }
+  }
+  return externals;
+}
+
+const SUBPATH_STUB_FIELDS = ["main", "module", "types", "react-native", "source"];
+
+function assertSubpathStubs(packedFiles) {
+  for (const subpath of ["headless", "math"]) {
+    const stubPath = path.join(packageDir, subpath, "package.json");
+    const stub = JSON.parse(fs.readFileSync(stubPath, "utf8"));
+    const exported = getPackageJson().exports?.[`./${subpath}`];
+    if (!exported) {
+      throw new Error(`package.json exports is missing ./${subpath}`);
+    }
+    for (const field of SUBPATH_STUB_FIELDS) {
+      const target = stub[field];
+      if (typeof target !== "string") {
+        throw new Error(`${subpath}/package.json is missing "${field}"`);
+      }
+      const packedPath = path.posix.normalize(path.posix.join(subpath, target));
+      if (!packedFiles.has(packedPath)) {
+        throw new Error(
+          `${subpath}/package.json "${field}" points at ${packedPath}, which is not packed`,
+        );
+      }
+    }
+    const expectedMain = exported.require?.default?.replace(/^\.\//, "");
+    const expectedSource = exported["react-native"]?.replace(/^\.\//, "");
+    if (path.posix.join(subpath, stub.main) !== path.posix.normalize(expectedMain)) {
+      throw new Error(`${subpath}/package.json main does not match exports`);
+    }
+    if (path.posix.join(subpath, stub["react-native"]) !== path.posix.normalize(expectedSource)) {
+      throw new Error(`${subpath}/package.json react-native does not match exports`);
+    }
+  }
+}
+
+function assertEntryGraphExcludes(entries, specifier) {
+  for (const entry of entries) {
+    if (collectEntryGraph(entry).has(specifier)) {
+      throw new Error(`${entry} must not load ${specifier}`);
+    }
+  }
+}
+
+function assertEntryGraphIncludes(entry, specifier) {
+  if (!collectEntryGraph(entry).has(specifier)) {
+    throw new Error(`${entry} must load ${specifier}`);
+  }
 }
 
 async function runPackageDocs(mode) {

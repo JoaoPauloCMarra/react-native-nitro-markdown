@@ -10,12 +10,11 @@ Pod::Spec.new do |s|
   s.license      = package["license"]
   s.authors      = package["author"]
 
-  s.platforms    = { :ios => "16.4" }
+  s.platforms    = { :ios => defined?(min_ios_version_supported) ? min_ios_version_supported : "15.1" }
   s.source       = { :git => "https://github.com/JoaoPauloCMarra/react-native-nitro-markdown.git", :tag => "v#{s.version}" }
   s.module_name  = "NitroMarkdown"
 
   s.source_files = [
-    "ios/**/*.{h,m,mm,swift}",
     "cpp/**/*.{h,hpp,c,cpp}"
   ]
   s.exclude_files = [
@@ -30,7 +29,6 @@ Pod::Spec.new do |s|
     "OTHER_CFLAGS" => "$(inherited) -Wall -Wextra -fstack-protector-strong -Werror=format-security",
     "OTHER_CPLUSPLUS_FLAGS" => "$(inherited) -Wall -Wextra -fstack-protector-strong -Werror=format-security",
     "HEADER_SEARCH_PATHS" => [
-      "$(PODS_ROOT)/Headers/Private/Yoga",
       "$(PODS_TARGET_SRCROOT)/cpp/nitromd",
       "$(PODS_TARGET_SRCROOT)/cpp/core",
       "$(PODS_TARGET_SRCROOT)/cpp/bindings",
@@ -38,9 +36,6 @@ Pod::Spec.new do |s|
       "$(PODS_TARGET_SRCROOT)/nitrogen/generated/ios"
     ].map { |path| "\"#{path}\"" }.join(" ")
   }
-
-  s.dependency "React-Core"
-  s.dependency "React-Fabric"
 
   load 'nitrogen/generated/ios/NitroMarkdown+autolinking.rb'
   add_nitrogen_files(s)

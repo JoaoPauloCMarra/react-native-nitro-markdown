@@ -1,4 +1,4 @@
-import type { MarkdownNode } from "../headless";
+import type { HeadingLevel, MarkdownNode } from "../headless";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
@@ -70,7 +70,7 @@ function createMockAst(text: string, mathEnabled: boolean): MarkdownNode {
   let i = 0;
 
   while (i < lines.length) {
-    const line = lines[i].content;
+    const line = lines[i]!.content;
     const trimmed = line.trim();
 
     if (trimmed === "") {
@@ -78,11 +78,11 @@ function createMockAst(text: string, mathEnabled: boolean): MarkdownNode {
       continue;
     }
 
-    if (mathEnabled && lines[i].hasLineEnding && isStandaloneMathFenceLine(line)) {
+    if (mathEnabled && lines[i]!.hasLineEnding && isStandaloneMathFenceLine(line)) {
       const contentLines: string[] = [];
       i++;
-      while (i < lines.length && !isStandaloneMathFenceLine(lines[i].content)) {
-        contentLines.push(lines[i].content);
+      while (i < lines.length && !isStandaloneMathFenceLine(lines[i]!.content)) {
+        contentLines.push(lines[i]!.content);
         i++;
       }
       if (i < lines.length) i++;
@@ -99,8 +99,8 @@ function createMockAst(text: string, mathEnabled: boolean): MarkdownNode {
     if (headingMatch) {
       root.children!.push({
         type: "heading",
-        level: headingMatch[1].length,
-        children: [{ type: "text", content: headingMatch[2] }],
+        level: headingMatch[1]!.length as HeadingLevel,
+        children: [{ type: "text", content: headingMatch[2]! }],
       });
       i++;
       continue;
@@ -117,14 +117,14 @@ function createMockAst(text: string, mathEnabled: boolean): MarkdownNode {
       const language = codeBlockMatch[1] || undefined;
       const codeLines: string[] = [];
       i++;
-      while (i < lines.length && !lines[i].content.trim().startsWith("```")) {
-        codeLines.push(lines[i].content);
+      while (i < lines.length && !lines[i]!.content.trim().startsWith("```")) {
+        codeLines.push(lines[i]!.content);
         i++;
       }
       i++;
       root.children!.push({
         type: "code_block",
-        language,
+        ...(language ? { language } : {}),
         children: [{ type: "text", content: codeLines.join("\n") }],
       });
       continue;
@@ -132,8 +132,8 @@ function createMockAst(text: string, mathEnabled: boolean): MarkdownNode {
 
     if (trimmed.startsWith(">")) {
       const quoteLines: string[] = [];
-      while (i < lines.length && lines[i].content.trim().startsWith(">")) {
-        quoteLines.push(lines[i].content.trim().replace(/^>\s?/, ""));
+      while (i < lines.length && lines[i]!.content.trim().startsWith(">")) {
+        quoteLines.push(lines[i]!.content.trim().replace(/^>\s?/, ""));
         i++;
       }
       root.children!.push({
@@ -144,8 +144,8 @@ function createMockAst(text: string, mathEnabled: boolean): MarkdownNode {
     }
 
     const paragraphLines: string[] = [];
-    while (i < lines.length && lines[i].content.trim() !== "") {
-      paragraphLines.push(lines[i].content);
+    while (i < lines.length && lines[i]!.content.trim() !== "") {
+      paragraphLines.push(lines[i]!.content);
       i++;
     }
     if (paragraphLines.length > 0) {
@@ -229,6 +229,14 @@ function createMockSession() {
     getLength: jest.fn(() => {
       assertActive();
       return buffer.length;
+    }),
+    parse: jest.fn(() => {
+      assertActive();
+      return mockParser.parse(buffer);
+    }),
+    parseWithOptions: jest.fn((options: MockParserOptions) => {
+      assertActive();
+      return mockParser.parseWithOptions(buffer, options);
     }),
     getTextRange: jest.fn((from: number, to: number) => {
       assertActive();

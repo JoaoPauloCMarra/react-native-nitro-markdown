@@ -6,6 +6,7 @@ import { MarkdownError } from "../errors";
 import { mockParser } from "./setup";
 
 jest.mock("../renderers/math", () => ({
+  ...jest.requireActual("../renderers/math"),
   MathInline: "MathInline",
   MathBlock: "MathBlock",
 }));
@@ -42,11 +43,11 @@ describe("Markdown plugin pipeline", () => {
     try {
       act(() => {
         renderer = create(
-          createElement(
-            Markdown,
-            { plugins: firstPlugins, onParseComplete },
-            "same input",
-          ),
+          createElement(Markdown, {
+            plugins: firstPlugins,
+            onParseComplete,
+            children: "same input",
+          }),
         );
       });
 
@@ -56,11 +57,11 @@ describe("Markdown plugin pipeline", () => {
 
       act(() => {
         renderer!.update(
-          createElement(
-            Markdown,
-            { plugins: secondPlugins, onParseComplete },
-            "same input",
-          ),
+          createElement(Markdown, {
+            plugins: secondPlugins,
+            onParseComplete,
+            children: "same input",
+          }),
         );
       });
 
@@ -134,11 +135,13 @@ describe("Markdown plugin pipeline", () => {
     try {
       act(() => {
         renderer = create(
-          createElement(
-            Markdown,
-            { plugins, onError, onParseComplete, parseCache: false },
-            "source fixture",
-          ),
+          createElement(Markdown, {
+            plugins,
+            onError,
+            onParseComplete,
+            parseCache: false,
+            children: "source fixture",
+          }),
         );
       });
 
@@ -192,21 +195,23 @@ describe("Markdown plugin pipeline", () => {
     try {
       act(() => {
         renderer = create(
-          createElement(
-            Markdown,
-            { plugins: [], parseCache: false, onParseComplete },
-            markdown,
-          ),
+          createElement(Markdown, {
+            plugins: [],
+            parseCache: false,
+            onParseComplete,
+            children: markdown,
+          }),
         );
       });
 
       act(() => {
         renderer!.update(
-          createElement(
-            Markdown,
-            { plugins: [], parseCache: false, onParseComplete },
-            markdown,
-          ),
+          createElement(Markdown, {
+            plugins: [],
+            parseCache: false,
+            onParseComplete,
+            children: markdown,
+          }),
         );
       });
 
@@ -227,11 +232,11 @@ describe("Markdown plugin pipeline", () => {
     try {
       act(() => {
         create(
-          createElement(
-            Markdown,
-            { onError, parseCache: false },
-            "native parser failure input",
-          ),
+          createElement(Markdown, {
+            onError,
+            parseCache: false,
+            children: "native parser failure input",
+          }),
         );
       });
 
@@ -267,11 +272,10 @@ describe("Markdown plugin pipeline", () => {
     try {
       act(() => {
         create(
-          createElement(
-            Markdown,
-            { virtualize: true },
-            "virtualized render input",
-          ),
+          createElement(Markdown, {
+            virtualize: true,
+            children: "virtualized render input",
+          }),
         );
       });
 
@@ -291,21 +295,19 @@ describe("Markdown plugin pipeline", () => {
     try {
       act(() => {
         renderer = create(
-          createElement(
-            Markdown,
-            { options: { sourceOffsets: false } },
-            "source offset cache input",
-          ),
+          createElement(Markdown, {
+            options: { sourceOffsets: false },
+            children: "source offset cache input",
+          }),
         );
       });
 
       act(() => {
         renderer!.update(
-          createElement(
-            Markdown,
-            { options: { sourceOffsets: true } },
-            "source offset cache input",
-          ),
+          createElement(Markdown, {
+            options: { sourceOffsets: true },
+            children: "source offset cache input",
+          }),
         );
       });
 
@@ -353,15 +355,12 @@ describe("Markdown plugin pipeline", () => {
     try {
       act(() => {
         create(
-          createElement(
-            Markdown,
-            {
-              plugins: [{ name: "before", beforeParse }],
-              sourceAst,
-              onParseComplete,
-            },
-            "ignored markdown",
-          ),
+          createElement(Markdown, {
+            plugins: [{ name: "before", beforeParse }],
+            sourceAst,
+            onParseComplete,
+            children: "ignored markdown",
+          }),
         );
       });
 
@@ -388,11 +387,11 @@ describe("Markdown plugin pipeline", () => {
     try {
       act(() => {
         create(
-          createElement(
-            Markdown,
-            { sourceAst: root as MarkdownNode, onError },
-            "ignored markdown",
-          ),
+          createElement(Markdown, {
+            sourceAst: root as MarkdownNode,
+            onError,
+            children: "ignored markdown",
+          }),
         );
       });
     } finally {
@@ -427,11 +426,11 @@ describe("Markdown plugin pipeline", () => {
     try {
       act(() => {
         create(
-          createElement(
-            Markdown,
-            { sourceAst: root as MarkdownNode, onError },
-            "ignored markdown",
-          ),
+          createElement(Markdown, {
+            sourceAst: root as MarkdownNode,
+            onError,
+            children: "ignored markdown",
+          }),
         );
       });
     } finally {
@@ -465,11 +464,12 @@ describe("Markdown plugin pipeline", () => {
     try {
       act(() => {
         create(
-          createElement(
-            Markdown,
-            { sourceAst, onError, onParseComplete },
-            "ignored markdown",
-          ),
+          createElement(Markdown, {
+            sourceAst,
+            onError,
+            onParseComplete,
+            children: "ignored markdown",
+          }),
         );
       });
     } finally {
@@ -495,20 +495,17 @@ describe("Markdown plugin pipeline", () => {
     try {
       act(() => {
         create(
-          createElement(
-            Markdown,
-            {
-              plugins: [
-                {
-                  name: "cyclic",
-                  afterParse: () => cyclic as MarkdownNode,
-                },
-              ],
-              onError,
-              onParseComplete,
-            },
-            "plugin fallback",
-          ),
+          createElement(Markdown, {
+            plugins: [
+              {
+                name: "cyclic",
+                afterParse: () => cyclic as MarkdownNode,
+              },
+            ],
+            onError,
+            onParseComplete,
+            children: "plugin fallback",
+          }),
         );
       });
     } finally {
@@ -537,14 +534,11 @@ describe("Markdown plugin pipeline", () => {
     try {
       act(() => {
         create(
-          createElement(
-            Markdown,
-            {
-              astTransform: () => cyclic as MarkdownNode,
-              onParseComplete,
-            },
-            "transform fallback",
-          ),
+          createElement(Markdown, {
+            astTransform: () => cyclic as MarkdownNode,
+            onParseComplete,
+            children: "transform fallback",
+          }),
         );
       });
     } finally {
@@ -593,33 +587,27 @@ describe("Markdown plugin pipeline", () => {
     try {
       act(() => {
         renderer = create(
-          createElement(
-            Markdown,
-            {
-              sourceAst: {
-                type: "document",
-                children: [firstParagraph, secondParagraph],
-              },
-              renderers,
+          createElement(Markdown, {
+            sourceAst: {
+              type: "document",
+              children: [firstParagraph, secondParagraph],
             },
-            "ignored markdown",
-          ),
+            renderers,
+            children: "ignored markdown",
+          }),
         );
       });
 
       act(() => {
         renderer!.update(
-          createElement(
-            Markdown,
-            {
-              sourceAst: {
-                type: "document",
-                children: [firstParagraph, nextSecondParagraph],
-              },
-              renderers,
+          createElement(Markdown, {
+            sourceAst: {
+              type: "document",
+              children: [firstParagraph, nextSecondParagraph],
             },
-            "ignored markdown",
-          ),
+            renderers,
+            children: "ignored markdown",
+          }),
         );
       });
 
@@ -640,10 +628,10 @@ describe("Markdown plugin pipeline", () => {
 
     try {
       act(() => {
-        create(createElement(Markdown, {}, markdown));
+        create(createElement(Markdown, { children: markdown }));
       });
       act(() => {
-        create(createElement(Markdown, {}, markdown));
+        create(createElement(Markdown, { children: markdown }));
       });
 
       expect(mockParser.parseWithOptions).toHaveBeenCalledTimes(2);
@@ -663,15 +651,23 @@ describe("Markdown plugin pipeline", () => {
     try {
       act(() => {
         renderer = create(
-          createElement(Markdown, { onParseComplete }, "cache identity"),
+          createElement(Markdown, {
+            onParseComplete,
+            children: "cache identity",
+          }),
         );
       });
       act(() => {
-        renderer!.update(createElement(Markdown, { onParseComplete }, "other"));
+        renderer!.update(
+          createElement(Markdown, { onParseComplete, children: "other" }),
+        );
       });
       act(() => {
         renderer!.update(
-          createElement(Markdown, { onParseComplete }, "cache identity"),
+          createElement(Markdown, {
+            onParseComplete,
+            children: "cache identity",
+          }),
         );
       });
 
@@ -679,11 +675,11 @@ describe("Markdown plugin pipeline", () => {
 
       act(() => {
         renderer!.update(
-          createElement(
-            Markdown,
-            { onParseComplete, astTransform: (ast) => ast },
-            "cache identity",
-          ),
+          createElement(Markdown, {
+            onParseComplete,
+            astTransform: (ast) => ast,
+            children: "cache identity",
+          }),
         );
       });
       expect(results[3]).not.toBe(results[0]);
@@ -709,15 +705,17 @@ describe("Markdown plugin pipeline", () => {
     try {
       act(() => {
         renderer = create(
-          createElement(Markdown, { onParseComplete }, markdown),
+          createElement(Markdown, { onParseComplete, children: markdown }),
         );
       });
       act(() => {
-        renderer!.update(createElement(Markdown, { onParseComplete }, "other"));
+        renderer!.update(
+          createElement(Markdown, { onParseComplete, children: "other" }),
+        );
       });
       act(() => {
         renderer!.update(
-          createElement(Markdown, { onParseComplete }, markdown),
+          createElement(Markdown, { onParseComplete, children: markdown }),
         );
       });
 
@@ -746,21 +744,18 @@ describe("Markdown plugin pipeline", () => {
     try {
       act(() => {
         create(
-          createElement(
-            Markdown,
-            {
-              options: { freezeAst: true },
-              plugins: [plugin],
-              astTransform: (ast) => {
-                observed.push(
-                  Object.isFrozen(ast),
-                  Object.isFrozen(ast.children),
-                );
-                return ast;
-              },
+          createElement(Markdown, {
+            options: { freezeAst: true },
+            plugins: [plugin],
+            astTransform: (ast) => {
+              observed.push(
+                Object.isFrozen(ast),
+                Object.isFrozen(ast.children),
+              );
+              return ast;
             },
-            "frozen callback input",
-          ),
+            children: "frozen callback input",
+          }),
         );
       });
     } finally {
@@ -778,16 +773,19 @@ describe("Markdown plugin pipeline", () => {
     try {
       act(() => {
         renderer = create(
-          createElement(Markdown, { onParseComplete }, "cached input"),
+          createElement(Markdown, {
+            onParseComplete,
+            children: "cached input",
+          }),
         );
       });
       act(() => {
         renderer!.update(
-          createElement(
-            Markdown,
-            { onParseComplete, astTransform: (ast) => ast },
-            "cached input",
-          ),
+          createElement(Markdown, {
+            onParseComplete,
+            astTransform: (ast) => ast,
+            children: "cached input",
+          }),
         );
       });
 
@@ -814,14 +812,17 @@ describe("Markdown plugin pipeline", () => {
     try {
       act(() => {
         renderer = create(
-          createElement(Markdown, { onParseComplete }, "seed input"),
+          createElement(Markdown, { onParseComplete, children: "seed input" }),
         );
       });
 
       for (let index = 0; index < 40; index += 1) {
         act(() => {
           renderer!.update(
-            createElement(Markdown, { onParseComplete }, `input ${index}`),
+            createElement(Markdown, {
+              onParseComplete,
+              children: `input ${index}`,
+            }),
           );
         });
       }

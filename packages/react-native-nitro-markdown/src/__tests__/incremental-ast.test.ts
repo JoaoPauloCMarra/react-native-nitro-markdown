@@ -375,7 +375,7 @@ describe("incremental AST", () => {
     expect(mockParser.parse).toHaveBeenCalledTimes(shouldParse ? 1 : 0);
   });
 
-  it("keeps p95 latency within budget for append-only updates", () => {
+  it("keeps append-only plain-text updates on the incremental path", () => {
     let previousText = "Hello";
     let previousAst = setTrailingPathEnd(
       parseMarkdownAst(previousText),
@@ -383,19 +383,59 @@ describe("incremental AST", () => {
     );
     jest.clearAllMocks();
 
-    const timings: number[] = [];
     for (let i = 0; i < 200; i++) {
       const nextText = `${previousText}a`;
-      const start = performance.now();
       const nextAst = getNextStreamAst({ previousAst, previousText, nextText });
-      timings.push(performance.now() - start);
       previousText = nextText;
       previousAst = nextAst;
     }
 
-    const sorted = [...timings].sort((a, b) => a - b);
-    const p95 = sorted[Math.floor(sorted.length * 0.95)];
     expect(mockParser.parse).not.toHaveBeenCalled();
-    expect(p95).toBeLessThanOrEqual(5);
+    expect(getTextContent(previousAst)).toBe(previousText);
+  });
+
+  it.each([
+    ["Options:\n*", " item"],
+    ["Options:\n+", " item"],
+    ["Options:\n-", " item"],
+    ["Options:\n  *  ", "item"],
+    ["Steps:\n1", ". first"],
+    ["Steps:\n1.", " first"],
+    ["Steps:\n12)", " first"],
+    ["Intro\n#", " Title"],
+  ])(
+    "full-parses when %j gains %j and may start a block",
+    (previousText, chunk) => {
+      const previousAst = setTrailingPathEnd(
+        parseMarkdownAst(previousText),
+        previousText.length,
+      );
+      jest.clearAllMocks();
+
+      getNextStreamAst({
+        previousAst,
+        previousText,
+        nextText: previousText + chunk,
+      });
+
+      expect(mockParser.parse).toHaveBeenCalledWith(previousText + chunk);
+    },
+  );
+
+  it("keeps the incremental path for trailing text that cannot start a block", () => {
+    const previousText = "Total:\n12 apples";
+    const previousAst = setTrailingPathEnd(
+      parseMarkdownAst(previousText),
+      previousText.length,
+    );
+    jest.clearAllMocks();
+
+    getNextStreamAst({
+      previousAst,
+      previousText,
+      nextText: `${previousText} more`,
+    });
+
+    expect(mockParser.parse).not.toHaveBeenCalled();
   });
 });

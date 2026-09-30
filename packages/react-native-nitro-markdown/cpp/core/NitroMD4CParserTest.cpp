@@ -9,6 +9,7 @@
 #include "../nitromd/nitromd.h"
 #include <iostream>
 #include <cassert>
+#include <cstdint>
 #include <cstring>
 #include <random>
 #include <sstream>
@@ -83,7 +84,7 @@ public:
                 case '\r': out += "\\r"; break;
                 case '\t': out += "\\t"; break;
                 default:
-                    if (c <= 0x1f) {
+                    if (c <= 0x1f || c == 0x7f) {
                         char buf[8];
                         snprintf(buf, sizeof(buf), "\\u%04x", c);
                         out += buf;
@@ -198,6 +199,8 @@ public:
         MD4CParser parser;
         ParserOptions options{true, true};
         unsigned int passed = 0;
+        size_t offsetViolations = 0;
+        std::string firstOffsetViolation;
         for (int i = 0; i < 2000; i++) {
             const size_t length = static_cast<size_t>(rng() % 512);
             std::string input;
@@ -212,6 +215,14 @@ public:
                 auto ast = parser.parse(input, options);
                 if (ast != nullptr) {
                     canonicalizeNode(ast);
+                    const std::string violation = offsetViolation(ast, ast->end, "");
+                    if (!violation.empty()) {
+                        offsetViolations++;
+                        if (firstOffsetViolation.empty()) {
+                            firstOffsetViolation = "#" + std::to_string(i) + " " +
+                                jsonEscape(input) + " " + violation;
+                        }
+                    }
                     passed++;
                 }
             } catch (const std::exception& error) {
@@ -224,6 +235,12 @@ public:
             }
         }
         TestRunner::assertTrue(passed == 2000, "Fuzz: all 2000 seeded inputs parse deterministically");
+        TestRunner::assertEqual(
+            "",
+            firstOffsetViolation,
+            "Fuzz: seeded inputs keep contained, monotonic offsets (" +
+                std::to_string(offsetViolations) + " violations)"
+        );
     }
 
     static void runAllTests() {
@@ -292,9 +309,11 @@ public:
         testParseLatencyBudgets();
         testHybridSerializationLatency();
         testLargeDocumentMemoryBudget();
-        testSerializationCacheEquivalence();
-        testSerializationCacheFlushBudget();
 
+        testSourceRangeContainment();
+        testImageAltFlattensSubtree();
+        testSessionStreamingMatchesColdParse();
+        testBindingJsonEscapingAndPlainTextOptions();
         testHybridMarkdownSessionCorpus();
         testHybridMarkdownParserBinding();
 
@@ -500,146 +519,340 @@ private:
         );
     }
 
-    static void testSerializationCacheEquivalence() {
-        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+    static std::string offsetViolation(
+        const std::shared_ptr<MarkdownNode>& node,
+        OFF maximumOffset,
+        const std::string& path
+    ) {
+        if (!node) return path + ": null node";
+        const std::string here = path + "/" + nodeTypeToString(node->type) +
+            "[" + std::to_string(node->beg) + "," + std::to_string(node->end) + "]";
+        if (node->beg > node->end) return here + ": beg > end";
+        if (node->end > maximumOffset) return here + ": end past input";
 
-        HybridMarkdownParser warm;
-        const std::vector<std::string> documents = {
-            "# Cache Heading\n\nParagraph with **bold**, *italic*, `code`, and a [link](https://example.com).\n\n- item one\n- item two\n- item three\n\n",
-            "## Título com acentos\n\nParágrafo com **negrito** e `código` — e emoji 🎉 no fim.\n\n| Coluna A | Coluna B |\n| --- | --- |\n| um | dois |\n| três | quatro |\n\n",
-            "Setext title\n=============\n\nParagraph after setext.\n\n> quote with **bold**\n\n```ts\nconst value = 1;\n```\n",
-            "[ref]: https://example.com/defined\n\nUses [ref] and [undefined] links.\n",
-            "Open paragraph that still continues",
+        const MarkdownNode* previous = nullptr;
+        for (const auto& child : node->children) {
+            if (!child) return here + ": null child";
+            if (child->beg < node->beg || child->end > node->end) {
+                return here + ": child " + nodeTypeToString(child->type) + "[" +
+                    std::to_string(child->beg) + "," + std::to_string(child->end) +
+                    "] escapes parent";
+            }
+            if (previous && (child->beg < previous->beg || child->end < previous->end)) {
+                return here + ": sibling " + nodeTypeToString(child->type) +
+                    " moves backwards";
+            }
+            const std::string nested = offsetViolation(child, maximumOffset, here);
+            if (!nested.empty()) return nested;
+            previous = child.get();
+        }
+        return "";
+    }
+
+    static OFF utf16LengthForTest(const std::string& source) {
+        OFF length = 0;
+        size_t index = 0;
+        while (index < source.size()) {
+            const unsigned char lead = static_cast<unsigned char>(source[index]);
+            const size_t bytes = lead < 0x80 ? 1 : (lead < 0xE0 ? 2 : (lead < 0xF0 ? 3 : 4));
+            length += bytes == 4 ? 2 : 1;
+            index += bytes;
+        }
+        return length;
+    }
+
+    static std::vector<std::string> makeFragmentCorpus(size_t count, uint32_t seed) {
+        static const std::vector<std::string> fragments = {
+            "- a\n", "- b\n", "* c\n", "1. d\n", "  - nested\n", "- [ ] task\n",
+            "> q\n", "> [x]: /u\n", "- [x]: /u\n", "[x]: /v\n", "[x]\n", "lazy\n",
+            "\n", "\n\n", "```\ncode\n```\n", "```js\n", "~~~\n", "    indented\n",
+            "| a | b |\n| - | - |\n| 1 | 2 |\n", "| c |\n", "[l](/u)", "[a](\n/u)\n",
+            "![**b** a](i)", "![a `c` b](i)", "*e*", "**s**", "`c`", "  \n", "\\\n",
+            "# h\n", "text ", "word", "é", "\U0001F642", "\r\n", "$$\nm\n$$\n",
+            "$x$", "<b>h</b>", "~~d~~", "---\n", "===\n", "&amp;", "<http://a.b>",
         };
+        std::vector<std::string> corpus;
+        corpus.reserve(count);
+        uint32_t state = seed;
+        const auto next = [&state]() {
+            state = state * 1664525u + 1013904223u;
+            return state >> 8;
+        };
+        for (size_t index = 0; index < count; index++) {
+            const size_t pieces = 1 + next() % 24;
+            std::string document;
+            for (size_t piece = 0; piece < pieces; piece++) {
+                document += fragments[next() % fragments.size()];
+            }
+            corpus.push_back(std::move(document));
+        }
+        return corpus;
+    }
 
-        bool allEquivalent = true;
-        for (size_t round = 0; round < 2; round++) {
-            for (const auto& document : documents) {
-                HybridMarkdownParser fresh;
-                allEquivalent = allEquivalent &&
-                    fresh.parseForStreaming(document) == warm.parseForStreaming(document);
+    static void testSourceRangeContainment() {
+        MD4CParser parser;
+
+        const std::vector<std::string> explicitCases = {
+            "- a\n- b\n\nc",
+            "> a\n> b\n\nc",
+            "> a\nlazy\n\nc",
+            "- a\n  - b\n\nc",
+            "1. a\n2. b\n\n\nc",
+            "| a |\n| - |\n| 1 |\n\nc",
+        };
+        for (const auto& markdown : explicitCases) {
+            ParserOptions options;
+            options.sourceOffsets = true;
+            const auto ast = parser.parse(markdown, options);
+            TestRunner::assertEqual(
+                "",
+                offsetViolation(ast, utf16LengthForTest(markdown), ""),
+                "Offsets containment: " + jsonEscape(markdown)
+            );
+        }
+
+        size_t corpusViolations = 0;
+        std::string firstCorpusViolation;
+        for (const auto& entry : kConformanceCorpus) {
+            ParserOptions options = optionsFromJson(entry.optionsJson);
+            options.sourceOffsets = true;
+            const std::string markdown(entry.markdown);
+            const auto ast = parser.parse(markdown, options);
+            const std::string violation =
+                offsetViolation(ast, utf16LengthForTest(markdown), "");
+            if (!violation.empty()) {
+                corpusViolations++;
+                if (firstCorpusViolation.empty()) {
+                    firstCorpusViolation = std::string(entry.name) + " " + violation;
+                }
             }
         }
-        TestRunner::assertTrue(
-            allEquivalent,
-            "Serialization cache outputs stay byte-identical across repeated parses"
-        );
-
-        HybridMarkdownParser freshExtended;
-        const std::string extended =
-            documents[0] + "Appended **tail** paragraph with `code`.\n\n- appended item\n";
         TestRunner::assertEqual(
-            freshExtended.parseForStreaming(extended),
-            warm.parseForStreaming(extended),
-            "Serialization cache outputs stay byte-identical for appended documents"
+            "",
+            firstCorpusViolation,
+            "Offsets containment: every conformance corpus entry (" +
+                std::to_string(corpusViolations) + " violations)"
         );
 
-        HybridMarkdownParser freshContinued;
-        const std::string continued = documents[4] + " and keeps going with **bold**";
-        TestRunner::assertEqual(
-            freshContinued.parseForStreaming(continued),
-            warm.parseForStreaming(continued),
-            "Serialization cache skips blocks terminated at end of input"
-        );
-
-        std::string evictionInput;
-        evictionInput.reserve(600 * 48);
-        for (size_t index = 0; index < 600; index++) {
-            evictionInput +=
-                "Eviction paragraph " + std::to_string(index) +
-                " with **bold " + std::to_string(index) + "** content.\n\n";
+        size_t fuzzViolations = 0;
+        std::string firstFuzzViolation;
+        const auto documents = makeFragmentCorpus(2000, 0x5EEDu);
+        for (size_t index = 0; index < documents.size(); index++) {
+            ParserOptions options;
+            options.sourceOffsets = true;
+            options.html = (index % 2) == 0;
+            const auto ast = parser.parse(documents[index], options);
+            const std::string violation =
+                offsetViolation(ast, utf16LengthForTest(documents[index]), "");
+            if (!violation.empty()) {
+                fuzzViolations++;
+                if (firstFuzzViolation.empty()) {
+                    firstFuzzViolation = "#" + std::to_string(index) + " " +
+                        jsonEscape(documents[index]) + " " + violation;
+                }
+            }
         }
-        HybridMarkdownParser freshEviction;
         TestRunner::assertEqual(
-            freshEviction.parseForStreaming(evictionInput),
-            warm.parseForStreaming(evictionInput),
-            "Serialization cache outputs stay byte-identical under entry eviction"
-        );
-        TestRunner::assertEqual(
-            freshEviction.parseForStreaming(evictionInput),
-            warm.parseForStreaming(evictionInput),
-            "Serialization cache outputs stay byte-identical when fully warm"
+            "",
+            firstFuzzViolation,
+            "Offsets containment: 2000 seeded fragment documents (" +
+                std::to_string(fuzzViolations) + " violations)"
         );
     }
 
-    static std::string makeStreamingFlushPayload(size_t sections) {
-        std::string payload;
-        for (size_t index = 0; index < sections; index++) {
-            payload += "## Streaming heading " + std::to_string(index) + "\n\n";
-            for (size_t repeat = 0; repeat < 3; repeat++) {
-                payload +=
-                    "Span paragraph " + std::to_string(index) + "." + std::to_string(repeat) +
-                    " mixes **bold *with `code " + std::to_string(repeat) +
-                    "\" quotes` inside* bold**,"\
-                    " *italic **with `more \"code\"` nested** italic*,"\
-                    " **star *deep `span` deep* star**,"\
-                    " and [a **bold** link](https://example.com/s" + std::to_string(index) + ").\n\n";
-            }
-            payload +=
-                "| Column A | Column B | Column C | Column D |\n"
-                "| --- | --- | --- | --- |\n"
-                "| **b *i `c" + std::to_string(index) + "` i* b** | [link **bold**](https://example.com/t" +
-                std::to_string(index) + ") | `code \"x\"` | *i **b `c` b** i* |\n"
-                "| \"a \\\"q\\\"\" | **b *i `c` i* b** | [read](https://example.com/r" +
-                std::to_string(index) + ") | *i **b** i* |\n\n";
-            payload +=
-                "- list item one with **bold *nested `code`* bold**\n"
-                "- list item two with *italic **with `code`** italic*\n"
-                "- list item three with [a **bold** link](https://example.com/i" +
-                std::to_string(index) + ")\n\n";
+    static void testImageAltFlattensSubtree() {
+        MD4CParser parser;
+        ParserOptions options;
+        const std::vector<std::pair<std::string, std::string>> cases = {
+            {"![**bold** alt](u)", "bold alt"},
+            {"![a `code` b](u)", "a code b"},
+            {"![line1\nline2](u)", "line1 line2"},
+            {"![a  \nb](u)", "a\nb"},
+            {"![x ![y](v) z](u)", "x y z"},
+            {"![*a* **b**](u)", "a b"},
+            {"![](u)", ""},
+        };
+        for (const auto& [markdown, expected] : cases) {
+            const auto ast = parser.parse(markdown, options);
+            const auto image = findFirstNode(ast, NodeType::Image);
+            TestRunner::assertEqual(
+                expected,
+                image ? image->alt.value_or("<none>") : "<no image>",
+                "Image alt flattens subtree: " + jsonEscape(markdown)
+            );
         }
-        return payload;
-    }
 
-    static void testSerializationCacheFlushBudget() {
         using ::margelo::nitro::Markdown::HybridMarkdownParser;
+        HybridMarkdownParser binding;
+        TestRunner::assertEqual(
+            "bold alt\n\n",
+            binding.extractPlainText("![**bold** alt](u)"),
+            "Image alt flattens subtree: extractPlainText"
+        );
 
-        const std::string base = makeStreamingFlushPayload(48);
-        static constexpr int kWarmRuns = 24;
-        static constexpr double kMaxWarmToFreshRatio = 1.1;
-
-        HybridMarkdownParser warm;
-        (void)warm.parseForStreaming(base);
-
-        std::string grown = base;
-        double warmTotalMs = 0.0;
-        double freshTotalMs = 0.0;
-        bool outputsMatchFresh = true;
-        for (int run = 0; run < kWarmRuns; run++) {
-            grown +=
-                "Warm tail paragraph " + std::to_string(run) +
-                " with **bold**, `code`, and [a link](https://example.com/warm-" +
-                std::to_string(run) + ").\n\n- warm item one " + std::to_string(run) +
-                "\n- warm item two\n\n";
-
-            const auto start = std::chrono::steady_clock::now();
-            const std::string warmJson = warm.parseForStreaming(grown);
-            const auto end = std::chrono::steady_clock::now();
-            warmTotalMs += std::chrono::duration<double, std::milli>(end - start).count();
-
-            HybridMarkdownParser fresh;
-            const auto freshStart = std::chrono::steady_clock::now();
-            const std::string freshJson = fresh.parseForStreaming(grown);
-            const auto freshEnd = std::chrono::steady_clock::now();
-            freshTotalMs +=
-                std::chrono::duration<double, std::milli>(freshEnd - freshStart).count();
-            outputsMatchFresh = outputsMatchFresh && freshJson == warmJson;
+        std::string nested;
+        for (int index = 0; index < 200; index++) nested += "![";
+        nested += std::string(320000, 'x');
+        for (int index = 0; index < 200; index++) nested += "](u)";
+        std::string nestedError;
+        try {
+            parser.parse(nested, options);
+        } catch (const std::exception& error) {
+            nestedError = error.what();
         }
-        const double warmAvgMs = warmTotalMs / kWarmRuns;
-        const double freshAvgMs = freshTotalMs / kWarmRuns;
-        const double ratio = freshAvgMs > 0.0 ? warmAvgMs / freshAvgMs : 0.0;
-
-        std::cout << "ℹ Perf budget serialization cache fresh=" << freshAvgMs
-                  << "ms warm=" << warmAvgMs << "ms ratio=" << ratio << std::endl;
-
         TestRunner::assertTrue(
-            outputsMatchFresh,
-            "Serialization cache warm outputs stay byte-identical to cold outputs"
+            nestedError.rfind("Markdown flattened text exceeds the maximum of", 0) == 0,
+            "Image alt cap scales with input size for nested images: " + nestedError
+        );
+
+        std::string wide;
+        for (int index = 0; index < 64; index++) {
+            wide += "![" + std::string(512, 'a') + "](u) ";
+        }
+        const auto wideAst = parser.parse(wide, options);
+        TestRunner::assertTrue(
+            findFirstNode(wideAst, NodeType::Image) != nullptr,
+            "Image alt cap accepts many sibling images within input size"
+        );
+        TestRunner::assertEqual(
+            "x y z\n\n",
+            binding.extractPlainText("![x ![y](v) z](u)"),
+            "Image alt cap keeps modest nesting"
+        );
+    }
+
+    static void testSessionStreamingMatchesColdParse() {
+        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+        using ::margelo::nitro::Markdown::HybridMarkdownSession;
+        using BindingParserOptions = ::margelo::nitro::Markdown::ParserOptions;
+
+        std::vector<std::string> documents = {
+            "[x]\n\n> [x]: /u\n",
+            "[x]\n\n- [x]: /u\n",
+            "Use [x] here.\n\n> quote\n> [x]: /u\n\nand [x] again\n",
+            "Use [x] here.\n\n- item\n- [x]: /u\n\nand [x] again\n",
+            "[x]\n\n[x]: /u\n",
+        };
+        const auto fuzz = makeFragmentCorpus(300, 0xC0DEu);
+        documents.insert(documents.end(), fuzz.begin(), fuzz.end());
+
+        BindingParserOptions options;
+        options.sourceOffsets = true;
+        size_t mismatches = 0;
+        std::string firstMismatch;
+        for (size_t index = 0; index < documents.size(); index++) {
+            const std::string& document = documents[index];
+            auto session = std::make_shared<HybridMarkdownSession>();
+            const size_t chunkSize = 1 + index % 12;
+            for (size_t offset = 0; offset < document.size(); offset += chunkSize) {
+                session->append(document.substr(offset, chunkSize));
+                const std::string warm = session->parseWithOptions(options);
+                HybridMarkdownParser cold;
+                const std::string expected =
+                    cold.parseWithOptions(session->getAllText(), options);
+                if (warm != expected) {
+                    mismatches++;
+                    if (firstMismatch.empty()) {
+                        firstMismatch = "#" + std::to_string(index) + " " + jsonEscape(document);
+                    }
+                    break;
+                }
+            }
+        }
+        TestRunner::assertEqual(
+            "",
+            firstMismatch,
+            "Session streaming parse matches cold parse (" +
+                std::to_string(mismatches) + " mismatches)"
+        );
+
+        auto quoted = std::make_shared<HybridMarkdownSession>();
+        quoted->append("[x]\n\n");
+        (void)quoted->parse();
+        quoted->append("> [x]: /u\n");
+        TestRunner::assertTrue(
+            quoted->parse().find("\"href\":\"/u\"") != std::string::npos,
+            "Session streaming resolves a blockquote reference definition"
+        );
+
+        auto listed = std::make_shared<HybridMarkdownSession>();
+        listed->append("[x]\n\n");
+        (void)listed->parse();
+        listed->append("- [x]: /u\n");
+        TestRunner::assertTrue(
+            listed->parse().find("\"href\":\"/u\"") != std::string::npos,
+            "Session streaming resolves a list reference definition"
+        );
+    }
+
+    static void testBindingJsonEscapingAndPlainTextOptions() {
+        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+        using ::margelo::nitro::Markdown::HybridMarkdownSession;
+        using BindingParserOptions = ::margelo::nitro::Markdown::ParserOptions;
+
+        HybridMarkdownParser parser;
+        BindingParserOptions withoutOffsets;
+        withoutOffsets.sourceOffsets = false;
+        const std::string controlJson = parser.parseWithOptions(
+            std::string("say \"hi\" a\x01" "b\bc\fd\x7f"),
+            withoutOffsets
         );
         TestRunner::assertTrue(
-            warmAvgMs <= kMaxWarmToFreshRatio * freshAvgMs,
-            "Serialization cache keeps warm flush cost within 1.1x of equivalent fresh parses"
+            controlJson.find(R"(say \"hi\" a\u0001b\bc\fd)" "\x7f") != std::string::npos,
+            "Parser binding JSON escapes quotes and C0 controls"
         );
+
+        const std::string codeJson = parser.parseWithOptions(
+            "```\n\"q\"\ta\\b\n```",
+            withoutOffsets
+        );
+        TestRunner::assertTrue(
+            codeJson.find(R"(\"q\"\ta\\b\n)") != std::string::npos,
+            "Parser binding JSON escapes tabs and backslashes in code"
+        );
+
+        BindingParserOptions plainOptions;
+        plainOptions.gfm = true;
+        TestRunner::assertEqual(
+            "one\ntwo\n\na | b | \n1 | 2 | \n",
+            parser.extractPlainTextWithOptions(
+                "- one\n- two\n\n| a | b |\n| - | - |\n| 1 | 2 |",
+                plainOptions
+            ),
+            "Parser binding extractPlainTextWithOptions flattens lists and tables"
+        );
+        BindingParserOptions limitedPlain;
+        limitedPlain.maxInputLength = 4.0;
+        bool plainLimitThrew = false;
+        try {
+            (void)parser.extractPlainTextWithOptions("12345", limitedPlain);
+        } catch (const std::runtime_error& error) {
+            plainLimitThrew =
+                std::string(error.what()).find("maximum of 4 bytes") != std::string::npos;
+        }
+        TestRunner::assertTrue(
+            plainLimitThrew,
+            "Parser binding extractPlainTextWithOptions honors maxInputLength"
+        );
+
+        auto session = std::make_shared<HybridMarkdownSession>();
+        size_t laterCalls = 0;
+        auto throwsStd = session->addListener([](double, double) {
+            throw std::runtime_error("listener failure");
+        });
+        auto throwsOther = session->addListener([](double, double) {
+            throw 42;
+        });
+        auto counts = session->addListener([&laterCalls](double, double) {
+            laterCalls++;
+        });
+        TestRunner::assertTrue(
+            session->append("abc") == 3.0 && laterCalls == 1,
+            "Session listener exceptions do not block later listeners"
+        );
+        throwsStd();
+        throwsOther();
+        counts();
     }
 
     static void testHybridMarkdownSessionCorpus() {
@@ -844,23 +1057,78 @@ private:
         );
         snapshotUnsubscribe();
 
+        const auto isByteCapError = [](const std::runtime_error& error) {
+            return std::string(error.what()) ==
+                "Buffer size limit exceeded (max 10485760 bytes)";
+        };
         auto capped = std::make_shared<HybridMarkdownSession>();
         capped->append(std::string(10 * 1024 * 1024, 'a'));
+        TestRunner::assertTrue(
+            capped->getLength() == 10.0 * 1024 * 1024,
+            "Session append accepts ASCII exactly at the byte cap"
+        );
         bool appendCapThrew = false;
         try {
             capped->append("!");
-        } catch (const std::runtime_error&) {
-            appendCapThrew = true;
+        } catch (const std::runtime_error& error) {
+            appendCapThrew = isByteCapError(error);
         }
         TestRunner::assertTrue(appendCapThrew, "Session append enforces buffer cap");
 
         bool replaceCapThrew = false;
         try {
             capped->replace(0.0, 0.0, "!");
-        } catch (const std::runtime_error&) {
-            replaceCapThrew = true;
+        } catch (const std::runtime_error& error) {
+            replaceCapThrew = isByteCapError(error);
         }
         TestRunner::assertTrue(replaceCapThrew, "Session replace enforces buffer cap");
+        TestRunner::assertTrue(
+            capped->replace(0.0, 1.0, "!") == 10.0 * 1024 * 1024,
+            "Session replace accepts a same-size edit at the byte cap"
+        );
+
+        std::string cjk;
+        cjk.reserve(4'000'000 * 3);
+        for (size_t index = 0; index < 4'000'000; index++) cjk += "\u4e2d";
+        auto cjkAppend = std::make_shared<HybridMarkdownSession>();
+        bool cjkAppendThrew = false;
+        try {
+            cjkAppend->append(cjk);
+        } catch (const std::runtime_error& error) {
+            cjkAppendThrew = isByteCapError(error);
+        }
+        TestRunner::assertTrue(
+            cjkAppendThrew && cjkAppend->getLength() == 0.0,
+            "Session append rejects 4,000,000 CJK chars (12,000,000 bytes)"
+        );
+
+        auto cjkReset = std::make_shared<HybridMarkdownSession>();
+        bool cjkResetThrew = false;
+        try {
+            cjkReset->reset(cjk);
+        } catch (const std::runtime_error& error) {
+            cjkResetThrew = isByteCapError(error);
+        }
+        TestRunner::assertTrue(cjkResetThrew, "Session reset enforces the byte cap");
+
+        auto cjkReplace = std::make_shared<HybridMarkdownSession>();
+        cjkReplace->reset(std::string(3'500'000, 'a'));
+        bool cjkReplaceThrew = false;
+        try {
+            (void)cjkReplace->replace(0.0, 0.0, std::string(cjk, 0, 2'400'000 * 3));
+        } catch (const std::runtime_error& error) {
+            cjkReplaceThrew = isByteCapError(error);
+        }
+        TestRunner::assertTrue(
+            cjkReplaceThrew && cjkReplace->getLength() == 3'500'000.0,
+            "Session replace counts inserted UTF-8 bytes against the cap"
+        );
+
+        auto cjkOffsets = std::make_shared<HybridMarkdownSession>();
+        TestRunner::assertTrue(
+            cjkOffsets->append("\u4e2d\u6587") == 2.0,
+            "Session offsets stay UTF-16 units under the byte cap"
+        );
 
         auto inspected = std::make_shared<HybridMarkdownSession>();
         const size_t emptyMemory = inspected->getExternalMemorySize();
@@ -1860,10 +2128,10 @@ private:
         BindingParserOptions bindingOptions;
         bindingOptions.math = true;
         const auto staticJson = publicParser.parseWithOptions(markdown, bindingOptions);
-        const auto streamingJson = publicParser.parseWithOptionsForStreaming(
-            markdown,
-            bindingOptions
-        );
+        auto streamingSession =
+            std::make_shared<::margelo::nitro::Markdown::HybridMarkdownSession>();
+        streamingSession->reset(markdown);
+        const auto streamingJson = streamingSession->parseWithOptions(bindingOptions);
         const auto countOccurrences = [](const std::string& value, const std::string& needle) {
             size_t count = 0;
             size_t offset = 0;
@@ -2067,10 +2335,10 @@ private:
         disabledBinding.math = false;
         HybridMarkdownParser disabledParser;
         const auto disabledStatic = disabledParser.parseWithOptions(opaqueContent, disabledBinding);
-        const auto disabledStreaming = disabledParser.parseWithOptionsForStreaming(
-            opaqueContent,
-            disabledBinding
-        );
+        auto disabledSession =
+            std::make_shared<::margelo::nitro::Markdown::HybridMarkdownSession>();
+        disabledSession->reset(opaqueContent);
+        const auto disabledStreaming = disabledSession->parseWithOptions(disabledBinding);
         TestRunner::assertEqual(
             disabledStatic,
             disabledStreaming,
@@ -2081,53 +2349,18 @@ private:
         bindingOptions.math = true;
         const std::string streamingMarkdown = "$$\nπ + 1\n$$\n\ntrailing";
         const std::string streamingPrefix = streamingMarkdown.substr(0, 8);
-        HybridMarkdownParser warmParser;
-        const auto warmPrefix = warmParser.parseWithOptionsForStreaming(
-            streamingPrefix,
-            bindingOptions
-        );
-        const auto warmFull = warmParser.parseWithOptionsForStreaming(
-            streamingMarkdown,
-            bindingOptions
-        );
+        auto warmSession =
+            std::make_shared<::margelo::nitro::Markdown::HybridMarkdownSession>();
+        warmSession->append(streamingPrefix);
+        const auto warmPrefix = warmSession->parseWithOptions(bindingOptions);
+        warmSession->append(streamingMarkdown.substr(streamingPrefix.size()));
+        const auto warmFull = warmSession->parseWithOptions(bindingOptions);
         HybridMarkdownParser coldParser;
-        const auto coldFull = coldParser.parseWithOptionsForStreaming(
-            streamingMarkdown,
-            bindingOptions
-        );
-        const auto staticFull = coldParser.parseWithOptions(streamingMarkdown, bindingOptions);
+        const auto coldFull = coldParser.parseWithOptions(streamingMarkdown, bindingOptions);
         TestRunner::assertTrue(
             warmPrefix.find("math_block") != std::string::npos &&
-            warmFull == coldFull &&
-            warmFull == staticFull,
-            "Issue #74 streaming: prefixes and warm/cold bytes stay equivalent"
-        );
-
-        const std::string cachedMathPrefix = "$$\nπ + 1\n$$\n\n";
-        const std::string cachedMathDocument = cachedMathPrefix + "trailing paragraph";
-        HybridMarkdownParser cachedWarmParser;
-        const auto cachedBase = cachedWarmParser.parseWithOptionsForStreaming(
-            cachedMathPrefix,
-            bindingOptions
-        );
-        const auto cachedWarm = cachedWarmParser.parseWithOptionsForStreaming(
-            cachedMathDocument,
-            bindingOptions
-        );
-        HybridMarkdownParser cachedColdParser;
-        const auto cachedCold = cachedColdParser.parseWithOptionsForStreaming(
-            cachedMathDocument,
-            bindingOptions
-        );
-        const auto cachedStatic = cachedColdParser.parseWithOptions(
-            cachedMathDocument,
-            bindingOptions
-        );
-        TestRunner::assertTrue(
-            cachedBase.find("math_block") != std::string::npos &&
-            cachedWarm == cachedCold &&
-            cachedWarm == cachedStatic,
-            "Issue #74 serialization cache: math block bytes stay static/streaming equivalent"
+            warmFull == coldFull,
+            "Issue #74 streaming: session prefix and appended bytes match a cold parse"
         );
 
         const std::vector<std::string> structuredTokens = {
@@ -2323,6 +2556,18 @@ private:
                 "Unicode backslash CRLF hard break", "🙂a\\\r\nb",
                 NodeType::LineBreak, 3, 6, "\\\r\n"
             },
+            {
+                "soft break after multi-line link destination", "[a](\n/u)\nb",
+                NodeType::SoftBreak, 8, 9, "\n"
+            },
+            {
+                "soft break after multi-line link title", "[a](/u\n\"t\")\nb",
+                NodeType::SoftBreak, 11, 12, "\n"
+            },
+            {
+                "hard break after closed span", "**a**  \nb", NodeType::LineBreak,
+                5, 8, "  \n"
+            },
         };
 
         const auto sourceSliceForOffsets = [](
@@ -2407,19 +2652,11 @@ private:
             serializedMarkdown,
             bindingOptions
         );
-        const std::string fastJson = serializer.parseWithOptionsForStreaming(
-            serializedMarkdown,
-            bindingOptions
-        );
         const std::string serializedBreak =
             "\"type\":\"soft_break\",\"beg\":3,\"end\":4";
         TestRunner::assertTrue(
             normalJson.find(serializedBreak) != std::string::npos,
-            "Break offsets: normal serializer preserves UTF-16 range"
-        );
-        TestRunner::assertTrue(
-            fastJson.find(serializedBreak) != std::string::npos,
-            "Break offsets: fast serializer preserves UTF-16 range"
+            "Break offsets: serializer preserves UTF-16 range"
         );
 
         BindingParserOptions withoutOffsets;
@@ -2429,19 +2666,11 @@ private:
             "a\nb",
             withoutOffsets
         );
-        const std::string fastWithoutOffsets =
-            noOffsetSerializer.parseWithOptionsForStreaming("a\nb", withoutOffsets);
         TestRunner::assertTrue(
             normalWithoutOffsets.find("\"beg\":") == std::string::npos &&
                 normalWithoutOffsets.find("\"end\":") == std::string::npos &&
                 normalWithoutOffsets.find("\"type\":\"soft_break\"") != std::string::npos,
-            "Break offsets: normal serializer omits offsets when disabled"
-        );
-        TestRunner::assertTrue(
-            fastWithoutOffsets.find("\"beg\":") == std::string::npos &&
-                fastWithoutOffsets.find("\"end\":") == std::string::npos &&
-                fastWithoutOffsets.find("\"type\":\"soft_break\"") != std::string::npos,
-            "Break offsets: fast serializer omits offsets when disabled"
+            "Break offsets: serializer omits offsets when disabled"
         );
 
         using ::margelo::nitro::Markdown::HybridMarkdownSession;

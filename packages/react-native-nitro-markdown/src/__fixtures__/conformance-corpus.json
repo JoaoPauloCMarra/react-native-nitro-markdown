@@ -875,5 +875,95 @@
         }
       ]
     }
+  },
+  {
+    "name": "image-alt-nested-strong",
+    "markdown": "![**bold** alt](u)",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "image",
+              "href": "u",
+              "alt": "bold alt",
+              "children": [
+                {
+                  "type": "bold",
+                  "children": [
+                    {
+                      "type": "text",
+                      "content": "bold"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "image-alt-inline-code",
+    "markdown": "![a `code` b](u)",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "image",
+              "href": "u",
+              "alt": "a code b",
+              "children": [
+                {
+                  "type": "text",
+                  "content": "a "
+                },
+                {
+                  "type": "code_inline",
+                  "content": "code"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "image-alt-soft-break",
+    "markdown": "![line1\nline2](u)",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "image",
+              "href": "u",
+              "alt": "line1 line2",
+              "children": [
+                {
+                  "type": "text",
+                  "content": "line1"
+                },
+                {
+                  "type": "soft_break"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
   }
 ]
