@@ -14,9 +14,40 @@ import { useMarkdownContext } from "../MarkdownContext";
 import {
   defaultHighlighter,
   type HighlightedToken,
+  type TokenType,
 } from "../utils/code-highlight";
 import type { MarkdownNode } from "../headless";
 import type { MarkdownTheme } from "../theme";
+
+type TokenStyles = Partial<Record<TokenType, TextStyle>>;
+
+const tokenStylesCache = new WeakMap<MarkdownTheme, TokenStyles>();
+
+const createTokenStyles = (theme: MarkdownTheme): TokenStyles => {
+  const styles: TokenStyles = {};
+  const colors = theme.colors.codeTokenColors ?? {};
+  for (const [type, color] of Object.entries(colors)) {
+    if (color) styles[type as TokenType] = { color };
+  }
+  return styles;
+};
+
+const mergeTokenRuns = (
+  tokens: readonly HighlightedToken[],
+  tokenStyles: TokenStyles,
+): { text: string; style: TextStyle | undefined }[] => {
+  const runs: { text: string; style: TextStyle | undefined }[] = [];
+  for (const token of tokens) {
+    const style = tokenStyles[token.type];
+    const previous = runs[runs.length - 1];
+    if (previous && previous.style === style) {
+      previous.text += token.text;
+    } else {
+      runs.push({ text: token.text, style });
+    }
+  }
+  return runs;
+};
 
 type CodeBlockProps = {
   language?: string;
@@ -42,10 +73,13 @@ export const CodeBlock: FC<CodeBlockProps> = ({
         : null;
 
   const displayContent = content ?? (node ? readTextContent(node) : "");
-  const highlightedTokens = useMemo(
+  const tokenStyles = getCachedStyles(tokenStylesCache, theme, createTokenStyles);
+  const highlightedRuns = useMemo(
     () =>
-      highlighter && language ? highlighter(language, displayContent) : null,
-    [displayContent, highlighter, language],
+      highlighter && language
+        ? mergeTokenRuns(highlighter(language, displayContent), tokenStyles)
+        : null,
+    [displayContent, highlighter, language, tokenStyles],
   );
 
   const styles = getCachedStyles(codeBlockStylesCache, theme, createCodeStyles);
@@ -62,18 +96,17 @@ export const CodeBlock: FC<CodeBlockProps> = ({
         showsHorizontalScrollIndicator={false}
         bounces={false}
       >
-        {highlightedTokens ? (
+        {highlightedRuns ? (
           <Text style={styles.codeBlockText} selectable>
-            {highlightedTokens.map((token: HighlightedToken, i: number) => {
-              const tokenColor = ctx.theme.colors.codeTokenColors?.[token.type];
-              return tokenColor ? (
-                <Text key={i} style={{ color: tokenColor }}>
-                  {token.text}
+            {highlightedRuns.map((run, i) =>
+              run.style ? (
+                <Text key={i} style={run.style}>
+                  {run.text}
                 </Text>
               ) : (
-                <Text key={i}>{token.text}</Text>
-              );
-            })}
+                <Text key={i}>{run.text}</Text>
+              ),
+            )}
           </Text>
         ) : (
           <Text style={styles.codeBlockText} selectable>

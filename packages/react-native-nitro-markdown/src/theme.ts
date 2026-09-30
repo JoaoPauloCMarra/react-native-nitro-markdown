@@ -84,13 +84,13 @@ export const defaultMarkdownTheme: MarkdownTheme = {
     tableRowEven: "transparent",
     tableRowOdd: "#f8fafc",
     codeTokenColors: {
-      keyword: "#c792ea",
-      string: "#c3e88d",
-      comment: "#546e7a",
-      number: "#f78c6c",
-      operator: "#89ddff",
-      punctuation: "#89ddff",
-      type: "#ffcb6b",
+      keyword: "#7c3aed",
+      string: "#166534",
+      comment: "#475569",
+      number: "#c2410c",
+      operator: "#0e7490",
+      punctuation: "#334155",
+      type: "#854d0e",
     },
   },
   spacing: {
@@ -160,6 +160,15 @@ export const darkMarkdownTheme: MarkdownTheme = {
     tableHeaderText: "#94a3b8",
     tableRowEven: "transparent",
     tableRowOdd: "#1e293b",
+    codeTokenColors: {
+      keyword: "#c792ea",
+      string: "#c3e88d",
+      comment: "#94a3b8",
+      number: "#f78c6c",
+      operator: "#89ddff",
+      punctuation: "#89ddff",
+      type: "#ffcb6b",
+    },
   },
 };
 
