@@ -1,5 +1,6 @@
 import { StyleSheet } from "react-native";
 import { Markdown } from "react-native-nitro-markdown";
+import { mathRenderers } from "react-native-nitro-markdown/math";
 import { ExampleHeader, ExamplePanel, ExampleScreen } from "../../components/example-ui";
 import { useBottomTabHeight } from "../../hooks/use-bottom-tab-height";
 import { COMPLEX_MARKDOWN, EDGE_CASE_MARKDOWN } from "../../markdown-test-data";
@@ -16,6 +17,7 @@ export default function RenderScreen() {
       <ExamplePanel style={styles.card}>
         <Markdown
           options={{ gfm: true, math: true, html: true }}
+          renderers={mathRenderers}
           highlightCode
           style={styles.markdown}
           virtualize={true}

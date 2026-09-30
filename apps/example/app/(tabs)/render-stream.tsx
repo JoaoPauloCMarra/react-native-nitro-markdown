@@ -24,6 +24,7 @@ import {
   type MarkdownNode,
   type MarkdownStreamRenderProps,
 } from "react-native-nitro-markdown";
+import { mathRenderers } from "react-native-nitro-markdown/math";
 import {
   ExampleActionButton,
   ExampleHeader,
@@ -316,6 +317,7 @@ const MarkdownRendererPanel = memo(function MarkdownRendererPanel({
           <MarkdownStream
             session={session}
             options={STREAM_PARSER_OPTIONS}
+            renderers={mathRenderers}
             updateStrategy="raf"
             useTransitionUpdates
           />
@@ -347,7 +349,7 @@ const Issue74StaticFixture = memo(function Issue74StaticFixture() {
         overScrollMode="never"
         contentContainerStyle={styles.scrollContent}
       >
-        <Markdown options={STREAM_PARSER_OPTIONS}>
+        <Markdown options={STREAM_PARSER_OPTIONS} renderers={mathRenderers}>
           {ISSUE_74_STANDALONE_EQUALS_DISPLAY_MATH_MARKDOWN}
         </Markdown>
       </ScrollView>

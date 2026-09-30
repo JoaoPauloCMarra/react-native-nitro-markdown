@@ -10,6 +10,7 @@ import {
   type CustomRenderers,
   type MarkdownPlugin,
 } from "react-native-nitro-markdown";
+import { mathRenderers } from "react-native-nitro-markdown/math";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { EXAMPLE_COLORS } from "../theme";
 
@@ -173,6 +174,7 @@ export default function MarkdownE2eRenderScreen() {
           >
             <Markdown
               options={{ gfm: true, math: true }}
+              renderers={mathRenderers}
               onParseComplete={parseCompleteCallbacks.kitchen}
             >
               {KITCHEN_SINK}
@@ -191,6 +193,7 @@ export default function MarkdownE2eRenderScreen() {
               theme={darkMarkdownTheme}
               stylingStrategy="opinionated"
               options={{ gfm: true, math: true }}
+              renderers={mathRenderers}
               onParseComplete={parseCompleteCallbacks.dark}
             >
               {KITCHEN_SINK}

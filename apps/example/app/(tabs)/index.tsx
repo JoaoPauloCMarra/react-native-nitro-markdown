@@ -29,6 +29,7 @@ import {
   type CustomRenderers,
   type MarkdownNode,
 } from "react-native-nitro-markdown";
+import { mathRenderers } from "react-native-nitro-markdown/math";
 import {
   BenchBar,
   ExampleActionButton,
@@ -1156,7 +1157,7 @@ export default function BenchmarkScreen() {
             renderers={
               latexBenchmarkTarget.renderer === "legacy-mathjax"
                 ? legacyMathRenderers
-                : undefined
+                : mathRenderers
             }
           >
             {LATEX_BENCH_MARKDOWN}
