@@ -6,7 +6,11 @@ import {
   type MarkdownStreamRenderProps,
 } from "../markdown-stream";
 import type { MarkdownSession } from "../specs/MarkdownSession.nitro";
-import type { MarkdownSessionController } from "../use-markdown-stream";
+import {
+  useMarkdownSession,
+  type MarkdownSessionController,
+} from "../use-markdown-stream";
+import { createMarkdownSession } from "../MarkdownSession";
 
 const markdownMock = jest.fn(() => null);
 
@@ -38,6 +42,10 @@ function createSession({
     },
     getAllText: jest.fn(() => currentAllText),
     getLength: jest.fn(() => currentAllText.length),
+    parse: jest.fn(() => mockParser.parse(currentAllText)),
+    parseWithOptions: jest.fn((options: Parameters<typeof mockParser.parseWithOptions>[1]) =>
+      mockParser.parseWithOptions(currentAllText, options),
+    ),
     getTextRange: jest.fn(() => {
       if (throwOnRange) throw new Error("range unavailable");
       return rangeText;
@@ -716,5 +724,142 @@ describe("MarkdownStream", () => {
         sourceAstDisabledReason: "parse-error",
       }),
     );
+  });
+  it("streams appends from a useMarkdownSession controller under StrictMode", () => {
+    const renderMarkdown = jest.fn((_props: MarkdownStreamRenderProps) => null);
+    let controller: MarkdownSessionController | null = null;
+    function Owner() {
+      controller = useMarkdownSession("Hello");
+      return React.createElement(MarkdownStream, {
+        session: controller,
+        updateIntervalMs: 1,
+        renderMarkdown,
+      });
+    }
+
+    act(() => {
+      TestRenderer.create(
+        React.createElement(React.StrictMode, null, React.createElement(Owner)),
+      );
+    });
+
+    act(() => {
+      controller!.getSession().append(" world");
+      jest.runOnlyPendingTimers();
+    });
+
+    const lastProps = renderMarkdown.mock.lastCall?.[0] as MarkdownStreamRenderProps;
+    expect(lastProps.text).toBe("Hello world");
+  });
+
+  describe("range reads against the full session buffer", () => {
+    function renderStream(
+      session: MarkdownSession,
+      extraProps: Record<string, unknown> = {},
+    ) {
+      const renderMarkdown = jest.fn((_props: MarkdownStreamRenderProps) => null);
+      let renderer: TestRenderer.ReactTestRenderer | null = null;
+      act(() => {
+        renderer = TestRenderer.create(
+          React.createElement(MarkdownStream, {
+            session,
+            updateIntervalMs: 1,
+            renderMarkdown,
+            ...extraProps,
+          }),
+        );
+      });
+      const lastText = () =>
+        (renderMarkdown.mock.lastCall?.[0] as MarkdownStreamRenderProps | undefined)
+          ?.text;
+      return { renderMarkdown, lastText, renderer: () => renderer! };
+    }
+
+    it("keeps the rest of the buffer after a replace at offset 0", () => {
+      const session = createMarkdownSession(
+        "hello world, this is the rest of the doc",
+      );
+      const { lastText } = renderStream(session);
+
+      act(() => {
+        session.replace(0, 5, "HELLO");
+        jest.runOnlyPendingTimers();
+      });
+
+      expect(lastText()).toBe("HELLO world, this is the rest of the doc");
+      expect(lastText()).toBe(session.getAllText());
+    });
+
+    it("keeps the rest of the buffer after an append and an insert in one batch", () => {
+      const session = createMarkdownSession("0123456789");
+      const { lastText } = renderStream(session);
+
+      act(() => {
+        session.append("abc");
+        session.replace(10, 10, "ZZ");
+        jest.runOnlyPendingTimers();
+      });
+
+      expect(session.getAllText()).toBe("0123456789ZZabc");
+      expect(lastText()).toBe("0123456789ZZabc");
+    });
+
+    it("keeps the rest of the buffer in the native parse path after a replace at 0", () => {
+      const session = createMarkdownSession("hello world tail");
+      const { renderMarkdown } = renderStream(session);
+
+      act(() => {
+        session.replace(0, 5, "HELLO");
+        jest.runOnlyPendingTimers();
+      });
+
+      const lastProps = renderMarkdown.mock.lastCall?.[0] as MarkdownStreamRenderProps;
+      expect(lastProps.markdownProps.children).toBe("HELLO world tail");
+    });
+
+    it("parses through the native session instead of re-parsing JS text", () => {
+      const { NitroModules } = jest.requireMock("react-native-nitro-modules") as {
+        NitroModules: { createHybridObject: (name: string) => MarkdownSession };
+      };
+      const session = NitroModules.createHybridObject("MarkdownSession");
+      session.reset("hello");
+      renderStream(session);
+      expect(session.parse).toHaveBeenCalledTimes(1);
+      expect(session.getAllText).toHaveBeenCalled();
+    });
+
+    it("re-syncs a pending chunk when only stream timing props change", () => {
+      const session = createMarkdownSession("Hello");
+      const renderMarkdown = jest.fn((_props: MarkdownStreamRenderProps) => null);
+      let renderer: TestRenderer.ReactTestRenderer | null = null;
+      act(() => {
+        renderer = TestRenderer.create(
+          React.createElement(MarkdownStream, {
+            session,
+            updateIntervalMs: 50,
+            renderMarkdown,
+          }),
+        );
+      });
+
+      act(() => {
+        session.append(" world");
+      });
+      act(() => {
+        renderer!.update(
+          React.createElement(MarkdownStream, {
+            session,
+            updateIntervalMs: 10,
+            renderMarkdown,
+          }),
+        );
+      });
+      act(() => {
+        jest.runOnlyPendingTimers();
+      });
+
+      const lastProps = renderMarkdown.mock.lastCall?.[0] as MarkdownStreamRenderProps;
+      expect(lastProps.text).toBe("Hello world");
+    });
   });
 });

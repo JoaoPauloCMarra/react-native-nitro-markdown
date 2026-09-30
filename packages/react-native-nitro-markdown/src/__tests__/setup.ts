@@ -230,6 +230,14 @@ function createMockSession() {
       assertActive();
       return buffer.length;
     }),
+    parse: jest.fn(() => {
+      assertActive();
+      return mockParser.parse(buffer);
+    }),
+    parseWithOptions: jest.fn((options: MockParserOptions) => {
+      assertActive();
+      return mockParser.parseWithOptions(buffer, options);
+    }),
     getTextRange: jest.fn((from: number, to: number) => {
       assertActive();
       if (!Number.isFinite(from) || !Number.isFinite(to) || from < 0 || to < 0 || from > to) {

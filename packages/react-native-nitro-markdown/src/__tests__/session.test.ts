@@ -346,3 +346,76 @@ describe("createMarkdownSession", () => {
     expect((caught as MarkdownError).source).toBe("session");
   });
 });
+
+describe("useMarkdownSession under StrictMode", () => {
+  let consoleErrorSpy: jest.SpyInstance;
+  let consoleWarnSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
+  });
+
+  it("keeps a usable session after the StrictMode effect replay and disposes it on unmount", () => {
+    const controllers: Array<ReturnType<typeof useMarkdownSession>> = [];
+    function Owner() {
+      const controller = useMarkdownSession("seed");
+      controllers.push(controller);
+      return null;
+    }
+
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+    act(() => {
+      renderer = TestRenderer.create(
+        React.createElement(React.StrictMode, null, React.createElement(Owner)),
+      );
+    });
+
+    const controller = controllers[controllers.length - 1]!;
+    const session = controller.getSession();
+    expect(session).not.toBeNull();
+    expect(session.getAllText()).toBe("seed");
+    expect(() => controller.reset("next")).not.toThrow();
+    expect(controller.getSession().getAllText()).toBe("next");
+    expect(() => controller.replace(0, 4, "NEXT")).not.toThrow();
+    expect(() => controller.clear()).not.toThrow();
+
+    const liveSession = controller.getSession();
+    expect(() => {
+      act(() => {
+        renderer!.unmount();
+      });
+    }).not.toThrow();
+    expect(() => liveSession.getAllText()).toThrow(
+      expect.objectContaining({ code: "destroyed" }),
+    );
+  });
+
+  it("re-renders consumers with the replacement session after the StrictMode replay", () => {
+    const seen: Array<ReturnType<typeof useMarkdownSession>["getSession"]> = [];
+    let latestSession: unknown = null;
+    function Owner() {
+      const controller = useMarkdownSession("seed");
+      seen.push(controller.getSession);
+      React.useEffect(() => {
+        latestSession = controller.getSession();
+      });
+      return null;
+    }
+
+    act(() => {
+      TestRenderer.create(
+        React.createElement(React.StrictMode, null, React.createElement(Owner)),
+      );
+    });
+
+    const session = latestSession as ReturnType<typeof createMarkdownSession>;
+    expect(() => session.getAllText()).not.toThrow();
+    expect(session.getAllText()).toBe("seed");
+  });
+});

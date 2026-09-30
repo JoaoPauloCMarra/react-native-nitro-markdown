@@ -16,15 +16,20 @@ export function useMarkdownSession(initialText?: string) {
   }
 
   const [isStreaming, setIsStreaming] = useState(false);
+  const [, setSessionGeneration] = useState(0);
 
   useEffect(() => {
-    const session = sessionRef.current!;
+    let session = sessionRef.current;
+    if (session === null) {
+      session = createMarkdownSession(initialTextRef.current);
+      sessionRef.current = session;
+      setSessionGeneration((generation) => generation + 1);
+    }
     return () => {
-      try {
-        session.dispose();
-      } finally {
+      if (sessionRef.current === session) {
         sessionRef.current = null;
       }
+      session.dispose();
     };
   }, []);
 

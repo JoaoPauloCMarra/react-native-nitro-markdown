@@ -48,7 +48,7 @@ const resolveStreamText = ({
     return session.getAllText();
   }
 
-  if (pendingTo < pendingFrom) {
+  if (pendingTo < pendingFrom || pendingTo !== session.getLength()) {
     return session.getAllText();
   }
 
@@ -300,7 +300,13 @@ export function useMarkdownStreamState({
       return;
     }
 
-    const initialText = activeSession.getAllText();
+    let initialText: string;
+    try {
+      initialText = activeSession.getAllText();
+    } catch (error) {
+      warnStreamError("[NitroMarkdown] Failed to read stream session:", error);
+      return;
+    }
     let initialAst: MarkdownNode | null = createEmptyAst();
     if (!hasBeforeParsePlugins) {
       try {
@@ -440,11 +446,12 @@ export function useMarkdownStreamState({
       warnStreamError("[NitroMarkdown] Failed to subscribe to stream:", error);
     }
 
+    if (pendingUpdateRef.current) {
+      forceFullSyncRef.current = true;
+      scheduleFlush();
+    }
+
     return () => {
-      pendingUpdateRef.current = false;
-      pendingFromRef.current = null;
-      pendingToRef.current = null;
-      forceFullSyncRef.current = false;
       try {
         unsubscribe?.();
       } catch (error) {
