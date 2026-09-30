@@ -192,7 +192,8 @@ function createReporter() {
   const tests = [];
   return {
     record(platform, name, status, reason) {
-      tests.push({ platform, name, status, reason: reason ?? null });
+      const kind = name.startsWith("tab ") ? "content" : "infra";
+      tests.push({ platform, name, kind, status, reason: reason ?? null });
       const icon = status === "passed" ? "✓" : status === "skipped" ? "⊘" : "✗";
       const detail = status === "passed" ? "" : ` (${reason ?? "no reason"})`;
       console.log(`  ${icon} [${platform}] ${name}${detail}`);
@@ -200,14 +201,18 @@ function createReporter() {
     finish({ requiredPlatforms, allowSkip }) {
       for (const platform of requiredPlatforms) {
         const executed = tests.some(
-          (test) => test.platform === platform && test.status === "passed",
+          (test) =>
+            test.platform === platform &&
+            test.kind === "content" &&
+            test.status === "passed",
         );
         if (!executed && !allowSkip) {
           tests.push({
             platform,
             name: "platform-smoke-execution",
+            kind: "content",
             status: "failed",
-            reason: `No smoke test passed on ${platform}; rerun with --allow-skip only when device absence is intended`,
+            reason: `No rendered-content check passed on ${platform}; infrastructure checks alone do not count. Rerun with --allow-skip only when that is intended`,
           });
         }
       }
@@ -219,7 +224,8 @@ function createReporter() {
           `Smoke failed: ${failed.length} failed / ${tests.length} total (${tests.filter((t) => t.status === "passed").length} passed, ${tests.filter((t) => t.status === "skipped").length} skipped)`,
           "red",
         );
-        process.exit(1);
+        process.exitCode = 1;
+        return;
       }
       log(
         `Smoke complete: ${tests.length} tests, 0 failed, ${tests.filter((t) => t.status === "skipped").length} skipped with reasons`,
@@ -452,19 +458,34 @@ async function main() {
   const reporter = createReporter();
   const requiredPlatforms = [];
 
-  await startMetroIfNeeded(options.startMetro);
-  await waitForMetro();
+  const metro = await startMetroIfNeeded(options.startMetro);
+  try {
+    await waitForMetro();
 
-  if (options.android) {
-    requiredPlatforms.push("android");
-    await runAndroidSmoke(reporter);
-  }
-  if (options.ios) {
-    requiredPlatforms.push("ios");
-    await runIosSmoke(reporter);
-  }
+    if (options.android) {
+      requiredPlatforms.push("android");
+      await runAndroidSmoke(reporter);
+    }
+    if (options.ios) {
+      requiredPlatforms.push("ios");
+      await runIosSmoke(reporter);
+    }
 
-  reporter.finish({ requiredPlatforms, allowSkip: options.allowSkip });
+    reporter.finish({ requiredPlatforms, allowSkip: options.allowSkip });
+  } finally {
+    stopMetro(metro);
+  }
+}
+
+function stopMetro(child) {
+  if (!child || !Number.isSafeInteger(child.pid)) return;
+  try {
+    process.kill(-child.pid, "SIGTERM");
+  } catch (error) {
+    if (error.code !== "ESRCH") {
+      log(`Could not stop Metro process group ${child.pid}: ${error.message}`, "yellow");
+    }
+  }
 }
 
 main().catch((error) => {
