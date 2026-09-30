@@ -1,7 +1,17 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Text } from "react-native";
-import { Markdown, type MarkdownNode, type MarkdownPlugin, type MarkdownErrorPhase, type MarkdownParseCompleteResult } from "react-native-nitro-markdown";
+import { LogBox, Text } from "react-native";
+import {
+  Markdown,
+  type MarkdownNode,
+  type MarkdownPlugin,
+  type MarkdownErrorPhase,
+  type MarkdownParseCompleteResult,
+} from "react-native-nitro-markdown";
 import { ExamplePanel } from "./example-ui";
+
+// The smoke plugin throws on purpose to prove the pipeline recovers; keep its
+// expected dev warning out of the on-screen LogBox.
+LogBox.ignoreLogs(["plugin afterParse (smoke-throwing-plugin) threw"]);
 
 const PIPELINE_SMOKE_MARKDOWN = "SOURCE fixture";
 const PIPELINE_SMOKE_OUTPUT = "Markdown plugin pipeline passed";
@@ -13,7 +23,6 @@ const PIPELINE_SMOKE_ORDER = [
   "after-continuation",
   "after-low",
 ];
-
 
 function replacePipelineSmokeText(
   node: MarkdownNode,
@@ -86,29 +95,28 @@ export function MarkdownPipelineSmoke() {
     (error: Error, phase: MarkdownErrorPhase, pluginName?: string) => {
       errorRef.current = { message: error.message, phase, pluginName };
       if (phase !== "after-plugin" || pluginName !== "smoke-throwing-plugin") {
-        setStatus(`FAIL — unexpected ${phase} error${pluginName ? ` in ${pluginName}` : ""}`);
+        setStatus(
+          `FAIL — unexpected ${phase} error${pluginName ? ` in ${pluginName}` : ""}`,
+        );
       }
     },
     [],
   );
-  const onParseComplete = useCallback(
-    (result: MarkdownParseCompleteResult) => {
-      const reportedError = errorRef.current;
-      const passed =
-        result.text.includes(PIPELINE_SMOKE_OUTPUT) &&
-        reportedError?.message === "intentional smoke plugin failure" &&
-        reportedError.phase === "after-plugin" &&
-        reportedError.pluginName === "smoke-throwing-plugin" &&
-        JSON.stringify(executionOrderRef.current) ===
-          JSON.stringify(PIPELINE_SMOKE_ORDER);
-      setStatus(
-        passed
-          ? `PASS — ${PIPELINE_SMOKE_OUTPUT}`
-          : "FAIL — priority, transformed output, error reporting, or continuation did not match",
-      );
-    },
-    [],
-  );
+  const onParseComplete = useCallback((result: MarkdownParseCompleteResult) => {
+    const reportedError = errorRef.current;
+    const passed =
+      result.text.includes(PIPELINE_SMOKE_OUTPUT) &&
+      reportedError?.message === "intentional smoke plugin failure" &&
+      reportedError.phase === "after-plugin" &&
+      reportedError.pluginName === "smoke-throwing-plugin" &&
+      JSON.stringify(executionOrderRef.current) ===
+        JSON.stringify(PIPELINE_SMOKE_ORDER);
+    setStatus(
+      passed
+        ? `PASS — ${PIPELINE_SMOKE_OUTPUT}`
+        : "FAIL — priority, transformed output, error reporting, or continuation did not match",
+    );
+  }, []);
 
   return (
     <ExamplePanel>
@@ -124,4 +132,3 @@ export function MarkdownPipelineSmoke() {
     </ExamplePanel>
   );
 }
-
