@@ -61,7 +61,7 @@
     },
     "packages/react-native-nitro-markdown": {
       "name": "react-native-nitro-markdown",
-      "version": "0.12.6",
+      "version": "0.13.0",
       "devDependencies": {
         "@size-limit/preset-small-lib": "^13.1.1",
         "@types/react": "~19.2.18",
@@ -69,6 +69,7 @@
         "commonmark": "^0.31.2",
         "markdown-it": "^14.3.2",
         "marked": "^18.0.14",
+        "ratex-react-native": "0.1.14",
         "react-native-builder-bob": "^0.43.1",
         "react-test-renderer": "19.2.3",
         "size-limit": "^13.1.1",
@@ -77,9 +78,12 @@
       "peerDependencies": {
         "ratex-react-native": ">=0.1.4",
         "react": "*",
-        "react-native": ">=0.75.0",
+        "react-native": ">=0.76.0",
         "react-native-nitro-modules": ">=0.37.0 <0.38.0",
       },
+      "optionalPeers": [
+        "ratex-react-native",
+      ],
     },
   },
   "trustedDependencies": [

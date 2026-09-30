@@ -293,6 +293,10 @@ async function validatePackedFiles() {
     "lib/typescript/module/headless.d.ts",
     "lib/typescript/commonjs/index.d.ts",
     "lib/typescript/commonjs/headless.d.ts",
+    "lib/module/math.js",
+    "lib/commonjs/math.js",
+    "lib/typescript/module/math.d.ts",
+    "lib/typescript/commonjs/math.d.ts",
     "nitrogen/generated/ios/NitroMarkdown+autolinking.rb",
     "nitrogen/generated/android/NitroMarkdown+autolinking.gradle",
     "nitrogen/generated/android/NitroMarkdownOnLoad.cpp",
@@ -304,6 +308,7 @@ async function validatePackedFiles() {
     "nitrogen/generated/shared/c++/ParserOptions.hpp",
     "src/index.ts",
     "src/headless.ts",
+    "src/math.tsx",
     `${PACKAGE_NAME}.podspec`,
   ];
 
@@ -318,7 +323,56 @@ async function validatePackedFiles() {
 
   console.log(`  ✓ ${PACKAGE_NAME} pack contains all required package files`);
   console.log(`  ✓ headless JS, declarations, and source are packed`);
+  assertEntryGraphExcludes(["lib/commonjs/index.js", "lib/module/index.js", "lib/commonjs/headless.js", "lib/module/headless.js"], OPTIONAL_MATH_PEER);
+  assertEntryGraphIncludes("lib/commonjs/math.js", OPTIONAL_MATH_PEER);
+  console.log(`  ✓ main and headless entries do not load ${OPTIONAL_MATH_PEER}`);
   console.log("");
+}
+
+const OPTIONAL_MATH_PEER = "ratex-react-native";
+const MODULE_SPECIFIER_PATTERN =
+  /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)["']([^"']+)["']/g;
+
+function collectEntryGraph(entry) {
+  const visited = new Set();
+  const externals = new Set();
+  const pending = [path.join(packageDir, entry)];
+  while (pending.length > 0) {
+    const file = pending.pop();
+    if (visited.has(file)) continue;
+    visited.add(file);
+    const source = fs.readFileSync(file, "utf8");
+    for (const match of source.matchAll(MODULE_SPECIFIER_PATTERN)) {
+      const specifier = match[1];
+      if (!specifier.startsWith(".")) {
+        externals.add(specifier);
+        continue;
+      }
+      const base = path.resolve(path.dirname(file), specifier);
+      const resolved = [base, `${base}.js`, path.join(base, "index.js")].find(
+        (candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile(),
+      );
+      if (!resolved) {
+        throw new Error(`Cannot resolve ${specifier} from ${path.relative(packageDir, file)}`);
+      }
+      pending.push(resolved);
+    }
+  }
+  return externals;
+}
+
+function assertEntryGraphExcludes(entries, specifier) {
+  for (const entry of entries) {
+    if (collectEntryGraph(entry).has(specifier)) {
+      throw new Error(`${entry} must not load ${specifier}`);
+    }
+  }
+}
+
+function assertEntryGraphIncludes(entry, specifier) {
+  if (!collectEntryGraph(entry).has(specifier)) {
+    throw new Error(`${entry} must load ${specifier}`);
+  }
 }
 
 async function runPackageDocs(mode) {

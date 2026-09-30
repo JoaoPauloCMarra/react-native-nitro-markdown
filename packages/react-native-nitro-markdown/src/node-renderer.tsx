@@ -27,7 +27,11 @@ import { HtmlBlock, HtmlInline } from "./renderers/html";
 import { Image } from "./renderers/image";
 import { Link } from "./renderers/link";
 import { List, ListItem, TaskListItem } from "./renderers/list";
-import { MathInline, MathBlock } from "./renderers/math";
+import {
+  MathInline,
+  MathBlock,
+  normalizeInlineMathContent,
+} from "./renderers/math";
 import { Paragraph } from "./renderers/paragraph";
 import { TableRenderer } from "./renderers/table";
 import type { MarkdownTheme } from "./theme";
@@ -424,13 +428,8 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
       return parentIsText ? " " : <Text> </Text>;
 
     case "math_inline": {
-      let mathContent = getRenderableText(node);
+      const mathContent = normalizeInlineMathContent(getRenderableText(node));
       if (!mathContent) return null;
-      // Native math content excludes the dollar delimiters. Strip them only
-      // when a non-native source (e.g. a pre-parsed custom AST) includes them.
-      if (mathContent.startsWith("$") || mathContent.endsWith("$")) {
-        mathContent = mathContent.replace(/^\$+|\$+$/g, "").trim();
-      }
       return (
         <MathInline
           content={mathContent}

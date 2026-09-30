@@ -14,30 +14,28 @@ import { getCachedStyles } from "./style-cache";
 import { useMarkdownContext } from "../MarkdownContext";
 import type { MarkdownTheme } from "../theme";
 
-let RaTeXViewComponent: ComponentType<{
+export type LatexViewProps = {
   latex: string;
   fontSize?: number;
   displayMode?: boolean;
   color?: string;
   style?: StyleProp<ViewStyle>;
   onError?: (event: { nativeEvent: { error: string } }) => void;
-}> | null = null;
+};
 
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const ratexModule = require("ratex-react-native");
-  RaTeXViewComponent = ratexModule.RaTeXView ?? null;
-} catch {
-  if (__DEV__) {
-    console.warn(
-      "[NitroMarkdown] ratex-react-native not found — math will render as plain text.",
-    );
+export type LatexViewComponent = ComponentType<LatexViewProps>;
+
+export function normalizeInlineMathContent(content: string): string {
+  if (content.startsWith("$") || content.endsWith("$")) {
+    return content.replace(/^\$+|\$+$/g, "").trim();
   }
+  return content;
 }
 
 type MathInlineProps = {
   content?: string;
   style?: ViewStyle;
+  LatexView?: LatexViewComponent;
 };
 
 type MathStyles = ReturnType<typeof createMathStyles>;
@@ -255,10 +253,13 @@ const createMathStyles = (theme: MarkdownTheme) =>
     },
   });
 
-export const MathInline: FC<MathInlineProps> = ({ content, style }) => {
+export const MathInline: FC<MathInlineProps> = ({
+  content,
+  style,
+  LatexView: RaTeXView,
+}) => {
   const { theme } = useMarkdownContext();
   const styles = getCachedStyles(mathStylesCache, theme, createMathStyles);
-  const RaTeXView = RaTeXViewComponent;
 
   if (!content) return null;
 
@@ -293,12 +294,16 @@ export const MathInline: FC<MathInlineProps> = ({ content, style }) => {
 type MathBlockProps = {
   content?: string;
   style?: ViewStyle;
+  LatexView?: LatexViewComponent;
 };
 
-export const MathBlock: FC<MathBlockProps> = ({ content, style }) => {
+export const MathBlock: FC<MathBlockProps> = ({
+  content,
+  style,
+  LatexView: RaTeXView,
+}) => {
   const { theme } = useMarkdownContext();
   const styles = getCachedStyles(mathStylesCache, theme, createMathStyles);
-  const RaTeXView = RaTeXViewComponent;
 
   if (!content) return null;
 

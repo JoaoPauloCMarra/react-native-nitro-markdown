@@ -5,6 +5,7 @@ import type {
   MarkdownErrorSource,
   MarkdownParseCompleteResult,
   MarkdownProps,
+  MarkdownRenderers,
   MarkdownSession,
   MarkdownStreamProps,
   MarkdownStreamSourceAstDisabledReason,
@@ -21,6 +22,12 @@ import {
   type MarkdownNodeWithSourceOffsets,
   type MarkdownNodeWithoutSourceOffsets,
 } from "react-native-nitro-markdown/headless";
+import {
+  mathRenderers,
+  RaTeXMathBlock,
+  RaTeXMathInline,
+  type RaTeXMathProps,
+} from "react-native-nitro-markdown/math";
 
 declare const session: MarkdownSession;
 
@@ -130,3 +137,23 @@ const invalidImageOptions: MarkdownProps = {
   imageOptions: { remoteImages: "maybe" },
 };
 void [invalidOptions, invalidImageOptions];
+
+const mathMarkdownProps = {
+  children: "$x^2$",
+  renderers: mathRenderers,
+} satisfies MarkdownProps;
+const combinedRenderers: MarkdownRenderers = {
+  ...mathRenderers,
+  heading: ({ children }) => children,
+};
+const mathComponentProps: RaTeXMathProps = { content: "x^2" };
+// @ts-expect-error — RaTeX math components take a string content
+const invalidMathProps: RaTeXMathProps = { content: 42 };
+void [
+  mathMarkdownProps,
+  combinedRenderers,
+  mathComponentProps,
+  invalidMathProps,
+  RaTeXMathBlock,
+  RaTeXMathInline,
+];

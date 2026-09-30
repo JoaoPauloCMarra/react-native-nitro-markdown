@@ -1,7 +1,16 @@
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { MarkdownContext } from "../MarkdownContext";
-import { MathBlock, MathInline } from "../renderers/math";
+import {
+  RaTeXMathBlock as MathBlock,
+  RaTeXMathInline as MathInline,
+  mathRenderers,
+} from "../math";
+import {
+  MathBlock as FallbackMathBlock,
+  MathInline as FallbackMathInline,
+} from "../renderers/math";
+import { NodeRenderer } from "../node-renderer";
 import { defaultMarkdownTheme } from "../theme";
 
 jest.mock("ratex-react-native", () => ({ RaTeXView: "RaTeXView" }));
@@ -129,7 +138,7 @@ describe("MathBlock renderer", () => {
     }
   });
 
-  it("renders inline and block math with RaTeX by default", () => {
+  it("renders inline and block math with the RaTeX subpath components", () => {
     let renderer: ReactTestRenderer | undefined;
     const consoleErrorSpy = jest
       .spyOn(console, "error")
@@ -284,5 +293,130 @@ describe("MathBlock renderer", () => {
     } finally {
       consoleErrorSpy.mockRestore();
     }
+  });
+
+  it("renders math as monospace text without the RaTeX subpath", () => {
+    let renderer: ReactTestRenderer | undefined;
+    act(() => {
+      renderer = create(
+        createElement(
+          MarkdownContext.Provider,
+          {
+            value: {
+              renderers: {},
+              theme: defaultMarkdownTheme,
+              stylingStrategy: "opinionated",
+            },
+          },
+          createElement(FallbackMathInline, { content: "E = mc^2" }),
+          createElement(FallbackMathBlock, { content: "\\sum n" }),
+        ),
+      );
+    });
+
+    expect(renderer!.root.findAllByType("RaTeXView")).toHaveLength(0);
+    const texts = renderer!.root
+      .findAllByType("Text")
+      .map((node) => node.props.children);
+    expect(texts).toEqual(["E = mc^2", "\\sum n"]);
+  });
+
+  it("routes math nodes through mathRenderers with context styles", () => {
+    let renderer: ReactTestRenderer | undefined;
+    const inlineStyle = { marginHorizontal: 7 };
+    act(() => {
+      renderer = create(
+        createElement(
+          MarkdownContext.Provider,
+          {
+            value: {
+              renderers: mathRenderers,
+              theme: defaultMarkdownTheme,
+              stylingStrategy: "opinionated",
+              styles: { math_inline: inlineStyle },
+            },
+          },
+          createElement(NodeRenderer, {
+            node: {
+              type: "paragraph",
+              children: [
+                { type: "math_inline", content: "$x^2$" },
+              ],
+            },
+            depth: 0,
+            inListItem: false,
+          }),
+          createElement(NodeRenderer, {
+            node: { type: "math_block", content: "y^2" },
+            depth: 0,
+            inListItem: false,
+          }),
+        ),
+      );
+    });
+
+    const ratexNodes = renderer!.root.findAllByType("RaTeXView");
+    expect(ratexNodes.map((node) => node.props.latex)).toEqual(["x^2", "y^2"]);
+    expect(ratexNodes[0].parent?.props.style).toEqual(
+      expect.arrayContaining([inlineStyle]),
+    );
+  });
+});
+
+describe("main entry math isolation", () => {
+  it("loads the main entry without resolving ratex-react-native", () => {
+    jest.isolateModules(() => {
+      jest.doMock("ratex-react-native", () => {
+        throw new Error("ratex-react-native must not load from the main entry");
+      });
+      expect(() => require("../index")).not.toThrow();
+      expect(() => require("../headless")).not.toThrow();
+      jest.dontMock("ratex-react-native");
+    });
+  });
+
+  it("keeps ratex-react-native out of the main entry import graph", () => {
+    const { readFileSync, statSync } = require("node:fs") as typeof import("node:fs");
+    const path = require("node:path") as typeof import("node:path");
+    const srcRoot = path.resolve(__dirname, "..");
+    const seen = new Set<string>();
+    const external = new Set<string>();
+    const isFile = (candidate: string) =>
+      statSync(candidate, { throwIfNoEntry: false })?.isFile() ?? false;
+    const resolveLocal = (from: string, specifier: string): string | null => {
+      const base = path.resolve(path.dirname(from), specifier);
+      return (
+        [
+          base,
+          `${base}.ts`,
+          `${base}.tsx`,
+          path.join(base, "index.ts"),
+          path.join(base, "index.tsx"),
+        ].find(isFile) ?? null
+      );
+    };
+    const visit = (file: string) => {
+      if (seen.has(file)) return;
+      seen.add(file);
+      const source = readFileSync(file, "utf8");
+      const specifiers = [
+        ...source.matchAll(/(?:from|import|require\()\s*["']([^"']+)["']/g),
+      ].map((match) => match[1]!);
+      for (const specifier of specifiers) {
+        if (specifier.startsWith(".")) {
+          const resolved = resolveLocal(file, specifier);
+          if (resolved) visit(resolved);
+        } else {
+          external.add(specifier);
+        }
+      }
+    };
+    visit(path.join(srcRoot, "index.ts"));
+
+    expect(seen.size).toBeGreaterThan(10);
+    expect([...external]).not.toContain("ratex-react-native");
+    expect([...seen].map((file) => path.relative(srcRoot, file))).not.toContain(
+      "math.tsx",
+    );
   });
 });
