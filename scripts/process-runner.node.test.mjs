@@ -41,3 +41,20 @@ test("Node identity fallback terminates a timed-out process tree", async () => {
     await rm(directory, { force: true, recursive: true });
   }
 });
+
+test("Node identity fallback accepts commands that exit before identity capture", async () => {
+  if (process.platform === "win32") return;
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const result = await runProcess({
+      command: "true",
+      args: [],
+      timeoutMs: 5_000,
+      killGraceMs: 80,
+      stdio: "ignore",
+      identityMode: "ps",
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.exitCode, 0);
+  }
+});

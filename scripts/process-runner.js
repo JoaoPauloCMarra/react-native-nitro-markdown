@@ -405,13 +405,6 @@ async function verifiedSurvivors(group) {
   return survivors;
 }
 
-async function processGroupHasOwnedSurvivors(group) {
-  if (!group) return false;
-  const discovered = await refreshProcessGroup(group);
-  if (!discovered || group.identityCompromised) return true;
-  return (await verifiedSurvivors(group)).length > 0;
-}
-
 async function sendVerifiedMembers(group, signal) {
   let sent = false;
   for (const member of await verifiedSurvivors(group)) {
@@ -764,9 +757,14 @@ async function runProcess({
       );
       if (!treeStatus.treeGone) terminated = await requestTermination();
     } else if (isProcessGroupSupported(detached, identityMode)) {
-      throw new ProcessTreeTerminationError(
-        `Could not prove process identity for ${child.pid ?? "unknown"}`,
-      );
+      const survivors = completion.state.settled
+        ? await listProcessGroupMembers(child.pid, identityMode)
+        : null;
+      if (!survivors || survivors.length > 0) {
+        throw new ProcessTreeTerminationError(
+          `Could not prove process identity for ${child.pid ?? "unknown"}`,
+        );
+      }
     }
 
     const result = await completion.promise;

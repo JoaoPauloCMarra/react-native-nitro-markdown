@@ -3,6 +3,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   changedFiles,
   restoreDirectorySnapshot,
@@ -11,7 +12,7 @@ import {
 } from "./generated-snapshot.js";
 import { runProcess } from "./process-runner.js";
 
-const repositoryDirectory = new URL("..", import.meta.url).pathname;
+const repositoryDirectory = fileURLToPath(new URL("..", import.meta.url));
 const packageDirectory = join(
   repositoryDirectory,
   "packages",
