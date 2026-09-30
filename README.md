@@ -471,12 +471,21 @@ bun run example:smoke:android
 bun run example:smoke:ios
 ```
 
-`check` runs package lint, typecheck, tests, and C++ tests. `check:ci` adds
-compatibility, harness, and React Native 0.87 type-compatibility checks; it does
-not launch a native app. `release:preflight` adds example checks and an auth-free publish
-dry-run; it does not publish or release the package. Prebuild generates native
-projects, the Android/iOS build commands compile them, and smoke commands are
-the runtime checks. Build and self-check success alone is not runtime proof.
+`check` runs package lint, typecheck (including test files), JS tests, C++
+tests, and script tests. `check:ci` is the single CI gate: it adds version
+alignment, the harness (codegen check, public types, size budgets, coverage,
+benchmark, C++ coverage), React Native 0.87 type compatibility, C++ sanitizers
+and the package audit; it does not launch a native app. `release:preflight`
+adds example checks and an auth-free pack check; it does not publish or release
+the package. Prebuild generates native projects, the Android/iOS build commands
+compile them, and smoke commands are the runtime checks. Build and self-check
+success alone is not runtime proof.
+
+The smoke report counts only rendered-content checks as proof for a platform.
+The iOS smoke run captures a screenshot but cannot assert rendered content yet,
+so `example:smoke:ios` fails unless you pass `--allow-skip`
+(`bun scripts/example-smoke.js --ios --allow-skip`); use the agent-device E2E
+flows (`bun run example:e2e:ios`) for iOS content checks.
 
 When several devices are available, set `ANDROID_SERIAL` for Android and
 `EXAMPLE_SMOKE_IOS_UDID` for iOS. The iOS smoke check stops if it cannot select
