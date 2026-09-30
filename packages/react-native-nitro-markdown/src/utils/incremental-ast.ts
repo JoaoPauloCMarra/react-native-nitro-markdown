@@ -75,6 +75,13 @@ const getTrailingLine = (text: string): string => {
   return text.slice(lastLineBreak + 1);
 };
 
+const AMBIGUOUS_BLOCK_START_PATTERN =
+  /^ {0,3}(?:[*+-]|\d{1,9}[.)]?|#{1,6})[ \t]*$/;
+
+const hasAmbiguousBlockStart = (previousText: string): boolean => {
+  return AMBIGUOUS_BLOCK_START_PATTERN.test(getTrailingLine(previousText));
+};
+
 const getLeadingLine = (text: string): string => {
   const newlineIndex = text.indexOf("\n");
   const carriageReturnIndex = text.indexOf("\r");
@@ -295,7 +302,10 @@ export const getNextStreamAst = ({
     return previousAst;
   }
 
-  if (hasAmbiguousLinkBoundary(previousText, appendedChunk)) {
+  if (
+    hasAmbiguousLinkBoundary(previousText, appendedChunk) ||
+    hasAmbiguousBlockStart(previousText)
+  ) {
     return parseAstWithStableNodes(previousAst, nextText, options, parseCurrent);
   }
 
