@@ -209,12 +209,26 @@ jobs:
             printf 'dist_tag=%s\n' "${dist_tag}"
           } >> "${GITHUB_OUTPUT}"
 
-      - name: Checkout release tag
+      - name: Checkout validated release commit
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           clean: true
-          ref: refs/tags/${{ steps.validate_inputs.outputs.release_tag }}
+          ref: ${{ needs.validate.outputs.release_commit }}
           persist-credentials: false
+
+      - name: Confirm validated release commit
+        env:
+          RELEASE_COMMIT: ${{ needs.validate.outputs.release_commit }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${RELEASE_COMMIT}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Validated release commit is not a full SHA."
+            exit 1
+          fi
+          if [[ "$(git rev-parse HEAD)" != "${RELEASE_COMMIT}" ]]; then
+            echo "::error::Checked-out commit does not match the validated release commit."
+            exit 1
+          fi
 
       - name: Setup Node
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
@@ -235,11 +249,6 @@ jobs:
           npm_bin="$(bun pm bin -g)"
           printf '%s\n' "$npm_bin" >> "$GITHUB_PATH"
           "$npm_bin/npm" --version
-
-      - name: Install C++ coverage tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang llvm
 
       - name: Install dependencies
         run: bun install --frozen-lockfile

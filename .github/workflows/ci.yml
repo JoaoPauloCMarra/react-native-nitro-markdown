@@ -44,44 +44,11 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      - name: Verify core versions
-        run: bun run verify:core-versions
-
-      - name: Verify RN 0.87 strict TypeScript compatibility
-        run: bun run typecheck:rn087
-
-      - name: Verify generated Nitro bindings
-        run: bun run codegen:check
-
-      - name: Lint
-        run: bun run lint
-
-      - name: Typecheck package
-        run: bun run typecheck
-
-      - name: Typecheck public declarations
-        run: bun run typecheck:public
+      - name: CI gate (check:ci)
+        run: bun run check:ci
 
       - name: Check example app
         run: bun run example:check
 
-      - name: JavaScript coverage
-        run: bun run test:coverage -- --runInBand --watchman=false
-
-      - name: C++ coverage
-        run: bun run test:cpp:coverage
-
-      - name: C++ sanitizers
-        run: bun run test:cpp:sanitizers
-
-      - name: Test lifecycle and release contracts
-        run: bun run test:lifecycle
-
-      - name: Build package artifacts
-        run: bun run build
-
-      - name: Audit package contents
-        run: bun run audit:package
-
       - name: Validate auth-free publication
-        run: bun run publish-package:dry-run
+        run: bun run publish-package:pack-check
