@@ -31,7 +31,8 @@ describe("conformance corpus (JS wrapper path)", () => {
     expect(stripSourceOffsets(ast)).toEqual(entry.expected);
   });
 
-  it("runs the full corpus in the native C++ gate", () => {
+  it("keeps every JS-mocked corpus entry present in the shared fixture", () => {
+    expect(supportedEntries).toHaveLength(MOCK_SUPPORTED.size);
     expect(corpus.length).toBeGreaterThanOrEqual(30);
     expect(
       corpus.some((entry) => entry.name === "table"),

@@ -12,7 +12,7 @@ describe("flatten differential corpus (JS getFlattenedText)", () => {
     expect(getFlattenedText(ast)).toBe(entry.expected);
   });
 
-  it("shares the corpus with the native C++ flatten gate", () => {
+  it("keeps the shared flatten corpus fixture populated", () => {
     const names = corpus.map((entry) => entry.name);
     expect(names).toContain("empty-input");
     expect(names).toContain("multiple-blocks");

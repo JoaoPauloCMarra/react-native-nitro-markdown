@@ -3,7 +3,7 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { NitroModules } from "react-native-nitro-modules";
 import { createMarkdownSession } from "../MarkdownSession";
-import { useMarkdownSession } from "../use-markdown-stream";
+import { useMarkdownSession, useStream } from "../use-markdown-stream";
 import { MarkdownError, toMarkdownError } from "../errors";
 
 describe("toMarkdownError legacy classification", () => {
@@ -458,5 +458,92 @@ describe("useMarkdownSession under StrictMode", () => {
     const session = latestSession as ReturnType<typeof createMarkdownSession>;
     expect(() => session.getAllText()).not.toThrow();
     expect(session.getAllText()).toBe("seed");
+  });
+});
+
+describe("useStream", () => {
+  let consoleErrorSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("syncs the highlight position from timestamps and ignores unchanged positions", () => {
+    let stream: ReturnType<typeof useStream> | null = null;
+    const timestamps = { 0: 0, 5: 100, 10: 200 };
+    function Owner() {
+      stream = useStream(timestamps);
+      return null;
+    }
+
+    act(() => {
+      TestRenderer.create(React.createElement(Owner));
+    });
+
+    const session = stream!.getSession();
+    act(() => {
+      stream!.sync(150);
+    });
+    expect(session.highlightPosition).toBe(6);
+
+    session.highlightPosition = 42;
+    act(() => {
+      stream!.sync(160);
+    });
+    expect(session.highlightPosition).toBe(42);
+
+    act(() => {
+      stream!.sync(250);
+    });
+    expect(session.highlightPosition).toBe(11);
+
+    act(() => {
+      stream!.setIsPlaying(true);
+    });
+    expect(stream!.isPlaying).toBe(true);
+  });
+
+  it("does nothing on sync without timestamps", () => {
+    let stream: ReturnType<typeof useStream> | null = null;
+    function Owner() {
+      stream = useStream();
+      return null;
+    }
+
+    act(() => {
+      TestRenderer.create(React.createElement(Owner));
+    });
+
+    stream!.setHighlight(3);
+    act(() => {
+      stream!.sync(1000);
+    });
+    expect(stream!.getSession().highlightPosition).toBe(3);
+  });
+
+  it("clears the session and resets the highlight", () => {
+    let controller: ReturnType<typeof useMarkdownSession> | null = null;
+    function Owner() {
+      controller = useMarkdownSession("text");
+      return null;
+    }
+    act(() => {
+      TestRenderer.create(React.createElement(Owner));
+    });
+
+    controller!.setHighlight(4);
+    act(() => {
+      controller!.setIsStreaming(true);
+    });
+    act(() => {
+      controller!.clear();
+    });
+    expect(controller!.getSession().getAllText()).toBe("");
+    expect(controller!.getSession().highlightPosition).toBe(0);
+    expect(controller!.isStreaming).toBe(false);
   });
 });
