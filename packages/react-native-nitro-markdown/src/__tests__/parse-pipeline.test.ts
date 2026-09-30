@@ -6,7 +6,6 @@ import {
   cloneMarkdownNode,
   getParserOptionsKey,
   hashString,
-  isMarkdownNode,
   materializeMarkdownNode,
   normalizeParserOptions,
   parseWithNativeParser,
@@ -67,11 +66,6 @@ describe("parse pipeline utilities", () => {
   });
 
   it("validates and clones markdown nodes", () => {
-    expect(isMarkdownNode(ROOT_NODE)).toBe(true);
-    expect(isMarkdownNode({ type: 1 })).toBe(false);
-    expect(isMarkdownNode(null)).toBe(false);
-    expect(isMarkdownNode("document")).toBe(false);
-
     const clone = cloneMarkdownNode(ROOT_NODE);
     expect(clone).toEqual(ROOT_NODE);
     expect(clone).not.toBe(ROOT_NODE);

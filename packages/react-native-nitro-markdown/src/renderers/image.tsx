@@ -145,20 +145,6 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
       };
     }
 
-    const picsumMatch = allowedImageHref.match(
-      /picsum\.photos\/.*\/(\d+)\/(\d+)/,
-    );
-    if (picsumMatch) {
-      const w = parseInt(picsumMatch[1] ?? "", 10);
-      const h = parseInt(picsumMatch[2] ?? "", 10);
-      if (!isNaN(w) && !isNaN(h) && h !== 0) {
-        setAspectRatio(w / h);
-        return () => {
-          isMounted = false;
-        };
-      }
-    }
-
     RNImage.getSize(
       allowedImageHref,
       (width, height) => {

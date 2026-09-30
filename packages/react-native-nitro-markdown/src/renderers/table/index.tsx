@@ -44,10 +44,6 @@ type TableRendererProps = {
 
 const COLUMN_MEASUREMENT_PADDING = 8;
 
-const IS_ACT_TEST_ENVIRONMENT =
-  Reflect.get(globalThis, "IS_REACT_ACT_ENVIRONMENT") === true;
-const SHOULD_DEBOUNCE_MEASUREMENT = !IS_ACT_TEST_ENVIRONMENT;
-
 export const TableRenderer: FC<TableRendererProps> = ({
   node,
   Renderer,
@@ -124,7 +120,7 @@ export const TableRenderer: FC<TableRendererProps> = ({
       }
     }
 
-    if (!SHOULD_DEBOUNCE_MEASUREMENT) {
+    if (measurementStabilizeMs <= 0) {
       setNeedsMeasurement(true);
       return;
     }

@@ -55,16 +55,6 @@ export function safeOnError<P extends string>(
   }
 }
 
-export const isMarkdownNode = (value: unknown): value is MarkdownNode => {
-  if (typeof value !== "object" || value === null) return false;
-  try {
-    const descriptor = Reflect.getOwnPropertyDescriptor(value, "type");
-    return Boolean(descriptor && "value" in descriptor && typeof descriptor.value === "string");
-  } catch {
-    return false;
-  }
-};
-
 export const warnInDev = (message: string, error?: unknown): void => {
   if (typeof __DEV__ === "undefined" || !__DEV__) return;
 
