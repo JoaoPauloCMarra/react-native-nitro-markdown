@@ -435,6 +435,20 @@ Version `0.13.0` moves RaTeX math rendering to an optional subpath:
 4. Session buffers are now capped at 10,485,760 UTF-8 bytes instead of UTF-16
    units, and the error message says `bytes`.
 5. The React Native peer floor is now `>=0.76`.
+6. The default code token palette is now a light palette. If you use a custom
+   dark theme that sets `codeBackground` but not every `codeTokenColors` entry,
+   add the dark palette explicitly:
+
+   ```tsx
+   import { darkMarkdownTheme } from "react-native-nitro-markdown";
+
+   const theme = {
+     colors: {
+       codeBackground: "#111827",
+       codeTokenColors: darkMarkdownTheme.colors.codeTokenColors,
+     },
+   };
+   ```
 
 ### Upgrading from 0.11.x and earlier
 

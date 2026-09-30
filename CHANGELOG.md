@@ -36,6 +36,13 @@ stay safe.
   `MarkdownStream` cannot parse. The `buffer_limit` message now ends in
   `bytes)`. Offsets and ranges stay in UTF-16 units. Migration: none unless you
   matched the old message text.
+- **The default code token palette is now light.** `defaultMarkdownTheme`
+  uses a light `codeTokenColors` palette; the previous (dark-background)
+  palette moved to `darkMarkdownTheme`. Custom dark themes that set
+  `codeBackground` without a full `codeTokenColors` now inherit the light
+  palette, which is hard to read on a dark background. Migration: add
+  `codeTokenColors: darkMarkdownTheme.colors.codeTokenColors` to those themes
+  (or merge them over `darkMarkdownTheme`).
 - **React Native peer floor is `>=0.76`.** React Native 0.76 and Expo SDK 52
   apps must set the Android `ndkVersion` to 27 or later (Nitro Modules 0.37
   requirement).
