@@ -16,6 +16,23 @@ describe("toMarkdownError legacy classification", () => {
       ["Buffer size limit exceeded (max 10485760 chars)", "buffer_limit"],
       ["Invalid range: from=NaN and to=0 must be finite", "invalid_range"],
       ["HybridMarkdownSession is destroyed", "destroyed"],
+      ["Buffer size limit exceeded (max 10485760 bytes)", "buffer_limit"],
+      [
+        "Markdown AST node/work budget exceeds the maximum of 500000",
+        "input_too_complex",
+      ],
+      [
+        "Markdown AST child/work budget exceeds the maximum of 500000",
+        "input_too_complex",
+      ],
+      [
+        "Markdown JSON output size 67108865 bytes exceeds the maximum of 67108864 bytes",
+        "input_too_complex",
+      ],
+      [
+        "Markdown flattened text exceeds the maximum of 10485760 bytes",
+        "input_too_complex",
+      ],
     ];
     for (const [message, code] of cases) {
       const error = toMarkdownError(new Error(message), "session");
@@ -301,6 +318,30 @@ describe("createMarkdownSession", () => {
     expect(markdownError.code).toBe("buffer_limit");
     expect(markdownError.source).toBe("session");
     expect(nativeAppend).not.toHaveBeenCalled();
+  });
+
+  it("measures the single-call buffer cap in UTF-8 bytes", () => {
+    const session = createMarkdownSession();
+    const nativeSession = createHybridObjectMock.mock.results.at(-1)!.value;
+    const cjk = "\u4e00".repeat(4_000_000);
+
+    let caught: unknown;
+    try {
+      session.append(cjk);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(MarkdownError);
+    expect((caught as MarkdownError).code).toBe("buffer_limit");
+    expect((caught as MarkdownError).message).toBe(
+      "Buffer size limit exceeded (max 10485760 bytes)",
+    );
+    expect(nativeSession.append).not.toHaveBeenCalled();
+    expect(() => session.replace(0, 0, cjk)).toThrow(
+      expect.objectContaining({ code: "buffer_limit" }),
+    );
+    expect(() => session.reset("\u4e00".repeat(3_000_000))).not.toThrow();
   });
 
   it("throws typed destroyed errors after dispose without calling the native session", () => {

@@ -92,6 +92,9 @@ const missingOffset: number = noOffsetNode.beg;
 declare const markdownError: MarkdownError;
 const errorCode: MarkdownErrorCode = markdownError.code;
 const errorSource: MarkdownErrorSource = markdownError.source;
+const complexityCode: MarkdownErrorCode = "input_too_complex";
+// @ts-expect-error — unknown error codes are rejected
+const unknownCode: MarkdownErrorCode = "too_complex";
 const inputLimit: number = MAX_PARSE_INPUT_LENGTH;
 const mutableNode: MarkdownNode = { type: "document", children: [] };
 mutableNode.children?.push({ type: "paragraph" });
@@ -108,6 +111,8 @@ void [
   noOffsetNode,
   sessionNode,
   offset,
+  complexityCode,
+  unknownCode,
   missingOffset,
   errorCode,
   errorSource,

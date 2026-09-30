@@ -14,6 +14,7 @@
  */
 export type MarkdownErrorCode =
   | "input_too_large"
+  | "input_too_complex"
   | "invalid_ast"
   | "parse_failed"
   | "invalid_json"
@@ -76,6 +77,10 @@ const MESSAGE_CODE_RULES: readonly (readonly [RegExp, MarkdownErrorCode])[] =
     // directly; the native byte cap is only reachable for multi-byte text).
     [/Markdown input size .* exceeds the maximum of/, "input_too_large"],
     [/Markdown AST depth exceeds the maximum of/, "invalid_ast"],
+    // Native C++ parser: node/work, JSON output and flattened-text budgets.
+    [/Markdown AST (?:node|child)\/work budget exceeds the maximum of/, "input_too_complex"],
+    [/Markdown JSON output size .* exceeds the maximum of/, "input_too_complex"],
+    [/Markdown flattened text exceeds the maximum of/, "input_too_complex"],
     // Native sessions (shared C++): stable, non-localized messages.
     [/Buffer size limit exceeded/, "buffer_limit"],
     [/Invalid range/, "invalid_range"],
