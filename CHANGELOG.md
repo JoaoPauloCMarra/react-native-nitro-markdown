@@ -49,6 +49,10 @@ stay safe.
   `updateStrategy`, `useTransitionUpdates` or `incrementalParsing` changes.
 - `useMarkdownSession` keeps a working session under React StrictMode and Fast
   Refresh, and disposes the session it owns on unmount without throwing.
+  `getSession()` never returns `null`, and the controller object changes when
+  the session is replaced, so memoized consumers re-render with the live
+  session. On Fast Refresh the hook creates a new session seeded with
+  `initialText`, so text streamed before the refresh is lost.
 - Streaming a lone `*`, `+`, `-`, `#` or an ordinal line followed by more text
   now re-parses, so list items and headings no longer render as paragraph text.
 - Streamed documents with reference definitions inside blockquotes or lists,

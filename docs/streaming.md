@@ -50,9 +50,11 @@ Pass the controller from `useMarkdownSession()` directly. Use
 
 `useMarkdownSession()` owns the native session and disposes it on unmount.
 When React StrictMode or Fast Refresh replays effects, the hook creates a fresh
-session (seeded with `initialText`) and re-renders its owner, so
-`MarkdownStream` and the controller methods keep working. Text appended before
-the replay is not carried over.
+session (seeded with `initialText`), increments `sessionGeneration`, and
+returns a new controller object, so `MarkdownStream`, memoized consumers and
+the controller methods keep working. `getSession()` never returns `null`. Text
+streamed before the replay is not carried over: on Fast Refresh the streamed
+text is lost.
 
 ## How incremental parsing works
 

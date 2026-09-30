@@ -547,3 +547,77 @@ describe("useStream", () => {
     expect(controller!.isStreaming).toBe(false);
   });
 });
+
+describe("useMarkdownSession StrictMode reconnect", () => {
+  let consoleErrorSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("gives memoized consumers a new controller with the live session", () => {
+    const seen: ReturnType<typeof createMarkdownSession>[] = [];
+    const Child = React.memo(function Child({
+      controller,
+    }: {
+      controller: ReturnType<typeof useMarkdownSession>;
+    }) {
+      seen.push(controller.getSession());
+      return null;
+    });
+    function Owner() {
+      const controller = useMarkdownSession("seed");
+      return React.createElement(Child, { controller });
+    }
+
+    act(() => {
+      TestRenderer.create(
+        React.createElement(React.StrictMode, null, React.createElement(Owner)),
+      );
+    });
+
+    const latest = seen[seen.length - 1]!;
+    expect(() => latest.getAllText()).not.toThrow();
+    expect(latest.getAllText()).toBe("seed");
+  });
+
+  it("never returns a null session from getSession during the effect replay", () => {
+    const seen: unknown[] = [];
+    function Child({
+      controller,
+    }: {
+      controller: ReturnType<typeof useMarkdownSession>;
+    }) {
+      React.useEffect(() => {
+        seen.push(controller.getSession());
+      });
+      return null;
+    }
+    function Owner() {
+      const controller = useMarkdownSession("seed");
+      return React.createElement(Child, { controller });
+    }
+
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+    act(() => {
+      renderer = TestRenderer.create(
+        React.createElement(React.StrictMode, null, React.createElement(Owner)),
+      );
+    });
+
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((session) => session != null)).toBe(true);
+    const latest = seen[seen.length - 1] as ReturnType<typeof createMarkdownSession>;
+    expect(latest.getAllText()).toBe("seed");
+    act(() => {
+      renderer!.unmount();
+    });
+    expect(() => latest.getAllText()).toThrow(
+      expect.objectContaining({ code: "destroyed" }),
+    );
+  });
+});
