@@ -16,7 +16,7 @@ stay safe.
 - **RaTeX math rendering moved to the `react-native-nitro-markdown/math`
   subpath, and `ratex-react-native` is now an optional peer dependency.** The
   main entry no longer loads `ratex-react-native`, so bare React Native apps
-  without it bundle, and apps on React Native 0.76–0.83 (which
+  without it bundle, and apps on React Native 0.77–0.83 (which
   `ratex-react-native@0.1.14` does not support) can install the package.
   Without the subpath, `math_inline` and `math_block` render as monospace text.
   Migration: if you render math with RaTeX, pass
@@ -43,9 +43,11 @@ stay safe.
   palette, which is hard to read on a dark background. Migration: add
   `codeTokenColors: darkMarkdownTheme.colors.codeTokenColors` to those themes
   (or merge them over `darkMarkdownTheme`).
-- **React Native peer floor is `>=0.76`.** React Native 0.76 and Expo SDK 52
-  apps must set the Android `ndkVersion` to 27 or later (Nitro Modules 0.37
-  requirement).
+- **React Native peer floor is `>=0.77`.** The package supports React Native
+  >= 0.77 / Expo SDK >= 53, the Nitro Modules 0.37 minimum
+  (`react-native-nitro-modules` 0.37.1 does not compile on React Native 0.76).
+  Tested on React Native 0.86.3 / Expo SDK 57. Migration: upgrade React Native
+  0.76 / Expo SDK 52 apps before installing this release.
 
 ### Fixed
 
@@ -91,8 +93,8 @@ stay safe.
 - The built-in image renderer no longer special-cases `picsum.photos` URLs.
 - `package.json` exports `./package.json`.
 - `react-native-nitro-markdown/headless` and `react-native-nitro-markdown/math`
-  also resolve without package `exports` support. React Native 0.76–0.78
-  (including Expo SDK 52) have Metro package exports off by default, so the
+  also resolve without package `exports` support. Metro keeps package exports
+  off by default before React Native 0.79 (React Native 0.77 and 0.78), so the
   package now ships `headless/package.json` and `math/package.json` stubs that
   point at the built files.
 

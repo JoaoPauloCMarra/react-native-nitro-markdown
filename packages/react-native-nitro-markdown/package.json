@@ -137,7 +137,7 @@
   },
   "peerDependencies": {
     "react": "*",
-    "react-native": ">=0.76.0",
+    "react-native": ">=0.77.0",
     "react-native-nitro-modules": ">=0.37.0 <0.38.0",
     "ratex-react-native": ">=0.1.4"
   },

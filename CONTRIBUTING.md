@@ -10,7 +10,7 @@ This is a monorepo using [Bun](https://bun.sh/) workspaces.
 
 - [Bun](https://bun.sh/)
 - iOS: Xcode and CocoaPods
-- Android: Android Studio and NDK 27 or later
+- Android: Android Studio and NDK
 
 ### Setup
 

@@ -81,7 +81,7 @@ import { mathRenderers } from "react-native-nitro-markdown/math";
 ```
 
 `ratex-react-native@0.1.14` requires React Native `>=0.84` and React `>=19.2`.
-On React Native 0.76–0.83, skip it; math stays readable as monospace text. The
+On React Native 0.77–0.83, skip it; math stays readable as monospace text. The
 main entry and `/headless` never load `ratex-react-native`.
 
 ## Expo Config
@@ -401,18 +401,16 @@ for the error-code contract.
 
 | Dependency                                                                | Supported                                                                                                      |
 | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| [React Native](https://reactnative.dev/)                                  | `>=0.76` (New Architecture). Tested on `0.86.3`; RN `0.87` Strict TypeScript compatibility check               |
-| [Expo](https://docs.expo.dev/versions/v57.0.0/)                           | SDK `>=52` development builds. Tested on SDK 57 (`57.0.26`, RN `0.86.3`)                                        |
+| [React Native](https://reactnative.dev/)                                  | `>=0.77` (New Architecture; Nitro 0.37 minimum). Tested on `0.86.3`; RN `0.87` Strict TypeScript compatibility check |
+| [Expo](https://docs.expo.dev/versions/v57.0.0/)                           | SDK `>=53` development builds. Tested on SDK 57 (`57.0.26`, RN `0.86.3`)                                        |
 | [Nitro Modules](https://www.npmjs.com/package/react-native-nitro-modules) | `>=0.37.0 <0.38.0`                                                                                             |
 | [RaTeX React Native](https://www.npmjs.com/package/ratex-react-native)    | Optional, only for `react-native-nitro-markdown/math`. `0.1.14` needs RN `>=0.84` and React `>=19.2`            |
-| iOS                                                                       | The app's React Native iOS floor (`min_ios_version_supported`, 15.1 on RN 0.76–0.86)                           |
-| Android                                                                   | `minSdkVersion` 24; NDK 27 or later                                                                            |
+| iOS                                                                       | The app's React Native iOS floor (`min_ios_version_supported`, 15.1 on RN 0.77–0.86)                           |
+| Android                                                                   | `minSdkVersion` 24                                                                                             |
 | Platforms                                                                 | iOS, Android (Web not supported)                                                                               |
 
-Tested on React Native 0.86.3 / Expo SDK 57; supports React Native >= 0.76 /
-Expo SDK >= 52. React Native 0.76 and Expo SDK 52 apps must set the Android
-`ndkVersion` to 27 or later, because Nitro Modules 0.37 requires it (on Expo
-SDK 52, use `expo-build-properties` `android.ndkVersion`). `check:ci` also
+Supports React Native >= 0.77 / Expo SDK >= 53 (the Nitro Modules 0.37
+minimum); tested on React Native 0.86.3 / Expo SDK 57. `check:ci` also
 compiles the public source against React Native `0.87.0`'s Strict TypeScript
 API. Do not override the React Native version selected by Expo.
 
@@ -434,7 +432,8 @@ Version `0.13.0` moves RaTeX math rendering to an optional subpath:
    `parse_failed`.
 4. Session buffers are now capped at 10,485,760 UTF-8 bytes instead of UTF-16
    units, and the error message says `bytes`.
-5. The React Native peer floor is now `>=0.76`.
+5. The React Native peer floor is now `>=0.77` (Expo SDK `>=53`), the minimum
+   that `react-native-nitro-modules` 0.37 compiles against.
 6. The default code token palette is now a light palette. If you use a custom
    dark theme that sets `codeBackground` but not every `codeTokenColors` entry,
    add the dark palette explicitly:
