@@ -9,6 +9,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [0.13.0] - 2026-09-30
+
+### Breaking changes
+
+- **RaTeX math rendering moved to the `react-native-nitro-markdown/math`
+  subpath, and `ratex-react-native` is now an optional peer dependency.** The
+  main entry no longer loads `ratex-react-native`, so bare React Native apps
+  without it bundle, and apps on React Native 0.76–0.83 (which
+  `ratex-react-native@0.1.14` does not support) can install the package.
+  Without the subpath, `math_inline` and `math_block` render as monospace text.
+  Migration: if you render math with RaTeX, pass
+  `renderers={mathRenderers}` (import `mathRenderers` from
+  `react-native-nitro-markdown/math`) to each `<Markdown>` / `<MarkdownStream>`
+  that shows math, or spread it into your own `renderers`. The subpath also
+  exports `RaTeXMathInline` and `RaTeXMathBlock`. `MathInline` / `MathBlock`
+  from the main entry no longer draw LaTeX.
+- **New error code `input_too_complex`.** Documents inside the byte cap that
+  exceed the native AST budgets (100,000 nodes, 500,000 units of AST work,
+  64 MiB of AST JSON or flattened text) now fail with `input_too_complex`
+  instead of `parse_failed`. Migration: add the code to exhaustive `switch`
+  statements over `MarkdownErrorCode`.
+- **Session buffer cap is measured in UTF-8 bytes.** `MarkdownSession` now
+  rejects writes that grow the buffer above 10,485,760 UTF-8 bytes (the parser
+  cap), not UTF-16 units, so a session can no longer hold text that
+  `MarkdownStream` cannot parse. The `buffer_limit` message now ends in
+  `bytes)`. Offsets and ranges stay in UTF-16 units. Migration: none unless you
+  matched the old message text.
+- **React Native peer floor is `>=0.76`.** React Native 0.76 and Expo SDK 52
+  apps must set the Android `ndkVersion` to 27 or later (Nitro Modules 0.37
+  requirement).
+
+### Fixed
+
+- `MarkdownStream` no longer drops the rest of the buffer after a replace at
+  offset 0 or an insert inside a batch; range reads are used only when the batch
+  ends at the end of the buffer.
+- `MarkdownStream` no longer loses a pending chunk when `updateIntervalMs`,
+  `updateStrategy`, `useTransitionUpdates` or `incrementalParsing` changes.
+- `useMarkdownSession` keeps a working session under React StrictMode and Fast
+  Refresh, and disposes the session it owns on unmount without throwing.
+- Streaming a lone `*`, `+`, `-`, `#` or an ordinal line followed by more text
+  now re-parses, so list items and headings no longer render as paragraph text.
+- Streamed documents with reference definitions inside blockquotes or lists,
+  or with lazily continued blocks, now match a fresh parse. The native
+  serialization cache that caused stale output was removed.
+- Image `alt` text keeps the full text when the description contains emphasis,
+  inline code or line breaks (for example `![**bold** alt](u)` gives
+  `bold alt`).
+- Container nodes always have `beg <= end` and cover their children, and
+  soft/hard break ranges after a link whose destination or title spans lines
+  point at the real line ending.
+- The default (light) theme has a readable code token palette (at least 4.5:1
+  contrast on the code background). The previous palette moved to
+  `darkMarkdownTheme`, where it now also uses a readable comment color.
+
+### Changed
+
+- Inline `onParseComplete` and `renderers` props no longer re-run the parse on
+  every parent render. `onParseComplete` runs when the parsed result changes.
+- Virtualized blocks are keyed by type and index, so a block that grows during
+  streaming keeps its cell instead of remounting.
+- Render paths read text from validated trees without deep-cloning them, and
+  highlighted code merges adjacent tokens of the same type and reuses their
+  styles.
+- Plain-text extraction no longer builds source-offset maps.
+- The iOS pod uses React Native's `min_ios_version_supported` instead of a
+  fixed iOS 16.4 floor, and no longer declares unused `React-Fabric` / Yoga
+  dependencies. Android compiles with Java 17.
+- The built-in image renderer no longer special-cases `picsum.photos` URLs.
+- `package.json` exports `./package.json`.
+
 ## [0.12.6] - 2026-09-27
 
 ### Breaking changes
