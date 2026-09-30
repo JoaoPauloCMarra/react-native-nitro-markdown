@@ -800,10 +800,10 @@ export default function BenchmarkScreen() {
   const [latexBenchmarkTarget, setLatexBenchmarkTarget] =
     useState<LatexBenchmarkTarget | null>(null);
   const tabHeight = useBottomTabHeight();
-  const latexBenchmarkResolverRef = useRef<(() => void) | null>(null);
+  const latexBenchmarkResolverRef = useRef<((layoutAt: number) => void) | null>(null);
   const [renderBenchmarkTarget, setRenderBenchmarkTarget] =
     useState<RenderBenchmarkTarget | null>(null);
-  const renderBenchmarkResolverRef = useRef<(() => void) | null>(null);
+  const renderBenchmarkResolverRef = useRef<((layoutAt: number) => void) | null>(null);
 
   const wait = (ms: number) =>
     new Promise((resolve) => setTimeout(resolve, ms));
@@ -846,8 +846,8 @@ export default function BenchmarkScreen() {
         setLatexBenchmarkTarget(null);
         resolve(value);
       };
-      latexBenchmarkResolverRef.current = () =>
-        finish(global.performance.now() - startedAt);
+      latexBenchmarkResolverRef.current = (layoutAt: number) =>
+        finish(layoutAt - startedAt);
       setTimeout(() => finish(null), MEASURE_TIMEOUT_MS);
       setLatexBenchmarkTarget({ renderer, startedAt, token: Math.random() });
     });
@@ -856,7 +856,8 @@ export default function BenchmarkScreen() {
   const handleLatexBenchmarkLayout = useCallback(() => {
     const resolve = latexBenchmarkResolverRef.current;
     if (!resolve) return;
-    setTimeout(resolve, MEASURE_SETTLE_MS);
+    const layoutAt = global.performance.now();
+    setTimeout(() => resolve(layoutAt), MEASURE_SETTLE_MS);
   }, []);
 
   const measureRender = (
@@ -873,8 +874,8 @@ export default function BenchmarkScreen() {
         setRenderBenchmarkTarget(null);
         resolve(value);
       };
-      renderBenchmarkResolverRef.current = () =>
-        finish(global.performance.now() - startedAt);
+      renderBenchmarkResolverRef.current = (layoutAt: number) =>
+        finish(layoutAt - startedAt);
       setTimeout(() => finish(null), MEASURE_TIMEOUT_MS);
       setRenderBenchmarkTarget({ kind, startedAt, token: Math.random() });
     });
@@ -883,7 +884,8 @@ export default function BenchmarkScreen() {
   const handleRenderBenchmarkLayout = useCallback(() => {
     const resolve = renderBenchmarkResolverRef.current;
     if (!resolve) return;
-    setTimeout(resolve, MEASURE_SETTLE_MS);
+    const layoutAt = global.performance.now();
+    setTimeout(() => resolve(layoutAt), MEASURE_SETTLE_MS);
   }, []);
 
   const measureRenderMedian = async (
