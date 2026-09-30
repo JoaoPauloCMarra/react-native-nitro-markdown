@@ -1,8 +1,10 @@
 #include "NitroMD4CParser.hpp"
+#include "flatten.hpp"
 #include "../nitromd/nitromd.h"
 
 #include <stack>
 #include <vector>
+#include <cstdint>
 #include <cstring>
 #include <algorithm>
 #include <limits>
@@ -16,6 +18,7 @@ namespace {
 // Hard input cap: oversized documents fail deterministically instead of
 // exhausting memory. The JavaScript boundary enforces the same cap earlier.
 static constexpr size_t kMaxInputBytes = 10 * 1024 * 1024;
+static constexpr size_t kMaxImageAltBytes = 64 * 1024 * 1024;
 
 size_t clampInputSize(size_t inputSize) {
     size_t maxSize = static_cast<size_t>(std::numeric_limits<MD_SIZE>::max());
@@ -82,11 +85,16 @@ static size_t utf8SequenceLength(
 }
 
 struct Utf16OffsetRun {
-    size_t byteBeg;
-    size_t byteEnd;
-    OFF utf16Beg;
-    size_t cumulativeExtra;
+    uint32_t byteBeg;
+    uint32_t byteEnd;
+    uint32_t utf16Beg;
+    uint32_t cumulativeExtra;
 };
+
+static_assert(
+    kMaxInputBytes <= std::numeric_limits<uint32_t>::max(),
+    "UTF-16 offset runs store byte offsets in 32 bits"
+);
 
 static std::vector<Utf16OffsetRun> createUtf16OffsetRuns(
     const char* text,
@@ -94,6 +102,11 @@ static std::vector<Utf16OffsetRun> createUtf16OffsetRuns(
 ) {
     std::vector<Utf16OffsetRun> runs;
     const auto* bytes = reinterpret_cast<const unsigned char*>(text);
+    size_t leadBytes = 0;
+    for (size_t index = 0; index < size; index++) {
+        if ((bytes[index] & 0xC0) == 0xC0) leadBytes++;
+    }
+    runs.reserve(leadBytes);
     size_t byteIndex = 0;
     OFF utf16Index = 0;
     size_t cumulativeExtra = 0;
@@ -105,10 +118,10 @@ static std::vector<Utf16OffsetRun> createUtf16OffsetRuns(
             const OFF utf16Length = sequenceLength == 4 ? 2 : 1;
             cumulativeExtra += sequenceLength - utf16Length;
             runs.push_back({
-                byteIndex,
-                byteIndex + sequenceLength,
-                utf16Index,
-                cumulativeExtra,
+                static_cast<uint32_t>(byteIndex),
+                static_cast<uint32_t>(byteIndex + sequenceLength),
+                static_cast<uint32_t>(utf16Index),
+                static_cast<uint32_t>(cumulativeExtra),
             });
             utf16Index += utf16Length;
         } else {
@@ -134,7 +147,10 @@ public:
     OFF currentTextBeg = 0;
     OFF lastTextEnd = 0;
     size_t lastTextByteEnd = 0;
+    size_t lastSpanByteEnd = 0;
+    size_t lastEnterByteOffset = 0;
     size_t nextBreakSearchByteOffset = 0;
+    size_t imageAltBytes = 0;
     bool forceCallbackFailure = false;
     std::string callbackError;
     size_t nodeCount = 0;
@@ -181,7 +197,10 @@ public:
         currentTextBeg = 0;
         lastTextEnd = 0;
         lastTextByteEnd = 0;
+        lastSpanByteEnd = 0;
+        lastEnterByteOffset = 0;
         nextBreakSearchByteOffset = 0;
+        imageAltBytes = 0;
         forceCallbackFailure = false;
         callbackError.clear();
     }
@@ -229,12 +248,19 @@ public:
         return static_cast<OFF>(index - extraBefore);
     }
 
+    void noteEnterOffset(MD_OFFSET byteOffset) {
+        lastEnterByteOffset = std::max(
+            lastEnterByteOffset,
+            std::min(static_cast<size_t>(byteOffset), inputTextSize)
+        );
+    }
+
     std::pair<OFF, OFF> sourceRange(const char* text, MD_SIZE size) {
         size_t byteBeg = static_cast<size_t>(
             safeOffset(text, inputText, inputTextSize)
         );
         if (byteBeg == 0 && text != inputText) {
-            byteBeg = lastTextByteEnd;
+            byteBeg = std::max(lastTextByteEnd, lastEnterByteOffset);
         }
         size_t byteEnd = byteBeg + static_cast<size_t>(size);
         if (byteEnd > inputTextSize) {
@@ -249,7 +275,13 @@ public:
         if (!sourceOffsetsTracked) return {0, 0};
 
         const size_t searchBeg = std::min(
-            std::max(nextBreakSearchByteOffset, lastTextByteEnd), inputTextSize
+            std::max({
+                nextBreakSearchByteOffset,
+                lastTextByteEnd,
+                lastSpanByteEnd,
+                lastEnterByteOffset,
+            }),
+            inputTextSize
         );
         size_t lineEndingBeg = searchBeg;
         while (
@@ -320,18 +352,52 @@ public:
                     std::to_string(kMaxAstDepth);
                 throw std::runtime_error(callbackError);
             }
-            node->beg = beg;
-            addChild(nodeStack.top(), node);
+            const auto& parent = nodeStack.top();
+            OFF floor = parent->beg;
+            if (!parent->children.empty() && parent->children.back()) {
+                floor = std::max(floor, parent->children.back()->end);
+            }
+            node->beg = std::max(beg, floor);
+            addChild(parent, node);
             nodeStack.push(std::move(node));
         }
     }
     
+    static OFF containedEnd(const MarkdownNode& node, OFF end) {
+        OFF result = std::max(end, node.beg);
+        if (!node.children.empty() && node.children.back()) {
+            result = std::max(result, node.children.back()->end);
+        }
+        return result;
+    }
+
     void popNode(OFF end = 0) {
         flushText();
         if (nodeStack.size() > 1) {
-            nodeStack.top()->end = end;
+            nodeStack.top()->end = containedEnd(*nodeStack.top(), end);
             nodeStack.pop();
         }
+    }
+
+    std::string flattenImageAlt(const MarkdownNode& image) {
+        std::string alt;
+        try {
+            for (const auto& child : image.children) {
+                alt += flattenNodeText(child);
+            }
+        } catch (const std::exception& error) {
+            callbackError = error.what();
+            throw;
+        }
+        alt += currentText;
+        if (alt.size() > kMaxImageAltBytes - imageAltBytes) {
+            callbackError =
+                "Markdown flattened text exceeds the maximum of " +
+                std::to_string(kMaxImageAltBytes) + " bytes";
+            throw std::runtime_error(callbackError);
+        }
+        imageAltBytes += alt.size();
+        return alt;
     }
     
     std::string getAttributeText(const MD_ATTRIBUTE* attr) {
@@ -379,6 +445,7 @@ public:
         auto* impl = static_cast<Impl*>(userdata);
         if (impl == nullptr) return 1; // Signal error to md4c
         if (impl->forceCallbackFailure) return 7;
+        impl->noteEnterOffset(off);
         off = impl->sourceOffset(off);
 
         switch (type) {
@@ -521,7 +588,8 @@ public:
 
         switch (type) {
             case MD_BLOCK_DOC:
-                impl->root->end = off;
+                impl->flushText();
+                impl->root->end = containedEnd(*impl->root, off);
                 break;
             case MD_BLOCK_HR:
                 impl->popNode(off);
@@ -541,6 +609,7 @@ public:
         try {
         auto* impl = static_cast<Impl*>(userdata);
         if (impl == nullptr) return 1; // Signal error to md4c
+        impl->noteEnterOffset(off);
         off = impl->sourceOffset(off);
 
         switch (type) {
@@ -622,6 +691,10 @@ public:
         try {
         auto* impl = static_cast<Impl*>(userdata);
         if (impl == nullptr) return 1; // Signal error to md4c
+        impl->lastSpanByteEnd = std::max(
+            impl->lastSpanByteEnd,
+            std::min(static_cast<size_t>(off), impl->inputTextSize)
+        );
         off = impl->sourceOffset(off);
 
         if (type == MD_SPAN_WIKILINK) return 0;
@@ -636,7 +709,7 @@ public:
                     break;
 
                 case MD_SPAN_IMG:
-                    currentNode->alt = impl->currentText;
+                    currentNode->alt = impl->flattenImageAlt(*currentNode);
                     impl->currentText.clear();
                     break;
 

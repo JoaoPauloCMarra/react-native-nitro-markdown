@@ -76,10 +76,10 @@ double HybridMarkdownSession::append(const std::string& chunk) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
         ensureActiveLocked();
-        const size_t chunkLength = utf16Length(chunk);
-        if (chunkLength > kMaxBufferSize - bufferUtf16Length_) {
+        if (chunk.size() > kMaxBufferSize - buffer_.size()) {
             validateBufferSizeLocked(kMaxBufferSize + 1);
         }
+        const size_t chunkLength = utf16Length(chunk);
         from = bufferUtf16Length_;
         to = from + chunkLength;
         const size_t previousByteLength = buffer_.size();
@@ -142,13 +142,13 @@ std::string HybridMarkdownSession::getTextRange(double from, double to) {
 std::string HybridMarkdownSession::parse() {
     std::lock_guard<std::mutex> lock(mutex_);
     ensureActiveLocked();
-    return parser_->parseForStreaming(buffer_);
+    return parser_->parse(buffer_);
 }
 
 std::string HybridMarkdownSession::parseWithOptions(const ParserOptions& options) {
     std::lock_guard<std::mutex> lock(mutex_);
     ensureActiveLocked();
-    return parser_->parseWithOptionsForStreaming(buffer_, options);
+    return parser_->parseWithOptions(buffer_, options);
 }
 
 std::function<void()> HybridMarkdownSession::addListener(
@@ -186,7 +186,7 @@ void HybridMarkdownSession::reset(const std::string& text) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
         ensureActiveLocked();
-        validateBufferSizeLocked(newLength);
+        validateBufferSizeLocked(text.size());
         buffer_ = text;
         bufferUtf16Length_ = newLength;
         rangeUtf16Offset_ = 0;
@@ -212,16 +212,15 @@ double HybridMarkdownSession::replace(
         const auto range = validateAndClampRange(from, to, bufferUtf16Length_);
         start = range.first;
         end = range.second;
-        insertedLength = utf16Length(text);
-        const size_t oldLength = bufferUtf16Length_;
-        if (insertedLength > kMaxBufferSize || oldLength - (end - start) > kMaxBufferSize - insertedLength) {
-            validateBufferSizeLocked(kMaxBufferSize + 1);
-        }
-        newLength = oldLength - (end - start) + insertedLength;
-        validateBufferSizeLocked(newLength);
-
         const size_t startByte = byteOffsetForUtf16(buffer_, start);
         const size_t endByte = byteOffsetForUtf16(buffer_, end, startByte, start);
+        const size_t retainedBytes = buffer_.size() - (endByte - startByte);
+        if (text.size() > kMaxBufferSize - retainedBytes) {
+            validateBufferSizeLocked(kMaxBufferSize + 1);
+        }
+        insertedLength = utf16Length(text);
+        newLength = bufferUtf16Length_ - (end - start) + insertedLength;
+
         buffer_.replace(startByte, endByte - startByte, text);
         bufferUtf16Length_ = newLength;
         rangeUtf16Offset_ = start;
@@ -273,7 +272,7 @@ void HybridMarkdownSession::ensureActiveLocked() const {
 void HybridMarkdownSession::validateBufferSizeLocked(size_t size) const {
     if (size > kMaxBufferSize) {
         throw std::runtime_error(
-            "Buffer size limit exceeded (max " + std::to_string(kMaxBufferSize) + " chars)"
+            "Buffer size limit exceeded (max " + std::to_string(kMaxBufferSize) + " bytes)"
         );
     }
 }
