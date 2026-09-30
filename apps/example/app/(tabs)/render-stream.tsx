@@ -46,15 +46,15 @@ const STREAM_PARSER_OPTIONS = {
   maxInputLength: 1_000_000,
 } as const;
 const DEMO_TEXT = `
-### 🚀 High-Performance Markdown
+### 🚀 Streaming Markdown
 
-Nitro Markdown isn't just fast; it's **blazingly fast**. 
-It handles large streams of text *without* dropping frames.
+This demo streams text into a native session and renders it as it arrives.
+Chunks are batched before each render.
 
 ## Features
-- **Zero-Copy** Buffering
-- **JSI** Powered
-- Native C++ Core
+- Native session buffer
+- **JSI** bindings
+- Native C++ parser (md4c)
 
 ### Code Example
 \`\`\`typescript
@@ -88,26 +88,26 @@ $$\\int_{-\\infty}^{\\infty} e^{-x^2}\\,dx = \\sqrt{\\pi}$$
 
 Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
 
-### Why Performance Matters
+### How Streaming Works
 
-When building LLM-powered applications, **latency** and **responsiveness** are key. Users expect the text to appear as if it's being typed by a human, but much faster. Creating a new string constant for every token and re-parsing the entire document in JavaScript is simply too slow for long documents.
+LLM responses arrive token by token. Re-rendering the whole document for every token wastes work, so the stream batches updates.
 
-Nitro Markdown solves this by:
-1. Keeping the text buffer in C++ memory
-2. Only bridging the necessary render commands
-3. Using JSI for synchronous, high-speed communication
+Nitro Markdown streams by:
+1. Keeping the text buffer in a native session
+2. Reading only the changed range after each batch
+3. Appending plain text to the previous AST when that is safe, and re-parsing otherwise
 
 ## Deep Dive
 
 Let's look at some *more complex* structures.
 
-| Feature | JS Implementation | Nitro Implementation |
+| Step | Where it runs | Notes |
 | :--- | :--- | :--- |
-| Parsing | ~50ms | ~2ms |
-| Memory | High GC Overhead | Stable Heap |
-| FPS | Janky during stream | **60/120 FPS** |
+| Buffer | Native session | Append, replace, reset |
+| Parse | C++ (md4c) | Synchronous JSI call |
+| Render | React Native | Batched by \`updateIntervalMs\` or \`raf\` |
 
-The difference becomes night and day when you have documents spanning thousands of words.
+Use the Bench tab to measure parse and render time on your device.
 
 ### Final Thoughts
 
@@ -119,6 +119,33 @@ Happy Coding!
 
 ${ISSUE_74_STANDALONE_EQUALS_DISPLAY_MATH_MARKDOWN}
 `;
+
+const DEMO_ATOMIC_LINE_RANGES: readonly (readonly [number, number])[] = (() => {
+  const ranges: [number, number][] = [];
+  let lineStart = 0;
+  let insideFence = false;
+  while (lineStart < DEMO_TEXT.length) {
+    const newline = DEMO_TEXT.indexOf("\n", lineStart);
+    const lineEnd = newline === -1 ? DEMO_TEXT.length : newline + 1;
+    const line = DEMO_TEXT.slice(lineStart, lineEnd).trim();
+    const isFenceLine = line.startsWith("```");
+    if (isFenceLine || insideFence || line.startsWith("|")) {
+      ranges.push([lineStart, lineEnd]);
+    }
+    if (isFenceLine) insideFence = !insideFence;
+    lineStart = lineEnd;
+  }
+  return ranges;
+})();
+
+function getDemoChunkEnd(offset: number): number {
+  const target = Math.min(offset + CHARS_PER_TICK, DEMO_TEXT.length);
+  for (const [start, end] of DEMO_ATOMIC_LINE_RANGES) {
+    if (offset >= start && offset < end) return end;
+    if (start > offset && start < target) return start;
+  }
+  return target;
+}
 
 type MarkdownRendererPanelProps = {
   session: ReturnType<typeof useMarkdownSession>;
@@ -497,7 +524,7 @@ export default function TokenStreamScreen() {
     streamIntervalRef.current = setInterval(() => {
       const chunk = DEMO_TEXT.slice(
         streamOffsetRef.current,
-        streamOffsetRef.current + CHARS_PER_TICK,
+        getDemoChunkEnd(streamOffsetRef.current),
       );
       if (chunk.length === 0) {
         stopStream();
