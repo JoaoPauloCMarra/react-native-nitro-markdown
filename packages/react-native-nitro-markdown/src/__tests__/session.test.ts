@@ -197,7 +197,7 @@ describe("createMarkdownSession", () => {
       renderer = TestRenderer.create(React.createElement(SessionOwner));
     });
 
-    const session = createHybridObjectMock.mock.results[0].value;
+    const session = createHybridObjectMock.mock.results[0]!.value;
 
     act(() => {
       renderer!.unmount();

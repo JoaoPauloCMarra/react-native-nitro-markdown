@@ -12,6 +12,7 @@ import {
 } from "../renderers/math";
 import { NodeRenderer } from "../node-renderer";
 import { defaultMarkdownTheme } from "../theme";
+import { hostType } from "./host-type";
 
 jest.mock("ratex-react-native", () => ({ RaTeXView: "RaTeXView" }));
 
@@ -52,9 +53,9 @@ describe("MathBlock renderer", () => {
         );
       });
 
-      const ratexNodes = renderer!.root.findAllByType("RaTeXView");
+      const ratexNodes = renderer!.root.findAllByType(hostType("RaTeXView"));
       expect(ratexNodes).toHaveLength(1);
-      expect(ratexNodes[0].props).toEqual(
+      expect(ratexNodes[0]!.props).toEqual(
         expect.objectContaining({
           latex:
             "\\frac{\\partial}{\\partial y}(x^2 + y^2) = 2y \\qquad \\text{and more}",
@@ -64,7 +65,7 @@ describe("MathBlock renderer", () => {
         }),
       );
 
-      const contentViewport = ratexNodes[0].parent?.parent;
+      const contentViewport = ratexNodes[0]!.parent?.parent;
       expect(contentViewport?.props.style).toEqual(
         expect.objectContaining({
           width: "100%",
@@ -77,7 +78,7 @@ describe("MathBlock renderer", () => {
         expect.any(Function),
       );
 
-      const contentTrack = ratexNodes[0].parent;
+      const contentTrack = ratexNodes[0]!.parent;
       expect(contentTrack?.props.style).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -124,13 +125,13 @@ describe("MathBlock renderer", () => {
         renderer = create(render("x^2"));
       });
 
-      const initialRaTeX = renderer!.root.findAllByType("RaTeXView")[0];
+      const initialRaTeX = renderer!.root.findAllByType(hostType("RaTeXView"))[0]!;
 
       act(() => {
         renderer!.update(render("x^2 + y^2"));
       });
 
-      const updatedRaTeX = renderer!.root.findAllByType("RaTeXView")[0];
+      const updatedRaTeX = renderer!.root.findAllByType(hostType("RaTeXView"))[0]!;
       expect(updatedRaTeX).toBe(initialRaTeX);
       expect(updatedRaTeX.props.latex).toBe("x^2 + y^2");
     } finally {
@@ -162,9 +163,9 @@ describe("MathBlock renderer", () => {
         );
       });
 
-      const ratexNodes = renderer!.root.findAllByType("RaTeXView");
+      const ratexNodes = renderer!.root.findAllByType(hostType("RaTeXView"));
       expect(ratexNodes).toHaveLength(2);
-      expect(ratexNodes[0].props).toEqual(
+      expect(ratexNodes[0]!.props).toEqual(
         expect.objectContaining({
           latex: "E = mc^2",
           displayMode: false,
@@ -172,7 +173,7 @@ describe("MathBlock renderer", () => {
           fontSize: defaultMarkdownTheme.fontSizes.l,
         }),
       );
-      expect(ratexNodes[1].props).toEqual(
+      expect(ratexNodes[1]!.props).toEqual(
         expect.objectContaining({
           latex: "\\sum_{n=1}^{\\infty} n",
           displayMode: true,
@@ -209,32 +210,32 @@ describe("MathBlock renderer", () => {
         renderer = create(render("bad"));
       });
 
-      const initialRaTeX = renderer!.root.findAllByType("RaTeXView")[0];
+      const initialRaTeX = renderer!.root.findAllByType(hostType("RaTeXView"))[0]!;
       const staleOnError = initialRaTeX.props.onError;
       act(() => {
         initialRaTeX.props.onError({ nativeEvent: { error: "invalid" } });
       });
-      expect(renderer!.root.findAllByType("RaTeXView")).toHaveLength(0);
+      expect(renderer!.root.findAllByType(hostType("RaTeXView"))).toHaveLength(0);
 
       act(() => {
         renderer!.update(render("bad"));
       });
-      expect(renderer!.root.findAllByType("RaTeXView")).toHaveLength(0);
+      expect(renderer!.root.findAllByType(hostType("RaTeXView"))).toHaveLength(0);
 
       act(() => {
         renderer!.update(render("fixed"));
       });
-      expect(renderer!.root.findAllByType("RaTeXView")).toHaveLength(1);
+      expect(renderer!.root.findAllByType(hostType("RaTeXView"))).toHaveLength(1);
 
       act(() => {
         renderer!.update(render("bad"));
       });
-      expect(renderer!.root.findAllByType("RaTeXView")).toHaveLength(1);
+      expect(renderer!.root.findAllByType(hostType("RaTeXView"))).toHaveLength(1);
 
       act(() => {
         staleOnError({ nativeEvent: { error: "invalid" } });
       });
-      expect(renderer!.root.findAllByType("RaTeXView")).toHaveLength(1);
+      expect(renderer!.root.findAllByType(hostType("RaTeXView"))).toHaveLength(1);
     } finally {
       consoleErrorSpy.mockRestore();
     }
@@ -264,32 +265,32 @@ describe("MathBlock renderer", () => {
         renderer = create(render("bad"));
       });
 
-      const initialRaTeX = renderer!.root.findAllByType("RaTeXView")[0];
+      const initialRaTeX = renderer!.root.findAllByType(hostType("RaTeXView"))[0]!;
       const staleOnError = initialRaTeX.props.onError;
       act(() => {
         initialRaTeX.props.onError({ nativeEvent: { error: "invalid" } });
       });
-      expect(renderer!.root.findAllByType("RaTeXView")).toHaveLength(0);
+      expect(renderer!.root.findAllByType(hostType("RaTeXView"))).toHaveLength(0);
 
       act(() => {
         renderer!.update(render("bad"));
       });
-      expect(renderer!.root.findAllByType("RaTeXView")).toHaveLength(0);
+      expect(renderer!.root.findAllByType(hostType("RaTeXView"))).toHaveLength(0);
 
       act(() => {
         renderer!.update(render("fixed"));
       });
-      expect(renderer!.root.findAllByType("RaTeXView")).toHaveLength(1);
+      expect(renderer!.root.findAllByType(hostType("RaTeXView"))).toHaveLength(1);
 
       act(() => {
         renderer!.update(render("bad"));
       });
-      expect(renderer!.root.findAllByType("RaTeXView")).toHaveLength(1);
+      expect(renderer!.root.findAllByType(hostType("RaTeXView"))).toHaveLength(1);
 
       act(() => {
         staleOnError({ nativeEvent: { error: "invalid" } });
       });
-      expect(renderer!.root.findAllByType("RaTeXView")).toHaveLength(1);
+      expect(renderer!.root.findAllByType(hostType("RaTeXView"))).toHaveLength(1);
     } finally {
       consoleErrorSpy.mockRestore();
     }
@@ -314,9 +315,9 @@ describe("MathBlock renderer", () => {
       );
     });
 
-    expect(renderer!.root.findAllByType("RaTeXView")).toHaveLength(0);
+    expect(renderer!.root.findAllByType(hostType("RaTeXView"))).toHaveLength(0);
     const texts = renderer!.root
-      .findAllByType("Text")
+      .findAllByType(hostType("Text"))
       .map((node) => node.props.children);
     expect(texts).toEqual(["E = mc^2", "\\sum n"]);
   });
@@ -355,9 +356,9 @@ describe("MathBlock renderer", () => {
       );
     });
 
-    const ratexNodes = renderer!.root.findAllByType("RaTeXView");
+    const ratexNodes = renderer!.root.findAllByType(hostType("RaTeXView"));
     expect(ratexNodes.map((node) => node.props.latex)).toEqual(["x^2", "y^2"]);
-    expect(ratexNodes[0].parent?.props.style).toEqual(
+    expect(ratexNodes[0]!.parent?.props.style).toEqual(
       expect.arrayContaining([inlineStyle]),
     );
   });

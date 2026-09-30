@@ -25,14 +25,11 @@ describe("Markdown re-render stability", () => {
   it("does not re-parse when inline onParseComplete and renderers change identity", () => {
     const completions: string[] = [];
     const renderTree = () =>
-      createElement(
-        Markdown,
-        {
-          onParseComplete: (result) => completions.push(result.raw),
-          renderers: { heading: ({ children }) => children },
-        },
-        LONG_TEXT,
-      );
+      createElement(Markdown, {
+        onParseComplete: (result) => completions.push(result.raw),
+        renderers: { heading: ({ children }) => children },
+        children: LONG_TEXT,
+      });
 
     let renderer: ReactTestRenderer | undefined;
     act(() => {
@@ -54,13 +51,19 @@ describe("Markdown re-render stability", () => {
     const second = jest.fn();
     let renderer: ReactTestRenderer | undefined;
     act(() => {
-      renderer = create(createElement(Markdown, { onParseComplete: first }, "one"));
+      renderer = create(
+        createElement(Markdown, { onParseComplete: first, children: "one" }),
+      );
     });
     act(() => {
-      renderer!.update(createElement(Markdown, { onParseComplete: second }, "one"));
+      renderer!.update(
+        createElement(Markdown, { onParseComplete: second, children: "one" }),
+      );
     });
     act(() => {
-      renderer!.update(createElement(Markdown, { onParseComplete: second }, "two"));
+      renderer!.update(
+        createElement(Markdown, { onParseComplete: second, children: "two" }),
+      );
     });
 
     expect(first).toHaveBeenCalledTimes(1);
@@ -84,7 +87,11 @@ describe("Markdown re-render stability", () => {
     let renderer: ReactTestRenderer | undefined;
     act(() => {
       renderer = create(
-        createElement(Markdown, { virtualize: true, sourceAst: makeAst(20) }, "a\n\nb"),
+        createElement(Markdown, {
+          virtualize: true,
+          sourceAst: makeAst(20),
+          children: "a\n\nb",
+        }),
       );
     });
     const list = renderer!.root.findByType("FlatList" as never);
@@ -93,7 +100,11 @@ describe("Markdown re-render stability", () => {
 
     act(() => {
       renderer!.update(
-        createElement(Markdown, { virtualize: true, sourceAst: makeAst(25) }, "a\n\nbbbbbb"),
+        createElement(Markdown, {
+          virtualize: true,
+          sourceAst: makeAst(25),
+          children: "a\n\nbbbbbb",
+        }),
       );
     });
     const nextList = renderer!.root.findByType("FlatList" as never);

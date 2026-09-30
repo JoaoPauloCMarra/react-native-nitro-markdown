@@ -85,7 +85,7 @@ describe("parse pipeline utilities", () => {
   it("materializes proxy data properties before rendering can observe changes", () => {
     let content = "before";
     const proxy = new Proxy(
-      { type: "text", content: "before" },
+      { type: "text" as const, content: "before" },
       {
         getOwnPropertyDescriptor(target, key) {
           const descriptor = Reflect.getOwnPropertyDescriptor(target, key);
@@ -201,7 +201,7 @@ describe("parse pipeline utilities", () => {
       end: undefined,
       children: [child],
       metadata,
-    } as MarkdownNode & { metadata: typeof metadata };
+    } as unknown as MarkdownNode & { metadata: typeof metadata };
 
     expect(() => freezeMarkdownNode(root)).not.toThrow();
     expect(Object.isFrozen(root)).toBe(true);
@@ -331,7 +331,7 @@ describe("parse pipeline utilities", () => {
       } as MarkdownNode),
     ).toThrow(expect.objectContaining({ code: "invalid_ast" }));
 
-    const sharedLeaf = { type: "text", content: "shared" };
+    const sharedLeaf = { type: "text" as const, content: "shared" };
     const largeChildren = new Array<MarkdownNode>(125_001).fill(sharedLeaf);
     const secondChildren = new Array<MarkdownNode>(125_001).fill(sharedLeaf);
     expect(() =>
@@ -381,7 +381,7 @@ describe("parse pipeline utilities", () => {
       type: "document" as const,
       children: [nodes[nodes.length - 1]!],
       metadata,
-    } as MarkdownNode & { metadata: typeof metadata };
+    } as unknown as MarkdownNode & { metadata: typeof metadata };
 
     expect(() => freezeMarkdownNode(root)).not.toThrow();
     expect(Object.isFrozen(root)).toBe(true);
@@ -424,7 +424,7 @@ describe("parse pipeline utilities", () => {
       expect.objectContaining({ code: "invalid_ast" }),
     );
     expect(() =>
-      freezeMarkdownNode({ type: "unknown" } as MarkdownNode),
+      freezeMarkdownNode({ type: "unknown" } as unknown as MarkdownNode),
     ).toThrow(expect.objectContaining({ code: "invalid_ast" }));
   });
 
@@ -576,7 +576,7 @@ describe("parse pipeline utilities", () => {
       { name: "noop" },
       {
         name: "invalid",
-        afterParse: () => ({ invalid: true }) as MarkdownNode,
+        afterParse: () => ({ invalid: true }) as unknown as MarkdownNode,
       },
       { name: "transform", afterParse: () => replacement },
       {

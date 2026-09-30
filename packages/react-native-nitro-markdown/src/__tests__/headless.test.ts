@@ -467,7 +467,7 @@ describe("sourceOffsets option", () => {
 
   it("omits beg/end when sourceOffsets is false", () => {
     const ast = parseMarkdownWithOptions("# Title", { sourceOffsets: false });
-    const heading = ast.children?.[0];
+    const heading: MarkdownNode | undefined = ast.children?.[0];
     expect(heading?.beg).toBeUndefined();
     expect(heading?.end).toBeUndefined();
   });
@@ -496,7 +496,7 @@ describe("stripSourceOffsets", () => {
     };
     const result = stripSourceOffsets(node);
     expect(result.beg).toBeUndefined();
-    expect(result.children![0].beg).toBeUndefined();
+    expect(result.children![0]!.beg).toBeUndefined();
   });
 
   it("does not add children key when original has none", () => {

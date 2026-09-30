@@ -12,13 +12,14 @@ import {
 } from "../use-markdown-stream";
 import { createMarkdownSession } from "../MarkdownSession";
 
-const markdownMock = jest.fn(() => null);
+const markdownMock = jest.fn((_props: { children?: string }) => null);
 
 jest.mock("../markdown", () => ({
   Markdown: (props: { children?: string }) => markdownMock(props),
 }));
 
 type SessionListener = (from: number, to: number) => void;
+type FrameCallback = (time: number) => void;
 
 function createSession({
   allText,
@@ -33,6 +34,8 @@ function createSession({
   let currentAllText = allText;
 
   return {
+    name: "MarkdownSession",
+    equals: jest.fn(() => false),
     append: jest.fn(),
     clear: jest.fn(),
     dispose: jest.fn(),
@@ -513,7 +516,7 @@ describe("MarkdownStream", () => {
       allText: "hello",
       rangeText: " world",
     });
-    const renderMarkdown = jest.fn(() => null);
+    const renderMarkdown = jest.fn((_props: MarkdownStreamRenderProps) => null);
 
     act(() => {
       TestRenderer.create(
@@ -557,7 +560,7 @@ describe("MarkdownStream", () => {
       allText: "hello",
       rangeText: " world",
     });
-    const renderMarkdown = jest.fn(() => null);
+    const renderMarkdown = jest.fn((_props: MarkdownStreamRenderProps) => null);
 
     act(() => {
       TestRenderer.create(
@@ -663,7 +666,7 @@ describe("MarkdownStream", () => {
       allText: "hello",
       rangeText: "",
     });
-    const renderMarkdown = jest.fn(() => null);
+    const renderMarkdown = jest.fn((_props: MarkdownStreamRenderProps) => null);
 
     act(() => {
       TestRenderer.create(
@@ -702,7 +705,7 @@ describe("MarkdownStream", () => {
       allText: "broken",
       rangeText: "",
     });
-    const renderMarkdown = jest.fn(() => null);
+    const renderMarkdown = jest.fn((_props: MarkdownStreamRenderProps) => null);
     const parseError = new Error("async initial parse failed");
     mockParser.parse.mockImplementationOnce(() => {
       throw parseError;
@@ -757,9 +760,9 @@ describe("MarkdownStream", () => {
       mock.mock.lastCall?.[0] as MarkdownStreamRenderProps;
 
     it("flushes on animation frames with the raf strategy and cancels on unmount", () => {
-      const frames = new Map<number, FrameRequestCallback>();
+      const frames = new Map<number, FrameCallback>();
       let nextFrame = 1;
-      const raf = jest.fn((callback: FrameRequestCallback) => {
+      const raf = jest.fn((callback: FrameCallback) => {
         const id = nextFrame++;
         frames.set(id, callback);
         return id;

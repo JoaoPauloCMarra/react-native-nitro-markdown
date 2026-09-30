@@ -5,6 +5,7 @@ import { MarkdownContext } from "../MarkdownContext";
 import { CodeBlock } from "../renderers/code";
 import { defaultMarkdownTheme } from "../theme";
 import type { CodeHighlighter } from "../utils/code-highlight";
+import { hostType } from "./host-type";
 
 const highlighter: CodeHighlighter = () => [
   { text: "const", type: "keyword" },
@@ -45,10 +46,10 @@ describe("CodeBlock highlighting", () => {
   it("merges adjacent same-type tokens and reuses token styles across renders", () => {
     const renderer = renderCode();
     const codeText = renderer.root
-      .findAllByType("Text")
+      .findAllByType(hostType("Text"))
       .find((node) => node.props.selectable === true)!;
     const runs = codeText.findAll(
-      (node) => node.type === "Text" && node !== codeText,
+      (node) => node.type === hostType("Text") && node !== codeText,
       { deep: false },
     );
 
@@ -66,10 +67,10 @@ describe("CodeBlock highlighting", () => {
 
     renderCode(renderer);
     const nextCodeText = renderer.root
-      .findAllByType("Text")
+      .findAllByType(hostType("Text"))
       .find((node) => node.props.selectable === true)!;
     const nextRuns = nextCodeText.findAll(
-      (node) => node.type === "Text" && node !== nextCodeText,
+      (node) => node.type === hostType("Text") && node !== nextCodeText,
       { deep: false },
     );
     expect(nextRuns[0]!.props.style).toBe(keywordStyle);

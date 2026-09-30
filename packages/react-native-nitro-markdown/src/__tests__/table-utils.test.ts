@@ -126,7 +126,7 @@ describe("estimateColumnWidths", () => {
     const long = [{ type: "text" as const, content: "A very long header text" }];
     const shortWidths = estimateColumnWidths(short as MarkdownNode[], [], 1, 60);
     const longWidths = estimateColumnWidths(long as MarkdownNode[], [], 1, 60);
-    expect(longWidths[0]).toBeGreaterThanOrEqual(shortWidths[0]);
+    expect(longWidths[0]).toBeGreaterThanOrEqual(shortWidths[0]!);
   });
 
   it("uses body cell width when wider than header", () => {
@@ -134,7 +134,7 @@ describe("estimateColumnWidths", () => {
     const rows = [[{ type: "text" as const, content: "A much longer cell value here" }]];
     const widths = estimateColumnWidths(headers as MarkdownNode[], rows as MarkdownNode[][], 1, 60);
     const headerOnlyWidths = estimateColumnWidths(headers as MarkdownNode[], [], 1, 60);
-    expect(widths[0]).toBeGreaterThanOrEqual(headerOnlyWidths[0]);
+    expect(widths[0]).toBeGreaterThanOrEqual(headerOnlyWidths[0]!);
   });
 
   it("uses minimum width for columns without header or body cells", () => {
@@ -160,7 +160,7 @@ describe("estimateColumnWidths", () => {
 
     const widths = estimateColumnWidths(headers as MarkdownNode[], rows as MarkdownNode[][], 2, 60);
 
-    expect(widths[1]).toBeGreaterThan(widths[0]);
+    expect(widths[1]).toBeGreaterThan(widths[0]!);
   });
 
   it("caps long content at the maximum estimated width", () => {
