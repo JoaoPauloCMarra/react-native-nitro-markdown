@@ -5,7 +5,10 @@
 #include <stack>
 #include <vector>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
+#include <exception>
+#include <new>
 #include <algorithm>
 #include <limits>
 #include <stdexcept>
@@ -84,53 +87,100 @@ static size_t utf8SequenceLength(
     return 1;
 }
 
-struct Utf16OffsetRun {
-    uint32_t byteBeg;
-    uint32_t byteEnd;
-    uint32_t utf16Beg;
-    uint32_t cumulativeExtra;
-};
+static constexpr size_t kOffsetCheckpointStride = 64;
+static constexpr uint32_t kOffsetCheckpointBackShift = 28;
+static constexpr uint32_t kOffsetCheckpointUtf16Mask =
+    (uint32_t{1} << kOffsetCheckpointBackShift) - 1;
 
 static_assert(
-    kMaxInputBytes <= std::numeric_limits<uint32_t>::max(),
-    "UTF-16 offset runs store byte offsets in 32 bits"
+    kMaxInputBytes <= kOffsetCheckpointUtf16Mask,
+    "UTF-16 offset checkpoints store offsets in 28 bits"
 );
 
-static std::vector<Utf16OffsetRun> createUtf16OffsetRuns(
+static std::vector<uint32_t> createUtf16OffsetCheckpoints(
     const char* text,
     size_t size
 ) {
-    std::vector<Utf16OffsetRun> runs;
     const auto* bytes = reinterpret_cast<const unsigned char*>(text);
-    size_t leadBytes = 0;
-    for (size_t index = 0; index < size; index++) {
-        if ((bytes[index] & 0xC0) == 0xC0) leadBytes++;
-    }
-    runs.reserve(leadBytes);
-    size_t byteIndex = 0;
-    OFF utf16Index = 0;
-    size_t cumulativeExtra = 0;
+    size_t firstHighByte = 0;
+    while (firstHighByte < size && bytes[firstHighByte] < 0x80) firstHighByte++;
+    if (firstHighByte == size) return {};
 
+    std::vector<uint32_t> checkpoints;
+    checkpoints.reserve(size / kOffsetCheckpointStride + 1);
+    size_t byteIndex = 0;
+    size_t utf16Index = 0;
+    size_t nextCheckpoint = 0;
     while (byteIndex < size) {
         const size_t sequenceLength =
             utf8SequenceLength(bytes + byteIndex, size - byteIndex);
-        if (sequenceLength > 1) {
-            const OFF utf16Length = sequenceLength == 4 ? 2 : 1;
-            cumulativeExtra += sequenceLength - utf16Length;
-            runs.push_back({
-                static_cast<uint32_t>(byteIndex),
-                static_cast<uint32_t>(byteIndex + sequenceLength),
-                static_cast<uint32_t>(utf16Index),
-                static_cast<uint32_t>(cumulativeExtra),
-            });
-            utf16Index += utf16Length;
-        } else {
-            utf16Index += 1;
+        const size_t sequenceEnd = byteIndex + sequenceLength;
+        while (nextCheckpoint < sequenceEnd) {
+            checkpoints.push_back(
+                static_cast<uint32_t>(utf16Index) |
+                (static_cast<uint32_t>(nextCheckpoint - byteIndex)
+                    << kOffsetCheckpointBackShift)
+            );
+            nextCheckpoint += kOffsetCheckpointStride;
         }
-        byteIndex += sequenceLength;
+        utf16Index += sequenceLength == 4 ? 2 : 1;
+        byteIndex = sequenceEnd;
     }
+    if (utf16Index == size) return {};
+    return checkpoints;
+}
 
-    return runs;
+[[noreturn]] static void throwParseFailure(int result, const char* parserLog) {
+    if (std::strstr(parserLog, "alloc() failed") != nullptr) {
+        throw MarkdownOutOfMemory();
+    }
+    std::string message = "Markdown parsing failed with code " + std::to_string(result);
+    if (parserLog[0] != '\0') {
+        message += ": ";
+        message += parserLog;
+    }
+    throw std::runtime_error(message);
+}
+
+static bool isMappedBlock(MD_BLOCKTYPE type) noexcept {
+    switch (type) {
+        case MD_BLOCK_QUOTE:
+        case MD_BLOCK_UL:
+        case MD_BLOCK_OL:
+        case MD_BLOCK_LI:
+        case MD_BLOCK_HR:
+        case MD_BLOCK_H:
+        case MD_BLOCK_CODE:
+        case MD_BLOCK_HTML:
+        case MD_BLOCK_FOOTNOTE_DEF:
+        case MD_BLOCK_P:
+        case MD_BLOCK_TABLE:
+        case MD_BLOCK_THEAD:
+        case MD_BLOCK_TBODY:
+        case MD_BLOCK_TR:
+        case MD_BLOCK_TH:
+        case MD_BLOCK_TD:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool isMappedSpan(MD_SPANTYPE type) noexcept {
+    switch (type) {
+        case MD_SPAN_EM:
+        case MD_SPAN_STRONG:
+        case MD_SPAN_DEL:
+        case MD_SPAN_A:
+        case MD_SPAN_IMG:
+        case MD_SPAN_CODE:
+        case MD_SPAN_LATEXMATH:
+        case MD_SPAN_LATEXMATH_DISPLAY:
+        case MD_SPAN_U:
+            return true;
+        default:
+            return false;
+    }
 }
 } // namespace
 
@@ -141,7 +191,9 @@ public:
     std::string currentText;
     const char* inputText = nullptr;
     size_t inputTextSize = 0;
-    std::vector<Utf16OffsetRun> sourceOffsetRuns;
+    std::vector<uint32_t> sourceOffsetCheckpoints;
+    mutable size_t sourceOffsetCursorByte = 0;
+    mutable size_t sourceOffsetCursorUtf16 = 0;
     bool sourceOffsetsTracked = false;
     bool sourceOffsetsIdentity = false;
     OFF currentTextBeg = 0;
@@ -151,8 +203,11 @@ public:
     size_t lastEnterByteOffset = 0;
     size_t nextBreakSearchByteOffset = 0;
     size_t imageAltBytes = 0;
+    size_t parseBaseOffset = 0;
     bool forceCallbackFailure = false;
     std::string callbackError;
+    std::exception_ptr callbackException;
+    char parserLog[128] = {0};
     size_t nodeCount = 0;
     size_t childSlotCount = 0;
     size_t workCount = 0;
@@ -201,21 +256,36 @@ public:
         lastEnterByteOffset = 0;
         nextBreakSearchByteOffset = 0;
         imageAltBytes = 0;
+        parseBaseOffset = 0;
         forceCallbackFailure = false;
         callbackError.clear();
+        callbackException = nullptr;
+        parserLog[0] = '\0';
+    }
+
+    void captureCallbackException() noexcept {
+        if (!callbackException) callbackException = std::current_exception();
+    }
+
+    static void recordParserLog(const char* message, void* userdata) noexcept {
+        auto* impl = static_cast<Impl*>(userdata);
+        if (impl == nullptr || message == nullptr) return;
+        std::snprintf(impl->parserLog, sizeof(impl->parserLog), "%s", message);
     }
 
     void setInput(const char* text, size_t size, bool trackOffsets) {
         inputText = text;
         inputTextSize = size;
         nextBreakSearchByteOffset = 0;
-        sourceOffsetRuns.clear();
+        sourceOffsetCheckpoints.clear();
+        sourceOffsetCursorByte = 0;
+        sourceOffsetCursorUtf16 = 0;
         sourceOffsetsTracked = trackOffsets;
         sourceOffsetsIdentity = false;
         if (!trackOffsets) return;
 
-        sourceOffsetRuns = createUtf16OffsetRuns(text, size);
-        sourceOffsetsIdentity = sourceOffsetRuns.empty();
+        sourceOffsetCheckpoints = createUtf16OffsetCheckpoints(text, size);
+        sourceOffsetsIdentity = sourceOffsetCheckpoints.empty();
     }
 
     OFF sourceOffset(size_t byteOffset) const {
@@ -223,29 +293,31 @@ public:
             byteOffset > inputTextSize ? inputTextSize : byteOffset;
         if (!sourceOffsetsTracked) return 0;
         if (sourceOffsetsIdentity) return static_cast<OFF>(index);
-        if (sourceOffsetRuns.empty()) return static_cast<OFF>(index);
 
-        size_t low = 0;
-        size_t high = sourceOffsetRuns.size();
-        while (low < high) {
-            const size_t middle = low + (high - low) / 2;
-            if (sourceOffsetRuns[middle].byteEnd <= index) {
-                low = middle + 1;
-            } else {
-                high = middle;
-            }
+        size_t byteIndex = sourceOffsetCursorByte;
+        size_t utf16Index = sourceOffsetCursorUtf16;
+        if (index < byteIndex || index - byteIndex >= kOffsetCheckpointStride) {
+            const size_t checkpoint = std::min(
+                index / kOffsetCheckpointStride,
+                sourceOffsetCheckpoints.size() - 1
+            );
+            const uint32_t packed = sourceOffsetCheckpoints[checkpoint];
+            byteIndex = checkpoint * kOffsetCheckpointStride -
+                (packed >> kOffsetCheckpointBackShift);
+            utf16Index = packed & kOffsetCheckpointUtf16Mask;
         }
 
-        const size_t extraBefore = low == 0
-            ? 0
-            : sourceOffsetRuns[low - 1].cumulativeExtra;
-        if (
-            low < sourceOffsetRuns.size() &&
-            index >= sourceOffsetRuns[low].byteBeg
-        ) {
-            return sourceOffsetRuns[low].utf16Beg;
+        const auto* bytes = reinterpret_cast<const unsigned char*>(inputText);
+        while (byteIndex < inputTextSize) {
+            const size_t sequenceLength =
+                utf8SequenceLength(bytes + byteIndex, inputTextSize - byteIndex);
+            if (index < byteIndex + sequenceLength) break;
+            byteIndex += sequenceLength;
+            utf16Index += sequenceLength == 4 ? 2 : 1;
         }
-        return static_cast<OFF>(index - extraBefore);
+        sourceOffsetCursorByte = byteIndex;
+        sourceOffsetCursorUtf16 = utf16Index;
+        return static_cast<OFF>(utf16Index);
     }
 
     void noteEnterOffset(MD_OFFSET byteOffset) {
@@ -447,6 +519,7 @@ public:
         auto* impl = static_cast<Impl*>(userdata);
         if (impl == nullptr) return 1; // Signal error to md4c
         if (impl->forceCallbackFailure) return 7;
+        off += static_cast<MD_OFFSET>(impl->parseBaseOffset);
         impl->noteEnterOffset(off);
         off = impl->sourceOffset(off);
 
@@ -519,6 +592,11 @@ public:
                 break;
             }
 
+            case MD_BLOCK_FOOTNOTE_DEF: {
+                impl->pushNode(impl->makeNode(NodeType::Paragraph), off);
+                break;
+            }
+
             case MD_BLOCK_P: {
                 impl->pushNode(impl->makeNode(NodeType::Paragraph), off);
                 break;
@@ -578,6 +656,7 @@ public:
 
         return 0;
         } catch (...) {
+            static_cast<Impl*>(userdata)->captureCallbackException();
             return 1; // Signal error to md4c
         }
     }
@@ -586,6 +665,7 @@ public:
         try {
         auto* impl = static_cast<Impl*>(userdata);
         if (impl == nullptr) return 1; // Signal error to md4c
+        off += static_cast<MD_OFFSET>(impl->parseBaseOffset);
         off = impl->sourceOffset(off);
 
         switch (type) {
@@ -593,16 +673,14 @@ public:
                 impl->flushText();
                 impl->root->end = containedEnd(*impl->root, off);
                 break;
-            case MD_BLOCK_HR:
-                impl->popNode(off);
-                break;
             default:
-                impl->popNode(off);
+                if (isMappedBlock(type)) impl->popNode(off);
                 break;
         }
 
         return 0;
         } catch (...) {
+            static_cast<Impl*>(userdata)->captureCallbackException();
             return 1; // Signal error to md4c
         }
     }
@@ -611,6 +689,7 @@ public:
         try {
         auto* impl = static_cast<Impl*>(userdata);
         if (impl == nullptr) return 1; // Signal error to md4c
+        off += static_cast<MD_OFFSET>(impl->parseBaseOffset);
         impl->noteEnterOffset(off);
         off = impl->sourceOffset(off);
 
@@ -685,6 +764,7 @@ public:
 
         return 0;
         } catch (...) {
+            static_cast<Impl*>(userdata)->captureCallbackException();
             return 1; // Signal error to md4c
         }
     }
@@ -693,13 +773,14 @@ public:
         try {
         auto* impl = static_cast<Impl*>(userdata);
         if (impl == nullptr) return 1; // Signal error to md4c
+        off += static_cast<MD_OFFSET>(impl->parseBaseOffset);
         impl->lastSpanByteEnd = std::max(
             impl->lastSpanByteEnd,
             std::min(static_cast<size_t>(off), impl->inputTextSize)
         );
         off = impl->sourceOffset(off);
 
-        if (type == MD_SPAN_WIKILINK) return 0;
+        if (!isMappedSpan(type)) return 0;
 
         if (!impl->nodeStack.empty()) {
             auto currentNode = impl->nodeStack.top();
@@ -723,6 +804,7 @@ public:
         impl->popNode(off);
         return 0;
         } catch (...) {
+            static_cast<Impl*>(userdata)->captureCallbackException();
             return 1; // Signal error to md4c
         }
     }
@@ -823,6 +905,7 @@ public:
 
         return 0;
         } catch (...) {
+            static_cast<Impl*>(userdata)->captureCallbackException();
             return 1; // Signal error to md4c
         }
     }
@@ -841,7 +924,7 @@ std::shared_ptr<MarkdownNode> MD4CParser::parseWithFlags(
     const ParserOptions& options,
     unsigned int extraFlags,
     bool forceCallbackFailure
-) {
+) try {
     Impl impl;
     impl.reset();
     size_t maxInputBytes = options.maxInputLength > 0
@@ -857,6 +940,9 @@ std::shared_ptr<MarkdownNode> MD4CParser::parseWithFlags(
     size_t inputSize = clampInputSize(markdown.size());
     impl.setInput(markdown.c_str(), inputSize, options.sourceOffsets);
     impl.forceCallbackFailure = forceCallbackFailure;
+    const size_t bomBytes =
+        inputSize >= 3 && markdown.compare(0, 3, "\xEF\xBB\xBF") == 0 ? 3 : 0;
+    impl.parseBaseOffset = bomBytes;
 #ifdef NITRO_MARKDOWN_TESTING
     lastParseTrackedOffsets = options.sourceOffsets;
 #endif
@@ -883,25 +969,25 @@ std::shared_ptr<MarkdownNode> MD4CParser::parseWithFlags(
         &Impl::enterSpan,
         &Impl::leaveSpan,
         &Impl::text,
-        nullptr,
+        &Impl::recordParserLog,
         nullptr
     };
 
-    int result = md_parse(markdown.c_str(),
-                          static_cast<MD_SIZE>(inputSize),
+    int result = md_parse(markdown.c_str() + bomBytes,
+                          static_cast<MD_SIZE>(inputSize - bomBytes),
                           &parser,
                           &impl);
-    if (!impl.callbackError.empty()) {
-        throw std::runtime_error(impl.callbackError);
+    if (impl.callbackException) {
+        std::rethrow_exception(impl.callbackException);
     }
     if (result != 0) {
-        throw std::runtime_error(
-            "Markdown parsing failed with code " + std::to_string(result)
-        );
+        throwParseFailure(result, impl.parserLog);
     }
 
     impl.flushText();
     return impl.root;
+} catch (const std::bad_alloc&) {
+    throw MarkdownOutOfMemory();
 }
 
 #ifdef NITRO_MARKDOWN_TESTING
@@ -938,6 +1024,44 @@ int MD4CParser::leaveSpanNullUserdataForTest() {
 
 int MD4CParser::textNullUserdataForTest() {
     return Impl::text(MD_TEXT_NORMAL, "x", 1, nullptr);
+}
+
+std::vector<OFF> MD4CParser::sourceOffsetsForTest(const std::string& text) {
+    Impl impl;
+    impl.setInput(text.data(), text.size(), true);
+    std::vector<OFF> offsets;
+    offsets.reserve(text.size() + 2);
+    for (size_t index = 0; index <= text.size() + 1; index++) {
+        offsets.push_back(impl.sourceOffset(index));
+    }
+    return offsets;
+}
+
+std::vector<OFF> MD4CParser::sourceOffsetsForTest(
+    const std::string& text,
+    const std::vector<size_t>& byteOffsets
+) {
+    Impl impl;
+    impl.setInput(text.data(), text.size(), true);
+    std::vector<OFF> offsets;
+    offsets.reserve(byteOffsets.size());
+    for (const size_t byteOffset : byteOffsets) {
+        offsets.push_back(impl.sourceOffset(byteOffset));
+    }
+    return offsets;
+}
+
+std::string MD4CParser::parseFailureMessageForTest(int result, const char* parserLog) {
+    try {
+        throwParseFailure(result, parserLog);
+    } catch (const std::exception& error) {
+        return error.what();
+    }
+}
+
+size_t MD4CParser::sourceOffsetMapBytesForTest(const std::string& text) {
+    return createUtf16OffsetCheckpoints(text.data(), text.size()).capacity() *
+        sizeof(uint32_t);
 }
 
 int MD4CParser::offsetBeforeBaseForTest() {

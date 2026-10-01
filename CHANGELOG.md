@@ -9,6 +9,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [0.13.1] - 2026-10-01
+
+### Breaking changes
+
+None.
+
+### Fixed
+
+- A leading UTF-8 byte order mark (BOM) is skipped, so `\uFEFF# Title` parses
+  as a heading. Before this release the document started with a paragraph that
+  contained the BOM. Source offsets stay relative to the original string (the
+  BOM counts as one UTF-16 unit), and the BOM no longer appears in text content
+  or `extractPlainText`. Only the first BOM is skipped.
+- Native memory for `sourceOffsets: true` is bounded for every kind of text.
+  The offset map is about 6% of the input, so a 10 MB non-ASCII document peaks
+  at about 11 MB of parser memory instead of 52–94 MB.
+- When the native parser runs out of memory, it fails with
+  `Markdown parser ran out of memory` (code `parse_failed`) instead of
+  `Markdown parsing failed with code 1`.
+- When a `MarkdownSession` buffer or listener operation runs out of memory, it
+  fails with `Markdown session ran out of memory` (code `parse_failed`)
+  instead of `std::bad_alloc`.
+- Native parse failures include the parser's reason after the code, for
+  example `Markdown parsing failed with code -1: Too many link reference
+  definition instantiations.` The error code is unchanged.
+- `MarkdownSession` length and ranges stay exact when a native chunk ends
+  inside a multi-byte character. The range reported for the completing chunk
+  starts at that character.
+  A JavaScript string that ends with half of a surrogate pair is still
+  converted to U+FFFD before it reaches the session, so append whole
+  characters.
+- Android arm64-v8a and x86_64 libraries are linked with 16 KB page alignment
+  for every NDK version the app uses.
+- `maxInputLength` values from 2^32 up to 2^53 − 1 clamp to the 10 MB hard cap
+  on 32-bit Android (armeabi-v7a) instead of throwing, as on 64-bit devices.
+  The JavaScript API still rejects values of 2^53 and above with
+  `input_too_large`, because they are not safe integers.
+- `maxInputLength` of exactly 2^64 no longer causes undefined behavior on
+  64-bit iOS; it is rejected like larger values.
+- The 64 MiB AST JSON limit is enforced while the JSON is written, so the
+  serializer no longer allocates past 64 MiB before it reports
+  `input_too_complex`.
+
 ## [0.13.0] - 2026-09-30
 
 ### Breaking changes

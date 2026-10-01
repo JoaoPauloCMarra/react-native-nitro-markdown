@@ -198,6 +198,8 @@ async function main() {
   const args = new Set(process.argv.slice(2));
   const collectCoverage = args.has("--coverage");
   const runSanitizers = args.has("--sanitizers");
+  const runThreadSanitizer = args.has("--tsan");
+  const runPerf = args.has("--perf");
   const minLinesArg = process.argv
     .slice(2)
     .find((arg) => arg.startsWith("--min-lines="));
@@ -210,8 +212,17 @@ async function main() {
 
   log("Building and running C++ tests for MD4C Parser...");
 
-  if (collectCoverage && runSanitizers) {
-    log("C++ coverage and sanitizer execution cannot run together", "red");
+  const exclusiveModes = [
+    collectCoverage,
+    runSanitizers,
+    runThreadSanitizer,
+    runPerf,
+  ].filter(Boolean).length;
+  if (exclusiveModes > 1) {
+    log(
+      "C++ coverage, sanitizer, thread-sanitizer, and perf execution cannot run together",
+      "red",
+    );
     process.exit(1);
   }
 
@@ -239,13 +250,17 @@ async function main() {
     process.exit(1);
   }
 
-  const sanitizerCCompiler = runSanitizers
+  const useSanitizerCompiler = runSanitizers || runThreadSanitizer;
+  const sanitizerCCompiler = useSanitizerCompiler
     ? commandPath(process.env.CC || "clang")
     : null;
-  const sanitizerCxxCompiler = runSanitizers
+  const sanitizerCxxCompiler = useSanitizerCompiler
     ? commandPath(process.env.CXX || "clang++")
     : null;
-  if (runSanitizers && (!sanitizerCCompiler || !sanitizerCxxCompiler || isWindows)) {
+  if (
+    useSanitizerCompiler &&
+    (!sanitizerCCompiler || !sanitizerCxxCompiler || isWindows)
+  ) {
     log(
       "C++ sanitizer execution is unsupported here; clang/clang++ on macOS or Linux is required",
       "red",
@@ -357,7 +372,20 @@ protected:
         '-DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"',
       ].join(" ")
     : "";
-  const cmakeConfigCommand = `cmake ${cmakeGenerator} ${coverageFlags} ${sanitizerFlags} "${cppDir}"`.trim();
+  const threadSanitizerFlags = runThreadSanitizer
+    ? [
+        "-DCMAKE_BUILD_TYPE=Debug",
+        `-DCMAKE_C_COMPILER=${shellQuote(sanitizerCCompiler)}`,
+        `-DCMAKE_CXX_COMPILER=${shellQuote(sanitizerCxxCompiler)}`,
+        '-DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer -O1 -g"',
+        '-DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer -O1 -g"',
+        '-DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"',
+      ].join(" ")
+    : "";
+  const perfFlags = runPerf
+    ? "-DCMAKE_BUILD_TYPE=Release -DNITRO_MARKDOWN_PERF_ASSERTS=ON"
+    : "";
+  const cmakeConfigCommand = `cmake ${cmakeGenerator} ${coverageFlags} ${sanitizerFlags} ${threadSanitizerFlags} ${perfFlags} "${cppDir}"`.trim();
 
   if (!(await execCommand(cmakeConfigCommand, { cwd: buildDir }))) {
     log("CMake configuration failed", "red");
@@ -365,7 +393,9 @@ protected:
   }
 
   log("Building test executable...");
-  const cmakeBuildCommand = "cmake --build . --target MD4CParserTest";
+  const cmakeBuildCommand = runPerf
+    ? "cmake --build . --target MD4CParserTest --config Release"
+    : "cmake --build . --target MD4CParserTest";
 
   if (!(await execCommand(cmakeBuildCommand, { cwd: buildDir }))) {
     log("Build failed", "red");
@@ -403,7 +433,9 @@ protected:
           ASAN_OPTIONS: "halt_on_error=1:detect_leaks=0",
           UBSAN_OPTIONS: "halt_on_error=1:print_stacktrace=1",
         }
-      : process.env;
+      : runThreadSanitizer
+        ? { ...process.env, TSAN_OPTIONS: "halt_on_error=1" }
+        : process.env;
 
   if (!(await execCommand(`"${testExecutable}"`, { cwd: buildDir, env: testEnv }))) {
     log("Tests failed", "red");

@@ -51,6 +51,18 @@ describe("toMarkdownError legacy classification", () => {
     expect(nonError.message).toBe("unknown non-error failure");
   });
 
+  it("classifies native out-of-memory and md4c failure reasons as parse_failed", () => {
+    for (const message of [
+      "Markdown parser ran out of memory",
+      "Markdown session ran out of memory",
+      "Markdown parsing failed with code -1: Too many link reference definition instantiations.",
+    ]) {
+      const error = toMarkdownError(new Error(message), "parse");
+      expect(error.code).toBe("parse_failed");
+      expect(error.message).toBe(message);
+    }
+  });
+
   it("passes through existing MarkdownErrors unchanged", () => {
     const original = new MarkdownError(
       "invalid_range",

@@ -4,6 +4,7 @@
 #include <vector>
 #include <optional>
 #include <memory>
+#include <new>
 #include <cstddef>
 #include <string_view>
 
@@ -13,6 +14,20 @@ constexpr std::size_t kMaxAstDepth = 256;
 constexpr std::size_t kMaxAstNodes = 100'000;
 constexpr std::size_t kMaxAstChildSlots = 250'000;
 constexpr std::size_t kMaxAstWork = 500'000;
+
+class MarkdownOutOfMemory final : public std::bad_alloc {
+public:
+    const char* what() const noexcept override {
+        return "Markdown parser ran out of memory";
+    }
+};
+
+class MarkdownSessionOutOfMemory final : public std::bad_alloc {
+public:
+    const char* what() const noexcept override {
+        return "Markdown session ran out of memory";
+    }
+};
 
 typedef unsigned MD_OFFSET;
 typedef MD_OFFSET OFF;

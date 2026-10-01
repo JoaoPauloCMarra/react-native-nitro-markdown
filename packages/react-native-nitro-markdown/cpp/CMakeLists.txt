@@ -47,7 +47,13 @@ add_executable(MD4CParserTest
 )
 
 # Link the test executable to the core library
-target_link_libraries(MD4CParserTest PRIVATE MD4CCore)
+option(NITRO_MARKDOWN_PERF_ASSERTS "Assert wall-clock parse budgets" OFF)
+if(NITRO_MARKDOWN_PERF_ASSERTS)
+    target_compile_definitions(MD4CParserTest PRIVATE NITRO_MARKDOWN_PERF_ASSERTS=1)
+endif()
+
+find_package(Threads REQUIRED)
+target_link_libraries(MD4CParserTest PRIVATE MD4CCore Threads::Threads)
 
 # Include directories for the test
 target_include_directories(MD4CParserTest PRIVATE
