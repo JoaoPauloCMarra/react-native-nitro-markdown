@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [0.13.1] - 2026-10-01
+
+### Breaking changes
+
+None.
+
+### Fixed
+
+- A leading UTF-8 byte order mark (BOM) is skipped, so `\uFEFF# Title` parses
+  as a heading. Before this release the document started with a paragraph that
+  contained the BOM. Source offsets stay relative to the original string (the
+  BOM counts as one UTF-16 unit), and the BOM no longer appears in text content
+  or `extractPlainText`. Only the first BOM is skipped.
+- Native memory for `sourceOffsets: true` no longer grows by 16 bytes for each
+  non-ASCII character. A 10 MB CJK, Cyrillic, or emoji document peaks at about
+  10.5 MB of parser memory instead of 52–94 MB. Text that alternates ASCII and
+  non-ASCII characters still uses the previous amount.
+- `maxInputLength` values of 2^32 and above clamp to the 10 MB hard cap on
+  32-bit Android (armeabi-v7a) instead of throwing, as on 64-bit devices.
+  Values of 2^64 and above are still rejected.
+- `maxInputLength` of exactly 2^64 no longer causes undefined behavior on
+  64-bit iOS; it is rejected like larger values.
+- The 64 MiB AST JSON limit is enforced while the JSON is written, so the
+  serializer no longer allocates past 64 MiB before it reports
+  `input_too_complex`.
+
 ## [0.13.0] - 2026-09-30
 
 ### Breaking changes

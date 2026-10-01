@@ -106,6 +106,10 @@ type ParserOptions = {
 };
 ```
 
+A leading UTF-8 byte order mark is skipped and is not part of any text node.
+`beg`/`end` still index the original string, so the BOM counts as one UTF-16
+unit.
+
 Set `sourceOffsets: false` for one-shot headless parses (search, indexing,
 validation) where you never map a node back to the source text. The native
 parser then skips building the UTF-16 offset map and omits the `beg`/`end`

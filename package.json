@@ -30,6 +30,8 @@
     "test:coverage": "bun run --cwd packages/react-native-nitro-markdown test:coverage",
     "test:cpp": "bun run --cwd packages/react-native-nitro-markdown test:cpp",
     "test:cpp:sanitizers": "bun run --cwd packages/react-native-nitro-markdown test:cpp:sanitizers",
+    "test:cpp:tsan": "bun run --cwd packages/react-native-nitro-markdown test:cpp:tsan",
+    "test:cpp:perf": "bun run --cwd packages/react-native-nitro-markdown test:cpp:perf",
     "test:cpp:coverage": "bun run --cwd packages/react-native-nitro-markdown test:cpp:coverage",
     "size": "bun run --cwd packages/react-native-nitro-markdown size",
     "benchmark": "node scripts/benchmark-comparison.js",
