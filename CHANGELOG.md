@@ -37,11 +37,15 @@ None.
 - `MarkdownSession` length and ranges stay exact when a native chunk ends
   inside a multi-byte character. The range reported for the completing chunk
   starts at that character.
+  A JavaScript string that ends with half of a surrogate pair is still
+  converted to U+FFFD before it reaches the session, so append whole
+  characters.
 - Android arm64-v8a and x86_64 libraries are linked with 16 KB page alignment
   for every NDK version the app uses.
-- `maxInputLength` values of 2^32 and above clamp to the 10 MB hard cap on
-  32-bit Android (armeabi-v7a) instead of throwing, as on 64-bit devices.
-  Values of 2^64 and above are still rejected.
+- `maxInputLength` values from 2^32 up to 2^53 − 1 clamp to the 10 MB hard cap
+  on 32-bit Android (armeabi-v7a) instead of throwing, as on 64-bit devices.
+  The JavaScript API still rejects values of 2^53 and above with
+  `input_too_large`, because they are not safe integers.
 - `maxInputLength` of exactly 2^64 no longer causes undefined behavior on
   64-bit iOS; it is rejected like larger values.
 - The 64 MiB AST JSON limit is enforced while the JSON is written, so the
