@@ -82,6 +82,42 @@ void operator delete(void* pointer, std::size_t) noexcept {
     NitroMarkdownTestHeap::release(pointer);
 }
 
+void* operator new[](std::size_t size) {
+    return NitroMarkdownTestHeap::allocate(size);
+}
+
+void operator delete[](void* pointer) noexcept {
+    NitroMarkdownTestHeap::release(pointer);
+}
+
+void operator delete[](void* pointer, std::size_t) noexcept {
+    NitroMarkdownTestHeap::release(pointer);
+}
+
+void* operator new(std::size_t size, const std::nothrow_t&) noexcept {
+    try {
+        return NitroMarkdownTestHeap::allocate(size);
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+void* operator new[](std::size_t size, const std::nothrow_t&) noexcept {
+    try {
+        return NitroMarkdownTestHeap::allocate(size);
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+void operator delete(void* pointer, const std::nothrow_t&) noexcept {
+    NitroMarkdownTestHeap::release(pointer);
+}
+
+void operator delete[](void* pointer, const std::nothrow_t&) noexcept {
+    NitroMarkdownTestHeap::release(pointer);
+}
+
 namespace NitroMarkdown {
 
 class TestRunner {
