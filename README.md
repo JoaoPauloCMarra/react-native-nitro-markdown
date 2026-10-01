@@ -13,6 +13,8 @@
 CommonMark and GitHub Flavored Markdown, real React Native rendering, first-class
 **streaming** for LLM/chat output, and a **headless AST** API — powered by
 [md4c](https://github.com/mity/md4c) and [Nitro Modules](https://nitro.margelo.com/).
+Need it installed into an existing Expo development build? See
+**[Paid setup](#paid-setup)**.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/JoaoPauloCMarra/react-native-nitro-markdown/main/readme/render.png" alt="Nitro Markdown rendering rich GitHub Flavored Markdown natively in React Native" width="250" />
@@ -396,6 +398,7 @@ for the error-code contract.
 | [Security policy](./SECURITY.md)                                                                                       | Supported versions, link/image policy, reporting.          |
 | [Changelog](./CHANGELOG.md)                                                                                            | Package changes and migration requirements by version.     |
 | [Troubleshooting](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/troubleshooting.md)    | Common install and runtime issues.                         |
+| [Paid setup](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/paid-setup.md)              | Fixed-scope Expo development-build install, theme, stream, headless parse. |
 
 ## Platform Support
 
@@ -513,6 +516,17 @@ bun run example:ios    # run the example app
 ```
 
 See [CONTRIBUTING.md](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/CONTRIBUTING.md). Run native example builds locally before release when changing native, Nitro, rendering, or packaging files. GitHub CI does not build the Android or iOS example.
+
+## Paid setup
+
+The package stays [MIT](./LICENSE). For teams that want it wired into an
+existing Expo **development build** (not Expo Go), there is a fixed-scope paid
+setup: install, theme, a streaming session, and headless parse. That is the
+whole scope.
+
+Use the contact already on
+[webnexus.com.br/en](https://webnexus.com.br/en#contact).
+Full write-up: **[Paid setup](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/paid-setup.md)**.
 
 ## License
 
