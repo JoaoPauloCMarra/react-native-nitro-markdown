@@ -1,6 +1,9 @@
 #include "HybridMarkdownSession.hpp"
 
 #include <algorithm>
+#ifdef NITRO_MARKDOWN_TESTING
+#include <atomic>
+#endif
 #include <cmath>
 #include <iostream>
 #include <limits>
@@ -10,7 +13,14 @@ namespace margelo::nitro::Markdown {
 
 namespace {
 
+#ifdef NITRO_MARKDOWN_TESTING
+std::atomic<size_t> utf8DecodeSteps{0};
+#endif
+
 size_t utf8SequenceLength(const unsigned char* bytes, size_t remaining) noexcept {
+#ifdef NITRO_MARKDOWN_TESTING
+    utf8DecodeSteps.fetch_add(1, std::memory_order_relaxed);
+#endif
     if (remaining == 0) return 0;
 
     const unsigned char first = bytes[0];
@@ -262,6 +272,16 @@ size_t HybridMarkdownSession::getExternalMemorySize() noexcept {
     }
     return retainedBufferCapacity + listenerCapacity * listenerBytes;
 }
+
+#ifdef NITRO_MARKDOWN_TESTING
+size_t HybridMarkdownSession::utf8DecodeStepsForTest() noexcept {
+    return utf8DecodeSteps.load(std::memory_order_relaxed);
+}
+
+void HybridMarkdownSession::resetUtf8DecodeStepsForTest() noexcept {
+    utf8DecodeSteps.store(0, std::memory_order_relaxed);
+}
+#endif
 
 void HybridMarkdownSession::ensureActiveLocked() const {
     if (disposed_) {

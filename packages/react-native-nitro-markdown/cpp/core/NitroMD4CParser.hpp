@@ -8,6 +8,7 @@
 #ifdef NITRO_MARKDOWN_TESTING
 #include "../nitromd/nitromd.h"
 #include <limits>
+#include <vector>
 #endif
 
 namespace NitroMarkdown {
@@ -33,6 +34,8 @@ public:
     static int enterSpanNullUserdataForTest();
     static int leaveSpanNullUserdataForTest();
     static int textNullUserdataForTest();
+    static std::vector<OFF> sourceOffsetsForTest(const std::string& text);
+    static size_t sourceOffsetRunCountForTest(const std::string& text);
     static int offsetBeforeBaseForTest();
     static int offsetPastBaseForTest();
     static size_t clampInputSizeForTest(size_t inputSize) {

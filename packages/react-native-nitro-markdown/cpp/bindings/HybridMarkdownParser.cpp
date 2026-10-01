@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <charconv>
 #include <cmath>
+#include <cstdint>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -31,15 +32,13 @@ public:
     }
 
     void append(std::string_view value) {
+        grow(value.size());
         output_.append(value.data(), value.size());
     }
 
     void push(char value) {
+        grow(1);
         output_.push_back(value);
-    }
-
-    [[nodiscard]] size_t size() const noexcept {
-        return output_.size();
     }
 
     [[nodiscard]] std::string take() && {
@@ -47,6 +46,18 @@ public:
     }
 
 private:
+    void grow(size_t extra) {
+        if (extra > kMaxJsonSize - output_.size()) {
+            throwJsonSizeError(output_.size() + extra);
+        }
+        const size_t needed = output_.size() + extra;
+        if (needed > output_.capacity()) {
+            output_.reserve(
+                std::min(std::max(needed, output_.capacity() * 2), kMaxJsonSize)
+            );
+        }
+    }
+
     std::string output_;
 };
 
@@ -177,7 +188,8 @@ inline void appendBoolField(Writer& output, const char* key, bool value) {
 // Converts the optional JS-side UTF-8 byte maxInputLength to the native size
 // type before the parser applies its hard cap. Invalid numeric values are
 // rejected before any narrowing conversion.
-size_t resolveMaxInputBytes(const std::optional<double>& maxInputLength) {
+template <typename SizeT>
+SizeT resolveMaxInputBytesAs(const std::optional<double>& maxInputLength) {
     if (!maxInputLength.has_value()) return 0;
     double value = maxInputLength.value();
     if (!std::isfinite(value) || value < 0 || std::floor(value) != value) {
@@ -186,11 +198,16 @@ size_t resolveMaxInputBytes(const std::optional<double>& maxInputLength) {
         );
     }
     if (value == 0) return 0;
-    const long double maxSize = static_cast<long double>(std::numeric_limits<size_t>::max());
-    if (static_cast<long double>(value) > maxSize) {
+    if (value >= 18446744073709551616.0) {
         throw std::runtime_error("maxInputLength cannot be represented as a native size");
     }
-    return static_cast<size_t>(value);
+    const uint64_t wide = static_cast<uint64_t>(value);
+    const uint64_t maxSize = static_cast<uint64_t>(std::numeric_limits<SizeT>::max());
+    return static_cast<SizeT>(std::min(wide, maxSize));
+}
+
+size_t resolveMaxInputBytes(const std::optional<double>& maxInputLength) {
+    return resolveMaxInputBytesAs<size_t>(maxInputLength);
 }
 
 template <typename Writer>
@@ -296,8 +313,15 @@ std::string HybridMarkdownParser::nodeToJson(
         : std::max<size_t>(4096, source.size() * 2 + 256);
     writer.reserve(reserveSize);
     appendNodeJson(writer, node, options.sourceOffsets);
-    if (writer.size() > kMaxJsonSize) throwJsonSizeError(writer.size());
     return std::move(writer).take();
 }
+
+#ifdef NITRO_MARKDOWN_TESTING
+uint64_t HybridMarkdownParser::resolveMaxInputBytesForTest(double value, bool narrowSize) {
+    return narrowSize
+        ? static_cast<uint64_t>(resolveMaxInputBytesAs<uint32_t>(value))
+        : resolveMaxInputBytesAs<uint64_t>(value);
+}
+#endif
 
 } // namespace margelo::nitro::Markdown

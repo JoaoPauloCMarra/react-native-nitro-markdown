@@ -34,6 +34,11 @@ public:
     void dispose() override;
     size_t getExternalMemorySize() noexcept override;
 
+#ifdef NITRO_MARKDOWN_TESTING
+    static size_t utf8DecodeStepsForTest() noexcept;
+    static void resetUtf8DecodeStepsForTest() noexcept;
+#endif
+
 private:
     struct Listener {
         size_t id;
