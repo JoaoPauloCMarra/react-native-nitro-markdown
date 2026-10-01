@@ -19,6 +19,68 @@
 #include <cmath>
 #include <limits>
 #include <vector>
+#include <atomic>
+#include <cstdlib>
+#include <functional>
+#include <mutex>
+#include <new>
+#include <thread>
+#include <utility>
+#ifndef _WIN32
+#include <pthread.h>
+#endif
+
+namespace NitroMarkdownTestHeap {
+
+constexpr std::size_t kHeaderBytes = 16;
+std::atomic<std::size_t> liveBytes{0};
+std::atomic<std::size_t> peakBytes{0};
+std::atomic<long long> allocationsUntilFailure{-1};
+std::atomic<bool> stickyFailure{false};
+std::atomic<std::size_t> injectedFailures{0};
+
+inline void* allocate(std::size_t size) {
+    const long long remaining = allocationsUntilFailure.load(std::memory_order_relaxed);
+    if (remaining == 0) {
+        if (!stickyFailure.load(std::memory_order_relaxed)) {
+            allocationsUntilFailure.store(-1, std::memory_order_relaxed);
+        }
+        injectedFailures.fetch_add(1, std::memory_order_relaxed);
+        throw std::bad_alloc();
+    }
+    if (remaining > 0) {
+        allocationsUntilFailure.store(remaining - 1, std::memory_order_relaxed);
+    }
+    void* block = std::malloc(size + kHeaderBytes);
+    if (block == nullptr) throw std::bad_alloc();
+    *static_cast<std::size_t*>(block) = size;
+    const std::size_t live = liveBytes.fetch_add(size, std::memory_order_relaxed) + size;
+    std::size_t peak = peakBytes.load(std::memory_order_relaxed);
+    while (live > peak && !peakBytes.compare_exchange_weak(peak, live, std::memory_order_relaxed)) {
+    }
+    return static_cast<unsigned char*>(block) + kHeaderBytes;
+}
+
+inline void release(void* pointer) noexcept {
+    if (pointer == nullptr) return;
+    void* block = static_cast<unsigned char*>(pointer) - kHeaderBytes;
+    liveBytes.fetch_sub(*static_cast<std::size_t*>(block), std::memory_order_relaxed);
+    std::free(block);
+}
+
+} // namespace NitroMarkdownTestHeap
+
+void* operator new(std::size_t size) {
+    return NitroMarkdownTestHeap::allocate(size);
+}
+
+void operator delete(void* pointer) noexcept {
+    NitroMarkdownTestHeap::release(pointer);
+}
+
+void operator delete(void* pointer, std::size_t) noexcept {
+    NitroMarkdownTestHeap::release(pointer);
+}
 
 namespace NitroMarkdown {
 
@@ -317,6 +379,32 @@ public:
         testHybridMarkdownSessionCorpus();
         testHybridMarkdownParserBinding();
 
+        testProductionOutputGolden();
+        testSourceOffsetMappingMatchesReference();
+        testLeadingBomIsSkipped();
+        testUnmappedExtensionNodesStayBalanced();
+        testMaxInputLengthSaturatesOnEveryAbi();
+        testHostileEncodings();
+        testJsonNeverEmitsRawControlBytes();
+        testOptionMatrixDifferential();
+        testTableShapeAndHtmlToggle();
+        testNestingAgainstDepthLimit();
+        testSmallStackDeepNesting();
+        testCallbackCountScalesLinearly();
+        testBudgetErrorsSurfaceFromCallbacks();
+        testFlattenBounds();
+        testJsonOutputSizeCap();
+        testBindingNumericOptionBoundaries();
+        testSessionNumericRangeBoundaries();
+        testSessionChunkSplitDifferential();
+        testSessionStreamingStepsAreLinear();
+        testSessionBufferGrowthIsBounded();
+        testSessionListenerReentrancy();
+        testSessionConcurrentCallers();
+        testSessionDisposeRacesCallers();
+        testAllocationFailureInjection();
+        testPeakHeapBounds();
+
         TestRunner::printSummary();
     }
 
@@ -459,8 +547,13 @@ private:
         static constexpr double kP95BudgetMs = 90.0;
 
         std::cout << "ℹ Perf budget parse p50=" << p50 << "ms p95=" << p95 << "ms" << std::endl;
+#ifdef NITRO_MARKDOWN_PERF_ASSERTS
         TestRunner::assertTrue(p50 <= kP50BudgetMs, "Perf budget parse p50");
         TestRunner::assertTrue(p95 <= kP95BudgetMs, "Perf budget parse p95");
+#else
+        std::cout << "ℹ Perf budget parse asserts (p50<=" << kP50BudgetMs << "ms, p95<="
+                  << kP95BudgetMs << "ms) run only in the perf build" << std::endl;
+#endif
     }
 
     static void testHybridSerializationLatency() {
@@ -2999,6 +3092,2202 @@ private:
         TestRunner::assertEqual("image.png", image->href.value_or(""), "ImageTitle: src");
         TestRunner::assertEqual("alt text", image->alt.value_or(""), "ImageTitle: alt");
         TestRunner::assertEqual("my title", image->title.value_or(""), "ImageTitle: title");
+    }
+
+    static std::string repeatToSize(const std::string& unit, size_t bytes) {
+        std::string value;
+        value.reserve(bytes + unit.size());
+        while (value.size() < bytes) value += unit;
+        return value;
+    }
+
+    static size_t countAllNodes(const std::shared_ptr<MarkdownNode>& node) {
+        if (!node) return 0;
+        size_t count = 1;
+        for (const auto& child : node->children) count += countAllNodes(child);
+        return count;
+    }
+
+    static size_t maxNodeDepth(const std::shared_ptr<MarkdownNode>& node) {
+        if (!node) return 0;
+        size_t deepest = 0;
+        for (const auto& child : node->children) {
+            deepest = std::max(deepest, maxNodeDepth(child));
+        }
+        return deepest + 1;
+    }
+
+    static bool anyContentContains(const std::shared_ptr<MarkdownNode>& node, char value) {
+        if (!node) return false;
+        if (node->content.has_value() && node->content->find(value) != std::string::npos) {
+            return true;
+        }
+        for (const auto& child : node->children) {
+            if (anyContentContains(child, value)) return true;
+        }
+        return false;
+    }
+
+    template <typename Fn>
+    static std::string errorOf(Fn&& fn) {
+        try {
+            fn();
+        } catch (const std::bad_alloc&) {
+            return "std::bad_alloc";
+        } catch (const std::exception& error) {
+            return error.what();
+        } catch (...) {
+            return "unknown exception";
+        }
+        return "";
+    }
+
+    static std::string stripOffsetFields(const std::string& json) {
+        static const std::string begKey = ",\"beg\":";
+        static const std::string endKey = ",\"end\":";
+        const auto skipDigits = [&json](size_t index) {
+            while (index < json.size() && json[index] >= '0' && json[index] <= '9') index++;
+            return index;
+        };
+        std::string out;
+        out.reserve(json.size());
+        size_t index = 0;
+        while (index < json.size()) {
+            if (json.compare(index, begKey.size(), begKey) == 0) {
+                const size_t afterBeg = skipDigits(index + begKey.size());
+                if (json.compare(afterBeg, endKey.size(), endKey) == 0) {
+                    index = skipDigits(afterBeg + endKey.size());
+                    continue;
+                }
+            }
+            out.push_back(json[index++]);
+        }
+        return out;
+    }
+
+    static std::vector<std::string> hostileDocuments() {
+        return {
+            std::string("a\xC0\xAF" "b"),
+            std::string("a\xE0\x80\xAF" "b"),
+            std::string("a\xED\xA0\x80" "b"),
+            std::string("a\xF4\x90\x80\x80" "b"),
+            std::string("**a\xC3"),
+            std::string("a\xE4\xB8"),
+            std::string("a\xF0\x9F\x98"),
+            std::string("\x80\xBF"),
+            std::string("\xFF\xFE\xF8 x"),
+            std::string("a\0*b*\0", 7),
+            std::string("\xEF\xBB\xBF# h"),
+            "a\r\nb\r\n\r\n# h\r\n",
+            "a\rb\r\r# h\r",
+            std::string("\xF0\x9F\x98\x80\xF0\x9F"),
+            "[a](u \"t\r\nx\")",
+            std::string("\x01\x02\x1f\x7f `\x03` [l](</\x04> \"\x05\") ![\x06](\x07)"),
+            "<div \x0b>\r\n\x0c</div>\r\n\r\n<!-- c -->\r\n<script>x</script>",
+            "```\r\na\r\nb\r\n```\r\n",
+            "| a | b | c |\n|---|---|\n| 1 | 2 | 3 | 4 |\n| 5 |\n",
+            "| a | b |\n|:--|--:|\n| 1 |\n| 1 | 2 | 3 |\n|\n",
+            "$$\n\\frac{a}{b}\n$$ and $x$ and $$y$$ ~~s~~ - [ ] t\n- [x] u\nwww.example.com a@b.co",
+            "<div>\n<b>unterminated",
+            "<![CDATA[x]]> <?php ?> <!DOCTYPE html> <a href='x'>l</a>",
+            "",
+            "\n",
+            std::string(1, '\0'),
+        };
+    }
+
+    static void testHostileEncodings() {
+        MD4CParser parser;
+        struct Case {
+            const char* name;
+            std::string input;
+            OFF utf16Length;
+            bool expectEndAtLength;
+        };
+        const std::vector<Case> cases = {
+            {"overlong two-byte", std::string("a\xC0\xAF" "b"), 4, true},
+            {"overlong three-byte", std::string("a\xE0\x80\xAF" "b"), 5, true},
+            {"encoded surrogate", std::string("a\xED\xA0\x80" "b"), 5, true},
+            {"above U+10FFFF", std::string("a\xF4\x90\x80\x80" "b"), 6, true},
+            {"truncated two-byte tail", std::string("**a\xC3"), 4, true},
+            {"truncated three-byte tail", std::string("a\xE4\xB8"), 3, true},
+            {"truncated four-byte tail", std::string("a\xF0\x9F\x98"), 4, true},
+            {"lone continuation bytes", std::string("\x80\xBF"), 2, true},
+            {"invalid lead bytes", std::string("\xFF\xFE\xF8 x"), 5, true},
+            {"NUL inside emphasis", std::string("a\0*b*\0", 7), 7, true},
+            {"BOM prefix", std::string("\xEF\xBB\xBF# h"), 4, true},
+            {"CRLF line endings", "a\r\nb\r\n\r\n# h\r\n", 13, true},
+            {"CR-only line endings", "a\rb\r\r# h\r", 9, true},
+            {"emoji then truncated emoji", std::string("\xF0\x9F\x98\x80\xF0\x9F"), 4, true},
+        };
+
+        for (const auto& entry : cases) {
+            const std::string name = std::string("Hostile encoding: ") + entry.name;
+            for (const bool html : {false, true}) {
+                ParserOptions withOffsets{true, true, html};
+                withOffsets.sourceOffsets = true;
+                ParserOptions withoutOffsets = withOffsets;
+                withoutOffsets.sourceOffsets = false;
+
+                std::shared_ptr<MarkdownNode> tracked;
+                std::shared_ptr<MarkdownNode> untracked;
+                const std::string error = errorOf([&]() {
+                    tracked = parser.parse(entry.input, withOffsets);
+                    untracked = parser.parse(entry.input, withoutOffsets);
+                });
+                TestRunner::assertEqual("", error, name + " parses without error");
+                if (!tracked || !untracked) continue;
+                TestRunner::assertEqual(
+                    "",
+                    offsetViolation(tracked, entry.utf16Length, ""),
+                    name + " keeps contained offsets"
+                );
+                if (entry.expectEndAtLength) {
+                    TestRunner::assertEqual(
+                        std::to_string(entry.utf16Length),
+                        std::to_string(tracked->end),
+                        name + " document end counts each invalid byte as one unit"
+                    );
+                }
+                TestRunner::assertEqual(
+                    canonicalizeNode(tracked),
+                    canonicalizeNode(untracked),
+                    name + " yields the same tree with and without offsets"
+                );
+            }
+        }
+
+        ParserOptions options{true, true};
+        const std::string overlong("a\xC0\xAF" "b");
+        const auto overlongText = findFirstNode(parser.parse(overlong, options), NodeType::Text);
+        TestRunner::assertEqual(
+            overlong,
+            overlongText ? overlongText->content.value_or("") : "",
+            "Hostile encoding: invalid bytes pass through unmodified"
+        );
+
+        const auto bomAst = parser.parse(std::string("\xEF\xBB\xBF# h"), options);
+        TestRunner::assertTrue(
+            findFirstNode(bomAst, NodeType::Heading) != nullptr &&
+                !anyContentContains(bomAst, '\xEF'),
+            "Hostile encoding: a leading BOM is skipped for block recognition"
+        );
+
+        for (const std::string& document : {
+            std::string("a\r\nb\r\n\r\n# h\r\n"),
+            std::string("a\rb\r\r# h\r"),
+            std::string("```\r\na\r\nb\r\n```\r\n"),
+            std::string("```\ra\rb\r```\r"),
+            std::string("<div>\r\nx\r\n</div>\r\n"),
+        }) {
+            ParserOptions htmlOptions{true, true, true};
+            const auto ast = parser.parse(document, htmlOptions);
+            TestRunner::assertTrue(
+                !anyContentContains(ast, '\r'),
+                "Hostile encoding: carriage returns never reach node content (" +
+                    jsonEscape(document) + ")"
+            );
+        }
+
+        const auto crlfBreak = findFirstNode(parser.parse("a\r\nb", options), NodeType::SoftBreak);
+        TestRunner::assertTrue(
+            crlfBreak && crlfBreak->beg == 1 && crlfBreak->end == 3,
+            "Hostile encoding: CRLF soft break spans both bytes"
+        );
+        const auto crBreak = findFirstNode(parser.parse("a\rb", options), NodeType::SoftBreak);
+        TestRunner::assertTrue(
+            crBreak && crBreak->beg == 1 && crBreak->end == 2,
+            "Hostile encoding: CR-only soft break spans one byte"
+        );
+        const auto crlfCode = findFirstNode(
+            parser.parse("```\r\na\r\nb\r\n```\r\n", options),
+            NodeType::CodeBlock
+        );
+        TestRunner::assertEqual(
+            "a\nb\n",
+            crlfCode ? flattenNodeTextRaw(crlfCode) : "",
+            "Hostile encoding: CRLF code block lines normalize to LF"
+        );
+
+        const auto wiki = parser.parseWithExtraFlagsForTest(
+            "[[Wiki Page]] x",
+            ParserOptions{false, false},
+            MD_FLAG_WIKILINKS
+        );
+        TestRunner::assertTrue(
+            findFirstNode(wiki, NodeType::Link) == nullptr &&
+                flattenNodeText(wiki) == "Wiki Page x\n\n",
+            "Hostile encoding: wikilink spans keep their text without a link node"
+        );
+    }
+
+    static std::string flattenNodeTextRaw(const std::shared_ptr<MarkdownNode>& node) {
+        if (!node) return "";
+        std::string value = node->content.value_or("");
+        for (const auto& child : node->children) value += flattenNodeTextRaw(child);
+        return value;
+    }
+
+    static void testJsonNeverEmitsRawControlBytes() {
+        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+        using BindingParserOptions = ::margelo::nitro::Markdown::ParserOptions;
+
+        HybridMarkdownParser parser;
+        size_t rawControlDocuments = 0;
+        size_t unbalancedDocuments = 0;
+        std::string firstFailure;
+        const auto documents = hostileDocuments();
+        for (const auto& document : documents) {
+            for (const bool html : {false, true}) {
+                BindingParserOptions options;
+                options.html = html;
+                std::string json;
+                const std::string error = errorOf([&]() {
+                    json = parser.parseWithOptions(document, options);
+                });
+                if (!error.empty()) {
+                    if (firstFailure.empty()) firstFailure = error;
+                    continue;
+                }
+                bool rawControl = false;
+                bool inString = false;
+                bool escaped = false;
+                long long depth = 0;
+                for (const char raw : json) {
+                    const unsigned char c = static_cast<unsigned char>(raw);
+                    if (c < 0x20) rawControl = true;
+                    if (inString) {
+                        if (escaped) escaped = false;
+                        else if (c == '\\') escaped = true;
+                        else if (c == '"') inString = false;
+                        continue;
+                    }
+                    if (c == '"') inString = true;
+                    else if (c == '{' || c == '[') depth++;
+                    else if (c == '}' || c == ']') depth--;
+                }
+                if (rawControl) rawControlDocuments++;
+                if (inString || depth != 0) unbalancedDocuments++;
+                if ((rawControl || inString || depth != 0) && firstFailure.empty()) {
+                    firstFailure = jsonEscape(document);
+                }
+            }
+        }
+        TestRunner::assertEqual(
+            "",
+            firstFailure,
+            "JSON writer: hostile documents serialize without raw C0 bytes (" +
+                std::to_string(rawControlDocuments) + " raw, " +
+                std::to_string(unbalancedDocuments) + " unbalanced)"
+        );
+
+        BindingParserOptions noOffsets;
+        noOffsets.sourceOffsets = false;
+        TestRunner::assertTrue(
+            parser.parseWithOptions("[a](u \"t\r\nx\")", noOffsets).find("\"title\":\"t\\nx\"") !=
+                std::string::npos,
+            "JSON writer: a CRLF link title is normalized and escaped"
+        );
+    }
+
+    static void testOptionMatrixDifferential() {
+        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+        using BindingParserOptions = ::margelo::nitro::Markdown::ParserOptions;
+
+        std::vector<std::string> documents = hostileDocuments();
+        const auto fragments = makeFragmentCorpus(150, 0xBADC0DEu);
+        documents.insert(documents.end(), fragments.begin(), fragments.end());
+
+        HybridMarkdownParser binding;
+        MD4CParser core;
+        size_t offsetMismatches = 0;
+        size_t plainMismatches = 0;
+        size_t failures = 0;
+        std::string firstProblem;
+        for (unsigned combo = 0; combo < 8; combo++) {
+            const bool gfm = (combo & 1u) != 0;
+            const bool math = (combo & 2u) != 0;
+            const bool html = (combo & 4u) != 0;
+            for (const auto& document : documents) {
+                BindingParserOptions tracked;
+                tracked.gfm = gfm;
+                tracked.math = math;
+                tracked.html = html;
+                tracked.sourceOffsets = true;
+                BindingParserOptions untracked = tracked;
+                untracked.sourceOffsets = false;
+                ParserOptions internal{gfm, math, html};
+                internal.sourceOffsets = false;
+
+                const std::string error = errorOf([&]() {
+                    const std::string withOffsets = binding.parseWithOptions(document, tracked);
+                    const std::string withoutOffsets = binding.parseWithOptions(document, untracked);
+                    if (stripOffsetFields(withOffsets) != withoutOffsets) {
+                        offsetMismatches++;
+                        if (firstProblem.empty()) firstProblem = "offsets: " + jsonEscape(document);
+                    }
+                    if (withoutOffsets.find("\"beg\":") != std::string::npos) {
+                        offsetMismatches++;
+                        if (firstProblem.empty()) firstProblem = "beg leaked: " + jsonEscape(document);
+                    }
+                    const std::string plain = binding.extractPlainTextWithOptions(document, tracked);
+                    if (plain != flattenNodeText(core.parse(document, internal))) {
+                        plainMismatches++;
+                        if (firstProblem.empty()) firstProblem = "plain: " + jsonEscape(document);
+                    }
+                });
+                if (!error.empty()) {
+                    failures++;
+                    if (firstProblem.empty()) firstProblem = error + ": " + jsonEscape(document);
+                }
+            }
+        }
+        TestRunner::assertEqual(
+            "",
+            firstProblem,
+            "Option matrix: every gfm/math/html/sourceOffsets combination agrees (" +
+                std::to_string(offsetMismatches) + " offset, " +
+                std::to_string(plainMismatches) + " plain-text, " +
+                std::to_string(failures) + " thrown)"
+        );
+
+        BindingParserOptions defaults;
+        const std::string sample = "# T\n\n| a |\n|---|\n| $x$ <b>h</b> |\n";
+        BindingParserOptions explicitDefaults;
+        explicitDefaults.gfm = true;
+        explicitDefaults.math = true;
+        explicitDefaults.html = false;
+        explicitDefaults.sourceOffsets = true;
+        explicitDefaults.maxInputLength = 0.0;
+        explicitDefaults.freezeAst = true;
+        TestRunner::assertEqual(
+            binding.parse(sample),
+            binding.parseWithOptions(sample, defaults),
+            "Option matrix: empty options equal parse()"
+        );
+        TestRunner::assertEqual(
+            binding.parse(sample),
+            binding.parseWithOptions(sample, explicitDefaults),
+            "Option matrix: explicit defaults equal parse()"
+        );
+        TestRunner::assertEqual(
+            binding.extractPlainText(sample),
+            binding.extractPlainTextWithOptions(sample, defaults),
+            "Option matrix: empty options equal extractPlainText()"
+        );
+    }
+
+    static void testTableShapeAndHtmlToggle() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+        for (const std::string& document : {
+            std::string("| a | b | c |\n|---|---|\n| 1 | 2 | 3 | 4 |\n| 5 |\n"),
+            std::string("| a | b |\n|---|---|\n| 1 | 2 | 3 | 4 | 5 |\n| 6 |\n|\n"),
+            std::string("| a |\n|---|\n| 1 | 2 |\n||\n"),
+            std::string("a | b\n-|-\n1\n1 | 2 | 3\n"),
+        }) {
+            const auto ast = parser.parse(document, options);
+            const auto table = findFirstNode(ast, NodeType::Table);
+            const auto head = findFirstNode(ast, NodeType::TableHead);
+            bool uniform = table != nullptr && head != nullptr && !head->children.empty();
+            size_t rows = 0;
+            if (uniform) {
+                const size_t columns = head->children[0]->children.size();
+                const auto body = findFirstNode(ast, NodeType::TableBody);
+                if (body) {
+                    for (const auto& row : body->children) {
+                        rows++;
+                        if (row->children.size() != columns) uniform = false;
+                    }
+                }
+            }
+            TestRunner::assertTrue(
+                uniform,
+                "Table shape: " + std::to_string(rows) +
+                    " body rows match the header column count (" + jsonEscape(document) + ")"
+            );
+            TestRunner::assertEqual(
+                "",
+                offsetViolation(ast, utf16LengthForTest(document), ""),
+                "Table shape: mismatched rows keep contained offsets (" + jsonEscape(document) + ")"
+            );
+        }
+
+        const std::vector<std::string> htmlDocuments = {
+            "<div>\n<b>unterminated",
+            "<script>alert(1)</script>\n\ntext <i>inline</i> <!-- c -->",
+            "<![CDATA[x]]>\n\n<?php x ?>\n\n<!DOCTYPE html>",
+            "<div\n\n<p",
+            "<a href=\"x\" onclick='y'>l</a><",
+        };
+        for (const auto& document : htmlDocuments) {
+            ParserOptions htmlOff{true, true, false};
+            ParserOptions htmlOn{true, true, true};
+            const auto off = parser.parse(document, htmlOff);
+            const auto on = parser.parse(document, htmlOn);
+            TestRunner::assertTrue(
+                countNodes(off, NodeType::HtmlBlock) == 0 &&
+                    countNodes(off, NodeType::HtmlInline) == 0,
+                "HTML toggle: html=false never emits HTML nodes (" + jsonEscape(document) + ")"
+            );
+            TestRunner::assertEqual(
+                "",
+                offsetViolation(on, utf16LengthForTest(document), ""),
+                "HTML toggle: html=true keeps contained offsets (" + jsonEscape(document) + ")"
+            );
+        }
+        ParserOptions htmlOn{true, true, true};
+        const auto unterminated = findFirstNode(
+            parser.parse("<div>\n<b>unterminated", htmlOn),
+            NodeType::HtmlBlock
+        );
+        TestRunner::assertEqual(
+            "<div>\n<b>unterminated\n",
+            unterminated ? unterminated->content.value_or("") : "",
+            "HTML toggle: an unterminated HTML block keeps its content to end of input"
+        );
+    }
+
+    struct NestingCase {
+        const char* name;
+        std::string below;
+        std::string above;
+    };
+
+    static std::vector<NestingCase> nestingCases() {
+        const auto nestedList = [](size_t levels, const char* marker, size_t indent) {
+            std::string value;
+            for (size_t level = 0; level < levels; level++) {
+                value += std::string(level * indent, ' ') + marker + " x\n";
+            }
+            return value;
+        };
+        const auto wrapped = [](size_t levels, const std::string& open, const std::string& close) {
+            std::string value;
+            for (size_t level = 0; level < levels; level++) value += open;
+            value += "a";
+            for (size_t level = 0; level < levels; level++) value += close;
+            return value;
+        };
+        return {
+            {"blockquotes", repeatToSize("> ", 200) + "x", repeatToSize("> ", 2000) + "x"},
+            {"blockquotes far above the limit", repeatToSize("> ", 200) + "x", repeatToSize("> ", 400000) + "x"},
+            {"bullet lists", nestedList(100, "-", 2), nestedList(400, "-", 2)},
+            {"ordered lists", nestedList(80, "1.", 3), nestedList(400, "1.", 3)},
+            {"inline list markers", repeatToSize("- ", 200) + "x", repeatToSize("- ", 100000) + "x"},
+            {"emphasis", wrapped(100, "*", "*"), wrapped(4000, "*", "*")},
+            {"strong emphasis", wrapped(100, "**", "**"), wrapped(4000, "**", "**")},
+            {"images", wrapped(100, "![", "](u)"), wrapped(2000, "![", "](u)")},
+            {"quotes in lists", repeatToSize("- > ", 240) + "x", repeatToSize("- > ", 4000) + "x"},
+        };
+    }
+
+    static void testNestingAgainstDepthLimit() {
+        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+        using ::margelo::nitro::Markdown::HybridMarkdownSession;
+
+        MD4CParser parser;
+        HybridMarkdownParser binding;
+        ParserOptions options{true, true};
+        const std::string depthError =
+            "Markdown AST depth exceeds the maximum of " + std::to_string(kMaxAstDepth);
+        for (const auto& entry : nestingCases()) {
+            const std::string name = std::string("Nesting: ") + entry.name;
+            std::shared_ptr<MarkdownNode> ast;
+            const std::string belowError = errorOf([&]() { ast = parser.parse(entry.below, options); });
+            TestRunner::assertEqual("", belowError, name + " below the limit parses");
+            if (ast) {
+                TestRunner::assertTrue(
+                    maxNodeDepth(ast) <= kMaxAstDepth,
+                    name + " stays within the AST depth limit (depth " +
+                        std::to_string(maxNodeDepth(ast)) + ")"
+                );
+                TestRunner::assertEqual(
+                    "",
+                    errorOf([&]() {
+                        (void)binding.parse(entry.below);
+                        (void)binding.extractPlainText(entry.below);
+                    }),
+                    name + " below the limit serializes and flattens"
+                );
+            }
+
+            TestRunner::assertEqual(
+                depthError,
+                errorOf([&]() { (void)parser.parse(entry.above, options); }),
+                name + " above the limit fails with the depth error"
+            );
+            TestRunner::assertEqual(
+                depthError,
+                errorOf([&]() { (void)binding.parse(entry.above); }),
+                name + " above the limit reaches the binding with the same error"
+            );
+            TestRunner::assertEqual(
+                depthError,
+                errorOf([&]() { (void)binding.extractPlainText(entry.above); }),
+                name + " above the limit fails plain-text extraction with the same error"
+            );
+            auto session = std::make_shared<HybridMarkdownSession>();
+            session->reset(entry.above);
+            TestRunner::assertEqual(
+                depthError,
+                errorOf([&]() { (void)session->parse(); }),
+                name + " above the limit reaches the session with the same error"
+            );
+            session->reset("ok");
+            TestRunner::assertTrue(
+                session->parse().find("\"content\":\"ok\"") != std::string::npos,
+                name + " leaves the session usable after the depth error"
+            );
+        }
+
+        for (const std::string& document : {
+            std::string(repeatToSize("*_", 4000) + "a" + repeatToSize("_*", 4000)),
+            std::string(repeatToSize("~~*", 6000) + "a" + repeatToSize("*~~", 6000)),
+        }) {
+            std::shared_ptr<MarkdownNode> alternating;
+            const std::string error = errorOf([&]() { alternating = parser.parse(document, options); });
+            TestRunner::assertTrue(
+                error.empty() && alternating && maxNodeDepth(alternating) <= kMaxAstDepth,
+                "Nesting: alternating delimiter runs resolve to a shallow tree"
+            );
+        }
+
+        const std::string brackets = std::string(100000, '[') + "a" + std::string(100000, ']');
+        TestRunner::assertEqual(
+            "",
+            errorOf([&]() { (void)parser.parse(brackets, options); }),
+            "Nesting: 100,000 unresolved brackets stay flat text"
+        );
+        const std::string links = repeatToSize("[", 3000) + "a" + repeatToSize("](u)", 12000);
+        std::shared_ptr<MarkdownNode> linkAst;
+        TestRunner::assertEqual(
+            "",
+            errorOf([&]() { linkAst = parser.parse(links, options); }),
+            "Nesting: nested link syntax parses"
+        );
+        TestRunner::assertTrue(
+            linkAst && countNodes(linkAst, NodeType::Link) == 1,
+            "Nesting: links never nest inside links"
+        );
+    }
+
+#ifndef _WIN32
+    template <typename Fn>
+    static bool runOnSmallStack(size_t stackBytes, Fn fn) {
+        struct Context {
+            Fn* fn;
+            bool completed;
+        };
+        Context context{&fn, false};
+        pthread_attr_t attributes;
+        if (pthread_attr_init(&attributes) != 0) return false;
+        if (pthread_attr_setstacksize(&attributes, stackBytes) != 0) {
+            pthread_attr_destroy(&attributes);
+            return false;
+        }
+        pthread_t thread;
+        const int created = pthread_create(
+            &thread,
+            &attributes,
+            +[](void* raw) -> void* {
+                auto* target = static_cast<Context*>(raw);
+                (*target->fn)();
+                target->completed = true;
+                return nullptr;
+            },
+            &context
+        );
+        pthread_attr_destroy(&attributes);
+        if (created != 0) return false;
+        pthread_join(thread, nullptr);
+        return context.completed;
+    }
+#endif
+
+    static void testSmallStackDeepNesting() {
+#ifndef _WIN32
+        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+        using ::margelo::nitro::Markdown::HybridMarkdownSession;
+
+        constexpr size_t kSmallStackBytes = 512 * 1024;
+        size_t parsed = 0;
+        size_t rejected = 0;
+        size_t unexpected = 0;
+        const auto cases = nestingCases();
+        const bool completed = runOnSmallStack(kSmallStackBytes, [&]() {
+            HybridMarkdownParser binding;
+            auto session = std::make_shared<HybridMarkdownSession>();
+            for (const auto& entry : cases) {
+                for (const std::string* document : {&entry.below, &entry.above}) {
+                    try {
+                        (void)binding.parse(*document);
+                        (void)binding.extractPlainText(*document);
+                        session->reset(*document);
+                        (void)session->parse();
+                        parsed++;
+                    } catch (const std::runtime_error&) {
+                        rejected++;
+                    } catch (...) {
+                        unexpected++;
+                    }
+                }
+            }
+            auto deepRoot = std::make_shared<MarkdownNode>(NodeType::Document);
+            auto current = deepRoot;
+            for (size_t index = 0; index + 1 < kMaxAstDepth; index++) {
+                auto child = std::make_shared<MarkdownNode>(NodeType::Blockquote);
+                current->addChild(child);
+                current = std::move(child);
+            }
+            try {
+                (void)flattenNodeText(deepRoot);
+            } catch (...) {
+                unexpected++;
+            }
+        });
+        TestRunner::assertTrue(
+            completed && unexpected == 0 && parsed == cases.size() && rejected == cases.size(),
+            "Small stack: deepest allowed and over-limit nesting complete on a 512 KiB thread (" +
+                std::to_string(parsed) + " parsed, " + std::to_string(rejected) + " rejected)"
+        );
+#else
+        std::cout << "ℹ Small stack: skipped on Windows" << std::endl;
+#endif
+    }
+
+    struct CallbackCounter {
+        size_t calls = 0;
+        size_t textBytes = 0;
+    };
+
+    static CallbackCounter countMd4cCallbacks(const std::string& input) {
+        CallbackCounter counter;
+        const auto block = +[](MD_BLOCKTYPE, void*, MD_OFFSET, void* userdata) -> int {
+            static_cast<CallbackCounter*>(userdata)->calls++;
+            return 0;
+        };
+        const auto span = +[](MD_SPANTYPE, void*, MD_OFFSET, void* userdata) -> int {
+            static_cast<CallbackCounter*>(userdata)->calls++;
+            return 0;
+        };
+        const auto text = +[](MD_TEXTTYPE, const MD_CHAR*, MD_SIZE size, void* userdata) -> int {
+            auto* target = static_cast<CallbackCounter*>(userdata);
+            target->calls++;
+            target->textBytes += size;
+            return 0;
+        };
+        MD_PARSER parser = {
+            0,
+            MD_FLAG_TABLES | MD_FLAG_STRIKETHROUGH | MD_FLAG_TASKLISTS |
+                MD_FLAG_PERMISSIVEAUTOLINKS | MD_FLAG_LATEXMATHSPANS,
+            block,
+            block,
+            span,
+            span,
+            text,
+            nullptr,
+            nullptr
+        };
+        md_parse(input.data(), static_cast<MD_SIZE>(input.size()), &parser, &counter);
+        return counter;
+    }
+
+    static void testCallbackCountScalesLinearly() {
+        struct Generator {
+            const char* name;
+            std::function<std::string(size_t)> make;
+        };
+        const std::vector<Generator> generators = {
+            {"open brackets", [](size_t n) { return std::string(n, '['); }},
+            {"stars", [](size_t n) { return std::string(n, '*'); }},
+            {"backticks", [](size_t n) { return std::string(n, '`'); }},
+            {"bracket pairs", [](size_t n) { return repeatToSize("[]", n); }},
+            {"mixed emphasis openers", [](size_t n) { return repeatToSize("*a_ ", n); }},
+            {"unclosed code spans", [](size_t n) { return repeatToSize("`a ", n); }},
+            {"unclosed inline links", [](size_t n) { return repeatToSize("[a](", n); }},
+            {"unclosed images", [](size_t n) { return repeatToSize("![a](", n); }},
+            {"angle brackets", [](size_t n) { return std::string(n, '<'); }},
+            {"entities", [](size_t n) { return repeatToSize("&a", n); }},
+            {"math openers", [](size_t n) { return repeatToSize("$a ", n); }},
+            {"strikethrough openers", [](size_t n) { return repeatToSize("~~a ", n); }},
+            {"table pipes", [](size_t n) { return "|a|\n|-|\n" + repeatToSize("|a", n); }},
+            {"nested quote markers", [](size_t n) { return repeatToSize("> ", n) + "x"; }},
+            {"reference uses", [](size_t n) { return "[r]: /u\n\n" + repeatToSize("[r] ", n); }},
+            {"reference label openers", [](size_t n) { return repeatToSize("[a][", n); }},
+            {"autolinks", [](size_t n) { return repeatToSize("www.a.b ", n); }},
+            {"short lines", [](size_t n) { return repeatToSize("a\n", n); }},
+            {"list items", [](size_t n) { return repeatToSize("- a\n", n); }},
+            {"intraword underscores", [](size_t n) { return repeatToSize("a_b_", n); }},
+            {"two-byte text", [](size_t n) { return repeatToSize("\xC3\xA9", n); }},
+        };
+
+        constexpr size_t kSmall = 16 * 1024;
+        constexpr size_t kLarge = 4 * kSmall;
+        MD4CParser parser;
+        ParserOptions options{true, true};
+        for (const auto& generator : generators) {
+            const std::string small = generator.make(kSmall);
+            const std::string large = generator.make(kLarge);
+            const CallbackCounter smallCount = countMd4cCallbacks(small);
+            const CallbackCounter largeCount = countMd4cCallbacks(large);
+            const std::string name = std::string("Complexity: ") + generator.name;
+            TestRunner::assertTrue(
+                largeCount.calls <= 4 * smallCount.calls + 64,
+                name + " callback count grows at most linearly (" +
+                    std::to_string(smallCount.calls) + " -> " +
+                    std::to_string(largeCount.calls) + ")"
+            );
+            TestRunner::assertTrue(
+                largeCount.textBytes <= large.size() + 64 &&
+                    smallCount.textBytes <= small.size() + 64,
+                name + " text callbacks never deliver more bytes than the input"
+            );
+
+            std::shared_ptr<MarkdownNode> ast;
+            const std::string error = errorOf([&]() { ast = parser.parse(large, options); });
+            const bool bounded = ast
+                ? countAllNodes(ast) <= kMaxAstNodes && maxNodeDepth(ast) <= kMaxAstDepth
+                : error.find("Markdown AST depth exceeds the maximum of") == 0 ||
+                    error.find("Markdown AST node/work budget exceeds the maximum of") == 0;
+            TestRunner::assertTrue(
+                bounded,
+                name + " ends in a bounded tree or a budget error (" +
+                    (ast ? std::to_string(countAllNodes(ast)) + " nodes" : error) + ")"
+            );
+        }
+    }
+
+    static void testBudgetErrorsSurfaceFromCallbacks() {
+        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+        using ::margelo::nitro::Markdown::HybridMarkdownSession;
+
+        MD4CParser parser;
+        HybridMarkdownParser binding;
+        ParserOptions options{true, true};
+        const std::string nodeBudgetError =
+            "Markdown AST node/work budget exceeds the maximum of " + std::to_string(kMaxAstWork);
+
+        const std::string softBreaks = repeatToSize("a\n", 120000);
+        TestRunner::assertEqual(
+            nodeBudgetError,
+            errorOf([&]() { (void)parser.parse(softBreaks, options); }),
+            "Budgets: node budget hit inside the text callback keeps its message"
+        );
+        const std::string paragraphs = repeatToSize("a\n\n", 300000);
+        TestRunner::assertEqual(
+            nodeBudgetError,
+            errorOf([&]() { (void)parser.parse(paragraphs, options); }),
+            "Budgets: node budget hit inside block callbacks keeps its message"
+        );
+        const std::string spans = repeatToSize("*a* ", 300000);
+        TestRunner::assertEqual(
+            nodeBudgetError,
+            errorOf([&]() { (void)parser.parse(spans, options); }),
+            "Budgets: node budget hit inside span callbacks keeps its message"
+        );
+        TestRunner::assertEqual(
+            nodeBudgetError,
+            errorOf([&]() { (void)binding.extractPlainText(softBreaks); }),
+            "Budgets: node budget error reaches plain-text extraction"
+        );
+        auto session = std::make_shared<HybridMarkdownSession>();
+        session->reset(softBreaks);
+        TestRunner::assertEqual(
+            nodeBudgetError,
+            errorOf([&]() { (void)session->parse(); }),
+            "Budgets: node budget error reaches the session"
+        );
+
+        const std::string underBudget = repeatToSize("a\n", 2 * 40000);
+        std::shared_ptr<MarkdownNode> ast;
+        TestRunner::assertEqual(
+            "",
+            errorOf([&]() { ast = parser.parse(underBudget, options); }),
+            "Budgets: 80,000 lines stay under the node budget"
+        );
+        TestRunner::assertTrue(
+            ast && countAllNodes(ast) <= kMaxAstNodes,
+            "Budgets: an accepted tree never exceeds the node budget"
+        );
+
+        std::string nestedImages = "![![![";
+        nestedImages += std::string(6000, 'a');
+        nestedImages += "](u)](u)](u)";
+        TestRunner::assertEqual(
+            "Markdown flattened text exceeds the maximum of " +
+                std::to_string(nestedImages.size() * 2) + " bytes",
+            errorOf([&]() { (void)parser.parse(nestedImages, options); }),
+            "Budgets: nested image alt text is bounded by twice the input"
+        );
+        TestRunner::assertEqual(
+            "",
+            errorOf([&]() { (void)parser.parse("![![![alt](u)](u)](u)", options); }),
+            "Budgets: small nested images parse and the parser stays reusable"
+        );
+    }
+
+    static void testFlattenBounds() {
+        TestRunner::assertEqual("", flattenNodeText(nullptr), "Flatten: null root is empty text");
+
+        auto withNull = std::make_shared<MarkdownNode>(NodeType::Paragraph);
+        auto text = std::make_shared<MarkdownNode>(NodeType::Text);
+        text->content = "kept";
+        withNull->children.push_back(nullptr);
+        withNull->children.push_back(text);
+        withNull->children.push_back(nullptr);
+        TestRunner::assertEqual(
+            "kept\n\n",
+            flattenNodeText(withNull),
+            "Flatten: null children are skipped"
+        );
+
+        auto leaf = std::make_shared<MarkdownNode>(NodeType::Text);
+        leaf->content = "x";
+        auto atBudget = std::make_shared<MarkdownNode>(NodeType::Document);
+        atBudget->children.assign(kMaxAstNodes - 1, leaf);
+        std::string flattened;
+        TestRunner::assertEqual(
+            "",
+            errorOf([&]() { flattened = flattenNodeText(atBudget); }),
+            "Flatten: a tree at the node budget flattens"
+        );
+        TestRunner::assertTrue(
+            flattened.size() == kMaxAstNodes - 1,
+            "Flatten: a tree at the node budget keeps every leaf"
+        );
+        auto overBudget = std::make_shared<MarkdownNode>(NodeType::Document);
+        overBudget->children.assign(kMaxAstNodes, leaf);
+        TestRunner::assertEqual(
+            "Markdown AST node/work budget exceeds the maximum of " + std::to_string(kMaxAstWork),
+            errorOf([&]() { (void)flattenNodeText(overBudget); }),
+            "Flatten: a tree above the node budget fails deterministically"
+        );
+
+        constexpr size_t kMaxFlattenedBytes = 64 * 1024 * 1024;
+        const std::string sizeError =
+            "Markdown flattened text exceeds the maximum of " +
+            std::to_string(kMaxFlattenedBytes) + " bytes";
+        {
+            auto huge = std::make_shared<MarkdownNode>(NodeType::Text);
+            huge->content = std::string(kMaxFlattenedBytes + 1, 'a');
+            TestRunner::assertEqual(
+                sizeError,
+                errorOf([&]() { (void)flattenNodeText(huge); }),
+                "Flatten: a single node above 64 MiB fails deterministically"
+            );
+        }
+        {
+            auto half = std::make_shared<MarkdownNode>(NodeType::Text);
+            half->content = std::string(kMaxFlattenedBytes / 2 + 1, 'a');
+            auto parent = std::make_shared<MarkdownNode>(NodeType::Document);
+            parent->children.assign(2, half);
+            TestRunner::assertEqual(
+                sizeError,
+                errorOf([&]() { (void)flattenNodeText(parent); }),
+                "Flatten: accumulated text above 64 MiB fails deterministically"
+            );
+        }
+    }
+
+    static void testJsonOutputSizeCap() {
+        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+        using BindingParserOptions = ::margelo::nitro::Markdown::ParserOptions;
+
+        HybridMarkdownParser parser;
+        std::string document = "![![";
+        document += std::string(5'700'000, '\x01');
+        document += "](u)](u)";
+        for (const bool offsets : {true, false}) {
+            BindingParserOptions options;
+            options.sourceOffsets = offsets;
+            const std::string error = errorOf([&]() {
+                (void)parser.parseWithOptions(document, options);
+            });
+            TestRunner::assertTrue(
+                error.find("Markdown JSON output size ") == 0 &&
+                    error.find(" bytes exceeds the maximum of 67108864 bytes") != std::string::npos,
+                std::string("JSON cap: output above 64 MiB fails with the size error (offsets ") +
+                    (offsets ? "on" : "off") + "): " + error.substr(0, 96)
+            );
+        }
+        BindingParserOptions capOptions;
+        const size_t capPeak = peakHeapDuring([&]() {
+            (void)errorOf([&]() { (void)parser.parseWithOptions(document, capOptions); });
+        });
+        std::cout << "ℹ Peak heap JSON cap rejection: " << capPeak << std::endl;
+        TestRunner::assertTrue(
+            capPeak <= 130u * 1024u * 1024u,
+            "JSON cap: the writer stops at the cap instead of growing past it"
+        );
+        std::string plain;
+        TestRunner::assertEqual(
+            "",
+            errorOf([&]() { plain = parser.extractPlainText(document); }),
+            "JSON cap: the same document still flattens to plain text"
+        );
+        TestRunner::assertTrue(
+            plain.size() == 5'700'000 + 2,
+            "JSON cap: plain text keeps the image alt bytes"
+        );
+        TestRunner::assertTrue(
+            parser.parse("ok").find("\"content\":\"ok\"") != std::string::npos,
+            "JSON cap: the parser stays usable after the size error"
+        );
+    }
+
+    static void testBindingNumericOptionBoundaries() {
+        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+        using BindingParserOptions = ::margelo::nitro::Markdown::ParserOptions;
+
+        HybridMarkdownParser parser;
+        const std::string invalid = "maxInputLength must be a finite non-negative integer in bytes";
+        const std::string unrepresentable = "maxInputLength cannot be represented as a native size";
+        struct Case {
+            const char* name;
+            double value;
+            std::string expectedError;
+        };
+        const std::vector<Case> cases = {
+            {"-1", -1.0, invalid},
+            {"-0.5", -0.5, invalid},
+            {"0.5", 0.5, invalid},
+            {"smallest subnormal", std::numeric_limits<double>::denorm_min(), invalid},
+            {"+Inf", std::numeric_limits<double>::infinity(), invalid},
+            {"-Inf", -std::numeric_limits<double>::infinity(), invalid},
+            {"signaling NaN", std::numeric_limits<double>::signaling_NaN(), invalid},
+            {"-DBL_MAX", std::numeric_limits<double>::lowest(), invalid},
+            {"0", 0.0, ""},
+            {"-0", -0.0, ""},
+            {"exact input size", 5.0, ""},
+            {"2^31 - 1", 2147483647.0, ""},
+            {"2^31", 2147483648.0, ""},
+            {"2^32 - 1", 4294967295.0, ""},
+            {"2^32", 4294967296.0, ""},
+            {"2^53", 9007199254740992.0, ""},
+            {"2^63", 9223372036854775808.0, ""},
+            {"2^64", 18446744073709551616.0, unrepresentable},
+            {"2^65", 36893488147419103232.0, unrepresentable},
+        };
+        for (const auto& entry : cases) {
+            BindingParserOptions options;
+            options.maxInputLength = entry.value;
+            TestRunner::assertEqual(
+                entry.expectedError,
+                errorOf([&]() { (void)parser.parseWithOptions("valid", options); }),
+                std::string("Numeric options: parseWithOptions maxInputLength ") + entry.name
+            );
+            TestRunner::assertEqual(
+                entry.expectedError,
+                errorOf([&]() { (void)parser.extractPlainTextWithOptions("valid", options); }),
+                std::string("Numeric options: extractPlainTextWithOptions maxInputLength ") + entry.name
+            );
+        }
+
+        BindingParserOptions tooSmall;
+        tooSmall.maxInputLength = 4.0;
+        TestRunner::assertEqual(
+            "Markdown input size 5 bytes exceeds the maximum of 4 bytes",
+            errorOf([&]() { (void)parser.parseWithOptions("valid", tooSmall); }),
+            "Numeric options: one byte above maxInputLength fails with the size error"
+        );
+        BindingParserOptions zero;
+        zero.maxInputLength = 0.0;
+        TestRunner::assertEqual(
+            "Markdown input size 10485761 bytes exceeds the maximum of 10485760 bytes",
+            errorOf([&]() {
+                (void)parser.parseWithOptions(std::string(10 * 1024 * 1024 + 1, 'a'), zero);
+            }),
+            "Numeric options: maxInputLength 0 means the hard cap"
+        );
+        TestRunner::assertEqual(
+            "",
+            errorOf([&]() { (void)parser.extractPlainText(std::string(10 * 1024 * 1024, 'a')); }),
+            "Numeric options: input exactly at the hard cap is accepted"
+        );
+    }
+
+    static void testSessionNumericRangeBoundaries() {
+        using ::margelo::nitro::Markdown::HybridMarkdownSession;
+
+        const double nan = std::numeric_limits<double>::quiet_NaN();
+        const double inf = std::numeric_limits<double>::infinity();
+        auto session = std::make_shared<HybridMarkdownSession>();
+        session->reset("hello");
+
+        TestRunner::assertEqual("he", session->getTextRange(0.5, 2.9), "Session numerics: fractional range truncates toward zero");
+        TestRunner::assertEqual("hello", session->getTextRange(-0.0, 1e300), "Session numerics: negative zero and huge end clamp");
+        TestRunner::assertEqual("", session->getTextRange(0.0, inf), "Session numerics: infinite getTextRange end is empty");
+        TestRunner::assertEqual("", session->getTextRange(-1.0, 3.0), "Session numerics: negative getTextRange start is empty");
+        TestRunner::assertEqual("", session->getTextRange(3.0, 1.0), "Session numerics: inverted getTextRange is empty");
+        TestRunner::assertEqual("", session->getTextRange(1e300, 1e301), "Session numerics: range past the end is empty");
+        TestRunner::assertEqual("hello", session->getTextRange(0.0, 4294967296.0), "Session numerics: end above 2^32 clamps");
+
+        const std::string suffix = " must be finite, from must be >= 0, and to must be >= from";
+        TestRunner::assertEqual(
+            "Invalid range: from=NaN and to=" + std::to_string(1.0) + suffix,
+            errorOf([&]() { (void)session->replace(nan, 1.0, "x"); }),
+            "Session numerics: replace rejects NaN start"
+        );
+        TestRunner::assertEqual(
+            "Invalid range: from=" + std::to_string(0.0) + " and to=Inf" + suffix,
+            errorOf([&]() { (void)session->replace(0.0, inf, "x"); }),
+            "Session numerics: replace rejects infinite end"
+        );
+        TestRunner::assertEqual(
+            "Invalid range: from=-Inf and to=" + std::to_string(1.0) + suffix,
+            errorOf([&]() { (void)session->replace(-inf, 1.0, "x"); }),
+            "Session numerics: replace rejects negative infinite start"
+        );
+        TestRunner::assertEqual(
+            "Invalid range: from=" + std::to_string(-1.0) + " and to=" + std::to_string(1.0) + suffix,
+            errorOf([&]() { (void)session->replace(-1.0, 1.0, "x"); }),
+            "Session numerics: replace rejects negative start"
+        );
+        TestRunner::assertEqual("hello", session->getAllText(), "Session numerics: rejected replaces leave the buffer unchanged");
+        TestRunner::assertTrue(
+            session->replace(1.9, 3.2, "EY") == 5.0 && session->getAllText() == "hEYlo",
+            "Session numerics: fractional replace truncates toward zero"
+        );
+        TestRunner::assertTrue(
+            session->replace(-0.0, 1e300, "") == 0.0 && session->getAllText().empty(),
+            "Session numerics: replace clamps a huge end to the buffer length"
+        );
+
+        for (const double value : {nan, inf, -inf, -1.0, 1e300, 0.5}) {
+            TestRunner::assertEqual(
+                "",
+                errorOf([&]() {
+                    session->setHighlightPosition(value);
+                    (void)session->getHighlightPosition();
+                    (void)session->append("x");
+                }),
+                "Session numerics: highlight position " + std::to_string(value) + " never throws natively"
+            );
+        }
+    }
+
+    static std::vector<std::string> splitByCodePoint(const std::string& text) {
+        std::vector<std::string> pieces;
+        size_t index = 0;
+        while (index < text.size()) {
+            const unsigned char lead = static_cast<unsigned char>(text[index]);
+            const size_t bytes = lead < 0x80 ? 1 : (lead < 0xE0 ? 2 : (lead < 0xF0 ? 3 : 4));
+            pieces.push_back(text.substr(index, bytes));
+            index += bytes;
+        }
+        return pieces;
+    }
+
+    static void testSessionChunkSplitDifferential() {
+        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+        using ::margelo::nitro::Markdown::HybridMarkdownSession;
+
+        const std::vector<std::string> documents = {
+            "# Título 😀\n\nTexto **negrito** e `código` com 中文字 e [link](https://e.x/ü \"tí\").\n",
+            "```ts\nconst a = \"😀\";\n// é\n```\n\ntail",
+            "| a | b |\n|:--|--:|\n| 😀 | é |\n| 中 | `x` |\n\n- [ ] tarefa\n- [x] feita\n",
+            "> citação\n> - item 😀\n>   continuação\n\n$$\nx^2\n$$\n\n~~fim~~",
+            "line one  \nline two\\\nline three\r\nline four\rline five",
+        };
+        HybridMarkdownParser cold;
+        size_t byteSplitMismatches = 0;
+        size_t codePointMismatches = 0;
+        size_t lengthMismatches = 0;
+        size_t rangeMismatches = 0;
+        size_t prefixFailures = 0;
+        for (const auto& document : documents) {
+            const std::string expected = cold.parse(document);
+            auto whole = std::make_shared<HybridMarkdownSession>();
+            const double expectedLength = whole->append(document);
+
+            for (const size_t chunkBytes : {size_t{1}, size_t{2}, size_t{3}, size_t{5}, size_t{7}, size_t{64}}) {
+                auto session = std::make_shared<HybridMarkdownSession>();
+                for (size_t offset = 0; offset < document.size(); offset += chunkBytes) {
+                    session->append(document.substr(offset, chunkBytes));
+                    if (chunkBytes == 1) {
+                        const std::string error = errorOf([&]() { (void)session->parse(); });
+                        if (!error.empty()) prefixFailures++;
+                    }
+                }
+                if (session->getAllText() != document || session->parse() != expected) {
+                    byteSplitMismatches++;
+                }
+            }
+
+            auto session = std::make_shared<HybridMarkdownSession>();
+            std::vector<std::pair<double, double>> ranges;
+            auto unsubscribe = session->addListener([&ranges](double from, double to) {
+                ranges.emplace_back(from, to);
+            });
+            double cursor = 0.0;
+            std::string reassembled;
+            for (const auto& piece : splitByCodePoint(document)) {
+                const double end = session->append(piece);
+                reassembled += session->getTextRange(cursor, end);
+                cursor = end;
+            }
+            unsubscribe();
+            if (session->parse() != expected || reassembled != document) codePointMismatches++;
+            if (session->getLength() != expectedLength) lengthMismatches++;
+            double expectedFrom = 0.0;
+            for (const auto& range : ranges) {
+                if (range.first != expectedFrom || range.second <= range.first) rangeMismatches++;
+                expectedFrom = range.second;
+            }
+            if (expectedFrom != expectedLength) rangeMismatches++;
+        }
+        TestRunner::assertTrue(
+            byteSplitMismatches == 0,
+            "Session chunks: byte-level splits rebuild the same buffer and parse (" +
+                std::to_string(byteSplitMismatches) + " mismatches)"
+        );
+        TestRunner::assertTrue(
+            prefixFailures == 0,
+            "Session chunks: every byte prefix parses without error (" +
+                std::to_string(prefixFailures) + " failures)"
+        );
+        TestRunner::assertTrue(
+            codePointMismatches == 0,
+            "Session chunks: code-point chunks match the one-shot parse and delta reads"
+        );
+        TestRunner::assertTrue(
+            lengthMismatches == 0,
+            "Session chunks: code-point chunks keep the one-shot UTF-16 length"
+        );
+        TestRunner::assertTrue(
+            rangeMismatches == 0,
+            "Session chunks: listener ranges tile the buffer without gaps"
+        );
+
+        auto session = std::make_shared<HybridMarkdownSession>();
+        std::vector<std::pair<double, double>> ranges;
+        auto unsubscribe = session->addListener([&ranges](double from, double to) {
+            ranges.emplace_back(from, to);
+        });
+        session->append("first 😀");
+        session->reset("é");
+        TestRunner::assertTrue(
+            session->append("😀") == 3.0 &&
+                ranges.back() == std::pair<double, double>{1.0, 3.0} &&
+                session->getAllText() == "é😀",
+            "Session chunks: append after reset continues from the new length"
+        );
+        session->reset("");
+        TestRunner::assertTrue(
+            session->append("") == 0.0 &&
+                ranges.back() == std::pair<double, double>{0.0, 0.0} &&
+                session->parse() == cold.parse(""),
+            "Session chunks: empty append after empty reset is a zero range"
+        );
+        session->clear();
+        TestRunner::assertTrue(
+            session->append("z") == 1.0 && ranges.back() == std::pair<double, double>{0.0, 1.0},
+            "Session chunks: append after clear starts at zero"
+        );
+        const size_t notifications = ranges.size();
+        TestRunner::assertEqual(
+            "Buffer size limit exceeded (max 10485760 bytes)",
+            errorOf([&]() { (void)session->append(std::string(10 * 1024 * 1024, 'a')); }),
+            "Session chunks: an append that would exceed the cap is rejected"
+        );
+        TestRunner::assertTrue(
+            session->getAllText() == "z" && session->getLength() == 1.0 &&
+                ranges.size() == notifications,
+            "Session chunks: a rejected append changes nothing and notifies nobody"
+        );
+        TestRunner::assertTrue(
+            session->append("y") == 2.0 && session->getTextRange(1.0, 2.0) == "y",
+            "Session chunks: the session keeps streaming after a rejected append"
+        );
+        unsubscribe();
+    }
+
+    static void testSessionStreamingStepsAreLinear() {
+        using ::margelo::nitro::Markdown::HybridMarkdownSession;
+
+        const std::string chunk = "aé😀 ";
+        constexpr size_t kChunkCodePoints = 4;
+        constexpr size_t kChunkUnits = 5;
+        const auto streamSteps = [&chunk](size_t chunks) {
+            auto session = std::make_shared<HybridMarkdownSession>();
+            auto unsubscribe = session->addListener([](double, double) {});
+            HybridMarkdownSession::resetUtf8DecodeStepsForTest();
+            double cursor = 0.0;
+            size_t deltaBytes = 0;
+            for (size_t index = 0; index < chunks; index++) {
+                const double end = session->append(chunk);
+                deltaBytes += session->getTextRange(cursor, end).size();
+                cursor = end;
+            }
+            const size_t steps = HybridMarkdownSession::utf8DecodeStepsForTest();
+            unsubscribe();
+            return std::pair<size_t, size_t>{steps, deltaBytes};
+        };
+
+        constexpr size_t kSmall = 5000;
+        constexpr size_t kLarge = 20000;
+        const auto small = streamSteps(kSmall);
+        const auto large = streamSteps(kLarge);
+        TestRunner::assertTrue(
+            small.second == kSmall * chunk.size() && large.second == kLarge * chunk.size(),
+            "Session streaming: delta reads return every appended byte"
+        );
+        TestRunner::assertTrue(
+            large.first <= kLarge * (2 * kChunkCodePoints + 4),
+            "Session streaming: 20,000 tiny chunks cost a bounded number of decode steps per chunk (" +
+                std::to_string(large.first) + " steps)"
+        );
+        TestRunner::assertTrue(
+            large.first <= 4 * small.first + 64,
+            "Session streaming: decode steps grow linearly with the chunk count (" +
+                std::to_string(small.first) + " -> " + std::to_string(large.first) + ")"
+        );
+
+        auto session = std::make_shared<HybridMarkdownSession>();
+        for (size_t index = 0; index < kLarge; index++) session->append(chunk);
+        HybridMarkdownSession::resetUtf8DecodeStepsForTest();
+        const double total = session->getLength();
+        (void)session->getTextRange(total - kChunkUnits, total);
+        const size_t tailSteps = HybridMarkdownSession::utf8DecodeStepsForTest();
+        TestRunner::assertTrue(
+            tailSteps <= 2 * kChunkCodePoints + 4,
+            "Session streaming: reading the last chunk does not rescan the buffer (" +
+                std::to_string(tailSteps) + " steps)"
+        );
+        HybridMarkdownSession::resetUtf8DecodeStepsForTest();
+        (void)session->replace(total, total, chunk);
+        TestRunner::assertTrue(
+            HybridMarkdownSession::utf8DecodeStepsForTest() <= kLarge * kChunkCodePoints + 64,
+            "Session streaming: a tail replace scans the buffer at most once"
+        );
+    }
+
+    static void testSessionBufferGrowthIsBounded() {
+        using ::margelo::nitro::Markdown::HybridMarkdownSession;
+
+        constexpr size_t kCap = 10 * 1024 * 1024;
+        constexpr size_t kChunkBytes = 1024;
+        auto session = std::make_shared<HybridMarkdownSession>();
+        const std::string chunk(kChunkBytes, 'a');
+        size_t maxReported = 0;
+        for (size_t index = 0; index < kCap / kChunkBytes; index++) {
+            session->append(chunk);
+            maxReported = std::max(maxReported, session->getExternalMemorySize());
+        }
+        TestRunner::assertTrue(
+            session->getLength() == static_cast<double>(kCap),
+            "Session growth: 10,240 chunks of 1 KiB fill the buffer to the cap"
+        );
+        TestRunner::assertTrue(
+            maxReported >= kCap && maxReported <= 2 * kCap + 4096,
+            "Session growth: retained capacity never exceeds twice the cap (" +
+                std::to_string(maxReported) + " bytes)"
+        );
+        TestRunner::assertEqual(
+            "Buffer size limit exceeded (max 10485760 bytes)",
+            errorOf([&]() { (void)session->append("a"); }),
+            "Session growth: the next byte after the cap is rejected"
+        );
+        TestRunner::assertEqual(
+            "Buffer size limit exceeded (max 10485760 bytes)",
+            errorOf([&]() { session->reset(std::string(kCap + 1, 'a')); }),
+            "Session growth: reset above the cap is rejected"
+        );
+        TestRunner::assertTrue(
+            session->getLength() == static_cast<double>(kCap),
+            "Session growth: rejected writes leave the full buffer intact"
+        );
+        session->clear();
+        TestRunner::assertTrue(
+            session->append("again") == 5.0,
+            "Session growth: the session streams again after clear"
+        );
+    }
+
+    static void testSessionListenerReentrancy() {
+        using ::margelo::nitro::Markdown::HybridMarkdownSession;
+
+        {
+            auto session = std::make_shared<HybridMarkdownSession>();
+            std::vector<std::pair<double, double>> ranges;
+            bool reentered = false;
+            auto unsubscribe = session->addListener([&](double from, double to) {
+                ranges.emplace_back(from, to);
+                if (!reentered) {
+                    reentered = true;
+                    session->append("def");
+                    (void)session->getTextRange(0.0, session->getLength());
+                    (void)session->parse();
+                }
+            });
+            const double length = session->append("abc");
+            TestRunner::assertTrue(
+                length == 3.0 && session->getAllText() == "abcdef" &&
+                    ranges == std::vector<std::pair<double, double>>{{0.0, 3.0}, {3.0, 6.0}},
+                "Session re-entrancy: a listener may append and read without deadlock"
+            );
+            unsubscribe();
+        }
+        {
+            auto session = std::make_shared<HybridMarkdownSession>();
+            size_t selfCalls = 0;
+            size_t lateCalls = 0;
+            std::function<void()> unsubscribeSelf;
+            std::function<void()> unsubscribeLate;
+            unsubscribeSelf = session->addListener([&](double, double) {
+                selfCalls++;
+                unsubscribeSelf();
+                if (!unsubscribeLate) {
+                    unsubscribeLate = session->addListener([&](double, double) { lateCalls++; });
+                }
+            });
+            session->append("a");
+            TestRunner::assertTrue(
+                selfCalls == 1 && lateCalls == 0,
+                "Session re-entrancy: a listener added during notify waits for the next event"
+            );
+            session->append("b");
+            TestRunner::assertTrue(
+                selfCalls == 1 && lateCalls == 1,
+                "Session re-entrancy: a listener removed during notify is not called again"
+            );
+            unsubscribeSelf();
+            unsubscribeLate();
+            unsubscribeLate();
+            session->append("c");
+            TestRunner::assertTrue(lateCalls == 1, "Session re-entrancy: double unsubscribe is a no-op");
+        }
+        {
+            auto session = std::make_shared<HybridMarkdownSession>();
+            size_t afterDispose = 0;
+            auto first = session->addListener([&](double, double) { session->dispose(); });
+            auto second = session->addListener([&](double, double) { afterDispose++; });
+            TestRunner::assertEqual(
+                "",
+                errorOf([&]() { (void)session->append("abc"); }),
+                "Session re-entrancy: a listener may dispose the session during notify"
+            );
+            TestRunner::assertTrue(
+                afterDispose == 1,
+                "Session re-entrancy: listeners snapshotted before dispose still run once"
+            );
+            TestRunner::assertEqual(
+                "HybridMarkdownSession is destroyed",
+                errorOf([&]() { (void)session->append("x"); }),
+                "Session re-entrancy: appends after dispose fail with the destroyed error"
+            );
+            TestRunner::assertEqual(
+                "HybridMarkdownSession is destroyed",
+                errorOf([&]() { (void)session->parse(); }),
+                "Session re-entrancy: parse after dispose fails with the destroyed error"
+            );
+            TestRunner::assertEqual(
+                "",
+                errorOf([&]() {
+                    first();
+                    second();
+                    session->dispose();
+                    session->dispose();
+                }),
+                "Session re-entrancy: unsubscribe and dispose after dispose are no-ops"
+            );
+        }
+        {
+            std::function<void()> orphan;
+            {
+                auto session = std::make_shared<HybridMarkdownSession>();
+                orphan = session->addListener([](double, double) {});
+            }
+            TestRunner::assertEqual(
+                "",
+                errorOf([&]() { orphan(); }),
+                "Session re-entrancy: unsubscribe after the session is destroyed is a no-op"
+            );
+        }
+    }
+
+    static void testSessionConcurrentCallers() {
+        using ::margelo::nitro::Markdown::HybridMarkdownSession;
+
+        constexpr size_t kAppenders = 4;
+        constexpr size_t kAppendsPerThread = 300;
+        constexpr double kChunkUnits = 5.0;
+        const std::string chunk = "ab😀\n";
+
+        auto session = std::make_shared<HybridMarkdownSession>();
+        std::mutex rangesMutex;
+        std::vector<std::pair<double, double>> ranges;
+        auto unsubscribe = session->addListener([&](double from, double to) {
+            std::lock_guard<std::mutex> lock(rangesMutex);
+            ranges.emplace_back(from, to);
+        });
+        std::atomic<size_t> unexpected{0};
+        std::vector<std::thread> threads;
+        for (size_t thread = 0; thread < kAppenders; thread++) {
+            threads.emplace_back([&]() {
+                for (size_t index = 0; index < kAppendsPerThread; index++) {
+                    try {
+                        (void)session->append(chunk);
+                    } catch (...) {
+                        unexpected.fetch_add(1);
+                    }
+                }
+            });
+        }
+        threads.emplace_back([&]() {
+            for (size_t index = 0; index < 200; index++) {
+                try {
+                    const double length = session->getLength();
+                    const std::string text = session->getTextRange(0.0, length);
+                    if (text.size() % chunk.size() != 0) unexpected.fetch_add(1);
+                    (void)session->getAllText();
+                    (void)session->getExternalMemorySize();
+                    session->setHighlightPosition(length);
+                    (void)session->getHighlightPosition();
+                } catch (...) {
+                    unexpected.fetch_add(1);
+                }
+            }
+        });
+        threads.emplace_back([&]() {
+            for (size_t index = 0; index < 20; index++) {
+                try {
+                    if (session->parse().find("\"type\":\"document\"") != 1) unexpected.fetch_add(1);
+                } catch (...) {
+                    unexpected.fetch_add(1);
+                }
+            }
+        });
+        threads.emplace_back([&]() {
+            for (size_t index = 0; index < 200; index++) {
+                try {
+                    auto remove = session->addListener([](double, double) {});
+                    remove();
+                } catch (...) {
+                    unexpected.fetch_add(1);
+                }
+            }
+        });
+        for (auto& thread : threads) thread.join();
+
+        const double total = static_cast<double>(kAppenders * kAppendsPerThread) * kChunkUnits;
+        TestRunner::assertTrue(unexpected.load() == 0, "Session concurrency: no caller observed an error or a torn chunk");
+        TestRunner::assertTrue(session->getLength() == total, "Session concurrency: final length equals the sum of all appends");
+        TestRunner::assertTrue(
+            session->getAllText() == repeatToSize(chunk, kAppenders * kAppendsPerThread * chunk.size()),
+            "Session concurrency: the buffer holds every chunk intact"
+        );
+        std::sort(ranges.begin(), ranges.end());
+        bool tiled = ranges.size() == kAppenders * kAppendsPerThread;
+        for (size_t index = 0; tiled && index < ranges.size(); index++) {
+            tiled = ranges[index].first == static_cast<double>(index) * kChunkUnits &&
+                ranges[index].second == ranges[index].first + kChunkUnits;
+        }
+        TestRunner::assertTrue(tiled, "Session concurrency: notified ranges tile the buffer exactly once");
+        unsubscribe();
+    }
+
+    static void testSessionDisposeRacesCallers() {
+        using ::margelo::nitro::Markdown::HybridMarkdownSession;
+
+        constexpr size_t kThreads = 4;
+        constexpr size_t kOperations = 300;
+        auto session = std::make_shared<HybridMarkdownSession>();
+        std::atomic<size_t> succeeded{0};
+        std::atomic<size_t> destroyed{0};
+        std::atomic<size_t> unexpected{0};
+        std::vector<std::thread> threads;
+        for (size_t thread = 0; thread < kThreads; thread++) {
+            threads.emplace_back([&]() {
+                for (size_t index = 0; index < kOperations; index++) {
+                    try {
+                        auto remove = session->addListener([](double, double) {});
+                        (void)session->append("chunk\n");
+                        (void)session->getTextRange(0.0, 5.0);
+                        (void)session->parse();
+                        remove();
+                        succeeded.fetch_add(1);
+                    } catch (const std::runtime_error& error) {
+                        if (std::string(error.what()) == "HybridMarkdownSession is destroyed") {
+                            destroyed.fetch_add(1);
+                        } else {
+                            unexpected.fetch_add(1);
+                        }
+                    } catch (...) {
+                        unexpected.fetch_add(1);
+                    }
+                }
+            });
+        }
+        while (succeeded.load() + destroyed.load() + unexpected.load() < kThreads * 8) {
+            std::this_thread::yield();
+        }
+        session->dispose();
+        for (auto& thread : threads) thread.join();
+
+        TestRunner::assertTrue(
+            unexpected.load() == 0 &&
+                succeeded.load() + destroyed.load() == kThreads * kOperations,
+            "Session dispose race: every operation either completes or fails with the destroyed error (" +
+                std::to_string(succeeded.load()) + " ok, " + std::to_string(destroyed.load()) + " destroyed)"
+        );
+        TestRunner::assertTrue(
+            session->getExternalMemorySize() == 0,
+            "Session dispose race: a disposed session retains no memory"
+        );
+    }
+
+    enum class InjectionOutcome { Completed, BadAlloc, RuntimeError, Other };
+
+    template <typename Fn>
+    static InjectionOutcome runWithAllocationFailure(long long allocations, bool sticky, bool& fired, Fn&& fn) {
+        namespace Heap = ::NitroMarkdownTestHeap;
+        const size_t before = Heap::injectedFailures.load();
+        const auto disarm = [&]() {
+            Heap::allocationsUntilFailure.store(-1);
+            Heap::stickyFailure.store(false);
+            fired = Heap::injectedFailures.load() != before;
+        };
+        Heap::stickyFailure.store(sticky);
+        Heap::allocationsUntilFailure.store(allocations);
+        try {
+            fn();
+            disarm();
+            return InjectionOutcome::Completed;
+        } catch (const std::bad_alloc&) {
+            disarm();
+            return InjectionOutcome::BadAlloc;
+        } catch (const std::runtime_error&) {
+            disarm();
+            return InjectionOutcome::RuntimeError;
+        } catch (...) {
+            disarm();
+            return InjectionOutcome::Other;
+        }
+    }
+
+    struct InjectionSummary {
+        size_t points = 0;
+        size_t badAlloc = 0;
+        size_t runtimeError = 0;
+        size_t swallowed = 0;
+        size_t other = 0;
+        size_t brokenInvariant = 0;
+    };
+
+    template <typename Fn, typename Check>
+    static InjectionSummary sweepAllocationFailures(bool sticky, Fn&& fn, Check&& check) {
+        InjectionSummary summary;
+        for (long long allocations = 0; allocations < 20000; allocations++) {
+            bool fired = false;
+            const InjectionOutcome outcome = runWithAllocationFailure(allocations, sticky, fired, fn);
+            if (!fired) break;
+            summary.points++;
+            if (outcome == InjectionOutcome::BadAlloc) summary.badAlloc++;
+            else if (outcome == InjectionOutcome::RuntimeError) summary.runtimeError++;
+            else if (outcome == InjectionOutcome::Completed) summary.swallowed++;
+            else summary.other++;
+            if (!check()) summary.brokenInvariant++;
+        }
+        return summary;
+    }
+
+    static std::string describe(const InjectionSummary& summary) {
+        return std::to_string(summary.points) + " points, " +
+            std::to_string(summary.badAlloc) + " bad_alloc, " +
+            std::to_string(summary.runtimeError) + " runtime_error, " +
+            std::to_string(summary.swallowed) + " swallowed, " +
+            std::to_string(summary.other) + " other, " +
+            std::to_string(summary.brokenInvariant) + " broken invariants";
+    }
+
+    static void testAllocationFailureInjection() {
+        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+        using ::margelo::nitro::Markdown::HybridMarkdownSession;
+        using BindingParserOptions = ::margelo::nitro::Markdown::ParserOptions;
+
+        const std::string document =
+            "# Título é\n\n- a *b* `c`\n- [l](/u \"t\")\n\n| a | b |\n|---|---|\n| 1 | 😀 |\n\n"
+            "![alt **x**](i)\n\n> q\n> r\n\n```js\ncode\n```\n\n[ref]\n\n[ref]: /r \"rt\"\n";
+
+        for (const bool sticky : {false, true}) {
+            const std::string mode = sticky ? "persistent" : "single";
+            MD4CParser parser;
+            ParserOptions options{true, true};
+            const std::string expectedTree = canonicalizeNode(parser.parse(document, options));
+            const InjectionSummary core = sweepAllocationFailures(
+                sticky,
+                [&]() { (void)parser.parse(document, options); },
+                [&]() { return canonicalizeNode(parser.parse(document, options)) == expectedTree; }
+            );
+            TestRunner::assertTrue(
+                core.points > 20 && core.swallowed == 0 && core.other == 0 &&
+                    core.brokenInvariant == 0,
+                "Allocation failure (" + mode + "): core parse fails loudly and stays reusable (" +
+                    describe(core) + ")"
+            );
+
+            HybridMarkdownParser binding;
+            BindingParserOptions bindingOptions;
+            const std::string expectedJson = binding.parseWithOptions(document, bindingOptions);
+            const std::string expectedPlain = binding.extractPlainText(document);
+            const InjectionSummary json = sweepAllocationFailures(
+                sticky,
+                [&]() {
+                    (void)binding.parseWithOptions(document, bindingOptions);
+                    (void)binding.extractPlainText(document);
+                },
+                [&]() {
+                    return binding.parseWithOptions(document, bindingOptions) == expectedJson &&
+                        binding.extractPlainText(document) == expectedPlain;
+                }
+            );
+            TestRunner::assertTrue(
+                json.points > 20 && json.swallowed == 0 && json.other == 0 &&
+                    json.brokenInvariant == 0,
+                "Allocation failure (" + mode + "): binding parse and flatten fail loudly (" +
+                    describe(json) + ")"
+            );
+
+            auto session = std::make_shared<HybridMarkdownSession>();
+            session->reset("início 😀 ");
+            auto keep = session->addListener([](double, double) {});
+            const std::string chunk = std::string(200, 'x') + "é😀\n";
+            const auto consistent = [&]() {
+                const std::string text = session->getAllText();
+                return session->getLength() == static_cast<double>(utf16LengthForTest(text)) &&
+                    session->getTextRange(0.0, session->getLength()) == text;
+            };
+            const InjectionSummary stream = sweepAllocationFailures(
+                sticky,
+                [&]() {
+                    auto remove = session->addListener([](double, double) {});
+                    (void)session->append(chunk);
+                    (void)session->replace(0.0, 1.0, chunk);
+                    session->reset(chunk + chunk);
+                    (void)session->getTextRange(0.0, 4.0);
+                    (void)session->getAllText();
+                    (void)session->parse();
+                    remove();
+                },
+                consistent
+            );
+            TestRunner::assertTrue(
+                stream.points > 5 && stream.swallowed == 0 && stream.other == 0 &&
+                    stream.brokenInvariant == 0,
+                "Allocation failure (" + mode + "): session operations keep length and buffer consistent (" +
+                    describe(stream) + ")"
+            );
+            keep();
+        }
+    }
+
+    template <typename Fn>
+    static size_t peakHeapDuring(Fn&& fn) {
+        namespace Heap = ::NitroMarkdownTestHeap;
+        const size_t base = Heap::liveBytes.load();
+        Heap::peakBytes.store(base);
+        fn();
+        return Heap::peakBytes.load() - base;
+    }
+
+    static void testPeakHeapBounds() {
+        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+        using BindingParserOptions = ::margelo::nitro::Markdown::ParserOptions;
+
+        constexpr size_t kCap = 10 * 1024 * 1024;
+        constexpr size_t kSlack = 1024 * 1024;
+        MD4CParser parser;
+        ParserOptions tracked{true, true};
+        tracked.sourceOffsets = true;
+        ParserOptions untracked = tracked;
+        untracked.sourceOffsets = false;
+
+        struct Case {
+            const char* name;
+            std::string input;
+            size_t trackedFactor;
+        };
+        std::vector<Case> cases;
+        cases.push_back({"ASCII at the cap", std::string(kCap, 'a'), 2});
+        cases.push_back({"two-byte text at the cap", repeatToSize("\xC3\xA9", kCap - 1), 2});
+        cases.push_back({"three-byte text at the cap", repeatToSize("\xE4\xB8\xAD", kCap - 2), 2});
+        cases.push_back({"four-byte text at the cap", repeatToSize("\xF0\x9F\x98\x80", kCap - 3), 2});
+        cases.push_back({"invalid lead bytes at the cap", std::string(kCap, '\xFF'), 2});
+        cases.push_back({"lone two-byte leads at the cap", std::string(kCap, '\xC3'), 2});
+        cases.push_back({"alternating ASCII and two-byte text at the cap", repeatToSize("a\xC3\xA9", kCap - 2), 7});
+        for (auto& entry : cases) {
+            if (entry.input.size() > kCap) entry.input.resize(kCap - kCap % 12);
+            const size_t trackedPeak = peakHeapDuring([&]() { (void)parser.parse(entry.input, tracked); });
+            const size_t untrackedPeak = peakHeapDuring([&]() { (void)parser.parse(entry.input, untracked); });
+            std::cout << "ℹ Peak heap " << entry.name << ": tracked=" << trackedPeak
+                      << " untracked=" << untrackedPeak << " input=" << entry.input.size() << std::endl;
+            TestRunner::assertTrue(
+                trackedPeak <= entry.trackedFactor * entry.input.size() + kSlack,
+                std::string("Peak heap: ") + entry.name + " with offsets stays within " +
+                    std::to_string(entry.trackedFactor) + "x input"
+            );
+            TestRunner::assertTrue(
+                untrackedPeak <= 2 * entry.input.size() + kSlack,
+                std::string("Peak heap: ") + entry.name + " without offsets stays within 2x input"
+            );
+        }
+
+        const std::string dense = repeatToSize("a\n", 2 * 49000);
+        const size_t densePeak = peakHeapDuring([&]() { (void)parser.parse(dense, tracked); });
+        std::cout << "ℹ Peak heap node-dense: " << densePeak << " input=" << dense.size() << std::endl;
+        TestRunner::assertTrue(
+            densePeak <= 64 * 1024 * 1024,
+            "Peak heap: a tree at the node budget stays under 64 MiB regardless of input size"
+        );
+
+        HybridMarkdownParser binding;
+        BindingParserOptions bindingOptions;
+        const std::string ascii(kCap, 'a');
+        const size_t jsonPeak = peakHeapDuring([&]() { (void)binding.parseWithOptions(ascii, bindingOptions); });
+        std::cout << "ℹ Peak heap binding ASCII at the cap: " << jsonPeak << std::endl;
+        TestRunner::assertTrue(
+            jsonPeak <= 4 * kCap + kSlack,
+            "Peak heap: binding JSON for ASCII at the cap stays within 4x input"
+        );
+    }
+
+    static std::vector<std::string> unicodeDocuments() {
+        return {
+            "# 标题\n\n中文段落，带有**加粗**和`代码`。\n\n- 列表项一\n- 列表项二\n",
+            "😀😀😀 **😀** _é😀_ `😀` [😀](https://e.x/😀 \"😀\")\n",
+            "aé aé aé **aé** aé\naé  \naé\\\naé",
+            "Olá, mundo! Ação, coração, pão — “aspas” … ½ ±\n\n> Citação é ótima\n",
+            "| 中 | é | 😀 |\n|:--|:-:|--:|\n| a中 | bé | c😀 |\n| 中中中 | ééé | 😀😀 |\n",
+            "```日本語\nコード 😀\n```\n\n$$\nα + β = γ\n$$\n\n$δ$ ~~削除~~\n",
+            "- [ ] tâche é\n- [x] 完了 😀\n\n1. Ünïcödé\n2. Ελληνικά\n3. Кириллица\n4. עברית\n5. العربية\n",
+            "mixed \xC3\xA9\xE4\xB8\xAD\xF0\x9F\x98\x80\xC3\xA9\xC3\xA9\xE4\xB8\xAD\xE4\xB8\xAD\xF0\x9F\x98\x80\xF0\x9F\x98\x80 a \xC3\xA9 b \xE4\xB8\xAD c \xF0\x9F\x98\x80 d",
+            "![é😀 **中**](i.png \"tí\") <b>é</b> &amp; &eacute; &#x4e2d; \\* é\n",
+            "é\r\n中\r😀\n\n***\n\nSetext é\n===\n\nSetext 中\n---\n",
+        };
+    }
+
+    static std::vector<std::string> goldenDocuments() {
+        std::vector<std::string> documents;
+        for (auto& document : hostileDocuments()) {
+            if (document.compare(0, 3, "\xEF\xBB\xBF") != 0) documents.push_back(std::move(document));
+        }
+        for (auto& document : unicodeDocuments()) documents.push_back(std::move(document));
+        for (auto& document : makeFragmentCorpus(600, 0x60D1E5u)) documents.push_back(std::move(document));
+        return documents;
+    }
+
+    static void testProductionOutputGolden() {
+        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+        using BindingParserOptions = ::margelo::nitro::Markdown::ParserOptions;
+
+        HybridMarkdownParser parser;
+        uint64_t hash = 14695981039346656037ull;
+        const auto mix = [&hash](const std::string& value) {
+            for (const char raw : value) {
+                hash ^= static_cast<unsigned char>(raw);
+                hash *= 1099511628211ull;
+            }
+            hash ^= 0xFFu;
+            hash *= 1099511628211ull;
+        };
+        for (const auto& document : goldenDocuments()) {
+            for (unsigned combo = 0; combo < 8; combo++) {
+                BindingParserOptions options;
+                options.gfm = (combo & 1u) != 0;
+                options.math = (combo & 2u) != 0;
+                options.html = (combo & 4u) != 0;
+                options.sourceOffsets = true;
+                std::string json;
+                std::string plain;
+                const std::string error = errorOf([&]() {
+                    json = parser.parseWithOptions(document, options);
+                    plain = parser.extractPlainTextWithOptions(document, options);
+                });
+                mix(json);
+                mix(plain);
+                mix(error);
+            }
+        }
+        TestRunner::assertEqual(
+            "14084455836454379281",
+            std::to_string(hash),
+            "Golden: production-flag JSON, offsets and plain text are byte-identical to the 0.13.0 output"
+        );
+    }
+
+    static size_t strictUtf8SequenceLength(const std::string& text, size_t index) {
+        const auto byteAt = [&text](size_t position) {
+            return static_cast<unsigned char>(text[position]);
+        };
+        const auto continuation = [&](size_t position) {
+            return position < text.size() && (byteAt(position) & 0xC0) == 0x80;
+        };
+        const unsigned char first = byteAt(index);
+        if (first >= 0xC2 && first <= 0xDF && continuation(index + 1)) return 2;
+        if (
+            first >= 0xE0 && first <= 0xEF && continuation(index + 1) && continuation(index + 2) &&
+            !(first == 0xE0 && byteAt(index + 1) < 0xA0) &&
+            !(first == 0xED && byteAt(index + 1) >= 0xA0)
+        ) {
+            return 3;
+        }
+        if (
+            first >= 0xF0 && first <= 0xF4 && continuation(index + 1) && continuation(index + 2) &&
+            continuation(index + 3) && !(first == 0xF0 && byteAt(index + 1) < 0x90) &&
+            !(first == 0xF4 && byteAt(index + 1) >= 0x90)
+        ) {
+            return 4;
+        }
+        return 1;
+    }
+
+    static std::vector<OFF> referenceSourceOffsets(const std::string& text) {
+        std::vector<OFF> offsets;
+        offsets.reserve(text.size() + 2);
+        OFF utf16 = 0;
+        size_t index = 0;
+        while (index < text.size()) {
+            const size_t length = strictUtf8SequenceLength(text, index);
+            for (size_t step = 0; step < length; step++) offsets.push_back(utf16);
+            utf16 += length == 4 ? 2 : 1;
+            index += length;
+        }
+        offsets.push_back(utf16);
+        offsets.push_back(utf16);
+        return offsets;
+    }
+
+    static void testSourceOffsetMappingMatchesReference() {
+        std::vector<std::string> documents = hostileDocuments();
+        for (auto& document : unicodeDocuments()) documents.push_back(std::move(document));
+        documents.push_back(repeatToSize("\xE4\xB8\xAD", 30000));
+        documents.push_back(repeatToSize("a\xC3\xA9", 30000));
+        documents.push_back(repeatToSize("\xC3\xA9\xE4\xB8\xAD\xF0\x9F\x98\x80", 30000));
+        documents.push_back(repeatToSize("\xF0\x9F\x98\x80\xF0\x9F", 3000));
+        documents.push_back(repeatToSize("\xC3\xA9\xC3", 3000));
+        documents.push_back(std::string(4096, '\xFF'));
+        documents.push_back(std::string(4096, '\xC3'));
+        std::mt19937 rng(0x0FF5E7u);
+        const char kBytes[] = "a\n\xC3\xA9\xE4\xB8\xAD\xF0\x9F\x98\x80\xED\xA0\x80\xC0\xFF\x80";
+        for (int index = 0; index < 400; index++) {
+            std::string document;
+            const size_t length = rng() % 200;
+            for (size_t position = 0; position < length; position++) {
+                document.push_back(kBytes[rng() % (sizeof(kBytes) - 1)]);
+            }
+            documents.push_back(std::move(document));
+        }
+
+        size_t mismatches = 0;
+        size_t checkedOffsets = 0;
+        std::string firstMismatch;
+        for (const auto& document : documents) {
+            const std::vector<OFF> actual = MD4CParser::sourceOffsetsForTest(document);
+            const std::vector<OFF> expected = referenceSourceOffsets(document);
+            checkedOffsets += expected.size();
+            if (actual != expected) {
+                mismatches++;
+                if (firstMismatch.empty()) firstMismatch = jsonEscape(document.substr(0, 64));
+            }
+        }
+        TestRunner::assertEqual(
+            "",
+            firstMismatch,
+            "Offset runs: every byte offset maps to the per-sequence reference (" +
+                std::to_string(checkedOffsets) + " offsets, " +
+                std::to_string(mismatches) + " mismatching documents)"
+        );
+
+        TestRunner::assertEqual(
+            "0",
+            std::to_string(MD4CParser::sourceOffsetRunCountForTest(std::string(4096, 'a'))),
+            "Offset runs: ASCII needs no runs"
+        );
+        TestRunner::assertEqual(
+            "1",
+            std::to_string(MD4CParser::sourceOffsetRunCountForTest(repeatToSize("\xE4\xB8\xAD", 30000))),
+            "Offset runs: contiguous same-width text coalesces into one run"
+        );
+        TestRunner::assertEqual(
+            "3",
+            std::to_string(MD4CParser::sourceOffsetRunCountForTest(
+                "\xC3\xA9\xC3\xA9\xE4\xB8\xAD\xE4\xB8\xAD\xF0\x9F\x98\x80\xF0\x9F\x98\x80"
+            )),
+            "Offset runs: a width change starts a new run"
+        );
+        TestRunner::assertEqual(
+            "1000",
+            std::to_string(MD4CParser::sourceOffsetRunCountForTest(repeatToSize("a\xC3\xA9", 3000))),
+            "Offset runs: alternating ASCII and two-byte text keeps one run per sequence"
+        );
+        TestRunner::assertEqual(
+            "0",
+            std::to_string(MD4CParser::sourceOffsetRunCountForTest(std::string(4096, '\xFF'))),
+            "Offset runs: invalid lead bytes create no runs"
+        );
+    }
+
+    static std::string dumpWithOffsets(const std::shared_ptr<MarkdownNode>& node, OFF shift, bool isRoot) {
+        if (!node) return "null";
+        const OFF beg = isRoot ? node->beg : node->beg + shift;
+        std::string out = nodeTypeToString(node->type) + "[" + std::to_string(beg) + "," +
+            std::to_string(node->end + shift) + "]";
+        if (node->content.has_value()) out += "{" + jsonEscape(node->content.value()) + "}";
+        if (node->href.has_value()) out += "<" + jsonEscape(node->href.value()) + ">";
+        if (node->alt.has_value()) out += "~" + jsonEscape(node->alt.value()) + "~";
+        out += "(";
+        for (const auto& child : node->children) out += dumpWithOffsets(child, shift, false) + " ";
+        out += ")";
+        return out;
+    }
+
+    static void testLeadingBomIsSkipped() {
+        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+        using ::margelo::nitro::Markdown::HybridMarkdownSession;
+
+        const std::string bom = "\xEF\xBB\xBF";
+        MD4CParser parser;
+        ParserOptions options{true, true, true};
+
+        const auto heading = findFirstNode(parser.parse(bom + "# h", options), NodeType::Heading);
+        const auto plainHeading = findFirstNode(parser.parse("# h", options), NodeType::Heading);
+        TestRunner::assertTrue(
+            heading && plainHeading && heading->beg == plainHeading->beg + 1 &&
+                heading->end == plainHeading->end + 1 && heading->end == 4,
+            "BOM: a leading BOM no longer hides a heading and offsets count it as one unit"
+        );
+
+        std::vector<std::string> documents = unicodeDocuments();
+        for (const std::string& extra : {
+            std::string(""),
+            std::string("\n"),
+            std::string("# h"),
+            std::string("plain"),
+            std::string("- a\n- b\n\n> q\n\n```\ncode\n```\n"),
+            std::string("| a |\n|---|\n| 1 |\n"),
+            std::string("a\r\nb  \r\nc\\\nd"),
+            std::string("<div>\nx\n</div>\n\n[r]\n\n[r]: /u \"t\"\n"),
+        }) {
+            documents.push_back(extra);
+        }
+        const auto fragments = makeFragmentCorpus(200, 0xB0B0u);
+        documents.insert(documents.end(), fragments.begin(), fragments.end());
+
+        size_t mismatches = 0;
+        size_t plainMismatches = 0;
+        std::string firstMismatch;
+        for (const auto& document : documents) {
+            for (const bool offsets : {true, false}) {
+                ParserOptions current = options;
+                current.sourceOffsets = offsets;
+                const auto plain = parser.parse(document, current);
+                const auto prefixed = parser.parse(bom + document, current);
+                const OFF shift = offsets ? 1 : 0;
+                if (dumpWithOffsets(plain, shift, true) != dumpWithOffsets(prefixed, 0, true)) {
+                    mismatches++;
+                    if (firstMismatch.empty()) firstMismatch = jsonEscape(document);
+                }
+                if (flattenNodeText(plain) != flattenNodeText(prefixed)) plainMismatches++;
+            }
+        }
+        TestRunner::assertEqual(
+            "",
+            firstMismatch,
+            "BOM: a prefixed document parses to the same tree with every offset shifted by one (" +
+                std::to_string(mismatches) + " mismatches)"
+        );
+        TestRunner::assertTrue(
+            plainMismatches == 0,
+            "BOM: plain text is the same with and without a leading BOM"
+        );
+
+        const auto bomOnly = parser.parse(bom, options);
+        TestRunner::assertTrue(
+            bomOnly && bomOnly->children.empty() && bomOnly->beg == 0 && bomOnly->end == 1,
+            "BOM: a BOM-only document is empty and spans one unit"
+        );
+        const auto secondBom = findFirstNode(parser.parse(bom + bom + "x", options), NodeType::Text);
+        TestRunner::assertTrue(
+            secondBom && secondBom->content.value_or("") == bom + "x" && secondBom->beg == 1 &&
+                secondBom->end == 3,
+            "BOM: only the first BOM is skipped"
+        );
+        const auto midBom = findFirstNode(parser.parse("a" + bom + "# h", options), NodeType::Text);
+        TestRunner::assertEqual(
+            "a" + bom + "# h",
+            midBom ? midBom->content.value_or("") : "",
+            "BOM: a BOM that is not at the start stays in the text"
+        );
+
+        HybridMarkdownParser binding;
+        TestRunner::assertEqual(
+            "{\"type\":\"document\",\"beg\":0,\"end\":4,\"children\":[{\"type\":\"heading\",\"beg\":3,\"end\":4,"
+            "\"level\":1,\"children\":[{\"type\":\"text\",\"beg\":3,\"end\":4,\"content\":\"h\"}]}]}",
+            binding.parse(bom + "# h"),
+            "BOM: binding JSON keeps offsets relative to the original string"
+        );
+        TestRunner::assertEqual("h\n\n", binding.extractPlainText(bom + "# h"), "BOM: plain text drops the BOM");
+
+        auto session = std::make_shared<HybridMarkdownSession>();
+        for (const char byte : bom + "# h") session->append(std::string(1, byte));
+        TestRunner::assertEqual(
+            binding.parse(bom + "# h"),
+            session->parse(),
+            "BOM: a streamed BOM parses like the one-shot document"
+        );
+        TestRunner::assertTrue(
+            session->getLength() >= 4.0 && session->getAllText() == bom + "# h",
+            "BOM: the session buffer keeps the BOM bytes"
+        );
+    }
+
+    static void testUnmappedExtensionNodesStayBalanced() {
+        MD4CParser parser;
+        ParserOptions options{false, false};
+        const std::string document =
+            "> q ==hi== ^s^ ~b~ ||sp|| [[w]] x[^1]\n\n\n[^1]: note\n\n> [!NOTE]\n> body\n\nafter";
+        struct Case {
+            const char* name;
+            unsigned int flags;
+            bool sourceOrdered;
+        };
+        const std::vector<Case> cases = {
+            {"spoilers", MD_FLAG_SPOILERS, true},
+            {"superscripts", MD_FLAG_SUPERSCRIPTS, true},
+            {"subscripts", MD_FLAG_SUBSCRIPTS, true},
+            {"highlight", MD_FLAG_HIGHLIGHT, true},
+            {"wikilinks", MD_FLAG_WIKILINKS, true},
+            {"footnotes", MD_FLAG_FOOTNOTES, false},
+            {"admonitions", MD_FLAG_ADMONITIONS, true},
+            {"blank lines", MD_FLAG_PRESERVEBLANKLINES, true},
+            {"all extensions", MD_FLAG_SPOILERS | MD_FLAG_SUPERSCRIPTS | MD_FLAG_SUBSCRIPTS |
+                MD_FLAG_HIGHLIGHT | MD_FLAG_WIKILINKS | MD_FLAG_FOOTNOTES | MD_FLAG_ADMONITIONS |
+                MD_FLAG_PRESERVEBLANKLINES, false},
+        };
+        for (const auto& entry : cases) {
+            std::shared_ptr<MarkdownNode> ast;
+            const std::string error = errorOf([&]() {
+                ast = parser.parseWithExtraFlagsForTest(document, options, entry.flags);
+            });
+            bool wellFormed = error.empty() && ast != nullptr;
+            if (wellFormed) {
+                for (const auto& child : ast->children) {
+                    if (entry.sourceOrdered && child->type == NodeType::Text) wellFormed = false;
+                }
+                bool afterIsRootParagraph = false;
+                for (const auto& child : ast->children) {
+                    if (child->type == NodeType::Paragraph && flattenNodeText(child) == "after\n\n") {
+                        afterIsRootParagraph = true;
+                    }
+                }
+                wellFormed = wellFormed && afterIsRootParagraph;
+                const auto quote = findFirstNode(ast, NodeType::Blockquote);
+                if (quote) {
+                    for (const auto& child : quote->children) {
+                        if (child->type == NodeType::Text || child->type == NodeType::Link) {
+                            wellFormed = false;
+                        }
+                    }
+                }
+                const auto last = ast->children.empty() ? nullptr : ast->children.back();
+                wellFormed = wellFormed && last != nullptr && flattenNodeText(ast).find("after") != std::string::npos;
+            }
+            TestRunner::assertTrue(
+                wellFormed,
+                std::string("Unmapped nodes: ") + entry.name +
+                    " keep inline text inside its paragraph (" + error + ")"
+            );
+            if (entry.sourceOrdered) {
+                TestRunner::assertEqual(
+                    "",
+                    ast ? offsetViolation(ast, utf16LengthForTest(document), "") : "no tree",
+                    std::string("Unmapped nodes: ") + entry.name + " keep contained offsets"
+                );
+            }
+        }
+
+        const auto spoiler = parser.parseWithExtraFlagsForTest("> q ||sp|| x", options, MD_FLAG_SPOILERS);
+        TestRunner::assertEqual(
+            "document{children=[blockquote{children=[paragraph{children=[text{content=q sp x}]}]}]}",
+            canonicalizeNode(spoiler),
+            "Unmapped nodes: an unmapped span is transparent inside its paragraph"
+        );
+        const auto footnote = parser.parseWithExtraFlagsForTest(
+            "x[^1]\n\n[^1]: note\n\nafter",
+            options,
+            MD_FLAG_FOOTNOTES
+        );
+        TestRunner::assertEqual(
+            "document{children=[paragraph{children=[text{content=x}]},paragraph{children=[text{content=after}]},text{content=note}]}",
+            canonicalizeNode(footnote),
+            "Unmapped nodes: an unmapped block is transparent and leaves its siblings intact"
+        );
+    }
+
+    static void testMaxInputLengthSaturatesOnEveryAbi() {
+        using ::margelo::nitro::Markdown::HybridMarkdownParser;
+
+        struct Case {
+            const char* name;
+            double value;
+            uint64_t narrow;
+            uint64_t wide;
+        };
+        const std::vector<Case> cases = {
+            {"0", 0.0, 0, 0},
+            {"1", 1.0, 1, 1},
+            {"hard cap", 10485760.0, 10485760, 10485760},
+            {"2^31", 2147483648.0, 2147483648ull, 2147483648ull},
+            {"2^32 - 1", 4294967295.0, 4294967295ull, 4294967295ull},
+            {"2^32", 4294967296.0, 4294967295ull, 4294967296ull},
+            {"2^32 + 1", 4294967297.0, 4294967295ull, 4294967297ull},
+            {"2^53", 9007199254740992.0, 4294967295ull, 9007199254740992ull},
+            {"2^63", 9223372036854775808.0, 4294967295ull, 9223372036854775808ull},
+            {"largest double below 2^64", 18446744073709549568.0, 4294967295ull, 18446744073709549568ull},
+        };
+        for (const auto& entry : cases) {
+            uint64_t narrow = 1;
+            uint64_t wide = 1;
+            const std::string error = errorOf([&]() {
+                narrow = HybridMarkdownParser::resolveMaxInputBytesForTest(entry.value, true);
+                wide = HybridMarkdownParser::resolveMaxInputBytesForTest(entry.value, false);
+            });
+            TestRunner::assertTrue(
+                error.empty() && narrow == entry.narrow && wide == entry.wide,
+                std::string("Max input ABI: ") + entry.name +
+                    " resolves the same way with a 32-bit and a 64-bit size (" +
+                    std::to_string(narrow) + ", " + std::to_string(wide) + ") " + error
+            );
+        }
+        for (const bool narrowSize : {true, false}) {
+            const std::string width = narrowSize ? "32-bit" : "64-bit";
+            TestRunner::assertEqual(
+                "maxInputLength cannot be represented as a native size",
+                errorOf([&]() {
+                    (void)HybridMarkdownParser::resolveMaxInputBytesForTest(18446744073709551616.0, narrowSize);
+                }),
+                "Max input ABI: 2^64 is rejected with a " + width + " size"
+            );
+            TestRunner::assertEqual(
+                "maxInputLength must be a finite non-negative integer in bytes",
+                errorOf([&]() {
+                    (void)HybridMarkdownParser::resolveMaxInputBytesForTest(-1.0, narrowSize);
+                }),
+                "Max input ABI: -1 is rejected with a " + width + " size"
+            );
+            TestRunner::assertEqual(
+                "maxInputLength must be a finite non-negative integer in bytes",
+                errorOf([&]() {
+                    (void)HybridMarkdownParser::resolveMaxInputBytesForTest(
+                        std::numeric_limits<double>::quiet_NaN(),
+                        narrowSize
+                    );
+                }),
+                "Max input ABI: NaN is rejected with a " + width + " size"
+            );
+        }
     }
 };
 
