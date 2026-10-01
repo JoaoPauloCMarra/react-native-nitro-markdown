@@ -28,7 +28,7 @@ static constexpr size_t kMaxJsonSize = 64 * 1024 * 1024;
 class JsonWriter final {
 public:
     void reserve(size_t capacity) {
-        output_.reserve(std::min(capacity, kMaxJsonSize));
+        reallocate(std::min(capacity, kMaxJsonSize));
     }
 
     void append(std::string_view value) {
@@ -51,14 +51,21 @@ private:
             throwJsonSizeError(output_.size() + extra);
         }
         const size_t needed = output_.size() + extra;
-        if (needed > output_.capacity()) {
-            output_.reserve(
-                std::min(std::max(needed, output_.capacity() * 2), kMaxJsonSize)
-            );
+        if (needed > capacity_) {
+            reallocate(std::min(std::max(needed, capacity_ * 2), kMaxJsonSize));
         }
     }
 
+    void reallocate(size_t capacity) {
+        std::string next;
+        next.reserve(capacity);
+        next.append(output_);
+        output_ = std::move(next);
+        capacity_ = capacity;
+    }
+
     std::string output_;
+    size_t capacity_ = 0;
 };
 
 template <typename Writer, typename T>

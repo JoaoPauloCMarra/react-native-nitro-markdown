@@ -30,6 +30,19 @@
 #include <pthread.h>
 #endif
 
+#define NITRO_MARKDOWN_TEST_HEAP_HOOK 1
+#if defined(__linux__)
+#if defined(__SANITIZE_THREAD__)
+#undef NITRO_MARKDOWN_TEST_HEAP_HOOK
+#define NITRO_MARKDOWN_TEST_HEAP_HOOK 0
+#elif defined(__has_feature)
+#if __has_feature(thread_sanitizer)
+#undef NITRO_MARKDOWN_TEST_HEAP_HOOK
+#define NITRO_MARKDOWN_TEST_HEAP_HOOK 0
+#endif
+#endif
+#endif
+
 namespace NitroMarkdownTestHeap {
 
 constexpr std::size_t kHeaderBytes = 16;
@@ -70,6 +83,7 @@ inline void release(void* pointer) noexcept {
 
 } // namespace NitroMarkdownTestHeap
 
+#if NITRO_MARKDOWN_TEST_HEAP_HOOK
 void* operator new(std::size_t size) {
     return NitroMarkdownTestHeap::allocate(size);
 }
@@ -81,6 +95,43 @@ void operator delete(void* pointer) noexcept {
 void operator delete(void* pointer, std::size_t) noexcept {
     NitroMarkdownTestHeap::release(pointer);
 }
+
+void* operator new[](std::size_t size) {
+    return NitroMarkdownTestHeap::allocate(size);
+}
+
+void operator delete[](void* pointer) noexcept {
+    NitroMarkdownTestHeap::release(pointer);
+}
+
+void operator delete[](void* pointer, std::size_t) noexcept {
+    NitroMarkdownTestHeap::release(pointer);
+}
+
+void* operator new(std::size_t size, const std::nothrow_t&) noexcept {
+    try {
+        return NitroMarkdownTestHeap::allocate(size);
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+void* operator new[](std::size_t size, const std::nothrow_t&) noexcept {
+    try {
+        return NitroMarkdownTestHeap::allocate(size);
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+void operator delete(void* pointer, const std::nothrow_t&) noexcept {
+    NitroMarkdownTestHeap::release(pointer);
+}
+
+void operator delete[](void* pointer, const std::nothrow_t&) noexcept {
+    NitroMarkdownTestHeap::release(pointer);
+}
+#endif
 
 namespace NitroMarkdown {
 
@@ -4014,15 +4065,17 @@ private:
                     (offsets ? "on" : "off") + "): " + error.substr(0, 96)
             );
         }
-        BindingParserOptions capOptions;
-        const size_t capPeak = peakHeapDuring([&]() {
-            (void)errorOf([&]() { (void)parser.parseWithOptions(document, capOptions); });
-        });
-        std::cout << "ℹ Peak heap JSON cap rejection: " << capPeak << std::endl;
-        TestRunner::assertTrue(
-            capPeak <= 130u * 1024u * 1024u,
-            "JSON cap: the writer stops at the cap instead of growing past it"
-        );
+        if (heapHookReady("JSON cap peak heap")) {
+            BindingParserOptions capOptions;
+            const size_t capPeak = peakHeapDuring([&]() {
+                (void)errorOf([&]() { (void)parser.parseWithOptions(document, capOptions); });
+            });
+            std::cout << "ℹ Peak heap JSON cap rejection: " << capPeak << std::endl;
+            TestRunner::assertTrue(
+                capPeak <= 130u * 1024u * 1024u,
+                "JSON cap: the writer stops at the cap instead of growing past it"
+            );
+        }
         std::string plain;
         TestRunner::assertEqual(
             "",
@@ -4641,6 +4694,30 @@ private:
         );
     }
 
+    static bool heapHookObserved() {
+        namespace Heap = ::NitroMarkdownTestHeap;
+        const size_t before = Heap::liveBytes.load();
+        auto* probe = new std::vector<char>(4096, 'x');
+        volatile const char* sink = probe->data();
+        const bool observed = sink != nullptr && Heap::liveBytes.load() >= before + 4096;
+        delete probe;
+        return observed;
+    }
+
+    static bool heapHookReady(const std::string& testName) {
+        const bool expected = NITRO_MARKDOWN_TEST_HEAP_HOOK == 1;
+        const bool observed = heapHookObserved();
+        TestRunner::assertTrue(
+            observed == expected,
+            "Heap hook: availability matches the build configuration for " + testName
+        );
+        if (!observed) {
+            std::cout << "ℹ " << testName
+                      << " skipped: allocator hook unavailable under TSan on Linux" << std::endl;
+        }
+        return observed;
+    }
+
     enum class InjectionOutcome { Completed, BadAlloc, RuntimeError, Other };
 
     static std::string& lastInjectionMessage() {
@@ -4733,6 +4810,8 @@ private:
         using ::margelo::nitro::Markdown::HybridMarkdownParser;
         using ::margelo::nitro::Markdown::HybridMarkdownSession;
         using BindingParserOptions = ::margelo::nitro::Markdown::ParserOptions;
+
+        if (!heapHookReady("Allocation failure injection")) return;
 
         const std::string document =
             "# Título é\n\n- a *b* `c`\n- [l](/u \"t\")\n\n| a | b |\n|---|---|\n| 1 | 😀 |\n\n"
@@ -4827,6 +4906,8 @@ private:
     static void testPeakHeapBounds() {
         using ::margelo::nitro::Markdown::HybridMarkdownParser;
         using BindingParserOptions = ::margelo::nitro::Markdown::ParserOptions;
+
+        if (!heapHookReady("Peak heap bounds")) return;
 
         constexpr size_t kCap = 10 * 1024 * 1024;
         constexpr size_t kSlack = 1024 * 1024;
