@@ -298,69 +298,105 @@ describe("MathBlock renderer", () => {
 
   it("renders math as monospace text without the RaTeX subpath", () => {
     let renderer: ReactTestRenderer | undefined;
-    act(() => {
-      renderer = create(
-        createElement(
-          MarkdownContext.Provider,
-          {
-            value: {
-              renderers: {},
-              theme: defaultMarkdownTheme,
-              stylingStrategy: "opinionated",
-            },
-          },
-          createElement(FallbackMathInline, { content: "E = mc^2" }),
-          createElement(FallbackMathBlock, { content: "\\sum n" }),
-        ),
-      );
-    });
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation((message?: unknown, ...args: unknown[]) => {
+        if (
+          typeof message === "string" &&
+          message.includes("react-test-renderer is deprecated")
+        ) {
+          return;
+        }
+        process.stderr.write(
+          [message, ...args].map((arg) => String(arg)).join(" ") + "\n",
+        );
+      });
 
-    expect(renderer!.root.findAllByType(hostType("RaTeXView"))).toHaveLength(0);
-    const texts = renderer!.root
-      .findAllByType(hostType("Text"))
-      .map((node) => node.props.children);
-    expect(texts).toEqual(["E = mc^2", "\\sum n"]);
+    try {
+      act(() => {
+        renderer = create(
+          createElement(
+            MarkdownContext.Provider,
+            {
+              value: {
+                renderers: {},
+                theme: defaultMarkdownTheme,
+                stylingStrategy: "opinionated",
+              },
+            },
+            createElement(FallbackMathInline, { content: "E = mc^2" }),
+            createElement(FallbackMathBlock, { content: "\\sum n" }),
+          ),
+        );
+      });
+
+      expect(renderer!.root.findAllByType(hostType("RaTeXView"))).toHaveLength(0);
+      const texts = renderer!.root
+        .findAllByType(hostType("Text"))
+        .map((node) => node.props.children);
+      expect(texts).toEqual(["E = mc^2", "\\sum n"]);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 
   it("routes math nodes through mathRenderers with context styles", () => {
     let renderer: ReactTestRenderer | undefined;
     const inlineStyle = { marginHorizontal: 7 };
-    act(() => {
-      renderer = create(
-        createElement(
-          MarkdownContext.Provider,
-          {
-            value: {
-              renderers: mathRenderers,
-              theme: defaultMarkdownTheme,
-              stylingStrategy: "opinionated",
-              styles: { math_inline: inlineStyle },
-            },
-          },
-          createElement(NodeRenderer, {
-            node: {
-              type: "paragraph",
-              children: [
-                { type: "math_inline", content: "$x^2$" },
-              ],
-            },
-            depth: 0,
-            inListItem: false,
-          }),
-          createElement(NodeRenderer, {
-            node: { type: "math_block", content: "y^2" },
-            depth: 0,
-            inListItem: false,
-          }),
-        ),
-      );
-    });
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation((message?: unknown, ...args: unknown[]) => {
+        if (
+          typeof message === "string" &&
+          message.includes("react-test-renderer is deprecated")
+        ) {
+          return;
+        }
+        process.stderr.write(
+          [message, ...args].map((arg) => String(arg)).join(" ") + "\n",
+        );
+      });
 
-    const ratexNodes = renderer!.root.findAllByType(hostType("RaTeXView"));
-    expect(ratexNodes.map((node) => node.props.latex)).toEqual(["x^2", "y^2"]);
-    expect(ratexNodes[0]!.parent?.props.style).toEqual(
-      expect.arrayContaining([inlineStyle]),
-    );
+    try {
+      act(() => {
+        renderer = create(
+          createElement(
+            MarkdownContext.Provider,
+            {
+              value: {
+                renderers: mathRenderers,
+                theme: defaultMarkdownTheme,
+                stylingStrategy: "opinionated",
+                styles: { math_inline: inlineStyle },
+              },
+            },
+            createElement(NodeRenderer, {
+              node: {
+                type: "paragraph",
+                children: [
+                  { type: "math_inline", content: "$x^2$" },
+                ],
+              },
+              depth: 0,
+              inListItem: false,
+            }),
+            createElement(NodeRenderer, {
+              node: { type: "math_block", content: "y^2" },
+              depth: 0,
+              inListItem: false,
+            }),
+          ),
+        );
+      });
+
+      const ratexNodes = renderer!.root.findAllByType(hostType("RaTeXView"));
+      expect(ratexNodes.map((node) => node.props.latex)).toEqual(["x^2", "y^2"]);
+      expect(ratexNodes[0]!.parent?.props.style).toEqual(
+        expect.arrayContaining([inlineStyle]),
+      );
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 });
 

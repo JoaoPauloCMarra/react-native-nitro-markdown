@@ -130,6 +130,7 @@ describe("Markdown plugin pipeline", () => {
       },
     ];
     const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+    const consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation();
     let renderer: ReactTestRenderer | undefined;
 
     try {
@@ -162,6 +163,11 @@ describe("Markdown plugin pipeline", () => {
         "after-plugin",
         "throwing-plugin",
       );
+      expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        "[react-native-nitro-markdown] plugin afterParse (throwing-plugin) threw; using previous AST.",
+        pluginError,
+      );
       expect(onParseComplete).toHaveBeenCalledWith(
         expect.objectContaining({ text: "rendered plugin output\n\n" }),
       );
@@ -171,6 +177,7 @@ describe("Markdown plugin pipeline", () => {
     } finally {
       if (renderer) act(() => renderer!.unmount());
       consoleErrorSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
     }
   });
 
@@ -491,6 +498,7 @@ describe("Markdown plugin pipeline", () => {
     const onError = jest.fn();
     const onParseComplete = jest.fn();
     const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+    const consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation();
 
     try {
       act(() => {
@@ -508,8 +516,15 @@ describe("Markdown plugin pipeline", () => {
           }),
         );
       });
+
+      expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        "[react-native-nitro-markdown] plugin afterParse (cyclic) threw; using previous AST.",
+        expect.objectContaining({ code: "invalid_ast" }),
+      );
     } finally {
       consoleErrorSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
     }
 
     expect(onError).toHaveBeenCalledWith(
@@ -530,6 +545,7 @@ describe("Markdown plugin pipeline", () => {
     cyclic.children.push(cyclic as unknown as MarkdownNode);
     const onParseComplete = jest.fn();
     const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+    const consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation();
 
     try {
       act(() => {
@@ -541,8 +557,15 @@ describe("Markdown plugin pipeline", () => {
           }),
         );
       });
+
+      expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        "[react-native-nitro-markdown] astTransform threw; falling back to parsed AST.",
+        expect.objectContaining({ code: "invalid_ast" }),
+      );
     } finally {
       consoleErrorSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
     }
 
     expect(onParseComplete).toHaveBeenCalledWith(

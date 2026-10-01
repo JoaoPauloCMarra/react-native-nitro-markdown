@@ -36,9 +36,27 @@ const renderCode = (renderer?: ReactTestRenderer) => {
     return renderer;
   }
   let created: ReactTestRenderer | undefined;
-  act(() => {
-    created = create(element);
-  });
+  const consoleErrorSpy = jest
+    .spyOn(console, "error")
+    .mockImplementation((message?: unknown, ...args: unknown[]) => {
+      if (
+        typeof message === "string" &&
+        message.includes("react-test-renderer is deprecated")
+      ) {
+        return;
+      }
+      process.stderr.write(
+        [message, ...args].map((arg) => String(arg)).join(" ") + "\n",
+      );
+    });
+
+  try {
+    act(() => {
+      created = create(element);
+    });
+  } finally {
+    consoleErrorSpy.mockRestore();
+  }
   return created!;
 };
 

@@ -252,10 +252,14 @@ describe("Markdown renderer accessibility", () => {
     };
 
     const renderer = renderMarkdown(tableAst);
-    const grid = renderer.root.find(
-      (node) => node.type === hostType("View") && node.props.role === "grid",
-    );
-    expect(grid.props.accessibilityLabel).toBe("Table: Name, Age");
+    try {
+      const grid = renderer.root.find(
+        (node) => node.type === hostType("View") && node.props.role === "grid",
+      );
+      expect(grid.props.accessibilityLabel).toBe("Table: Name, Age");
+    } finally {
+      act(() => renderer.unmount());
+    }
   });
 
   it("cleans markdown markers from image accessibility labels", () => {
