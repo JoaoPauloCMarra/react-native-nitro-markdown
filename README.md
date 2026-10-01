@@ -352,6 +352,13 @@ Methodology and the full capability matrix:
   C++ parser enforces the same hard cap in bytes plus AST budgets and a 64 MiB
   JSON output cap (`input_too_complex`). Session buffers use the same UTF-8
   byte cap.
+- `maxInputLength` is the only hard bound on synchronous parse work. Set it to
+  the largest document your app expects, especially on low-end devices.
+  `MarkdownStream` batches updates and reuses AST nodes, but each batch parses
+  the full buffer; for large initial content use `initialParseMode="async"`.
+  In the C++ tests, 16 pathological input classes (six at the 10 MB cap)
+  produced at most 1.34 parser callbacks per input byte, and the AST is capped
+  at 100,000 nodes. The vendored md4c scanner itself is not instrumented.
 - Custom `onLinkPress` handlers receive the original, unvalidated href so apps
   can handle routes and custom schemes. Handle only links you recognize and
   return `false` for them; return `true` or nothing to let the built-in

@@ -22,10 +22,23 @@ None.
   contained the BOM. Source offsets stay relative to the original string (the
   BOM counts as one UTF-16 unit), and the BOM no longer appears in text content
   or `extractPlainText`. Only the first BOM is skipped.
-- Native memory for `sourceOffsets: true` no longer grows by 16 bytes for each
-  non-ASCII character. A 10 MB CJK, Cyrillic, or emoji document peaks at about
-  10.5 MB of parser memory instead of 52–94 MB. Text that alternates ASCII and
-  non-ASCII characters still uses the previous amount.
+- Native memory for `sourceOffsets: true` is bounded for every kind of text.
+  The offset map is about 6% of the input, so a 10 MB non-ASCII document peaks
+  at about 11 MB of parser memory instead of 52–94 MB.
+- When the native parser runs out of memory, it fails with
+  `Markdown parser ran out of memory` (code `parse_failed`) instead of
+  `Markdown parsing failed with code 1`.
+- When a `MarkdownSession` buffer or listener operation runs out of memory, it
+  fails with `Markdown session ran out of memory` (code `parse_failed`)
+  instead of `std::bad_alloc`.
+- Native parse failures include the parser's reason after the code, for
+  example `Markdown parsing failed with code -1: Too many link reference
+  definition instantiations.` The error code is unchanged.
+- `MarkdownSession` length and ranges stay exact when a native chunk ends
+  inside a multi-byte character. The range reported for the completing chunk
+  starts at that character.
+- Android arm64-v8a and x86_64 libraries are linked with 16 KB page alignment
+  for every NDK version the app uses.
 - `maxInputLength` values of 2^32 and above clamp to the 10 MB hard cap on
   32-bit Android (armeabi-v7a) instead of throwing, as on 64-bit devices.
   Values of 2^64 and above are still rejected.
