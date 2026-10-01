@@ -50,6 +50,7 @@ private:
     mutable std::mutex mutex_;
     std::string buffer_;
     size_t bufferUtf16Length_ = 0;
+    size_t unsettledTailBytes_ = 0;
     size_t rangeUtf16Offset_ = 0;
     size_t rangeByteOffset_ = 0;
     std::unique_ptr<HybridMarkdownParser> parser_;
@@ -60,7 +61,13 @@ private:
 
     void ensureActiveLocked() const;
     void validateBufferSizeLocked(size_t size) const;
+    struct Utf16Scan {
+        size_t units;
+        size_t unsettledTailBytes;
+    };
+
     static size_t utf16Length(const std::string& text) noexcept;
+    static Utf16Scan scanUtf16(const std::string& text, size_t fromByte) noexcept;
     static size_t byteOffsetForUtf16(
         const std::string& text,
         size_t utf16Offset,

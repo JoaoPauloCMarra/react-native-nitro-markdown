@@ -51,6 +51,35 @@ size_t utf8SequenceLength(const unsigned char* bytes, size_t remaining) noexcept
     return 1;
 }
 
+bool isIncompleteUtf8Prefix(const unsigned char* bytes, size_t remaining) noexcept {
+    const unsigned char first = bytes[0];
+    const auto isContinuation = [](unsigned char value) {
+        return (value & 0xC0) == 0x80;
+    };
+
+    if (first >= 0xC2 && first <= 0xDF) return remaining < 2;
+    if (first >= 0xE0 && first <= 0xEF) {
+        if (remaining >= 3) return false;
+        if (remaining == 1) return true;
+        return isContinuation(bytes[1]) &&
+            !(first == 0xE0 && bytes[1] < 0xA0) &&
+            !(first == 0xED && bytes[1] >= 0xA0);
+    }
+    if (first >= 0xF0 && first <= 0xF4) {
+        if (remaining >= 4) return false;
+        if (remaining == 1) return true;
+        if (
+            !isContinuation(bytes[1]) ||
+            (first == 0xF0 && bytes[1] < 0x90) ||
+            (first == 0xF4 && bytes[1] >= 0x90)
+        ) {
+            return false;
+        }
+        return remaining == 2 || isContinuation(bytes[2]);
+    }
+    return false;
+}
+
 std::string numberString(double value) {
     if (std::isnan(value)) return "NaN";
     if (std::isinf(value)) return value < 0 ? "-Inf" : "Inf";
@@ -80,7 +109,7 @@ void HybridMarkdownSession::setHighlightPosition(double highlightPosition) {
     highlightPosition_ = highlightPosition;
 }
 
-double HybridMarkdownSession::append(const std::string& chunk) {
+double HybridMarkdownSession::append(const std::string& chunk) try {
     size_t from;
     size_t to;
     {
@@ -89,38 +118,46 @@ double HybridMarkdownSession::append(const std::string& chunk) {
         if (chunk.size() > kMaxBufferSize - buffer_.size()) {
             validateBufferSizeLocked(kMaxBufferSize + 1);
         }
-        const size_t chunkLength = utf16Length(chunk);
-        from = bufferUtf16Length_;
-        to = from + chunkLength;
-        const size_t previousByteLength = buffer_.size();
+        const size_t settledByteLength = buffer_.size() - unsettledTailBytes_;
+        from = bufferUtf16Length_ - unsettledTailBytes_;
         buffer_.append(chunk);
+        const Utf16Scan scan = scanUtf16(buffer_, settledByteLength);
+        to = from + scan.units;
         bufferUtf16Length_ = to;
+        unsettledTailBytes_ = scan.unsettledTailBytes;
         rangeUtf16Offset_ = from;
-        rangeByteOffset_ = previousByteLength;
+        rangeByteOffset_ = settledByteLength;
     }
 
     notifyListeners(snapshotListeners(), static_cast<double>(from), static_cast<double>(to));
     return static_cast<double>(to);
+} catch (const std::bad_alloc&) {
+    throw ::NitroMarkdown::MarkdownSessionOutOfMemory();
 }
 
-void HybridMarkdownSession::clear() {
+void HybridMarkdownSession::clear() try {
     {
         std::lock_guard<std::mutex> lock(mutex_);
         ensureActiveLocked();
         buffer_.clear();
         bufferUtf16Length_ = 0;
+        unsettledTailBytes_ = 0;
         rangeUtf16Offset_ = 0;
         rangeByteOffset_ = 0;
         highlightPosition_ = 0.0;
     }
 
     notifyListeners(snapshotListeners(), 0.0, 0.0);
+} catch (const std::bad_alloc&) {
+    throw ::NitroMarkdown::MarkdownSessionOutOfMemory();
 }
 
-std::string HybridMarkdownSession::getAllText() {
+std::string HybridMarkdownSession::getAllText() try {
     std::lock_guard<std::mutex> lock(mutex_);
     ensureActiveLocked();
     return buffer_;
+} catch (const std::bad_alloc&) {
+    throw ::NitroMarkdown::MarkdownSessionOutOfMemory();
 }
 
 double HybridMarkdownSession::getLength() {
@@ -129,7 +166,7 @@ double HybridMarkdownSession::getLength() {
     return static_cast<double>(bufferUtf16Length_);
 }
 
-std::string HybridMarkdownSession::getTextRange(double from, double to) {
+std::string HybridMarkdownSession::getTextRange(double from, double to) try {
     if (
         !std::isfinite(from) || !std::isfinite(to) || from < 0.0 || to < 0.0 ||
         from > to
@@ -147,6 +184,8 @@ std::string HybridMarkdownSession::getTextRange(double from, double to) {
     rangeUtf16Offset_ = start;
     rangeByteOffset_ = startByte;
     return buffer_.substr(startByte, endByte - startByte);
+} catch (const std::bad_alloc&) {
+    throw ::NitroMarkdown::MarkdownSessionOutOfMemory();
 }
 
 std::string HybridMarkdownSession::parse() {
@@ -163,7 +202,7 @@ std::string HybridMarkdownSession::parseWithOptions(const ParserOptions& options
 
 std::function<void()> HybridMarkdownSession::addListener(
     const std::function<void(double, double)>& listener
-) {
+) try {
     size_t listenerId;
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -189,29 +228,35 @@ std::function<void()> HybridMarkdownSession::addListener(
             self->listeners_.end()
         );
     };
+} catch (const std::bad_alloc&) {
+    throw ::NitroMarkdown::MarkdownSessionOutOfMemory();
 }
 
-void HybridMarkdownSession::reset(const std::string& text) {
-    const size_t newLength = utf16Length(text);
+void HybridMarkdownSession::reset(const std::string& text) try {
+    const Utf16Scan scan = scanUtf16(text, 0);
+    const size_t newLength = scan.units;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         ensureActiveLocked();
         validateBufferSizeLocked(text.size());
         buffer_ = text;
         bufferUtf16Length_ = newLength;
+        unsettledTailBytes_ = scan.unsettledTailBytes;
         rangeUtf16Offset_ = 0;
         rangeByteOffset_ = 0;
         highlightPosition_ = 0.0;
     }
 
     notifyListeners(snapshotListeners(), 0.0, static_cast<double>(newLength));
+} catch (const std::bad_alloc&) {
+    throw ::NitroMarkdown::MarkdownSessionOutOfMemory();
 }
 
 double HybridMarkdownSession::replace(
     double from,
     double to,
     const std::string& text
-) {
+) try {
     size_t start;
     size_t end;
     size_t newLength;
@@ -228,11 +273,12 @@ double HybridMarkdownSession::replace(
         if (text.size() > kMaxBufferSize - retainedBytes) {
             validateBufferSizeLocked(kMaxBufferSize + 1);
         }
-        insertedLength = utf16Length(text);
-        newLength = bufferUtf16Length_ - (end - start) + insertedLength;
-
         buffer_.replace(startByte, endByte - startByte, text);
+        const Utf16Scan scan = scanUtf16(buffer_, 0);
+        newLength = scan.units;
+        insertedLength = std::min(utf16Length(text), newLength - std::min(start, newLength));
         bufferUtf16Length_ = newLength;
+        unsettledTailBytes_ = scan.unsettledTailBytes;
         rangeUtf16Offset_ = start;
         rangeByteOffset_ = startByte;
     }
@@ -243,6 +289,8 @@ double HybridMarkdownSession::replace(
         static_cast<double>(start + insertedLength)
     );
     return static_cast<double>(newLength);
+} catch (const std::bad_alloc&) {
+    throw ::NitroMarkdown::MarkdownSessionOutOfMemory();
 }
 
 void HybridMarkdownSession::dispose() {
@@ -251,6 +299,7 @@ void HybridMarkdownSession::dispose() {
     std::vector<Listener>().swap(listeners_);
     std::string().swap(buffer_);
     bufferUtf16Length_ = 0;
+    unsettledTailBytes_ = 0;
     rangeUtf16Offset_ = 0;
     rangeByteOffset_ = 0;
     parser_.reset();
@@ -307,6 +356,25 @@ size_t HybridMarkdownSession::utf16Length(const std::string& text) noexcept {
         length += sequenceLength == 4 ? 2 : 1;
     }
     return length;
+}
+
+HybridMarkdownSession::Utf16Scan HybridMarkdownSession::scanUtf16(
+    const std::string& text,
+    size_t fromByte
+) noexcept {
+    const auto* bytes = reinterpret_cast<const unsigned char*>(text.data());
+    size_t byteIndex = fromByte;
+    size_t units = 0;
+    while (byteIndex < text.size()) {
+        const size_t remaining = text.size() - byteIndex;
+        const size_t sequenceLength = utf8SequenceLength(bytes + byteIndex, remaining);
+        if (sequenceLength == 1 && isIncompleteUtf8Prefix(bytes + byteIndex, remaining)) {
+            return {units + remaining, remaining};
+        }
+        byteIndex += sequenceLength;
+        units += sequenceLength == 4 ? 2 : 1;
+    }
+    return {units, 0};
 }
 
 size_t HybridMarkdownSession::byteOffsetForUtf16(

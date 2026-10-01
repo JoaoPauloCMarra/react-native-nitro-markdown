@@ -263,14 +263,16 @@ HybridMarkdownParser::HybridMarkdownParser()
 
 HybridMarkdownParser::~HybridMarkdownParser() = default;
 
-std::string HybridMarkdownParser::parse(const std::string& text) {
+std::string HybridMarkdownParser::parse(const std::string& text) try {
     InternalParserOptions opts{.gfm = true, .math = true, .html = false};
 
     auto ast = parser_->parse(text, opts);
     return nodeToJson(ast, text, opts);
+} catch (const std::bad_alloc&) {
+    throw ::NitroMarkdown::MarkdownOutOfMemory();
 }
 
-std::string HybridMarkdownParser::parseWithOptions(const std::string& text, const ParserOptions& options) {
+std::string HybridMarkdownParser::parseWithOptions(const std::string& text, const ParserOptions& options) try {
     InternalParserOptions internalOpts;
     internalOpts.gfm = options.gfm.value_or(true);
     internalOpts.math = options.math.value_or(true);
@@ -280,17 +282,21 @@ std::string HybridMarkdownParser::parseWithOptions(const std::string& text, cons
 
     auto ast = parser_->parse(text, internalOpts);
     return nodeToJson(ast, text, internalOpts);
+} catch (const std::bad_alloc&) {
+    throw ::NitroMarkdown::MarkdownOutOfMemory();
 }
 
-std::string HybridMarkdownParser::extractPlainText(const std::string& text) {
+std::string HybridMarkdownParser::extractPlainText(const std::string& text) try {
     InternalParserOptions opts{.gfm = true, .math = true, .html = false};
     opts.sourceOffsets = false;
 
     auto ast = parser_->parse(text, opts);
     return flattenNodeText(ast);
+} catch (const std::bad_alloc&) {
+    throw ::NitroMarkdown::MarkdownOutOfMemory();
 }
 
-std::string HybridMarkdownParser::extractPlainTextWithOptions(const std::string& text, const ParserOptions& options) {
+std::string HybridMarkdownParser::extractPlainTextWithOptions(const std::string& text, const ParserOptions& options) try {
     InternalParserOptions internalOpts;
     internalOpts.gfm = options.gfm.value_or(true);
     internalOpts.math = options.math.value_or(true);
@@ -300,6 +306,8 @@ std::string HybridMarkdownParser::extractPlainTextWithOptions(const std::string&
 
     auto ast = parser_->parse(text, internalOpts);
     return flattenNodeText(ast);
+} catch (const std::bad_alloc&) {
+    throw ::NitroMarkdown::MarkdownOutOfMemory();
 }
 
 std::string HybridMarkdownParser::nodeToJson(

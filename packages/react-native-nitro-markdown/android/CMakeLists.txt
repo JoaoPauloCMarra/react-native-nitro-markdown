@@ -24,6 +24,10 @@ add_library(${PROJECT_NAME} SHARED
     src/main/cpp/cpp-adapter.cpp
 )
 
+if(ANDROID_ABI STREQUAL "arm64-v8a" OR ANDROID_ABI STREQUAL "x86_64")
+    target_link_options(${PROJECT_NAME} PRIVATE "-Wl,-z,max-page-size=16384")
+endif()
+
 # Include directories
 target_include_directories(${PROJECT_NAME} PRIVATE
     "${CPP_ROOT}/nitromd"

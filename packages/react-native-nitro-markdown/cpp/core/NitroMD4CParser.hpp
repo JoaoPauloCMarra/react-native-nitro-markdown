@@ -35,7 +35,12 @@ public:
     static int leaveSpanNullUserdataForTest();
     static int textNullUserdataForTest();
     static std::vector<OFF> sourceOffsetsForTest(const std::string& text);
-    static size_t sourceOffsetRunCountForTest(const std::string& text);
+    static std::vector<OFF> sourceOffsetsForTest(
+        const std::string& text,
+        const std::vector<size_t>& byteOffsets
+    );
+    static size_t sourceOffsetMapBytesForTest(const std::string& text);
+    static std::string parseFailureMessageForTest(int result, const char* parserLog);
     static int offsetBeforeBaseForTest();
     static int offsetPastBaseForTest();
     static size_t clampInputSizeForTest(size_t inputSize) {
