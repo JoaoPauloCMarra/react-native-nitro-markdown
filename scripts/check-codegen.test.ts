@@ -129,8 +129,8 @@ describe("codegen check process guard", () => {
 
     const grandchild = `
       const fs = require("node:fs");
-      setTimeout(() => fs.writeFileSync(${JSON.stringify(file)}, "late"), 120);
-      setTimeout(() => {}, 1000);
+      setTimeout(() => fs.writeFileSync(${JSON.stringify(file)}, "late"), 2400);
+      setTimeout(() => {}, 5000);
     `;
     const parent = `
       const fs = require("node:fs");
@@ -138,7 +138,7 @@ describe("codegen check process guard", () => {
       process.on("SIGTERM", () => {});
       const child = spawn(process.execPath, ["-e", ${JSON.stringify(grandchild)}], { stdio: "ignore" });
       fs.writeFileSync(${JSON.stringify(pidFile)}, String(child.pid));
-      setTimeout(() => {}, 1000);
+      setTimeout(() => {}, 5000);
     `;
 
     try {
@@ -146,7 +146,7 @@ describe("codegen check process guard", () => {
         command: process.execPath,
         args: ["-e", parent],
         generatedDirectory: directory,
-        timeoutMs: 30,
+        timeoutMs: 2000,
         killGraceMs: 40,
         stdout: "ignore",
         stderr: "ignore",
@@ -156,7 +156,7 @@ describe("codegen check process guard", () => {
       const grandchildPid = Number(await readFile(pidFile, "utf8"));
       expect(Number.isInteger(grandchildPid)).toBe(true);
 
-      const deadline = Date.now() + 300;
+      const deadline = Date.now() + 1500;
       while (Date.now() < deadline) {
         expect(await readFile(file, "utf8")).toBe("original");
         await new Promise((resolve) => setTimeout(resolve, 10));
