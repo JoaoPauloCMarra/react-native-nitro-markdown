@@ -5,6 +5,12 @@ import type { MarkdownNode } from "../headless";
 import { mockParser } from "./setup";
 
 const LONG_TEXT = "Paragraph text that repeats.\n\n".repeat(1_000);
+const imageGetSize = jest.fn();
+const nativeMock = jest.requireMock("react-native") as { Image: unknown };
+nativeMock.Image = Object.assign(
+  (props: Record<string, unknown>) => createElement("Image", props),
+  { getSize: imageGetSize },
+);
 
 describe("Markdown re-render stability", () => {
   let consoleErrorSpy: jest.SpyInstance;
@@ -12,6 +18,7 @@ describe("Markdown re-render stability", () => {
   beforeEach(() => {
     mockParser.parse.mockClear();
     mockParser.parseWithOptions.mockClear();
+    imageGetSize.mockClear();
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -114,5 +121,58 @@ describe("Markdown re-render stability", () => {
 
     expect(nextKeys).toEqual(firstKeys);
     expect(nextKeys).toEqual(["paragraph:0", "paragraph:1"]);
+  });
+
+  it("enforces an empty image host allowlist on initial and updated renders", () => {
+    const url = "https://assets.example.com/fixture.png";
+    const sourceAst: MarkdownNode = {
+      type: "document",
+      children: [{ type: "image", href: url, alt: "Fixture" }],
+    };
+
+    let renderer: ReactTestRenderer | undefined;
+    act(() => {
+      renderer = create(
+        createElement(Markdown, {
+          sourceAst,
+          imageOptions: { allowedHosts: [] },
+          children: "",
+        }),
+      );
+    });
+
+    try {
+      expect(imageGetSize).not.toHaveBeenCalled();
+      expect(renderer!.root.findAllByType("Image" as never)).toHaveLength(0);
+
+      act(() => {
+        renderer!.update(
+          createElement(Markdown, { sourceAst, children: "" }),
+        );
+      });
+
+      expect(imageGetSize).toHaveBeenCalledTimes(1);
+      expect(imageGetSize).toHaveBeenCalledWith(
+        url,
+        expect.any(Function),
+        expect.any(Function),
+      );
+      expect(renderer!.root.findAllByType("Image" as never)).toHaveLength(1);
+
+      act(() => {
+        renderer!.update(
+          createElement(Markdown, {
+            sourceAst,
+            imageOptions: { allowedHosts: [] },
+            children: "",
+          }),
+        );
+      });
+
+      expect(imageGetSize).toHaveBeenCalledTimes(1);
+      expect(renderer!.root.findAllByType("Image" as never)).toHaveLength(0);
+    } finally {
+      act(() => renderer!.unmount());
+    }
   });
 });
