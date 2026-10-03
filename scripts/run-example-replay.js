@@ -201,8 +201,6 @@ function runExampleReplay({
   }
   const session = `nitro-markdown-replay-${runId}`;
   const targetArgs = [
-    "--platform",
-    options.platform,
     options.targetFlag,
     options.target,
   ];

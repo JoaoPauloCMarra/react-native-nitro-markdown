@@ -1,7 +1,5 @@
-open "com.nitromarkdown.example" --relaunch
+open "com.nitromarkdown.example" "nitromarkdown://e2e" --relaunch
 wait "stable"
-wait id="open-e2e-lab"
-press id="open-e2e-lab"
 wait id="e2e-screen"
 press id="open-e2e-render"
 wait id="e2e-render-screen"
