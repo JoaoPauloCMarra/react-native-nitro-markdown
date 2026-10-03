@@ -4,7 +4,7 @@
 
 | Version | Supported |
 | ------- | --------- |
-| 0.13.x  | ✅ |
+| 0.14.x  | ✅ |
 
 The package follows a rolling support window: only the latest minor release
 line receives security fixes. Older lines are unsupported.
@@ -49,6 +49,8 @@ documented here so app owners can reason about what is and is not guaranteed.
   When rendering untrusted markdown in privacy- or SSRF-sensitive apps, set
   `imageOptions={{ remoteImages: "deny" }}` to disable remote image loading
   entirely, or restrict hosts with `imageOptions={{ allowedHosts: [...] }}`.
+  An explicit empty host list denies every host; omit the property to retain
+  the default host policy.
   This policy applies to the built-in `Image` renderer; custom renderers are
   the app's responsibility.
 - Raw HTML is parsed into AST nodes only when `options.html` is enabled

@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [0.14.0] - 2026-10-03
+
+### Breaking changes
+
+- `imageOptions.allowedHosts: []` now denies every image host instead of disabling the allowlist. Migration: omit `allowedHosts` to retain the default host policy, or provide the hostnames that images may use. Protocol restrictions still apply.
+
+### Fixed
+
+- Switching a `MarkdownStream` or `useMarkdownStreamState` to another session no longer exposes text or an AST from the previous session while the new session initializes. Work queued by an old subscription cannot replace the new session's state.
+
 ## [0.13.1] - 2026-10-01
 
 ### Breaking changes
