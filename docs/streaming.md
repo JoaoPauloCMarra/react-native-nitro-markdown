@@ -131,12 +131,17 @@ const { text, sourceAst, sourceAstStatus } = useMarkdownStreamState({
 ```
 
 `sourceAst` is available when the stream can safely reuse Nitro's parsed AST.
+When the `session` prop changes, the hook reads the new session in the same
+render, so it never returns the previous session's text or AST and the default
+`MarkdownStream` does not render an empty frame. If the new session cannot be
+read, the hook returns empty text with `sourceAstStatus: "disabled"` and
+`sourceAstDisabledReason: "initializing"` instead of the previous session's state.
 When a `beforeParse` plugin is present, `sourceAstStatus` becomes `"disabled"`,
 `sourceAstDisabledReason` is `"beforeParse-plugin"`, and `sourceAst` is omitted —
 render from `text` so the full plugin pipeline can run.
 
 Parser failures call `onError(error, "parse")`. A failed update retains the last
-valid text and AST. If the initial parse fails, `sourceAstStatus` is `"disabled"`,
+valid text and AST for that session. If the initial parse fails, `sourceAstStatus` is `"disabled"`,
 `sourceAstDisabledReason` is `"parse-error"`, and `sourceAst` is omitted. The
 default `<MarkdownStream>` renderer renders nothing until a later update parses.
 

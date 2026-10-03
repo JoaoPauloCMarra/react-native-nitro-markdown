@@ -368,7 +368,12 @@ Methodology and the full capability matrix:
   for compatibility — set `imageOptions={{ remoteImages: "deny" }}` (and/or
   `allowedHosts`) when rendering untrusted markdown in privacy- or SSRF-sensitive
   apps. Host allowlists compare complete normalized hostnames, including bracketed
-  IPv6 addresses; ports do not change the hostname. Malformed authorities and
+  IPv6 addresses; ports do not change the hostname. An explicit
+  `imageOptions={{ allowedHosts: [] }}` denies every image host. Omit
+  `allowedHosts` to retain the default host policy, or list the permitted hosts.
+  Migration from 0.13.x: replace an empty list with an omitted property if you
+  intended to allow all hosts supported by the protocol policy.
+  Malformed authorities and
   backslash-based URL parser ambiguities are rejected.
 - The C++ parser is fuzzed with a seeded, deterministic corpus and checked
   against a CommonMark/GFM conformance corpus in `bun run check`.
@@ -491,7 +496,8 @@ bun run example:smoke:android
 bun run example:smoke:ios
 ```
 
-`check` runs package lint, typecheck (including test files), JS tests, C++
+`check` validates replay freshness and helper tests, then runs package lint,
+typecheck (including test files), JS tests, C++
 tests, and script tests. `check:ci` is the single CI gate: it adds version
 alignment, the harness (codegen check, public types, size budgets, coverage,
 benchmark, C++ coverage), React Native 0.87 type compatibility, C++ sanitizers
@@ -504,8 +510,16 @@ success alone is not runtime proof.
 The smoke report counts only rendered-content checks as proof for a platform.
 The iOS smoke run captures a screenshot but cannot assert rendered content yet,
 so `example:smoke:ios` fails unless you pass `--allow-skip`
-(`bun scripts/example-smoke.js --ios --allow-skip`); use the agent-device E2E
-flows (`bun run example:e2e:ios`) for iOS content checks.
+(`bun scripts/example-smoke.js --ios --allow-skip`); use the agent-device replay
+flows below for iOS content checks.
+
+Use `bun run example:replay --platform ios --udid <exact-target>` or
+`--platform android --serial <exact-target>` for the maintained agent-device
+flows. The example must already be installed from the source under test. After
+reviewing package or example changes, update affected coverage assertions and
+run `bun run example:replay:refresh`; `bun run example:replay:check` rejects stale
+coverage. See [the replay guide](docs/qa/agent-device-replay.md) for suite selection,
+prerequisites, and limits on what each flow proves.
 
 When several devices are available, set `ANDROID_SERIAL` for Android and
 `EXAMPLE_SMOKE_IOS_UDID` for iOS. The iOS smoke check stops if it cannot select

@@ -33,6 +33,10 @@ Three entry points:
 `virtualizationMinBlocks`, `virtualization`, `tableOptions`, `imageOptions`,
 `highlightCode`, `errorText`. Full prop table in [usage](./usage.md#common-props--options).
 
+`imageOptions.allowedHosts` restricts image URLs to complete normalized hostnames.
+An empty list denies every host; omitting the property retains the default host
+policy. Protocol restrictions and `remoteImages: "deny"` still apply.
+
 ### `MarkdownStream` options (selected)
 
 `updateStrategy`, `updateIntervalMs`, `useTransitionUpdates`,

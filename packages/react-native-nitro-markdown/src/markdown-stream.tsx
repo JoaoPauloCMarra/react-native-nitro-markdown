@@ -4,6 +4,7 @@ import {
   useRef,
   useCallback,
   useMemo,
+  useLayoutEffect,
   startTransition,
   type FC,
   type ReactNode,
@@ -98,6 +99,18 @@ function notifyStreamParseError(
     );
   }
 }
+
+type StreamRenderState = {
+  session: MarkdownSession;
+  text: string;
+  ast: MarkdownNode | null;
+  initializedBy?: {
+    parseSession: (knownText?: string) => MarkdownNode;
+    createEmptyAst: () => MarkdownNode;
+    hasBeforeParsePlugins: boolean;
+  };
+  parseFailure?: { error: unknown };
+};
 
 export type MarkdownStreamSourceAstStatus = "available" | "disabled";
 
@@ -240,13 +253,11 @@ export function useMarkdownStreamState({
   const [initialParsePending, setInitialParsePending] = useState(
     () => initialParseMode === "async",
   );
-  const [renderState, setRenderState] = useState<{
-    text: string;
-    ast: MarkdownNode | null;
-  }>(() => {
+  const [renderState, setRenderState] = useState<StreamRenderState>(() => {
     const initialText = activeSession.getAllText();
     if (initialParseMode === "async") {
       return {
+        session: activeSession,
         text: initialText,
         ast: null,
       };
@@ -261,11 +272,40 @@ export function useMarkdownStreamState({
       }
     }
     return {
+      session: activeSession,
       text: initialText,
       ast: initialAst,
     };
   });
+  if (renderState.session !== activeSession) {
+    let replacementText: string | null;
+    try {
+      replacementText = activeSession.getAllText();
+    } catch {
+      replacementText = null;
+    }
+    if (replacementText !== null) {
+      let replacementAst: MarkdownNode | null = createEmptyAst();
+      let parseFailure: { error: unknown } | undefined;
+      if (!hasBeforeParsePlugins) {
+        try {
+          replacementAst = parseSession(replacementText);
+        } catch (error) {
+          replacementAst = null;
+          parseFailure = { error };
+        }
+      }
+      setRenderState({
+        session: activeSession,
+        text: replacementText,
+        ast: replacementAst,
+        initializedBy: { parseSession, createEmptyAst, hasBeforeParsePlugins },
+        ...(parseFailure ? { parseFailure } : {}),
+      });
+    }
+  }
   const renderStateRef = useRef(renderState);
+  const activeSessionRef = useRef(activeSession);
   const onErrorRef = useRef(onError);
   const didMountRef = useRef(false);
   const pendingUpdateRef = useRef(false);
@@ -277,8 +317,14 @@ export function useMarkdownStreamState({
   const mountedRef = useRef(true);
   const allowIncremental = incrementalParsing && !hasBeforeParsePlugins;
 
+  useLayoutEffect(() => {
+    activeSessionRef.current = activeSession;
+  }, [activeSession]);
+
   useEffect(() => {
-    renderStateRef.current = renderState;
+    if (renderState.session === activeSessionRef.current) {
+      renderStateRef.current = renderState;
+    }
   }, [renderState]);
 
   useEffect(() => {
@@ -300,6 +346,34 @@ export function useMarkdownStreamState({
       return;
     }
 
+    if (activeSessionRef.current !== activeSession) {
+      return;
+    }
+    const resetPendingUpdates = () => {
+      setInitialParsePending(false);
+      pendingUpdateRef.current = false;
+      pendingFromRef.current = null;
+      pendingToRef.current = null;
+      forceFullSyncRef.current = false;
+    };
+    const derivedState = renderStateRef.current;
+    if (
+      derivedState.session === activeSession &&
+      derivedState.initializedBy?.parseSession === parseSession &&
+      derivedState.initializedBy.createEmptyAst === createEmptyAst &&
+      derivedState.initializedBy.hasBeforeParsePlugins === hasBeforeParsePlugins
+    ) {
+      resetPendingUpdates();
+      renderStateRef.current = {
+        session: derivedState.session,
+        text: derivedState.text,
+        ast: derivedState.ast,
+      };
+      if (derivedState.parseFailure) {
+        notifyStreamParseError(onErrorRef.current, derivedState.parseFailure.error);
+      }
+      return;
+    }
     let initialText: string;
     try {
       initialText = activeSession.getAllText();
@@ -316,15 +390,12 @@ export function useMarkdownStreamState({
         initialAst = null;
       }
     }
-    setInitialParsePending(false);
+    resetPendingUpdates();
     const initialState = {
+      session: activeSession,
       text: initialText,
       ast: initialAst,
     };
-    pendingUpdateRef.current = false;
-    pendingFromRef.current = null;
-    pendingToRef.current = null;
-    forceFullSyncRef.current = false;
     renderStateRef.current = initialState;
     setRenderState(initialState);
   }, [
@@ -336,7 +407,12 @@ export function useMarkdownStreamState({
   ]);
 
   useEffect(() => {
+    let subscriptionActive = true;
+    const isCurrentSubscription = () =>
+      subscriptionActive && activeSessionRef.current === activeSession;
+
     const flushUpdate = () => {
+      if (!isCurrentSubscription()) return;
       updateTimerRef.current = null;
       if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current);
@@ -363,9 +439,15 @@ export function useMarkdownStreamState({
           session: activeSession,
         });
       } catch (error) {
-        warnStreamError("[NitroMarkdown] Failed to read stream session:", error);
+        if (isCurrentSubscription()) {
+          warnStreamError(
+            "[NitroMarkdown] Failed to read stream session:",
+            error,
+          );
+        }
         return;
       }
+      if (!isCurrentSubscription()) return;
       if (latest === previousState.text) return;
 
       let nextAst: MarkdownNode | null;
@@ -385,24 +467,29 @@ export function useMarkdownStreamState({
           nextAst = parseSession(latest);
         }
       } catch (error) {
-        notifyStreamParseError(onErrorRef.current, error);
+        if (isCurrentSubscription()) {
+          notifyStreamParseError(onErrorRef.current, error);
+        }
         return;
       }
+      if (!isCurrentSubscription()) return;
       const nextState = {
+        session: activeSession,
         text: latest,
         ast: nextAst,
       };
       renderStateRef.current = nextState;
       if (!mountedRef.current) return;
 
-      if (useTransitionUpdates) {
-        startTransition(() => {
-          if (!mountedRef.current) return;
-          setRenderState(nextState);
-        });
-      } else {
-        setRenderState(nextState);
-      }
+      const commitNextState = () => {
+        if (!mountedRef.current || !isCurrentSubscription()) return;
+        setRenderState((currentState) =>
+          currentState.session === activeSession ? nextState : currentState,
+        );
+      };
+
+      if (useTransitionUpdates) startTransition(commitNextState);
+      else commitNextState();
     };
 
     const scheduleFlush = () => {
@@ -422,7 +509,7 @@ export function useMarkdownStreamState({
 
     try {
       unsubscribe = activeSession.addListener((from, to) => {
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || !isCurrentSubscription()) return;
 
         const nextFrom = normalizeOffset(from);
         const nextTo = normalizeOffset(to);
@@ -452,6 +539,7 @@ export function useMarkdownStreamState({
     }
 
     return () => {
+      subscriptionActive = false;
       try {
         unsubscribe?.();
       } catch (error) {
@@ -480,13 +568,16 @@ export function useMarkdownStreamState({
     useTransitionUpdates,
   ]);
 
+  const stateMatchesSession = renderState.session === activeSession;
   const sourceAstAvailable =
-    !hasBeforeParsePlugins && renderState.ast !== null;
+    stateMatchesSession && !hasBeforeParsePlugins && renderState.ast !== null;
   const streamState: MarkdownStreamState = {
-    text: renderState.text,
+    text: stateMatchesSession ? renderState.text : "",
     sourceAstStatus: sourceAstAvailable ? "available" : "disabled",
   };
-  if (hasBeforeParsePlugins) {
+  if (!stateMatchesSession) {
+    streamState.sourceAstDisabledReason = "initializing";
+  } else if (hasBeforeParsePlugins) {
     streamState.sourceAstDisabledReason = "beforeParse-plugin";
   } else if (renderState.ast === null && initialParsePending) {
     streamState.sourceAstDisabledReason = "initializing";

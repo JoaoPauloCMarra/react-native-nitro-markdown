@@ -14,6 +14,11 @@ const IPV6_GROUP_PATTERN = /^[0-9a-f]{1,4}$/i;
 
 export type UrlSafetyOptions = {
   allowedProtocols?: readonly string[];
+  /**
+   * Restricts image URLs to complete normalized hostnames.
+   * - An empty list denies every host.
+   * - Omitting the property retains the default host policy.
+   */
   allowedHosts?: readonly string[];
   /**
    * Remote image loading policy.
@@ -197,7 +202,7 @@ export const getAllowedImageHref = (
   if (!allowedProtocols.has(parsed.protocol)) return null;
 
   const allowedHosts = options?.allowedHosts;
-  if (allowedHosts && allowedHosts.length > 0) {
+  if (Array.isArray(allowedHosts)) {
     const allowedHostSet = new Set(
       allowedHosts
         .map((host) => {

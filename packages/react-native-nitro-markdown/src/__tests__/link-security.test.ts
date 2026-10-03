@@ -2,6 +2,7 @@ import {
   normalizeLinkHref,
   getAllowedExternalHref,
   getAllowedImageHref,
+  type UrlSafetyOptions,
 } from "../utils/link-security";
 
 describe("normalizeLinkHref", () => {
@@ -84,6 +85,30 @@ describe("getAllowedImageHref", () => {
     expect(
       getAllowedImageHref("https://assets.example.com.evil/image.png", {
         allowedHosts: ["assets.example.com"],
+      }),
+    ).toBeNull();
+  });
+
+  it("denies every remote image when the configured host list is empty", () => {
+    expect(
+      getAllowedImageHref("https://example.com/image.png", {
+        allowedHosts: [],
+      }),
+    ).toBeNull();
+  });
+
+  it("treats a null host list from untyped callers like an omitted one", () => {
+    expect(
+      getAllowedImageHref("https://example.com/image.png", {
+        allowedHosts: null,
+      } as unknown as UrlSafetyOptions),
+    ).toBe("https://example.com/image.png");
+  });
+
+  it("denies images when no configured host normalizes to a valid hostname", () => {
+    expect(
+      getAllowedImageHref("https://example.com/image.png", {
+        allowedHosts: ["invalid host!"],
       }),
     ).toBeNull();
   });

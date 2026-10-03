@@ -1,8 +1,9 @@
 import { mockParser } from "./setup";
-import React from "react";
+import React, { useLayoutEffect } from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import {
   MarkdownStream,
+  type MarkdownStreamProps,
   type MarkdownStreamRenderProps,
 } from "../markdown-stream";
 import type { MarkdownSession } from "../specs/MarkdownSession.nitro";
@@ -63,6 +64,52 @@ function createSession({
       };
     }),
   } as MarkdownSession & { emit: SessionListener; setAllText: (text: string) => void };
+}
+
+type CommittedStreamValue = {
+  label: string;
+  text: string;
+  sourceAst: MarkdownStreamRenderProps["sourceAst"];
+  markdownAst: MarkdownStreamRenderProps["markdownProps"]["sourceAst"];
+};
+type StreamRender = NonNullable<MarkdownStreamProps["renderMarkdown"]>;
+
+function CommittedStreamOutput({
+  value,
+  onCommit,
+}: {
+  value: CommittedStreamValue;
+  onCommit: (value: CommittedStreamValue) => void;
+}) {
+  useLayoutEffect(() => {
+    onCommit(value);
+  }, [onCommit, value]);
+  return React.createElement("Text", null, value.text);
+}
+
+function createCommittedStreamRenderer(
+  label: string,
+  commits: CommittedStreamValue[],
+  suspend?: {
+    when: (props: MarkdownStreamRenderProps) => boolean;
+    with: Promise<void>;
+  },
+): StreamRender {
+  const onCommit = (value: CommittedStreamValue) => commits.push(value);
+  return (streamProps) => {
+    if (suspend?.when(streamProps)) {
+      throw suspend.with;
+    }
+    return React.createElement(CommittedStreamOutput, {
+      value: {
+        label,
+        text: streamProps.text,
+        sourceAst: streamProps.sourceAst,
+        markdownAst: streamProps.markdownProps.sourceAst,
+      },
+      onCommit,
+    });
+  };
 }
 
 describe("MarkdownStream", () => {
@@ -194,6 +241,270 @@ describe("MarkdownStream", () => {
     expect(markdownMock).not.toHaveBeenCalledWith(
       expect.objectContaining({ children: "broken" }),
     );
+  });
+
+  it.each([
+    [false, "sync"],
+    [true, "sync"],
+    [false, "async"],
+    [true, "async"],
+  ] as const)(
+    "does not commit the previous session while replacing sessions (transition=%s, initial parse=%s)",
+    (useTransitionUpdates, initialParseMode) => {
+      const sessionA = createSession({
+        allText: "ALPHA",
+        rangeText: "",
+      });
+      const sessionB = createSession({
+        allText: "BETA",
+        rangeText: "",
+      });
+      const commits: CommittedStreamValue[] = [];
+      const renderA = createCommittedStreamRenderer("A", commits);
+      const renderB = createCommittedStreamRenderer("B", commits);
+      let renderer: TestRenderer.ReactTestRenderer | null = null;
+
+      act(() => {
+        renderer = TestRenderer.create(
+          React.createElement(MarkdownStream, {
+            session: sessionA,
+            useTransitionUpdates,
+            initialParseMode,
+            renderMarkdown: renderA,
+          }),
+        );
+      });
+      const alphaAst = commits.find(
+        (commit) => commit.label === "A" && commit.sourceAst !== undefined,
+      )?.sourceAst;
+      expect(alphaAst).toBeDefined();
+
+      act(() => {
+        renderer!.update(
+          React.createElement(MarkdownStream, {
+            session: sessionB,
+            useTransitionUpdates,
+            initialParseMode,
+            renderMarkdown: renderB,
+          }),
+        );
+      });
+
+      const betaCommits = commits.filter((commit) => commit.label === "B");
+      expect(betaCommits.length).toBeGreaterThan(0);
+      expect(betaCommits.every((commit) => commit.text !== "ALPHA")).toBe(true);
+      expect(betaCommits.every((commit) => commit.sourceAst !== alphaAst)).toBe(
+        true,
+      );
+      expect(betaCommits.every((commit) => commit.markdownAst !== alphaAst)).toBe(
+        true,
+      );
+      expect(betaCommits.at(-1)).toEqual(
+        expect.objectContaining({
+          text: "BETA",
+          sourceAst: expect.objectContaining({ type: "document" }),
+        }),
+      );
+
+      act(() => {
+        renderer!.unmount();
+      });
+    },
+  );
+
+  it("keeps the default renderer mounted in the commit that replaces the session", () => {
+    const sessionA = createSession({ allText: "ALPHA", rangeText: "" });
+    const sessionB = createSession({ allText: "BETA", rangeText: "" });
+    const committedTrees: unknown[] = [];
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+    function CommitProbe() {
+      useLayoutEffect(() => {
+        if (renderer) committedTrees.push(renderer.toJSON());
+      });
+      return null;
+    }
+    const renderTree = (session: MarkdownSession) =>
+      React.createElement(
+        React.Fragment,
+        null,
+        React.createElement(MarkdownStream, { session }),
+        React.createElement(CommitProbe),
+      );
+    markdownMock.mockImplementation((props) =>
+      React.createElement("Text", null, props.children) as never,
+    );
+
+    try {
+      act(() => {
+        renderer = TestRenderer.create(renderTree(sessionA));
+      });
+      committedTrees.length = 0;
+      act(() => {
+        renderer!.update(renderTree(sessionB));
+      });
+
+      expect(committedTrees).toEqual([
+        expect.objectContaining({ type: "Text", children: ["BETA"] }),
+      ]);
+    } finally {
+      act(() => {
+        renderer!.unmount();
+      });
+      markdownMock.mockImplementation(() => null);
+    }
+  });
+
+  it("ignores stale session callbacks and errors after replacement", () => {
+    const sessionA = createSession({ allText: "ALPHA", rangeText: " stale" });
+    const sessionB = createSession({ allText: "BETA", rangeText: "" });
+    const onError = jest.fn();
+    const commits: CommittedStreamValue[] = [];
+    let staleListener: SessionListener | null = null;
+    const parseSessionA = jest.spyOn(sessionA, "parse");
+    const addSessionListener = sessionA.addListener.bind(sessionA);
+    sessionA.addListener = jest.fn((listener) => {
+      staleListener = listener as SessionListener;
+      return addSessionListener(listener);
+    });
+
+    const renderA = createCommittedStreamRenderer("A", commits);
+    const renderB = createCommittedStreamRenderer("B", commits);
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+
+    act(() => {
+      renderer = TestRenderer.create(
+        React.createElement(MarkdownStream, {
+          session: sessionA,
+          onError,
+          updateIntervalMs: 1,
+          renderMarkdown: renderA,
+        }),
+      );
+    });
+
+    act(() => {
+      renderer!.update(
+        React.createElement(MarkdownStream, {
+          session: sessionB,
+          onError,
+          updateIntervalMs: 1,
+          renderMarkdown: renderB,
+        }),
+      );
+    });
+    expect(staleListener).not.toBeNull();
+
+    const staleParseError = new Error("stale session parse failed");
+    parseSessionA.mockClear();
+    parseSessionA.mockImplementationOnce(() => {
+      throw staleParseError;
+    });
+    sessionA.setAllText("ALPHA stale");
+    act(() => {
+      staleListener!(5, 11);
+      jest.runOnlyPendingTimers();
+    });
+
+    expect(parseSessionA).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+    expect(commits.filter((commit) => commit.label === "B").at(-1)).toEqual(
+      expect.objectContaining({ label: "B", text: "BETA" }),
+    );
+
+    act(() => {
+      renderer!.unmount();
+    });
+  });
+
+  it("continues streaming resets from the active session", () => {
+    const session = createMarkdownSession("before");
+    const commits: CommittedStreamValue[] = [];
+    const renderMarkdown = createCommittedStreamRenderer("active", commits);
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+
+    act(() => {
+      renderer = TestRenderer.create(
+        React.createElement(MarkdownStream, {
+          session,
+          updateIntervalMs: 1,
+          renderMarkdown,
+        }),
+      );
+    });
+    act(() => {
+      session.reset("after");
+      jest.runOnlyPendingTimers();
+    });
+
+    expect(commits.at(-1)).toEqual(
+      expect.objectContaining({ label: "active", text: "after" }),
+    );
+
+    act(() => {
+      renderer!.unmount();
+    });
+  });
+
+  it("does not commit a queued stream transition over the replacement session", async () => {
+    const sessionA = createSession({ allText: "ALPHA", rangeText: " updated" });
+    const sessionB = createSession({ allText: "BETA", rangeText: "" });
+    const commits: CommittedStreamValue[] = [];
+    let releaseSuspendedRender: (() => void) | null = null;
+    const suspendedRender = new Promise<void>((resolve) => {
+      releaseSuspendedRender = resolve;
+    });
+
+    const renderSessionA = createCommittedStreamRenderer("A", commits, {
+      when: (props) => props.text === "ALPHA updated",
+      with: suspendedRender,
+    });
+    const renderSessionB = createCommittedStreamRenderer("B", commits);
+    const renderTree = (session: typeof sessionA, renderMarkdown: StreamRender) =>
+      React.createElement(
+        React.Suspense,
+        { fallback: React.createElement("Text", null, "pending") },
+        React.createElement(MarkdownStream, {
+          session,
+          updateIntervalMs: 1,
+          useTransitionUpdates: true,
+          renderMarkdown,
+        }),
+      );
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+
+    act(() => {
+      renderer = TestRenderer.create(renderTree(sessionA, renderSessionA));
+    });
+    act(() => {
+      sessionA.setAllText("ALPHA updated");
+      sessionA.emit(5, 13);
+      jest.runOnlyPendingTimers();
+    });
+
+    act(() => {
+      renderer!.update(renderTree(sessionB, renderSessionB));
+    });
+    expect(commits.filter((commit) => commit.label === "B").at(-1)?.text).toBe(
+      "BETA",
+    );
+
+    await act(async () => {
+      releaseSuspendedRender!();
+      await suspendedRender;
+    });
+
+    expect(commits.filter((commit) => commit.label === "B").at(-1)?.text).toBe(
+      "BETA",
+    );
+    expect(
+      commits.filter((commit) => commit.label === "B").some((commit) =>
+        commit.text.startsWith("ALPHA"),
+      ),
+    ).toBe(false);
+
+    act(() => {
+      renderer!.unmount();
+    });
   });
 
   it("reports update parser failures without replacing the last valid state", () => {

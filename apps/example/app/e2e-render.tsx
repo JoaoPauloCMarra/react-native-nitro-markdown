@@ -336,6 +336,9 @@ export default function MarkdownE2eRenderScreen() {
           <Text testID="e2e-stream-status" style={styles.metric}>
             {streamStatus}
           </Text>
+          <Text testID="e2e-render-generation" style={styles.metric}>
+            {`generation:${generation}`}
+          </Text>
           <View style={styles.row}>
             <Pressable
               testID="e2e-render-remount"
@@ -365,9 +368,11 @@ export default function MarkdownE2eRenderScreen() {
                   session.append(`Token **${index}** `);
                 }
                 const ms = (globalThis.performance?.now?.() ?? Date.now()) - started;
-                setStreamStatus(
-                  `ok:burst=${session.getAllText().length}:ms=${ms.toFixed(1)}`,
-                );
+                const expected = Array.from({ length: 24 }, (_, index) => `Token **${index}** `).join("");
+                const actual = session.getAllText();
+                setStreamStatus(actual === expected
+                  ? `ok:burst=tokens-0-through-23:chars=${actual.length}:ms=${ms.toFixed(1)}`
+                  : "fail:burst-content-mismatch");
               }}
               style={styles.button}
             >
