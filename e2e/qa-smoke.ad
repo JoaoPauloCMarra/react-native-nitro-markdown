@@ -1,0 +1,6 @@
+open "com.nitromarkdown.example" "nitromarkdown://?autorun=smoke" --relaunch
+wait "stable"
+wait id="smoke-probe"
+wait text "smoke:pass="
+wait text ":fail=0:"
+close

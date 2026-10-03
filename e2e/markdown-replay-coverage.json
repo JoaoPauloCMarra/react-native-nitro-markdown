@@ -26,6 +26,27 @@
       "id": "contracts",
       "path": "e2e/qa-contracts.ad",
       "purpose": "Public empty-host image policy, inline PNG decoding and committed stream session isolation"
+    },
+    {
+      "id": "smoke",
+      "path": "e2e/qa-smoke.ad",
+      "purpose": "In-app native smoke suite on the tabs root with a zero-failure count probe"
+    },
+    {
+      "id": "api",
+      "path": "e2e/qa-api.ad",
+      "purpose": "Run-on-load public parser, headless subpath, session error codes, listener and useStream contracts"
+    },
+    {
+      "id": "render-contracts",
+      "path": "e2e/qa-render-contracts.ad",
+      "purpose": "Renderer props, accessibility labels, table width options, stream state reasons and link press interception"
+    },
+    {
+      "id": "contracts-http",
+      "path": "e2e/qa-contracts-http.ad",
+      "purpose": "Remote image host policy against the local HTTP fixture request log",
+      "requires": "http-fixture"
     }
   ],
   "features": [
@@ -110,7 +131,7 @@
       "source": "apps/example/components/markdown-pipeline-smoke.tsx",
       "trigger": "screen-load",
       "statusId": "plugin-smoke-status",
-      "expectedText": "PASS — Markdown plugin pipeline passed",
+      "expectedText": "PASS \u2014 Markdown plugin pipeline passed",
       "assertion": "reportedError.phase === \"after-plugin\""
     },
     {
@@ -234,28 +255,357 @@
       "expectedText": "transition:PASS:current-update:text+ast:stale=0",
       "assertion": "sessions.b.append(\"_CONFIRMED\")",
       "controlId": "session-transition-confirm"
+    },
+    {
+      "id": "smoke.native-runtime",
+      "coverage": "replay-asserted",
+      "kind": "coverage-state",
+      "transport": "The in-app smoke suite runs its native parser, extraction, session and renderer checks; the probe counts PASS, FAIL and SKIP rows and the flow requires zero failures; the replay starts the run with the nitromarkdown://?autorun=smoke deep link because iOS reports the tab screen buttons as covered.",
+      "suite": "e2e/qa-smoke.ad",
+      "source": "apps/example/app/(tabs)/index.tsx",
+      "statusId": "smoke-probe",
+      "expectedText": ":fail=0:",
+      "assertion": "log.text.startsWith(\"FAIL  \")",
+      "claimLimit": "Counts the smoke log rows; each row's own detail is not asserted separately, and SKIP rows are allowed.",
+      "trigger": "screen-load"
+    },
+    {
+      "id": "headless.subpath",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "The react-native-nitro-markdown/headless subpath parses natively into a document with a heading.",
+      "suite": "e2e/qa-api.ad",
+      "source": "apps/example/app/e2e-api.tsx",
+      "trigger": "screen-load",
+      "statusId": "api-probe",
+      "expectedText": "headless=ok;",
+      "assertion": "parseHeadlessMarkdown(\"# Headless\")"
+    },
+    {
+      "id": "parser.source-offsets",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "Default parse returns numeric beg/end offsets; sourceOffsets: false omits them on every node.",
+      "suite": "e2e/qa-api.ad",
+      "source": "apps/example/app/e2e-api.tsx",
+      "trigger": "screen-load",
+      "statusId": "api-probe",
+      "expectedText": "offsets=ok;",
+      "assertion": "parseMarkdownWithOptions(\"# Offsets\", { sourceOffsets: false })"
+    },
+    {
+      "id": "parser.freeze",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "freezeAst: true returns a frozen root, children array and child node.",
+      "suite": "e2e/qa-api.ad",
+      "source": "apps/example/app/e2e-api.tsx",
+      "trigger": "screen-load",
+      "statusId": "api-probe",
+      "expectedText": "freeze=ok;",
+      "assertion": "Object.isFrozen(ast) && Object.isFrozen(ast.children)"
+    },
+    {
+      "id": "parser.strip",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "stripSourceOffsets removes every beg/end from an offset-bearing AST.",
+      "suite": "e2e/qa-api.ad",
+      "source": "apps/example/app/e2e-api.tsx",
+      "trigger": "screen-load",
+      "statusId": "api-probe",
+      "expectedText": "strip=ok;",
+      "assertion": "stripSourceOffsets(ast)"
+    },
+    {
+      "id": "parser.extract-options",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "With gfm on, native extraction returns the parsed table as cells joined by \" | \" with no delimiter row; with gfm off the pipes and delimiter row stay literal paragraph text. Both outputs equal getFlattenedText of the matching native AST.",
+      "suite": "e2e/qa-api.ad",
+      "source": "apps/example/app/e2e-api.tsx",
+      "trigger": "screen-load",
+      "statusId": "api-probe",
+      "expectedText": "extractopt=ok;",
+      "assertion": "gfmOn === \"A | \\nB | \\n\""
+    },
+    {
+      "id": "parser.text-content",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "getTextContent returns the exact native code block content.",
+      "suite": "e2e/qa-api.ad",
+      "source": "apps/example/app/e2e-api.tsx",
+      "trigger": "screen-load",
+      "statusId": "api-probe",
+      "expectedText": "textcontent=ok;",
+      "assertion": "getTextContent(code).trim() === \"E2E_CODE\""
+    },
+    {
+      "id": "parser.complexity",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "A 1000-level blockquote exceeds the native AST depth limit and surfaces the typed invalid_ast code.",
+      "suite": "e2e/qa-api.ad",
+      "source": "apps/example/app/e2e-api.tsx",
+      "trigger": "screen-load",
+      "statusId": "api-probe",
+      "expectedText": "complex=invalid_ast;",
+      "assertion": "parseMarkdown(`${\"> \".repeat(1000)}x`)"
+    },
+    {
+      "id": "session.invalid-range",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "replace with from > to throws the typed invalid_range code.",
+      "suite": "e2e/qa-api.ad",
+      "source": "apps/example/app/e2e-api.tsx",
+      "trigger": "screen-load",
+      "statusId": "api-probe",
+      "expectedText": "range=invalid_range;",
+      "assertion": "session.replace(2, 1, \"x\")"
+    },
+    {
+      "id": "session.destroyed",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "A method call after dispose throws the typed destroyed code.",
+      "suite": "e2e/qa-api.ad",
+      "source": "apps/example/app/e2e-api.tsx",
+      "trigger": "screen-load",
+      "statusId": "api-probe",
+      "expectedText": "destroyed=destroyed;",
+      "assertion": "key: \"destroyed\""
+    },
+    {
+      "id": "session.buffer-limit",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "Appending more than MAX_PARSE_INPUT_LENGTH throws the typed buffer_limit code.",
+      "suite": "e2e/qa-api.ad",
+      "source": "apps/example/app/e2e-api.tsx",
+      "trigger": "screen-load",
+      "statusId": "api-probe",
+      "expectedText": "buffer=buffer_limit;",
+      "assertion": "session.append(\"x\".repeat(MAX_PARSE_INPUT_LENGTH + 1))"
+    },
+    {
+      "id": "session.surface",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "getLength, highlightPosition, clear and reset read back exact native values; clear and reset zero the highlight.",
+      "suite": "e2e/qa-api.ad",
+      "source": "apps/example/app/e2e-api.tsx",
+      "trigger": "screen-load",
+      "statusId": "api-probe",
+      "expectedText": "sess=ok;",
+      "assertion": "session.getAllText() === \"xyz!\" && session.highlightPosition === 0"
+    },
+    {
+      "id": "session.listener",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "addListener receives the native 0-3 append range; after unsubscribe a further append is not delivered.",
+      "suite": "e2e/qa-api.ad",
+      "source": "apps/example/app/e2e-api.tsx",
+      "trigger": "screen-load",
+      "statusId": "api-probe",
+      "expectedText": "listener=ok;",
+      "assertion": "ranges[0] === \"0-3\" && ranges.length === before"
+    },
+    {
+      "id": "hook.use-stream",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "useStream(timestamps).sync(150) sets the native session highlightPosition to the resolved word index 2.",
+      "suite": "e2e/qa-api.ad",
+      "source": "apps/example/app/e2e-api.tsx",
+      "trigger": "screen-load",
+      "statusId": "api-probe",
+      "expectedText": "sync=ok;",
+      "assertion": "getSession().highlightPosition === 2"
+    },
+    {
+      "id": "render.error-text",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "maxInputLength 4 makes Markdown render the custom errorText and report onError phase parse.",
+      "suite": "e2e/qa-render-contracts.ad",
+      "source": "apps/example/app/e2e-render-contracts.tsx",
+      "trigger": "screen-load",
+      "statusId": "error-text-surface",
+      "expectedText": "ERR_TEXT_OK",
+      "assertion": "errorText=\"ERR_TEXT_OK\""
+    },
+    {
+      "id": "render.error-phase",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "The Markdown onError callback reports the parse phase for the bounded input.",
+      "suite": "e2e/qa-render-contracts.ad",
+      "source": "apps/example/app/e2e-render-contracts.tsx",
+      "trigger": "screen-load",
+      "statusId": "render-contracts-probe",
+      "expectedText": "errortext=parse;",
+      "assertion": "report(\"errortext\", `errortext=${phase}`)"
+    },
+    {
+      "id": "render.html",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "options.html parses html_inline and html_block nodes and the default renderers show their raw content.",
+      "suite": "e2e/qa-render-contracts.ad",
+      "source": "apps/example/app/e2e-render-contracts.tsx",
+      "trigger": "screen-load",
+      "statusId": "html-surface",
+      "expectedText": "<div>HTML_BLOCK</div>",
+      "assertion": "<div>HTML_BLOCK</div>"
+    },
+    {
+      "id": "render.code-language",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "theme.showCodeLanguage renders the fenced code language label, which is not otherwise rendered.",
+      "suite": "e2e/qa-render-contracts.ad",
+      "source": "apps/example/app/e2e-render-contracts.tsx",
+      "trigger": "screen-load",
+      "statusId": "code-language-surface",
+      "expectedText": "e2elang",
+      "assertion": "showCodeLanguage: true"
+    },
+    {
+      "id": "render.highlighter",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "A custom highlightCode function is called with the fence language ts.",
+      "suite": "e2e/qa-render-contracts.ad",
+      "source": "apps/example/app/e2e-render-contracts.tsx",
+      "trigger": "screen-load",
+      "statusId": "render-contracts-probe",
+      "expectedText": "hl=ts:",
+      "assertion": "highlightCalls.current"
+    },
+    {
+      "id": "render.custom-renderer",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "A custom heading renderer replaces the default heading and receives level 2.",
+      "suite": "e2e/qa-render-contracts.ad",
+      "source": "apps/example/app/e2e-render-contracts.tsx",
+      "trigger": "screen-load",
+      "statusId": "custom-heading-marker",
+      "expectedText": "custom=heading-2;",
+      "assertion": "testID=\"custom-heading-marker\""
+    },
+    {
+      "id": "render.a11y-labels",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "The table renderer exposes its header-derived accessibilityLabel.",
+      "suite": "e2e/qa-render-contracts.ad",
+      "source": "apps/example/app/e2e-render-contracts.tsx",
+      "trigger": "screen-load",
+      "statusId": "table-surface",
+      "expectedText": "Table: Alpha, Beta",
+      "assertion": "TABLE_MARKDOWN = \"| Alpha | Beta |"
+    },
+    {
+      "id": "render.math-label",
+      "coverage": "replay-asserted",
+      "kind": "visual-only",
+      "transport": "mathRenderers renders block math with the LaTeX source as its accessibilityLabel.",
+      "suite": "e2e/qa-render-contracts.ad",
+      "source": "apps/example/app/e2e-render-contracts.tsx",
+      "trigger": "screen-load",
+      "statusId": "math-surface",
+      "expectedText": "E2Emath^{2}",
+      "assertion": "renderers={mathRenderers}",
+      "claimLimit": "The RaTeX fallback renders the same LaTeX as text, so this does not separate the accessibility label from fallback text or prove math drawing."
+    },
+    {
+      "id": "render.table-width",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "tableOptions.minColumnWidth 120 lays out a two-column table at least 240pt wide while the default-option control stays narrower.",
+      "suite": "e2e/qa-render-contracts.ad",
+      "source": "apps/example/app/e2e-render-contracts.tsx",
+      "trigger": "screen-load",
+      "statusId": "render-contracts-probe",
+      "expectedText": "tablew>=240:ctl<240;",
+      "assertion": "WIDE_TABLE_OPTIONS = { minColumnWidth: 120 }"
+    },
+    {
+      "id": "render.link-press",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "Pressing a rendered link calls onLinkPress with the exact href; the handler returns false so the default open is skipped.",
+      "suite": "e2e/qa-render-contracts.ad",
+      "source": "apps/example/app/e2e-render-contracts.tsx",
+      "statusId": "render-contracts-probe",
+      "expectedText": "link=https://example.test:blocked;",
+      "assertion": "report(\"link\", `link=${href}:blocked`)",
+      "controlId": "link-press-target",
+      "claimLimit": "Proves the handler received the href and returned false; that openURL was skipped is only shown by the app staying foreground."
+    },
+    {
+      "id": "stream.async-initial",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "initialParseMode async first reports disabled/initializing and then available.",
+      "suite": "e2e/qa-render-contracts.ad",
+      "source": "apps/example/app/e2e-render-contracts.tsx",
+      "trigger": "screen-load",
+      "statusId": "render-contracts-probe",
+      "expectedText": "async=initializing>available;",
+      "assertion": "initialParseMode: \"async\""
+    },
+    {
+      "id": "stream.before-parse-reason",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "A beforeParse plugin disables the stream source AST with reason beforeParse-plugin.",
+      "suite": "e2e/qa-render-contracts.ad",
+      "source": "apps/example/app/e2e-render-contracts.tsx",
+      "trigger": "screen-load",
+      "statusId": "render-contracts-probe",
+      "expectedText": "reason=beforeParse-plugin;",
+      "assertion": "plugins: BEFORE_PARSE_PLUGINS"
+    },
+    {
+      "id": "stream.parse-error",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "A native session parse over maxInputLength reports the stream onError parse phase.",
+      "suite": "e2e/qa-render-contracts.ad",
+      "source": "apps/example/app/e2e-render-contracts.tsx",
+      "trigger": "screen-load",
+      "statusId": "render-contracts-probe",
+      "expectedText": "streamerr=parse;",
+      "assertion": "report(\"streamerr\", `streamerr=${phase}`)"
+    },
+    {
+      "id": "images.http-transport",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "Against the local HTTP fixture, the allowed-host image is served and loaded (its loaded-only title appears) while a nonmatching host list, an empty host list and remoteImages deny each issue zero requests in the fixture log. Redirects are not exercised.",
+      "suite": "e2e/qa-contracts-http.ad",
+      "source": "apps/example/app/e2e-contracts.tsx",
+      "trigger": "screen-load",
+      "statusId": "http-probe",
+      "expectedText": "http:ok=served:denied=0:deny=0:empty=0;",
+      "assertion": "remoteImages: \"deny\""
     }
   ],
   "pending": [
     {
-      "id": "images.http-transport",
-      "state": "pending-prerequisites",
-      "reason": "The default image fixture uses an explicitly allowed data URI, so it does not observe HTTP requests or redirects.",
-      "prerequisites": [
-        "A controlled HTTP(S) image server with request logs",
-        "A dedicated installed native QA target"
-      ],
-      "acceptance": "Verify allowed host image bytes load and URLs denied by a nonempty or empty host list issue no request. Capture controlled server request evidence separately from fallback text."
-    },
-    {
       "id": "render.visual-and-accessibility",
       "state": "pending-prerequisites",
-      "reason": "Text and parse callbacks do not prove glyph layout, screen-reader speech, table dimensions or math drawing.",
+      "reason": "Replay now reads table and math accessibility labels, but it cannot read accessibility roles or states, screen-reader speech, glyph layout or math drawing.",
       "prerequisites": [
         "Authorized iOS and Android device runs",
         "Representative text scaling and screen-reader settings"
       ],
-      "acceptance": "Inspect screenshots and accessibility output for math, code, tables, custom fonts, long-document virtualization and mixed scripts on both platforms."
+      "acceptance": "Inspect screenshots and screen-reader output for roles (header, link, checkbox, image, grid), math drawing, code, tables, custom fonts, long-document virtualization and mixed scripts on both platforms."
     },
     {
       "id": "stream.sustained-performance",

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "runtimeSourceSha256": "47281cb0e90adcecabe9e9da5ab02ea68e44611a1752f519051e05db33c5030d",
+  "runtimeSourceSha256": "47ee7987f86ea79812b1928f9d359e2c3f7f9d1727a9fa21b7276d3631af5281",
   "runtimeSourceFiles": [
     "apps/example/app.config.js",
     "apps/example/app/(tabs)/_layout.tsx",
@@ -11,7 +11,9 @@
     "apps/example/app/(tabs)/render-default.tsx",
     "apps/example/app/(tabs)/render-stream.tsx",
     "apps/example/app/_layout.tsx",
+    "apps/example/app/e2e-api.tsx",
     "apps/example/app/e2e-contracts.tsx",
+    "apps/example/app/e2e-render-contracts.tsx",
     "apps/example/app/e2e-render.tsx",
     "apps/example/app/e2e.tsx",
     "apps/example/assets/adaptive-icon.png",
@@ -107,18 +109,26 @@
     "packages/react-native-nitro-markdown/src/utils/stream-timeline.ts",
     "packages/react-native-nitro-markdown/src/utils/text-content.ts"
   ],
-  "replayInputsSha256": "455e625fc45f49772f05c1c395f0e4523b78a05abff058cdecfe9bdc80087cdc",
+  "replayInputsSha256": "a6d81b31b325cdd09400a4ff30dfac9c1fa5c4c637622b02989b00cb880f383f",
   "replayInputs": [
     "e2e/markdown-replay-coverage.json",
+    "e2e/qa-api.ad",
+    "e2e/qa-contracts-http.ad",
     "e2e/qa-contracts.ad",
     "e2e/qa-deeplink.ad",
     "e2e/qa-full-features.ad",
-    "e2e/qa-render-stress.ad"
+    "e2e/qa-render-contracts.ad",
+    "e2e/qa-render-stress.ad",
+    "e2e/qa-smoke.ad"
   ],
   "suites": [
     "full-features",
     "render-stress",
     "deeplink",
-    "contracts"
+    "contracts",
+    "smoke",
+    "api",
+    "render-contracts",
+    "contracts-http"
   ]
 }

@@ -1,6 +1,7 @@
 import {
   useState,
   useCallback,
+  useEffect,
   useRef,
   type ComponentType,
 } from "react";
@@ -29,6 +30,7 @@ import {
   type CustomRenderers,
   type MarkdownNode,
 } from "react-native-nitro-markdown";
+import { useLocalSearchParams } from "expo-router";
 import { mathRenderers } from "react-native-nitro-markdown/math";
 import {
   BenchBar,
@@ -916,6 +918,16 @@ export default function BenchmarkScreen() {
     }
   };
 
+  const { autorun } = useLocalSearchParams<{ autorun?: string }>();
+  const autorunStarted = useRef(false);
+  useEffect(() => {
+    // Replay flows start the smoke run by deep link: iOS reports the tab
+    // screen's buttons as covered, so agent-device cannot press them.
+    if (autorun !== "smoke" || autorunStarted.current) return;
+    autorunStarted.current = true;
+    void runSmoke();
+  });
+
   const runBenchmark = async () => {
     setMode("bench");
     setSmokeLogs([]);
@@ -984,8 +996,20 @@ export default function BenchmarkScreen() {
     setIsBenchmarkRunning(false);
   };
 
+  const smokeProbeLabel = error
+    ? "smoke:error;"
+    : mode === "smoke" && smokeLogs.length > 0
+      ? `smoke:pass=${smokeLogs.filter((log) => log.text.startsWith("PASS  ")).length}:fail=${smokeLogs.filter((log) => log.text.startsWith("FAIL  ")).length}:skip=${smokeLogs.filter((log) => log.text.startsWith("SKIP  ")).length};`
+      : "smoke:idle;";
+
   return (
     <ExampleScreen paddingBottom={0} style={styles.screenContent}>
+      <View
+        testID="smoke-probe"
+        accessible
+        accessibilityLabel={smokeProbeLabel}
+        style={styles.resultsProbe}
+      />
       <View style={styles.buttonRow}>
         <ExampleActionButton
           testID="run-smoke-tests"
@@ -1194,6 +1218,9 @@ export default function BenchmarkScreen() {
 const styles = StyleSheet.create({
   screenContent: {
     paddingTop: 20,
+  },
+  resultsProbe: {
+    height: 1,
   },
   buttonRow: {
     flexDirection: "row",
