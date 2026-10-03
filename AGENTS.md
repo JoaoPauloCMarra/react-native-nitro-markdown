@@ -94,3 +94,10 @@
 ## Web Stance
 
 - Web is not supported: every entrypoint (including `./headless`) requires Nitro Modules (JSI). Do not add a `browser` field or web entry without adding a real web implementation and a smoke proof.
+
+## Replay Maintenance
+
+- Keep `e2e/markdown-replay-coverage.json` aligned with concrete example assertions and `.ad` flows. A coverage row's `assertion` must match source, and every required result needs a replay status selector and expected value.
+- Review affected flows after package or example runtime changes, then run `bun run example:replay:refresh`. The normal `check` gate validates freshness and helper tests without launching a device.
+- Device execution uses `bun run example:replay --platform ios --udid <exact-target>` or `--platform android --serial <exact-target>` only when authorized. The runner selects one target and writes unique OS-temp artifacts; `agent-device test` closes each attempt session itself.
+- Do not treat a current source lock, fixture-only result, skipped prerequisite, or ready marker as native runtime proof. Keep required result counts and pending acceptance rows explicit.

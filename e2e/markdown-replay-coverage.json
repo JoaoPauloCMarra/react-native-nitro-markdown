@@ -1,0 +1,271 @@
+{
+  "version": 1,
+  "entry": "scripts/run-example-replay.js",
+  "sourceScope": [
+    "Markdown TypeScript, native C++/Android wiring, generated bindings, package manifests and workspace lock",
+    "All example source and assets except generated Android/iOS projects, test files, caches and secrets",
+    "Replay flows and coverage assertions"
+  ],
+  "suites": [
+    {
+      "id": "full-features",
+      "path": "e2e/qa-full-features.ad",
+      "purpose": "Native parsing, extraction, session mutations, input bounds and plugin recovery"
+    },
+    {
+      "id": "render-stress",
+      "path": "e2e/qa-render-stress.ad",
+      "purpose": "Eight renderer specimens, exact native stream burst content and remount completion"
+    },
+    {
+      "id": "deeplink",
+      "path": "e2e/qa-deeplink.ad",
+      "purpose": "Installed E2E deep-link routing"
+    },
+    {
+      "id": "contracts",
+      "path": "e2e/qa-contracts.ad",
+      "purpose": "Public empty-host image policy, inline PNG decoding and committed stream session isolation"
+    }
+  ],
+  "features": [
+    {
+      "id": "parser.structure",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "Native parser AST contains document, heading, list, table and math nodes plus the task text.",
+      "suite": "e2e/qa-full-features.ad",
+      "source": "apps/example/components/e2e-lab.tsx",
+      "trigger": "screen-load",
+      "statusId": "e2e-parse-status",
+      "expectedText": "ok:parse=structure",
+      "assertion": "getFlattenedText(ast).includes(\"Task\")"
+    },
+    {
+      "id": "parser.extract",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "Native extraction and flattened native AST agree on exact plain text.",
+      "suite": "e2e/qa-full-features.ad",
+      "source": "apps/example/components/e2e-lab.tsx",
+      "trigger": "screen-load",
+      "statusId": "e2e-extract-status",
+      "expectedText": "ok:extract=bold and italic",
+      "assertion": "plain === \"bold and italic\" && flat === plain"
+    },
+    {
+      "id": "session.mutations",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "Native session append, replace and reset return the expected complete strings.",
+      "suite": "e2e/qa-full-features.ad",
+      "source": "apps/example/components/e2e-lab.tsx",
+      "trigger": "screen-load",
+      "statusId": "e2e-session-status",
+      "expectedText": "ok:session=append-replace-reset",
+      "assertion": "session.getAllText() === \"# reset\""
+    },
+    {
+      "id": "parser.comparison",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "Two native parse results retain their separate before/after content.",
+      "suite": "e2e/qa-full-features.ad",
+      "source": "apps/example/components/e2e-lab.tsx",
+      "trigger": "screen-load",
+      "statusId": "e2e-comparison-status",
+      "expectedText": "ok:comparison",
+      "assertion": "getFlattenedText(after).trim() === \"PLUGIN hello\""
+    },
+    {
+      "id": "parser.input-limit",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "The public input-size boundary rejects the oversized input with the declared error code.",
+      "suite": "e2e/qa-full-features.ad",
+      "source": "apps/example/components/e2e-lab.tsx",
+      "trigger": "screen-load",
+      "statusId": "e2e-error-status",
+      "expectedText": "ok:error=input_too_large",
+      "assertion": "code === \"input_too_large\""
+    },
+    {
+      "id": "parser.repeated-values",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "Forty native parse results each contain their own iteration marker; elapsed time is informational.",
+      "suite": "e2e/qa-full-features.ad",
+      "source": "apps/example/components/e2e-lab.tsx",
+      "trigger": "screen-load",
+      "statusId": "e2e-stress-result",
+      "expectedText": "ok:parses=40:blocks=",
+      "assertion": "getFlattenedText(ast).includes(marker)"
+    },
+    {
+      "id": "pipeline.priority-recovery",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "The public renderer checks exact plugin order, transformed output, named error reporting and continuation after an intentional plugin failure.",
+      "suite": "e2e/qa-full-features.ad",
+      "source": "apps/example/components/markdown-pipeline-smoke.tsx",
+      "trigger": "screen-load",
+      "statusId": "plugin-smoke-status",
+      "expectedText": "PASS — Markdown plugin pipeline passed",
+      "assertion": "reportedError.phase === \"after-plugin\""
+    },
+    {
+      "id": "render.parse-completion",
+      "coverage": "replay-asserted",
+      "kind": "coverage-state",
+      "transport": "Eight distinct specimen parse-completion callbacks are required.",
+      "suite": "e2e/qa-render-stress.ad",
+      "source": "apps/example/app/e2e-render.tsx",
+      "trigger": "screen-load",
+      "statusId": "e2e-render-ready-count",
+      "expectedText": "ok:ready=8/8:ms=",
+      "assertion": "next.length === SPECIMEN_IDS.length",
+      "claimLimit": "This counts parse completion; the flow's content assertions and separate visual acceptance cover rendered appearance."
+    },
+    {
+      "id": "render.burst-content",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "All 24 appended token strings are read back exactly from the native session; the flow then observes the first and last rendered tokens.",
+      "suite": "e2e/qa-render-stress.ad",
+      "source": "apps/example/app/e2e-render.tsx",
+      "statusId": "e2e-stream-status",
+      "expectedText": "ok:burst=tokens-0-through-23:chars=",
+      "assertion": "actual === expected",
+      "controlId": "e2e-stream-burst"
+    },
+    {
+      "id": "render.remount",
+      "coverage": "replay-asserted",
+      "kind": "coverage-state",
+      "transport": "The remount generation advances before the flow requires all eight parse callbacks again.",
+      "suite": "e2e/qa-render-stress.ad",
+      "source": "apps/example/app/e2e-render.tsx",
+      "statusId": "e2e-render-generation",
+      "expectedText": "generation:1",
+      "assertion": "setGeneration((value) => value + 1)",
+      "controlId": "e2e-render-remount",
+      "claimLimit": "Generation is a lifecycle assertion, not a timing or visual-quality claim."
+    },
+    {
+      "id": "route.deeplink",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "The installed app opens its E2E route through the declared deep link.",
+      "suite": "e2e/qa-deeplink.ad",
+      "source": "apps/example/app/e2e.tsx",
+      "trigger": "screen-load",
+      "statusId": "e2e-deeplink",
+      "expectedText": "nitromarkdown://e2e",
+      "assertion": "nitromarkdown://e2e"
+    },
+    {
+      "id": "images.empty-host-list",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "The public Markdown image renderer blocks an inline PNG with an explicit empty host allowlist. The same PNG must load in the positive control.",
+      "suite": "e2e/qa-contracts.ad",
+      "source": "apps/example/app/e2e-contracts.tsx",
+      "trigger": "screen-load",
+      "statusId": "image-blocked-surface",
+      "expectedText": "Image failed to load",
+      "assertion": "allowedHosts: []"
+    },
+    {
+      "id": "images.omitted-host-list",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "With allowedHosts omitted and the data protocol explicitly allowed, native Image decodes the inline PNG and reveals its loaded-only title; its error alt is different.",
+      "suite": "e2e/qa-contracts.ad",
+      "source": "apps/example/app/e2e-contracts.tsx",
+      "trigger": "screen-load",
+      "statusId": "image-allowed-surface",
+      "expectedText": "INLINE_IMAGE_LOADED",
+      "assertion": "title: \"INLINE_IMAGE_LOADED\""
+    },
+    {
+      "id": "stream.direct.switch",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "A layout-effect observer latches any old-session text or AST committed after selecting B; the flow requires B's actual rendered marker.",
+      "suite": "e2e/qa-contracts.ad",
+      "source": "apps/example/app/e2e-contracts.tsx",
+      "statusId": "session-direct-status",
+      "expectedText": "direct:PASS:session-B:text+ast:stale=0",
+      "assertion": "state.text.includes(\"ALPHA_\") || astText.includes(\"ALPHA_\")",
+      "controlId": "session-direct-switch"
+    },
+    {
+      "id": "stream.direct.current-update",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "After another write to old A, active B must receive its new text and AST without any stale commit.",
+      "suite": "e2e/qa-contracts.ad",
+      "source": "apps/example/app/e2e-contracts.tsx",
+      "statusId": "session-direct-status",
+      "expectedText": "direct:PASS:current-update:text+ast:stale=0",
+      "assertion": "sessions.b.append(\"_CONFIRMED\")",
+      "controlId": "session-direct-confirm"
+    },
+    {
+      "id": "stream.transition.switch",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "A layout-effect observer latches any old-session text or AST committed after selecting B; the flow requires B's actual rendered marker.",
+      "suite": "e2e/qa-contracts.ad",
+      "source": "apps/example/app/e2e-contracts.tsx",
+      "statusId": "session-transition-status",
+      "expectedText": "transition:PASS:session-B:text+ast:stale=0",
+      "assertion": "state.text.includes(\"ALPHA_\") || astText.includes(\"ALPHA_\")",
+      "controlId": "session-transition-switch"
+    },
+    {
+      "id": "stream.transition.current-update",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "After another write to old A, active B must receive its new text and AST without any stale commit.",
+      "suite": "e2e/qa-contracts.ad",
+      "source": "apps/example/app/e2e-contracts.tsx",
+      "statusId": "session-transition-status",
+      "expectedText": "transition:PASS:current-update:text+ast:stale=0",
+      "assertion": "sessions.b.append(\"_CONFIRMED\")",
+      "controlId": "session-transition-confirm"
+    }
+  ],
+  "pending": [
+    {
+      "id": "images.http-transport",
+      "state": "pending-prerequisites",
+      "reason": "The default image fixture uses an explicitly allowed data URI, so it does not observe HTTP requests or redirects.",
+      "prerequisites": [
+        "A controlled HTTP(S) image server with request logs",
+        "A dedicated installed native QA target"
+      ],
+      "acceptance": "Verify allowed host image bytes load and URLs denied by a nonempty or empty host list issue no request. Capture controlled server request evidence separately from fallback text."
+    },
+    {
+      "id": "render.visual-and-accessibility",
+      "state": "pending-prerequisites",
+      "reason": "Text and parse callbacks do not prove glyph layout, screen-reader speech, table dimensions or math drawing.",
+      "prerequisites": [
+        "Authorized iOS and Android device runs",
+        "Representative text scaling and screen-reader settings"
+      ],
+      "acceptance": "Inspect screenshots and accessibility output for math, code, tables, custom fonts, long-document virtualization and mixed scripts on both platforms."
+    },
+    {
+      "id": "stream.sustained-performance",
+      "state": "pending-prerequisites",
+      "reason": "Bounded content assertions and printed milliseconds are not frame-time or memory benchmarks.",
+      "prerequisites": [
+        "A release build on a representative physical target",
+        "A recorded profiling workload and baseline"
+      ],
+      "acceptance": "Measure sustained streaming frames, JS responsiveness and memory separately; do not infer performance from replay completion."
+    }
+  ]
+}
