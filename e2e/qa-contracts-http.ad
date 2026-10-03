@@ -1,0 +1,8 @@
+open "com.nitromarkdown.example" "nitromarkdown://e2e-contracts?fixtureUrl=${FIXTURE_URL}" --relaunch
+wait "stable"
+wait id="e2e-contracts-screen"
+wait id="http-probe"
+wait id="http-image-allowed"
+wait text "HTTP_IMAGE_LOADED"
+wait text "http:ok=served:denied=0:deny=0:empty=0;"
+close

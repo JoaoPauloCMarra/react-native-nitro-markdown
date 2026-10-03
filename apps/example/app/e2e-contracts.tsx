@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Markdown,
@@ -20,6 +21,81 @@ const ALLOWED_IMAGE: MarkdownNode = {
   type: "document",
   children: [{ type: "image", href: INLINE_PNG, alt: "Inline PNG decode failed", title: "INLINE_IMAGE_LOADED" }],
 };
+
+const FIXTURE_ORIGIN = /^http:\/\/([A-Za-z0-9.-]+|\[[0-9a-fA-F:]+\]):\d{1,5}$/;
+const HTTP_IMAGE_PATHS = ["/img/ok.png", "/img/denied.png", "/img/deny.png", "/img/empty.png"] as const;
+
+const httpImage = (origin: string, imagePath: string, title?: string): MarkdownNode => ({
+  type: "document",
+  children: [{ type: "image", href: `${origin}${imagePath}`, alt: `HTTP image unavailable ${imagePath}`, ...(title ? { title } : {}) }],
+});
+
+async function readRequestCounts(origin: string): Promise<Record<string, number>> {
+  const response = await fetch(`${origin}/requests`, { cache: "no-store" });
+  if (!response.ok) throw new Error(`requests status ${response.status}`);
+  const body: unknown = await response.json();
+  const counts: Record<string, number> = {};
+  for (const imagePath of HTTP_IMAGE_PATHS) {
+    const value = body && typeof body === "object" ? (body as Record<string, unknown>)[imagePath] : undefined;
+    counts[imagePath] = typeof value === "number" && Number.isInteger(value) ? value : 0;
+  }
+  return counts;
+}
+
+function HttpImageProbe({ origin, host }: { origin: string; host: string }) {
+  const [report, setReport] = useState("http:pending;");
+  const [images] = useState(() => ({
+    ok: httpImage(origin, "/img/ok.png", "HTTP_IMAGE_LOADED"),
+    denied: httpImage(origin, "/img/denied.png"),
+    deny: httpImage(origin, "/img/deny.png"),
+    empty: httpImage(origin, "/img/empty.png"),
+  }));
+  const [policies] = useState(() => ({
+    ok: { allowedHosts: [host] },
+    denied: { allowedHosts: ["other.test"] },
+    deny: { remoteImages: "deny" as const },
+    empty: { allowedHosts: [] },
+  }));
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      const deadline = Date.now() + 15000;
+      let counts = await readRequestCounts(origin);
+      while ((counts["/img/ok.png"] ?? 0) < 1 && Date.now() < deadline && !cancelled) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        counts = await readRequestCounts(origin);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      counts = await readRequestCounts(origin);
+      const served = (counts["/img/ok.png"] ?? 0) >= 1 ? "served" : "missing";
+      return `http:ok=${served}:denied=${counts["/img/denied.png"]}:deny=${counts["/img/deny.png"]}:empty=${counts["/img/empty.png"]};`;
+    };
+    run()
+      .then((value) => {
+        if (!cancelled) setReport(value);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setReport(`http:error=${String(error instanceof Error ? error.message : error).replace(/[;:]/g, " ")};`);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [origin]);
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.title}>HTTP image policy</Text>
+      <View testID="http-probe" accessible accessibilityLabel={report} style={styles.resultsProbe} />
+      <View testID="http-image-allowed" style={styles.image}>
+        <Markdown sourceAst={images.ok} imageOptions={policies.ok}>{""}</Markdown>
+      </View>
+      <Markdown sourceAst={images.denied} imageOptions={policies.denied}>{""}</Markdown>
+      <Markdown sourceAst={images.deny} imageOptions={policies.deny}>{""}</Markdown>
+      <Markdown sourceAst={images.empty} imageOptions={policies.empty}>{""}</Markdown>
+    </View>
+  );
+}
 
 function SessionProbe({ transition }: { transition: boolean }) {
   const name = transition ? "transition" : "direct";
@@ -95,9 +171,13 @@ function SessionProbe({ transition }: { transition: boolean }) {
 
 export default function MarkdownContractReplayScreen() {
   const insets = useSafeAreaInsets();
+  const { fixtureUrl } = useLocalSearchParams<{ fixtureUrl?: string }>();
+  const fixtureMatch = typeof fixtureUrl === "string" ? FIXTURE_ORIGIN.exec(fixtureUrl) : null;
+  const fixtureHost = fixtureMatch?.[1]?.replace(/^\[|\]$/g, "");
   return (
     <ScrollView testID="e2e-contracts-screen" style={styles.screen} contentContainerStyle={{ padding: 16, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16, gap: 12 }}>
       <Text style={styles.title}>Image policy and session contracts</Text>
+      {fixtureMatch && fixtureHost ? <HttpImageProbe origin={fixtureMatch[0]} host={fixtureHost} /> : null}
       <View testID="image-blocked-surface" style={styles.card}>
         <Text>Empty host allowlist</Text>
         <Markdown sourceAst={BLOCKED_IMAGE} imageOptions={{ allowedProtocols: ["data"], allowedHosts: [] }}>{""}</Markdown>
@@ -119,6 +199,7 @@ const styles = StyleSheet.create({
   card: { gap: 8, padding: 12, backgroundColor: EXAMPLE_COLORS.surface, borderRadius: 12 },
   title: { color: EXAMPLE_COLORS.text, fontSize: 18, fontWeight: "600" },
   image: { width: 96 },
+  resultsProbe: { height: 1 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   button: { padding: 10, borderWidth: 1, borderColor: EXAMPLE_COLORS.border, borderRadius: 8 },
 });

@@ -278,6 +278,14 @@ function readCoverageManifest(root, manifestPath = manifestRelativePath) {
         `${suite.path} must close its app flow as its final command`,
       );
     }
+    if (suite.requires !== undefined && suite.requires !== "http-fixture") {
+      throw new Error(`${suite.path} names an unknown replay prerequisite`);
+    }
+    if ((suite.requires === "http-fixture") !== source.includes("${FIXTURE_URL}")) {
+      throw new Error(
+        `${suite.path} must use \${FIXTURE_URL} exactly when it requires the HTTP fixture`,
+      );
+    }
     suiteFiles.set(suite.path, source);
   }
 

@@ -16,6 +16,8 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="e2e" />
         <Stack.Screen name="e2e-render" />
+        <Stack.Screen name="e2e-api" />
+        <Stack.Screen name="e2e-render-contracts" />
       </Stack>
     </SafeAreaProvider>
   );

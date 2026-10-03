@@ -12,7 +12,13 @@ import {
   readCoverageManifest,
   refreshReplayLock,
 } from "./check-example-replay-freshness.js";
-import { parseArgs, readSuites, runExampleReplay } from "./run-example-replay.js";
+import {
+  parseArgs,
+  parseFixtureUrl,
+  readSuites,
+  runExampleReplay,
+} from "./run-example-replay.js";
+import { createExampleReplayHttpFixture } from "./example-replay-http-fixture.js";
 
 const projectRoot = path.resolve(__dirname, "..");
 
@@ -495,9 +501,10 @@ test("default selection runs every manifest flow with one unique temp directory 
       },
     });
     assert.equal(status, 0);
-    const suitePaths = readSuites().map(
+    const suitePaths = readSuites(undefined, [], { httpFixture: false }).map(
       (suite: { path: string }) => suite.path,
     );
+    assert.ok(!suitePaths.includes("e2e/qa-contracts-http.ad"));
     assert.deepEqual(
       calls[0]?.args.slice(1, 1 + suitePaths.length),
       suitePaths,
@@ -610,5 +617,105 @@ test("spawn errors return a failing status without extra spawns", () => {
     assert.equal(calls.length, 1);
   } finally {
     removeTempDirectories(artifacts);
+  }
+});
+
+test("HTTP fixture flows require a local fixture origin and receive it through --env", () => {
+  const calls: { args: string[] }[] = [];
+  const artifacts: string[] = [];
+  const spawn = (_command: string, args: string[]) => {
+    calls.push({ args });
+    return { status: 0 };
+  };
+  const makeTempDirectory = (prefix: string) => {
+    const directory = fs.mkdtempSync(prefix);
+    artifacts.push(directory);
+    return directory;
+  };
+  try {
+    assert.throws(
+      () =>
+        runExampleReplay({
+          argv: ["--platform", "ios", "--udid", "sim-http", "--flow", "contracts-http"],
+          env: {},
+          spawn,
+          makeTempDirectory,
+        }),
+      /requires --http-fixture-url/,
+    );
+    for (const url of [
+      "https://127.0.0.1:8080",
+      "http://example.com:8080",
+      "http://127.0.0.1",
+      "http://127.0.0.1:8080/img",
+      "http://user:pass@127.0.0.1:8080",
+    ]) {
+      assert.throws(() => parseFixtureUrl(url), /--http-fixture-url/);
+    }
+    assert.equal(parseFixtureUrl("http://10.0.2.2:8123"), "http://10.0.2.2:8123");
+    assert.equal(calls.length, 0);
+
+    const status = runExampleReplay({
+      argv: [
+        "--platform",
+        "android",
+        "--serial",
+        "emulator-5554",
+        "--http-fixture-url",
+        "http://10.0.2.2:8123",
+      ],
+      env: {},
+      uuid: () => "http-run",
+      spawn,
+      makeTempDirectory,
+    });
+    assert.equal(status, 0);
+    const args = calls[0]?.args ?? [];
+    assert.ok(args.includes("e2e/qa-contracts-http.ad"));
+    assert.equal(args[args.indexOf("--env") + 1], "FIXTURE_URL=http%3A%2F%2F10.0.2.2%3A8123");
+  } finally {
+    removeTempDirectories(artifacts);
+  }
+});
+
+test("HTTP fixture suites must use the fixture URL exactly when they declare it", () => {
+  const { manifest } = readCoverageManifest(projectRoot);
+  for (const suite of manifest.suites) {
+    const source = fs.readFileSync(path.join(projectRoot, suite.path), "utf8");
+    assert.equal(suite.requires === "http-fixture", source.includes("${FIXTURE_URL}"));
+  }
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "nitro-markdown-replay-http-"));
+  try {
+    fs.cpSync(path.join(projectRoot, "e2e"), path.join(root, "e2e"), { recursive: true });
+    fs.cpSync(path.join(projectRoot, "apps/example/app"), path.join(root, "apps/example/app"), { recursive: true });
+    fs.cpSync(path.join(projectRoot, "apps/example/components"), path.join(root, "apps/example/components"), { recursive: true });
+    const manifestPath = path.join(root, "e2e/markdown-replay-coverage.json");
+    const copy = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    delete copy.suites.find((suite: { id: string }) => suite.id === "contracts-http").requires;
+    fs.writeFileSync(manifestPath, JSON.stringify(copy));
+    assert.throws(() => readCoverageManifest(root), /exactly when it requires the HTTP fixture/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("HTTP image fixture counts served images per path and stores no bodies", async () => {
+  const fixture = createExampleReplayHttpFixture();
+  const { baseUrl } = await fixture.listen();
+  try {
+    const image = await fetch(`${baseUrl}/img/ok.png`);
+    assert.equal(image.status, 200);
+    assert.equal(image.headers.get("content-type"), "image/png");
+    assert.ok((await image.arrayBuffer()).byteLength > 0);
+    assert.equal((await fetch(`${baseUrl}/img/other.png`)).status, 404);
+    const counts = await (await fetch(`${baseUrl}/requests`)).json();
+    assert.deepEqual(counts, {
+      "/img/ok.png": 1,
+      "/img/denied.png": 0,
+      "/img/deny.png": 0,
+      "/img/empty.png": 0,
+    });
+  } finally {
+    await fixture.close();
   }
 });

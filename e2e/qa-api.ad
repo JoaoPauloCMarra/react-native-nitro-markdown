@@ -1,0 +1,18 @@
+open "com.nitromarkdown.example" "nitromarkdown://e2e-api" --relaunch
+wait "stable"
+wait id="e2e-api-screen"
+wait id="api-probe"
+wait text "headless=ok;"
+wait text "offsets=ok;"
+wait text "freeze=ok;"
+wait text "strip=ok;"
+wait text "extractopt=ok;"
+wait text "textcontent=ok;"
+wait text "complex=invalid_ast;"
+wait text "range=invalid_range;"
+wait text "destroyed=destroyed;"
+wait text "buffer=buffer_limit;"
+wait text "sess=ok;"
+wait text "listener=ok;"
+wait text "sync=ok;"
+close

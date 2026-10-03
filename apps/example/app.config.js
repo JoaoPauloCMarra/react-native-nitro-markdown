@@ -1,3 +1,5 @@
+const httpFixture = process.env.EXPO_PUBLIC_MARKDOWN_HTTP_FIXTURE === "1";
+
 module.exports = {
   "expo": {
     "name": "Nitro Markdown",
@@ -27,7 +29,8 @@ module.exports = {
             "compileSdkVersion": 36,
             "targetSdkVersion": 36,
             "buildToolsVersion": "36.0.0",
-            "usePrecompiledHeaders": true
+            "usePrecompiledHeaders": true,
+            ...(httpFixture ? { "usesCleartextTraffic": true } : {})
           },
           "ios": {
             "deploymentTarget": "16.4",

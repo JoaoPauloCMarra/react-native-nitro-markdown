@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+const { isIP } = require("node:net");
 
 const projectRoot = path.resolve(__dirname, "..");
 const coveragePath = path.join(
@@ -16,8 +17,10 @@ function usage() {
     "Usage:",
     "  bun scripts/run-example-replay.js --platform ios --udid <exact-target> [--flow <manifest-flow-id>]",
     "  bun scripts/run-example-replay.js --platform android --serial <exact-target> [--flow <manifest-flow-id>]",
+    "  bun scripts/run-example-replay.js --platform <ios|android> <target> --http-fixture-url <local-fixture-origin> [--flow contracts-http]",
     "",
     "Without --flow, the runner executes every flow in e2e/markdown-replay-coverage.json.",
+    "Flows that require the local HTTP fixture run only when --http-fixture-url is supplied.",
     "The selected release example must already be installed on a dedicated QA target.",
   ].join("\n");
 }
@@ -25,7 +28,13 @@ function usage() {
 function parseArgs(argv) {
   const options = {};
   const flows = [];
-  const allowed = new Set(["--platform", "--udid", "--serial", "--flow"]);
+  const allowed = new Set([
+    "--platform",
+    "--udid",
+    "--serial",
+    "--flow",
+    "--http-fixture-url",
+  ]);
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index];
     if (!allowed.has(flag)) {
@@ -73,7 +82,73 @@ function parseArgs(argv) {
       `${targetFlag} must identify one target; comma-separated targets are ambiguous`,
     );
   }
-  return { platform, targetFlag, target: target.trim(), flowIds: flows };
+  const fixtureUrlValue = options["--http-fixture-url"];
+  return {
+    platform,
+    targetFlag,
+    target: target.trim(),
+    flowIds: flows,
+    fixtureUrl:
+      fixtureUrlValue === undefined ? undefined : parseFixtureUrl(fixtureUrlValue),
+  };
+}
+
+function isLocalFixtureHost(hostname) {
+  const host = hostname
+    .replace(/^\[|\]$/g, "")
+    .toLowerCase()
+    .replace(/\.$/, "");
+  if (
+    host === "localhost" ||
+    host === "host.docker.internal" ||
+    host.endsWith(".local")
+  ) {
+    return true;
+  }
+  const version = isIP(host);
+  if (version === 4) {
+    const [first, second] = host.split(".").map(Number);
+    return (
+      first === 10 ||
+      first === 127 ||
+      (first === 169 && second === 254) ||
+      (first === 172 && second >= 16 && second <= 31) ||
+      (first === 192 && second === 168)
+    );
+  }
+  if (version === 6) {
+    return (
+      host === "::1" ||
+      host.startsWith("fc") ||
+      host.startsWith("fd") ||
+      host.startsWith("fe80:")
+    );
+  }
+  return false;
+}
+
+function parseFixtureUrl(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("--http-fixture-url must be a valid local HTTP URL");
+  }
+  if (
+    url.protocol !== "http:" ||
+    url.username !== "" ||
+    url.password !== "" ||
+    url.port === "" ||
+    url.pathname !== "/" ||
+    url.search !== "" ||
+    url.hash !== "" ||
+    !isLocalFixtureHost(url.hostname)
+  ) {
+    throw new Error(
+      "--http-fixture-url must be a local HTTP origin with an explicit port and no credentials, path, query, or fragment",
+    );
+  }
+  return url.origin;
 }
 
 function inside(root, relativePath) {
@@ -104,7 +179,11 @@ function inside(root, relativePath) {
   return absolute;
 }
 
-function readSuites(manifestFile = coveragePath, selectedFlowIds = []) {
+function readSuites(
+  manifestFile = coveragePath,
+  selectedFlowIds = [],
+  { httpFixture = true } = {},
+) {
   const root = path.resolve(path.dirname(manifestFile), "..");
   const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8"));
   if (manifest.version !== 1 || !Array.isArray(manifest.suites)) {
@@ -132,7 +211,8 @@ function readSuites(manifestFile = coveragePath, selectedFlowIds = []) {
       !suite.path.endsWith(".ad") ||
       paths.has(suite.path) ||
       typeof suite.purpose !== "string" ||
-      suite.purpose.trim() === ""
+      suite.purpose.trim() === "" ||
+      (suite.requires !== undefined && suite.requires !== "http-fixture")
     ) {
       throw new Error(
         "Markdown replay manifest contains an invalid or duplicate flow",
@@ -150,9 +230,21 @@ function readSuites(manifestFile = coveragePath, selectedFlowIds = []) {
   if (unknownFlow) {
     throw new Error(`Unknown replay flow: ${unknownFlow}`);
   }
-  return selectedFlowIds.length === 0
-    ? suites
-    : suites.filter((suite) => selectedFlowIds.includes(suite.id));
+  if (selectedFlowIds.length === 0) {
+    return httpFixture
+      ? suites
+      : suites.filter((suite) => suite.requires !== "http-fixture");
+  }
+  const selected = suites.filter((suite) => selectedFlowIds.includes(suite.id));
+  const needsFixture = selected.find(
+    (suite) => suite.requires === "http-fixture" && !httpFixture,
+  );
+  if (needsFixture) {
+    throw new Error(
+      `Replay flow ${needsFixture.id} requires --http-fixture-url for the local HTTP fixture`,
+    );
+  }
+  return selected;
 }
 
 function isWithinDirectory(parent, candidate) {
@@ -190,7 +282,9 @@ function runExampleReplay({
   cwd = projectRoot,
 } = {}) {
   const options = parseArgs(argv ?? []);
-  const suites = readSuites(manifestFile, options.flowIds);
+  const suites = readSuites(manifestFile, options.flowIds, {
+    httpFixture: options.fixtureUrl !== undefined,
+  });
   if (suites.length === 0) {
     throw new Error("Replay selection contains no flows");
   }
@@ -210,6 +304,9 @@ function runExampleReplay({
     ...targetArgs,
     "--session",
     session,
+    ...(options.fixtureUrl === undefined
+      ? []
+      : ["--env", `FIXTURE_URL=${encodeURIComponent(options.fixtureUrl)}`]),
     "--artifacts-dir",
     artifactsDirectory,
     "--fail-fast",
@@ -259,6 +356,7 @@ if (require.main === module) {
 
 module.exports = {
   parseArgs,
+  parseFixtureUrl,
   readSuites,
   runExampleReplay,
 };

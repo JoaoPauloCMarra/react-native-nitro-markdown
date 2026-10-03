@@ -518,7 +518,8 @@ Use `bun run example:replay --platform ios --udid <exact-target>` or
 flows. The example must already be installed from the source under test. After
 reviewing package or example changes, update affected coverage assertions and
 run `bun run example:replay:refresh`; `bun run example:replay:check` rejects stale
-coverage. See [the replay guide](docs/qa/agent-device-replay.md) for suite selection,
+coverage. The `contracts-http` flow also needs `--http-fixture-url` and the
+local image fixture. See [the replay guide](docs/qa/agent-device-replay.md) for suite selection,
 prerequisites, and limits on what each flow proves.
 
 When several devices are available, set `ANDROID_SERIAL` for Android and
