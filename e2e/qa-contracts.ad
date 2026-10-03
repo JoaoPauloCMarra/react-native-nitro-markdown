@@ -5,7 +5,7 @@ wait id="image-blocked-surface"
 wait text "Image failed to load"
 wait id="image-allowed-surface"
 wait text "INLINE_IMAGE_LOADED"
-scroll bottom
+scroll down
 wait id="session-direct-status"
 wait text "direct:ready:session-A"
 wait text "ALPHA_DIRECT"

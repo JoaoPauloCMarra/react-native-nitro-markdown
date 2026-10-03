@@ -453,8 +453,6 @@ test("runner sends the selected manifest flow to official agent-device test", ()
     assert.deepEqual(calls[0]?.args, [
       "test",
       "e2e/qa-render-stress.ad",
-      "--platform",
-      "ios",
       "--udid",
       "sim-123",
       "--session",
