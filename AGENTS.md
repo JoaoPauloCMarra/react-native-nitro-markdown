@@ -101,4 +101,5 @@
 - Review affected flows after package or example runtime changes, then run `bun run example:replay:refresh`. The normal `check` gate validates freshness and helper tests without launching a device.
 - Device execution uses `bun run example:replay --platform ios --udid <exact-target>` or `--platform android --serial <exact-target>` only when authorized. The runner selects one target and writes unique OS-temp artifacts; `agent-device test` closes each attempt session itself.
 - Manifest suites with `"requires": "http-fixture"` (`contracts-http`) run only with `--http-fixture-url <local origin>` from `scripts/example-replay-http-fixture.js`; the default run skips them. Android needs an example build with `EXPO_PUBLIC_MARKDOWN_HTTP_FIXTURE=1` for cleartext HTTP.
+- `text-scale` changes the target's OS text size and restores `medium` at its end. Keep it last in manifest `suites`; after a failed run, restore with `agent-device settings text-size medium`.
 - Do not treat a current source lock, fixture-only result, skipped prerequisite, or ready marker as native runtime proof. Keep required result counts and pending acceptance rows explicit.

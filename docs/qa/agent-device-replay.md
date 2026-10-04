@@ -10,11 +10,12 @@ bun run example:replay --platform android --serial <exact-serial>
 bun run example:replay --platform ios --udid <exact-udid> --flow contracts
 ```
 
-Without `--flow`, the seven device-only manifest suites run in order:
-`full-features`, `render-stress`, `deeplink`, `contracts`, `smoke`, `api` and
-`render-contracts`. The eighth suite, `contracts-http`, needs the local HTTP
-fixture and runs only when `--http-fixture-url` is given; selecting it with
-`--flow` and no URL fails before any device work. Repeat `--flow` for
+Without `--flow`, the eight device-only manifest suites run in order:
+`full-features`, `render-stress`, `deeplink`, `contracts`, `smoke`, `api`,
+`render-contracts` and `text-scale`. The `contracts-http` suite needs the local
+HTTP fixture and runs only when `--http-fixture-url` is given, before
+`text-scale`; selecting it with `--flow` and no URL fails before any device
+work. Repeat `--flow` for
 distinct selected suites. Each invocation uses official `agent-device test`, a
 unique session, and an artifact directory under the OS temporary directory.
 `agent-device test` closes each attempt session itself. Device execution must
@@ -49,6 +50,25 @@ custom heading renderer, the table accessibility label, the math block label,
 parse error. The last step scrolls to the bottom and presses the rendered link;
 `onLinkPress` records the href and returns `false`. The math label check can
 also match the RaTeX text fallback, and accessibility roles are not read.
+
+The text-scale flow changes the device text size. It sets
+`settings text-size accessibility-large`, relaunches
+`nitromarkdown://e2e-text-scale`, and reads the fixed `text-scale-probe` label
+`text-scale:font-scale=<n>;scaled=<yes|no>;h1=<h>:base=<b>;body=<h>:base=<b>;body-scaled=<yes|no>;`.
+`body` is the `onLayout` height of a single-line Markdown paragraph at the
+theme body size (`fontSizes.m`) with its margins removed; its `base` is a plain
+`Text` with `allowFontScaling={false}` and the same font size and line height.
+`body-scaled=yes;` means `body >= base * 1.15` (Android 14+ nonlinear scaling gives about 1.27x for 16 sp body text at fontScale 1.75; iOS about 2x). The flow then restores
+`settings text-size medium`, relaunches, and requires `;scaled=no;` and
+`body-scaled=no;`. Each run compares only its own measurements. The `h1`
+heights (margin-stripped `# Scale` heading against a non-scaling theme h1
+`Text`) are printed as evidence only and are not asserted: Android 14+ uses
+nonlinear font scaling, so large sizes grow much less than `fontScale` (a 32sp
+h1 grows about 1.07x at fontScale 1.75), while body text scales near-linearly.
+This proves layout height scaling, not glyph rendering. The suite must stay
+last in the manifest. With `--fail-fast`, a failure before the restore step
+leaves the target at accessibility-large; restore it with
+`agent-device settings text-size medium` on the same target before other QA.
 
 The contracts flow renders the same valid inline PNG under two public image
 policies. With an explicitly allowed `data` protocol and `allowedHosts: []`,

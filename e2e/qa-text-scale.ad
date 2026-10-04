@@ -1,0 +1,13 @@
+settings text-size accessibility-large
+open "com.nitromarkdown.example" "nitromarkdown://e2e-text-scale" --relaunch
+wait "stable"
+wait id="text-scale-probe"
+wait text ";scaled=yes;"
+wait text "body-scaled=yes;"
+settings text-size medium
+open "com.nitromarkdown.example" "nitromarkdown://e2e-text-scale" --relaunch
+wait "stable"
+wait id="text-scale-probe"
+wait text ";scaled=no;"
+wait text "body-scaled=no;"
+close

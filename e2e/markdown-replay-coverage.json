@@ -47,6 +47,11 @@
       "path": "e2e/qa-contracts-http.ad",
       "purpose": "Remote image host policy against the local HTTP fixture request log",
       "requires": "http-fixture"
+    },
+    {
+      "id": "text-scale",
+      "path": "e2e/qa-text-scale.ad",
+      "purpose": "OS text-size scaling of a rendered Markdown body paragraph against a non-scaling baseline; changes device text size, restores medium, and must run last"
     }
   ],
   "features": [
@@ -594,16 +599,29 @@
       "statusId": "http-probe",
       "expectedText": "http:ok=served:denied=0:deny=0:empty=0;",
       "assertion": "remoteImages: \"deny\""
+    },
+    {
+      "id": "render.text-scaling",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "agent-device sets the OS text size to accessibility-large and relaunches; a single-line Markdown paragraph at the theme body size, margins removed, measures at least 1.15x a non-scaling Text (Android 14+ scales 16 sp body text about 1.27x at fontScale 1.75) with the same font size and line height, and after restoring medium it does not. The h1 heights are printed as evidence only.",
+      "suite": "e2e/qa-text-scale.ad",
+      "source": "apps/example/app/e2e-text-scale.tsx",
+      "trigger": "screen-load",
+      "statusId": "text-scale-probe",
+      "expectedText": "body-scaled=yes;",
+      "assertion": "bodyHeight >= bodyBaseHeight * SCALED_BODY_RATIO",
+      "claimLimit": "OS text size is set through agent-device settings and adopted only after relaunch; the probe measures onLayout height of the margin-stripped body paragraph line box, not glyph rendering, other node types or maxFontSizeMultiplier. Heading scaling is not asserted because Android 14+ nonlinear font scaling grows large sizes far less than fontScale (a 32sp h1 grows about 1.07x at fontScale 1.75)."
     }
   ],
   "pending": [
     {
       "id": "render.visual-and-accessibility",
       "state": "pending-prerequisites",
-      "reason": "Replay now reads table and math accessibility labels, but it cannot read accessibility roles or states, screen-reader speech, glyph layout or math drawing.",
+      "reason": "Replay now reads table and math accessibility labels and measures OS text-size scaling of body text, but it cannot read accessibility roles or states, screen-reader speech, glyph layout or math drawing.",
       "prerequisites": [
         "Authorized iOS and Android device runs",
-        "Representative text scaling and screen-reader settings"
+        "Representative screen-reader settings"
       ],
       "acceptance": "Inspect screenshots and screen-reader output for roles (header, link, checkbox, image, grid), math drawing, code, tables, custom fonts, long-document virtualization and mixed scripts on both platforms."
     },
