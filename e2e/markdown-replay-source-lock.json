@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "runtimeSourceSha256": "47ee7987f86ea79812b1928f9d359e2c3f7f9d1727a9fa21b7276d3631af5281",
+  "runtimeSourceSha256": "ea50922be331b86d29f0c7fec891dc1f2b7fef6df5ba2c48e34d0513aa5cc330",
   "runtimeSourceFiles": [
     "apps/example/app.config.js",
     "apps/example/app/(tabs)/_layout.tsx",
@@ -15,6 +15,7 @@
     "apps/example/app/e2e-contracts.tsx",
     "apps/example/app/e2e-render-contracts.tsx",
     "apps/example/app/e2e-render.tsx",
+    "apps/example/app/e2e-text-scale.tsx",
     "apps/example/app/e2e.tsx",
     "apps/example/assets/adaptive-icon.png",
     "apps/example/assets/icon.png",
@@ -109,7 +110,7 @@
     "packages/react-native-nitro-markdown/src/utils/stream-timeline.ts",
     "packages/react-native-nitro-markdown/src/utils/text-content.ts"
   ],
-  "replayInputsSha256": "a6d81b31b325cdd09400a4ff30dfac9c1fa5c4c637622b02989b00cb880f383f",
+  "replayInputsSha256": "222b53aa52f2649d38aaf73a344970eb7ee12889385b4a5cd7a3615da114b1bf",
   "replayInputs": [
     "e2e/markdown-replay-coverage.json",
     "e2e/qa-api.ad",
@@ -119,7 +120,8 @@
     "e2e/qa-full-features.ad",
     "e2e/qa-render-contracts.ad",
     "e2e/qa-render-stress.ad",
-    "e2e/qa-smoke.ad"
+    "e2e/qa-smoke.ad",
+    "e2e/qa-text-scale.ad"
   ],
   "suites": [
     "full-features",
@@ -129,6 +131,7 @@
     "smoke",
     "api",
     "render-contracts",
-    "contracts-http"
+    "contracts-http",
+    "text-scale"
   ]
 }
