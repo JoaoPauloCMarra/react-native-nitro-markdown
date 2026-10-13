@@ -44,10 +44,6 @@ function log(message, color = "green") {
   console.log(colors[color](message));
 }
 
-function formatCommand(command, args) {
-  return [command, ...args].join(" ");
-}
-
 async function run(command, args, options = {}) {
   const result = await runProcess({
     command,
@@ -82,49 +78,6 @@ async function runQuiet(command, args, options = {}) {
     stderr: result.stderr.trim(),
     error: result.error,
   };
-}
-
-async function runAsync({ label, command, args, cwd = projectRoot }) {
-  const startedAt = Date.now();
-  log(`${label} started: ${formatCommand(command, args)}`, "cyan");
-  const result = await runProcess({
-    command,
-    args,
-    cwd,
-    stdio: "inherit",
-  });
-  return {
-    label,
-    ok: result.ok,
-    durationMs: Date.now() - startedAt,
-    code: result.exitCode,
-    error: result.error,
-    interruptedBy: result.interruptedBy,
-  };
-}
-
-async function runParallelSteps(label, steps) {
-  log(label, "cyan");
-  const results = await Promise.all(steps.map(runAsync));
-  let failed = false;
-
-  for (const result of results) {
-    const duration = `${(result.durationMs / 1000).toFixed(1)}s`;
-    if (result.ok) {
-      console.log(`  ✓ ${result.label} (${duration})`);
-    } else {
-      failed = true;
-      log(`  ✗ ${result.label} failed (${duration})`, "red");
-      if (result.error) log(`    ${result.error.message}`, "red");
-    }
-  }
-
-  console.log("");
-  const interrupted = results.find((result) => result.interruptedBy);
-  if (interrupted?.interruptedBy) {
-    throw new ProcessInterrupted(interrupted.interruptedBy);
-  }
-  if (failed) throw new Error("One or more package checks failed");
 }
 
 function askQuestion(question) {
@@ -498,15 +451,7 @@ async function runPreflight({ dryRun, skipPreflight, version }) {
 }
 
 async function runVerification() {
-  await runParallelSteps("Running independent package checks in parallel...", [
-    { label: "lint", command: "bun", args: ["run", "lint"], cwd: projectRoot },
-    { label: "JS coverage", command: "bun", args: ["run", "test:coverage"], cwd: packageDir },
-  ]);
-
-  await runStep("Running C++ coverage...", "bun", ["run", "test:cpp:coverage"], {
-    cwd: packageDir,
-  });
-  await runStep("Running repo typecheck...", "bun", ["run", "typecheck"], {
+  await runStep("Running the CI gate...", "bun", ["run", "check:ci"], {
     cwd: projectRoot,
   });
   // Root build regenerates Nitro bindings before compiling, so publish
