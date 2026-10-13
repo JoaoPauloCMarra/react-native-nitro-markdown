@@ -26,7 +26,7 @@
     "typecheck:rn087": "bun scripts/verify-rn087-types.ts",
     "typecheck:public": "bun run build && bunx tsc -p type-tests/tsconfig.json",
     "test": "bun run --cwd packages/react-native-nitro-markdown test",
-    "test:lifecycle": "bun test ./scripts/setup.test.ts ./scripts/audit-doc-contracts.test.ts ./scripts/check-codegen.test.ts ./scripts/generated-snapshot.test.ts && node --test scripts/process-runner.node.test.mjs && node scripts/package-doc-lifecycle.test.js && bun test ./scripts/build-composition.test.ts",
+    "test:lifecycle": "bun test ./scripts/setup.test.ts ./scripts/audit-doc-contracts.test.ts ./scripts/check-codegen.test.ts ./scripts/generated-snapshot.test.ts ./scripts/package-source-entries.test.ts && node --test scripts/process-runner.node.test.mjs && node scripts/package-doc-lifecycle.test.js && bun test ./scripts/build-composition.test.ts",
     "test:coverage": "bun run --cwd packages/react-native-nitro-markdown test:coverage",
     "test:cpp": "bun run --cwd packages/react-native-nitro-markdown test:cpp",
     "test:cpp:sanitizers": "bun run --cwd packages/react-native-nitro-markdown test:cpp:sanitizers",
