@@ -19,9 +19,12 @@ import {
   resolveMarkdownSession,
   type MarkdownSessionController,
 } from "./use-markdown-stream";
-import { getNextStreamAst, parseMarkdownAst } from "./utils/incremental-ast";
+import { getNextStreamAst } from "./utils/incremental-ast";
 import { freezeMarkdownNode } from "./utils/freeze-ast";
-import { useStableParserOptions } from "./utils/parse-pipeline";
+import {
+  parseWithNativeParser,
+  useStableParserOptions,
+} from "./utils/parse-pipeline";
 
 type MarkdownOnError = NonNullable<MarkdownProps["onError"]>;
 
@@ -202,7 +205,7 @@ export function useMarkdownStreamState({
       if (canParseSessionNatively || knownText === undefined) {
         return parseMarkdownSession(activeSession, parserOptions);
       }
-      return parseMarkdownAst(knownText, parserOptions);
+      return parseWithNativeParser(knownText, parserOptions);
     },
     [activeSession, canParseSessionNatively, parserOptions],
   );

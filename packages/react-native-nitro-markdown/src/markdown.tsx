@@ -46,7 +46,6 @@ import {
   materializeMarkdownNode,
   useStableParserOptions,
   parseWithNativeParser,
-  parseWithNativeParserForRender,
   safeOnError,
   sortPluginsByPriority,
   warnInDev,
@@ -125,11 +124,10 @@ const getCachedParsedAst = (
   cache: Map<string, ParseAstCacheEntry>,
   stats: { hits: number; misses: number; evictions: number },
   freezeAst: boolean,
-  parse: typeof parseWithNativeParser = parseWithNativeParser,
   cloneAst = true,
 ): MarkdownNode => {
   if (text.length > MAX_CACHEABLE_TEXT_LENGTH) {
-    return parse(text, options);
+    return parseWithNativeParser(text, options);
   }
 
   const cacheKey = `${getParserOptionsKey(options)}|${text.length}|${hashString(text)}`;
@@ -144,7 +142,7 @@ const getCachedParsedAst = (
   }
 
   stats.misses += 1;
-  const parsedNode = parse(text, options);
+  const parsedNode = parseWithNativeParser(text, options);
   cache.set(cacheKey, {
     text,
     ast: cloneAst ? materializeMarkdownNode(parsedNode, true) : parsedNode,
@@ -366,14 +364,9 @@ export const Markdown: FC<MarkdownProps> = ({
               parseAstCacheRef.current!,
               cacheStatsRef.current,
               parserOptions?.freezeAst === true,
-              canUseRenderFastPath
-                ? parseWithNativeParserForRender
-                : parseWithNativeParser,
               !canUseRenderFastPath,
             )
-          : (canUseRenderFastPath
-              ? parseWithNativeParserForRender
-              : parseWithNativeParser)(markdownToParse, parserOptions);
+          : parseWithNativeParser(markdownToParse, parserOptions);
       parsedAst = applyAfterParsePlugins(
         parsedAst,
         sortedPlugins,
