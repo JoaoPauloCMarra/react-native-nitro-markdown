@@ -49,7 +49,7 @@ expectValue(
 expectValue(
   "example Expo",
   dependencyValue(example, "dependencies", "expo"),
-  "~57.0.26",
+  "~57.0.28",
 );
 expectValue(
   "example React Native",
@@ -94,7 +94,7 @@ expectValue(
   rootOverrides != null && typeof rootOverrides === "object"
     ? (rootOverrides as JsonRecord)["expo"]
     : undefined,
-  "~57.0.26",
+  "~57.0.28",
 );
 if (
   rootOverrides != null &&
