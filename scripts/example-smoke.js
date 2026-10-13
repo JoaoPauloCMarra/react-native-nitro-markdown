@@ -234,6 +234,14 @@ function createReporter() {
   };
 }
 
+function androidPid() {
+  try {
+    return run("adb", ["shell", "pidof", packageName]).trim();
+  } catch {
+    return "";
+  }
+}
+
 function androidDumpWindow() {
   tryRun("adb", ["shell", "rm", "-f", "/sdcard/window_dump.xml"], {
     stdio: "ignore",
@@ -296,8 +304,7 @@ async function runAndroidSmoke(reporter) {
   await runAndroidExpo();
   await wait(launchWaitMs);
 
-  const pid = run("adb", ["shell", "pidof", packageName]).trim();
-  if (!pid) {
+  if (!androidPid()) {
     reporter.record("android", "app stays running", "failed", "app process not found");
     return;
   }
