@@ -9,18 +9,29 @@ type MockParserOptions = {
   sourceOffsets?: boolean;
 };
 
-let offsetCursor = 0;
-function stampOffsets(node: MarkdownNode): MarkdownNode {
-  node.beg = offsetCursor;
-  offsetCursor += (node.content?.length ?? 1) + 1;
-  node.end = offsetCursor;
-  node.children?.forEach(stampOffsets);
+function stripOffsets(node: MarkdownNode): MarkdownNode {
+  delete node.beg;
+  delete node.end;
+  node.children?.forEach(stripOffsets);
+  return node;
+}
+
+function spanned(
+  node: MarkdownNode,
+  beg: number,
+  end: number,
+): MarkdownNode {
+  node.beg = beg;
+  node.end = end;
   return node;
 }
 
 type MockLine = {
   content: string;
   hasLineEnding: boolean;
+  start: number;
+  end: number;
+  next: number;
 };
 
 function splitMockLines(text: string): MockLine[] {
@@ -31,13 +42,26 @@ function splitMockLines(text: string): MockLine[] {
     const character = text[index];
     if (character !== "\r" && character !== "\n") continue;
 
-    lines.push({ content: text.slice(start, index), hasLineEnding: true });
+    const end = index;
     if (character === "\r" && text[index + 1] === "\n") index++;
+    lines.push({
+      content: text.slice(start, end),
+      hasLineEnding: true,
+      start,
+      end,
+      next: index + 1,
+    });
     start = index + 1;
   }
 
   if (start < text.length) {
-    lines.push({ content: text.slice(start), hasLineEnding: false });
+    lines.push({
+      content: text.slice(start),
+      hasLineEnding: false,
+      start,
+      end: text.length,
+      next: text.length,
+    });
   }
 
   return lines;
@@ -53,19 +77,13 @@ function serializeMockAst(
   mathEnabled = true,
 ): string {
   const ast = createMockAst(text, mathEnabled);
-  if (includeOffsets) {
-    offsetCursor = 0;
-    stampOffsets(ast);
-  }
-  return JSON.stringify(ast);
+  return JSON.stringify(includeOffsets ? ast : stripOffsets(ast));
 }
 
 function createMockAst(text: string, mathEnabled: boolean): MarkdownNode {
-  if (text.length === 0) {
-    return { type: "document", children: [] };
-  }
+  const root = spanned({ type: "document", children: [] }, 0, text.length);
+  if (text.length === 0) return root;
 
-  const root: MarkdownNode = { type: "document", children: [] };
   const lines = splitMockLines(text);
   let i = 0;
 
@@ -79,17 +97,29 @@ function createMockAst(text: string, mathEnabled: boolean): MarkdownNode {
     }
 
     if (mathEnabled && lines[i]!.hasLineEnding && isStandaloneMathFenceLine(line)) {
-      const contentLines: string[] = [];
+      const openLine = lines[i]!;
+      const contentLines: MockLine[] = [];
       i++;
       while (i < lines.length && !isStandaloneMathFenceLine(lines[i]!.content)) {
-        contentLines.push(lines[i]!.content);
+        contentLines.push(lines[i]!);
         i++;
       }
-      if (i < lines.length) i++;
+      const closeLine = i < lines.length ? lines[i]! : undefined;
+      if (closeLine) i++;
 
-      const mathBlock: MarkdownNode = { type: "math_block" };
+      const blockEnd = closeLine ? closeLine.end : text.length;
+      const mathBlock = spanned({ type: "math_block" }, openLine.start, blockEnd);
       if (contentLines.length > 0) {
-        mathBlock.children = [{ type: "text", content: `${contentLines.join("\n")}\n` }];
+        mathBlock.children = [
+          spanned(
+            {
+              type: "text",
+              content: `${contentLines.map((entry) => entry.content).join("\n")}\n`,
+            },
+            contentLines[0]!.start,
+            closeLine ? closeLine.start : text.length,
+          ),
+        ];
       }
       root.children!.push(mathBlock);
       continue;
@@ -97,62 +127,140 @@ function createMockAst(text: string, mathEnabled: boolean): MarkdownNode {
 
     const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
     if (headingMatch) {
-      root.children!.push({
-        type: "heading",
-        level: headingMatch[1]!.length as HeadingLevel,
-        children: [{ type: "text", content: headingMatch[2]! }],
-      });
+      const lineRecord = lines[i]!;
+      const leading = line.length - line.trimStart().length;
+      const textOffset =
+        lineRecord.start +
+        line.indexOf(headingMatch[2]!, leading + headingMatch[1]!.length);
+      root.children!.push(
+        spanned(
+          {
+            type: "heading",
+            level: headingMatch[1]!.length as HeadingLevel,
+            children: [
+              spanned(
+                { type: "text", content: headingMatch[2]! },
+                textOffset,
+                textOffset + headingMatch[2]!.length,
+              ),
+            ],
+          },
+          lineRecord.start,
+          lineRecord.end,
+        ),
+      );
       i++;
       continue;
     }
 
     if (/^[-*_]{3,}$/.test(trimmed)) {
-      root.children!.push({ type: "horizontal_rule" });
+      root.children!.push(
+        spanned({ type: "horizontal_rule" }, lines[i]!.start, lines[i]!.end),
+      );
       i++;
       continue;
     }
 
-    const codeBlockMatch = trimmed.match(/^```(\w*)$/);
+    const codeBlockMatch = trimmed.match(/^(`{3,}|~{3,})(\w*)$/);
     if (codeBlockMatch) {
-      const language = codeBlockMatch[1] || undefined;
-      const codeLines: string[] = [];
+      const fence = codeBlockMatch[1]!;
+      const isFenceClose = (value: string) => {
+        const candidate = value.trim();
+        return (
+          candidate.length >= fence.length &&
+          candidate === fence[0]!.repeat(candidate.length)
+        );
+      };
+      const language = codeBlockMatch[2] || undefined;
+      const openLine = lines[i]!;
+      const codeLines: MockLine[] = [];
       i++;
-      while (i < lines.length && !lines[i]!.content.trim().startsWith("```")) {
-        codeLines.push(lines[i]!.content);
+      while (i < lines.length && !isFenceClose(lines[i]!.content)) {
+        codeLines.push(lines[i]!);
         i++;
       }
+      const closeLine = i < lines.length ? lines[i]! : undefined;
       i++;
-      root.children!.push({
-        type: "code_block",
-        ...(language ? { language } : {}),
-        children: [{ type: "text", content: codeLines.join("\n") }],
-      });
+      const textBeg = codeLines[0]?.start ?? closeLine?.start ?? text.length;
+      const textEnd = codeLines.at(-1)?.next ?? textBeg;
+      root.children!.push(
+        spanned(
+          {
+            type: "code_block",
+            ...(language ? { language } : {}),
+            children: [
+              spanned(
+                {
+                  type: "text",
+                  content: codeLines.map((entry) => entry.content).join("\n"),
+                },
+                textBeg,
+                textEnd,
+              ),
+            ],
+          },
+          openLine.start,
+          closeLine ? closeLine.end : text.length,
+        ),
+      );
       continue;
     }
 
     if (trimmed.startsWith(">")) {
-      const quoteLines: string[] = [];
+      const quoteLines: MockLine[] = [];
       while (i < lines.length && lines[i]!.content.trim().startsWith(">")) {
-        quoteLines.push(lines[i]!.content.trim().replace(/^>\s?/, ""));
+        quoteLines.push(lines[i]!);
         i++;
       }
-      root.children!.push({
-        type: "blockquote",
-        children: [{ type: "paragraph", children: [{ type: "text", content: quoteLines.join(" ") }] }],
-      });
+      const first = quoteLines[0]!;
+      const last = quoteLines.at(-1)!;
+      const quoteContent = quoteLines
+        .map((entry) => entry.content.trim().replace(/^>\s?/, ""))
+        .join(" ");
+      const textBeg = first.start + first.content.indexOf(">") + 1;
+      root.children!.push(
+        spanned(
+          {
+            type: "blockquote",
+            children: [
+              spanned(
+                {
+                  type: "paragraph",
+                  children: [
+                    spanned({ type: "text", content: quoteContent }, textBeg, last.end),
+                  ],
+                },
+                textBeg,
+                last.end,
+              ),
+            ],
+          },
+          first.start,
+          last.end,
+        ),
+      );
       continue;
     }
 
-    const paragraphLines: string[] = [];
+    const paragraphLines: MockLine[] = [];
     while (i < lines.length && lines[i]!.content.trim() !== "") {
-      paragraphLines.push(lines[i]!.content);
+      paragraphLines.push(lines[i]!);
       i++;
     }
     if (paragraphLines.length > 0) {
-      root.children!.push({
-        type: "paragraph",
-        children: [{ type: "text", content: paragraphLines.join(" ") }],
-      });
+      const first = paragraphLines[0]!;
+      const last = paragraphLines.at(-1)!;
+      const textContent = paragraphLines.map((entry) => entry.content).join(" ");
+      root.children!.push(
+        spanned(
+          {
+            type: "paragraph",
+            children: [spanned({ type: "text", content: textContent }, first.start, last.end)],
+          },
+          first.start,
+          last.end,
+        ),
+      );
     }
   }
 
