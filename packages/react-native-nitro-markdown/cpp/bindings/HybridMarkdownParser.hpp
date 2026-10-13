@@ -1,14 +1,12 @@
 #pragma once
 
 #include "HybridMarkdownParserSpec.hpp"
+#include "ParserOptionsMapping.hpp"
 #include "../core/NitroMD4CParser.hpp"
 #include <cstdint>
 #include <memory>
 
 namespace margelo::nitro::Markdown {
-
-using InternalMarkdownNode = ::NitroMarkdown::MarkdownNode;
-using InternalParserOptions = ::NitroMarkdown::ParserOptions;
 
 class HybridMarkdownParser : public HybridMarkdownParserSpec {
 public:
@@ -26,11 +24,6 @@ public:
 
 private:
     std::unique_ptr<::NitroMarkdown::MD4CParser> parser_;
-    std::string nodeToJson(
-        const std::shared_ptr<InternalMarkdownNode>& node,
-        const std::string& source,
-        const InternalParserOptions& options
-    );
 };
 
 } // namespace margelo::nitro::Markdown
