@@ -103,7 +103,6 @@ export default function TabsLayout() {
             ),
           }}
         />
-        <Tabs.Screen name="list-layout" options={{ href: null }} />
       </Tabs>
     </SafeAreaView>
   );
