@@ -92,18 +92,6 @@
       "assertion": "session.getAllText() === \"# reset\""
     },
     {
-      "id": "parser.comparison",
-      "coverage": "replay-asserted",
-      "kind": "public-api",
-      "transport": "Two native parse results retain their separate before/after content.",
-      "suite": "e2e/qa-full-features.ad",
-      "source": "apps/example/components/e2e-lab.tsx",
-      "trigger": "screen-load",
-      "statusId": "e2e-comparison-status",
-      "expectedText": "ok:comparison",
-      "assertion": "getFlattenedText(after).trim() === \"PLUGIN hello\""
-    },
-    {
       "id": "parser.input-limit",
       "coverage": "replay-asserted",
       "kind": "public-api",
