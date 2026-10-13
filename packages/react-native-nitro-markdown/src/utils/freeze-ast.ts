@@ -56,10 +56,9 @@ const NODE_KEYS: ReadonlySet<string> = new Set([
   "beg",
   "end",
   "children",
-  "metadata",
 ]);
 
-type TraversalKind = "node" | "children" | "metadata" | "array";
+type TraversalKind = "node" | "children";
 
 type TraversalFrame = {
   value: object;
@@ -226,21 +225,6 @@ type AstState = {
   roles: WeakMap<object, TraversalKind>;
 };
 
-function assertMetadataPrimitive(value: unknown, state: AstState): void {
-  if (value === null || value === undefined || typeof value === "boolean") return;
-  if (typeof value === "string") {
-    assertString(value, "AST metadata string", state);
-    return;
-  }
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) {
-      throw invalidAstError("AST metadata numbers must be finite");
-    }
-    return;
-  }
-  throw invalidAstError("AST metadata must contain JSON-like values");
-}
-
 function assertNodeProperty(
   key: string,
   value: unknown,
@@ -298,11 +282,6 @@ function assertNodeProperty(
         throw invalidAstError("AST children must be an array");
       }
       return;
-    case "metadata":
-      if (value !== undefined && !isObject(value)) {
-        assertMetadataPrimitive(value, state);
-      }
-      return;
     default:
       return;
   }
@@ -326,45 +305,30 @@ function validateFrame(frame: TraversalFrame, state: AstState): void {
     return;
   }
 
-  if (kind === "children" || kind === "array") {
-    const length = getArrayLength(value as readonly unknown[]);
-    state.arraySlots += length;
-    if (state.arraySlots > MAX_AST_ARRAY_SLOTS) {
-      throw invalidAstError("AST exceeds the maximum array slot count");
+  const length = getArrayLength(value as readonly unknown[]);
+  state.arraySlots += length;
+  if (state.arraySlots > MAX_AST_ARRAY_SLOTS) {
+    throw invalidAstError("AST exceeds the maximum array slot count");
+  }
+  const seenIndexes = new Set<number>();
+  for (const key of frame.keys) {
+    if (key === "length") continue;
+    const name = keyName(key);
+    if (!isArrayIndex(name)) {
+      throw invalidAstError("AST arrays must contain only indexed values");
     }
-    const seenIndexes = new Set<number>();
-    for (const key of frame.keys) {
-      if (key === "length") continue;
-      const name = keyName(key);
-      if (!isArrayIndex(name)) {
-        throw invalidAstError("AST arrays must contain only indexed values");
-      }
-      const index = Number(name);
-      if (index >= length || seenIndexes.has(index)) {
-        throw invalidAstError("AST arrays must be dense");
-      }
-      seenIndexes.add(index);
-      state.propertyCount += 1;
-      if (state.propertyCount > MAX_AST_PROPERTIES) {
-        throw invalidAstError("AST exceeds the maximum property count");
-      }
-    }
-    if (seenIndexes.size !== length) {
+    const index = Number(name);
+    if (index >= length || seenIndexes.has(index)) {
       throw invalidAstError("AST arrays must be dense");
     }
-    return;
-  }
-
-  assertPlainObject(value, "AST metadata");
-  for (const key of frame.keys) {
-    keyName(key);
+    seenIndexes.add(index);
     state.propertyCount += 1;
     if (state.propertyCount > MAX_AST_PROPERTIES) {
       throw invalidAstError("AST exceeds the maximum property count");
     }
-    const child = readDataProperty(value, key);
-    if (isObject(child)) continue;
-    assertMetadataPrimitive(child, state);
+  }
+  if (seenIndexes.size !== length) {
+    throw invalidAstError("AST arrays must be dense");
   }
 }
 
@@ -436,29 +400,13 @@ function traverseAst(root: MarkdownNode, freeze: boolean): void {
       if (frame.kind === "children" && isArrayIndex(key)) {
         throw invalidAstError("AST children must contain node objects");
       }
-      if (frame.kind === "array" && isArrayIndex(key)) {
-        assertMetadataPrimitive(child, state);
-      }
       continue;
     }
 
     if (frame.kind === "node") {
       if (key === "children") push(child, "children", frame.depth + 1);
-      else if (key === "metadata") push(child, "metadata", frame.depth + 1);
-    } else if (frame.kind === "children") {
-      if (!isArrayIndex(key)) continue;
-      if (!isObject(child)) {
-        throw invalidAstError("AST children must contain node objects");
-      }
+    } else if (isArrayIndex(key)) {
       push(child, "node", frame.depth);
-    } else if (frame.kind === "array") {
-      if (isObject(child)) {
-        push(child, isArray(child) ? "array" : "metadata", frame.depth + 1);
-      } else {
-        assertMetadataPrimitive(child, state);
-      }
-    } else {
-      push(child, isArray(child) ? "array" : "metadata", frame.depth + 1);
     }
   }
 }
@@ -491,11 +439,7 @@ export function cloneMarkdownNode(node: MarkdownNode): MarkdownNode {
     value: object,
     kind: TraversalKind,
   ): void => {
-    if (kind === "node") {
-      assertPlainObject(value, "AST node");
-      return;
-    }
-    if (kind === "metadata") assertPlainObject(value, "AST metadata");
+    if (kind === "node") assertPlainObject(value, "AST node");
   };
 
   const registerCloneObject = (
@@ -587,7 +531,7 @@ export function cloneMarkdownNode(node: MarkdownNode): MarkdownNode {
     }
     const key = frame.keys[frame.index]!;
     frame.index += 1;
-    if ((frame.kind === "array" || frame.kind === "children") && key === "length") continue;
+    if (frame.kind === "children" && key === "length") continue;
     const name = keyName(key);
     const value = readDataProperty(frame.source, key);
     if (frame.kind === "node") {
@@ -596,26 +540,11 @@ export function cloneMarkdownNode(node: MarkdownNode): MarkdownNode {
       if (!isArrayIndex(name) || !isObject(value)) {
         throw invalidAstError("AST children must contain node objects");
       }
-    } else if (frame.kind === "array") {
-      if (!isArrayIndex(name)) {
-        throw invalidAstError("AST arrays must contain only indexed values");
-      }
-      if (!isObject(value)) assertMetadataPrimitive(value, cloneState);
-    } else if (!isObject(value)) {
-      assertMetadataPrimitive(value, cloneState);
     }
     let clonedValue = value;
     if (isObject(value)) {
       const childKind: TraversalKind =
-        frame.kind === "node" && name === "children"
-          ? "children"
-          : frame.kind === "node" && name === "metadata"
-            ? "metadata"
-            : frame.kind === "children"
-              ? "node"
-              : isArray(value)
-                ? "array"
-                : "metadata";
+        frame.kind === "node" ? "children" : "node";
       const childDepth =
         frame.kind === "children" ? frame.depth : frame.depth + 1;
       clonedValue = cloneChild(value, childKind, childDepth);

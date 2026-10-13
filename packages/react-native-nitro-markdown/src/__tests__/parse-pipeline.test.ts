@@ -112,13 +112,13 @@ describe("parse pipeline utilities", () => {
 
   it("bounds a proxy that changes values between validation and cloning", () => {
     const changingRoot = (
-      field: "children" | "metadata",
+      field: "children",
       replacement: unknown,
     ): MarkdownNode => {
       let reads = 0;
       const target: Record<string, unknown> = {
-        type: field === "children" ? "document" : "text",
-        [field]: field === "children" ? [] : { values: [] },
+        type: "document",
+        [field]: [],
       };
       return new Proxy(target, {
         getOwnPropertyDescriptor(source, key) {
@@ -148,14 +148,6 @@ describe("parse pipeline utilities", () => {
     }
     expectInvalid(changingRoot("children", [deepNode]));
 
-    const metadataArray = [] as unknown[] & { extra?: boolean };
-    Object.defineProperty(metadataArray, "extra", {
-      configurable: true,
-      enumerable: true,
-      value: true,
-    });
-    expectInvalid(changingRoot("metadata", { values: metadataArray }));
-
     const manyNodes = Array.from({ length: 100_001 }, () => ({
       type: "text" as const,
       content: "x",
@@ -163,16 +155,7 @@ describe("parse pipeline utilities", () => {
     expectInvalid(changingRoot("children", manyNodes));
   });
 
-  it("validates the documented node fields and JSON-like metadata iteratively", () => {
-    const metadata = {
-      nullValue: null,
-      undefinedValue: undefined,
-      booleanValue: true,
-      numberValue: 42,
-      stringValue: "é",
-      nested: { emoji: "😀" },
-      values: [{ nestedValue: false }],
-    };
+  it("validates the documented node fields iteratively", () => {
     const child = {
       type: "heading" as const,
       content: "heading",
@@ -188,7 +171,6 @@ describe("parse pipeline utilities", () => {
       align: "center" as const,
       beg: 0,
       end: 7,
-      metadata,
     };
     const root = {
       type: "document" as const,
@@ -206,27 +188,17 @@ describe("parse pipeline utilities", () => {
       beg: undefined,
       end: undefined,
       children: [child],
-      metadata,
-    } as unknown as MarkdownNode & { metadata: typeof metadata };
+    } as unknown as MarkdownNode;
 
     expect(() => freezeMarkdownNode(root)).not.toThrow();
     expect(Object.isFrozen(root)).toBe(true);
-    expect(Object.isFrozen(metadata.nested)).toBe(true);
-    expect(Object.isFrozen(metadata.values)).toBe(true);
-    expect(Object.isFrozen(metadata.values[0])).toBe(true);
 
     const clone = cloneMarkdownNode(root);
     expect(clone).not.toBe(root);
     expect(clone.children?.[0]).not.toBe(child);
-    expect((clone as typeof root).metadata).not.toBe(metadata);
-    expect((clone as typeof root).metadata.nested).not.toBe(metadata.nested);
-    expect((clone as typeof root).metadata.values).not.toBe(metadata.values);
-    expect((clone as typeof root).metadata.values[0]).not.toBe(
-      metadata.values[0],
-    );
   });
 
-  it("rejects invalid scalar, property, metadata, and array shapes", () => {
+  it("rejects invalid scalar, property, and array shapes", () => {
     const expectInvalid = (node: unknown) => {
       expect(() => freezeMarkdownNode(node as MarkdownNode)).toThrow(
         expect.objectContaining({ code: "invalid_ast" }),
@@ -250,13 +222,8 @@ describe("parse pipeline utilities", () => {
       type: "text",
       content: "a".repeat(MAX_AST_STRING_BYTES + 1),
     });
-    expectInvalid({ type: "text", metadata: Symbol("metadata") });
+    expectInvalid({ type: "text", metadata: { values: [] } });
     expectInvalid({ type: "document", children: ["not-a-node"] });
-    expectInvalid({ type: "text", metadata: { values: [Symbol("value")] } });
-    expectInvalid({ type: "text", metadata: { values: [() => "value"] } });
-    expectInvalid({ type: "text", metadata: { value: Number.NaN } });
-    expectInvalid({ type: "text", metadata: { value: 1n } });
-    expectInvalid({ type: "text", metadata: new Date() });
 
     const symbolKeyNode = { type: "text" } as Record<PropertyKey, unknown>;
     Object.defineProperty(symbolKeyNode, Symbol("unexpected"), {
@@ -269,11 +236,6 @@ describe("parse pipeline utilities", () => {
     longKeyNode["k".repeat(257)] = true;
     expectInvalid(longKeyNode);
 
-    expectInvalid({
-      type: "text",
-      metadata: { ["k".repeat(257)]: true },
-    });
-
     const nonIndexedArray = [] as unknown[] & { extra?: boolean };
     nonIndexedArray.extra = true;
     expectInvalid({ type: "document", children: nonIndexedArray });
@@ -281,9 +243,9 @@ describe("parse pipeline utilities", () => {
     const sparseArray = new Array<MarkdownNode>(1);
     expectInvalid({ type: "document", children: sparseArray });
 
-    const revokedMetadata = Proxy.revocable({}, {});
-    revokedMetadata.revoke();
-    expectInvalid({ type: "document", metadata: revokedMetadata.proxy });
+    const revokedChildren = Proxy.revocable([], {});
+    revokedChildren.revoke();
+    expectInvalid({ type: "document", children: revokedChildren.proxy });
 
     const throwingKeys = new Proxy(
       { type: "text" },
@@ -326,15 +288,16 @@ describe("parse pipeline utilities", () => {
   });
 
   it("rejects incompatible shared roles and aggregate array work", () => {
-    const shared = { type: "text", content: "shared" } as MarkdownNode & {
-      metadata?: unknown;
-    };
+    const shared = { type: "text", content: "shared" } as MarkdownNode;
+    const sharedAsChildren = [shared];
     expect(() =>
       freezeMarkdownNode({
         type: "document",
-        children: [shared],
-        metadata: { shared },
-      } as MarkdownNode),
+        children: [
+          { type: "paragraph", children: sharedAsChildren },
+          sharedAsChildren as unknown as MarkdownNode,
+        ],
+      }),
     ).toThrow(expect.objectContaining({ code: "invalid_ast" }));
 
     const sharedLeaf = { type: "text" as const, content: "shared" };
@@ -376,9 +339,7 @@ describe("parse pipeline utilities", () => {
     );
   });
 
-  it("freezes a deep AST and reachable metadata without using the call stack", () => {
-    const metadataTags = ["shared"];
-    const metadata = { tags: metadataTags };
+  it("freezes a deep AST without using the call stack", () => {
     const nodes: MarkdownNode[] = [{ type: "text", content: "leaf" }];
     for (let index = 0; index < MAX_AST_DEPTH - 2; index += 1) {
       nodes.push({ type: "paragraph", children: [nodes[nodes.length - 1]!] });
@@ -386,14 +347,11 @@ describe("parse pipeline utilities", () => {
     const root = {
       type: "document" as const,
       children: [nodes[nodes.length - 1]!],
-      metadata,
-    } as unknown as MarkdownNode & { metadata: typeof metadata };
+    } as unknown as MarkdownNode;
 
     expect(() => freezeMarkdownNode(root)).not.toThrow();
     expect(Object.isFrozen(root)).toBe(true);
     expect(Object.isFrozen(root.children)).toBe(true);
-    expect(Object.isFrozen(metadata)).toBe(true);
-    expect(Object.isFrozen(metadataTags)).toBe(true);
     expect(Object.isFrozen(nodes[0])).toBe(true);
     expect(Object.isFrozen(nodes[nodes.length - 1])).toBe(true);
   });
