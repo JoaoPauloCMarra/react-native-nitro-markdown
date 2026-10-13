@@ -4,7 +4,7 @@
 
 | Version | Supported |
 | ------- | --------- |
-| 0.14.x  | ✅ |
+| 0.15.x  | ✅ |
 
 The package follows a rolling support window: only the latest minor release
 line receives security fixes. Older lines are unsupported.

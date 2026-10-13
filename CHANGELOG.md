@@ -9,20 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
-## [Next]
+## [0.15.0] - 2026-10-13
 
 ### Breaking changes
 
 - `session.getTextRange(from, to)` now throws `MarkdownError` with code `invalid_range` for a non-finite, negative or reversed range instead of returning `""`, matching `session.replace`. Migration: pass finite, non-negative `from <= to` values (indexes past the end of the buffer still clamp), or catch `invalid_range`. `MarkdownStream` already falls back to a full read when a range read throws.
 - AST validation no longer accepts the undocumented `metadata` property on nodes: plugin and `astTransform` output that sets it now fails with `invalid_ast` like any other unknown property. `MarkdownNode` never declared it. Migration: remove `metadata` from nodes, or keep the data outside the AST.
+- Table header and body cells now render their text with the table text styles, so header weight, size and `theme.colors.tableHeaderText` apply. Header text is smaller (12pt) and bolder (600), and body cell text uses the 14pt cell style instead of the paragraph text style. Migration: set `theme.colors.tableHeaderText`, `theme.colors.text` and `theme.fontFamilies` to adjust the look, or replace `table_cell` with a custom renderer.
+- Custom `table_head`, `table_body` and `table_row` renderers now take effect and receive the default layout element as `children`. They must render `children`: a renderer that returns something else replaces the whole header, body or row, and the cells inside are not drawn. Migration: render `children` inside your wrapper, or return `undefined` to keep the default. Renderers registered for these keys before 0.15.0 were never called.
+
+### Added
+
+- `renderers.table_cell` replaces the content of a table cell inside the sized cell, for header and body cells.
+- `styles.list_item` styles list items, and `styles.table_head`, `table_body`, `table_row` and `table_cell` style the matching table parts. `line_break` and `soft_break` keys remain in `NodeStyleOverrides` but cannot carry styles.
+
+### Changed
+
+- The parse-error text uses the same monospace fallback as code, HTML and math (`Courier` on iOS) when `theme.fontFamilies.mono` is not set.
 
 ### Fixed
 
-- The AST budget error now names the limit that was exceeded ("Markdown AST node budget exceeds the maximum of 100000 nodes"). The child-slot and work budgets could never trigger and are removed from the documentation; `input_too_complex` is unchanged.
-- `renderers.table_cell`, `table_row`, `table_head` and `table_body` now take effect in the default table. `table_cell` replaces the cell content; the other three receive the default layout element as `children` and must render it; a renderer that returns something else replaces the whole header, body or row.
-- The parse-error text now uses the same monospace fallback as code, HTML and math (`Courier` on iOS) when `theme.fontFamilies.mono` is not set.
-- `styles.list_item` now styles list items, and `styles.table_head`, `table_body`, `table_row` and `table_cell` style the matching table parts. `line_break` and `soft_break` keys remain in `NodeStyleOverrides` but cannot carry styles.
-- Table header and body cells now render their text with the cell text style, so header weight, size and `theme.colors.tableHeaderText` apply. This is a visible change: header text is smaller and bolder, and body cell text uses the 14pt cell style instead of the paragraph text style.
+- The AST budget error names the limit that was exceeded ("Markdown AST node budget exceeds the maximum of 100000 nodes"). The child-slot and work budgets could never trigger and are removed from the documentation; `input_too_complex` is unchanged.
 
 ## [0.14.0] - 2026-10-03
 
