@@ -14,11 +14,13 @@ stay safe.
 ### Breaking changes
 
 - `session.getTextRange(from, to)` now throws `MarkdownError` with code `invalid_range` for a non-finite, negative or reversed range instead of returning `""`, matching `session.replace`. Migration: pass finite, non-negative `from <= to` values (indexes past the end of the buffer still clamp), or catch `invalid_range`. `MarkdownStream` already falls back to a full read when a range read throws.
+- AST validation no longer accepts the undocumented `metadata` property on nodes: plugin and `astTransform` output that sets it now fails with `invalid_ast` like any other unknown property. `MarkdownNode` never declared it. Migration: remove `metadata` from nodes, or keep the data outside the AST.
 
 ### Fixed
 
 - The AST budget error now names the limit that was exceeded ("Markdown AST node budget exceeds the maximum of 100000 nodes"). The child-slot and work budgets could never trigger and are removed from the documentation; `input_too_complex` is unchanged.
-- `renderers.table_cell`, `table_row`, `table_head` and `table_body` now take effect in the default table. `table_cell` replaces the cell content; the other three receive the default layout element as `children`.
+- `renderers.table_cell`, `table_row`, `table_head` and `table_body` now take effect in the default table. `table_cell` replaces the cell content; the other three receive the default layout element as `children` and must render it; a renderer that returns something else replaces the whole header, body or row.
+- The parse-error text now uses the same monospace fallback as code, HTML and math (`Courier` on iOS) when `theme.fontFamilies.mono` is not set.
 - `styles.list_item` now styles list items, and `styles.table_head`, `table_body`, `table_row` and `table_cell` style the matching table parts. `line_break` and `soft_break` keys remain in `NodeStyleOverrides` but cannot carry styles.
 - Table header and body cells now render their text with the cell text style, so header weight, size and `theme.colors.tableHeaderText` apply. This is a visible change: header text is smaller and bolder, and body cell text uses the 14pt cell style instead of the paragraph text style.
 

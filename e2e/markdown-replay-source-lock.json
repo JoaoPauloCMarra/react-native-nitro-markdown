@@ -1,11 +1,10 @@
 {
   "version": 1,
-  "runtimeSourceSha256": "04fb3f7ad430932b2cd5150addac952deace810c4404e7874bd425c750134114",
+  "runtimeSourceSha256": "ce874acdda461bc44553a8e1bde200e61bb37e772a7fa0a5094159cec9bffde3",
   "runtimeSourceFiles": [
     "apps/example/app.config.js",
     "apps/example/app/(tabs)/_layout.tsx",
     "apps/example/app/(tabs)/index.tsx",
-    "apps/example/app/(tabs)/list-layout.tsx",
     "apps/example/app/(tabs)/render-custom.tsx",
     "apps/example/app/(tabs)/render-default-styles.tsx",
     "apps/example/app/(tabs)/render-default.tsx",
@@ -43,6 +42,9 @@
     "packages/react-native-nitro-markdown/cpp/bindings/HybridMarkdownParser.hpp",
     "packages/react-native-nitro-markdown/cpp/bindings/HybridMarkdownSession.cpp",
     "packages/react-native-nitro-markdown/cpp/bindings/HybridMarkdownSession.hpp",
+    "packages/react-native-nitro-markdown/cpp/bindings/ParserOptionsMapping.hpp",
+    "packages/react-native-nitro-markdown/cpp/core/MarkdownJson.cpp",
+    "packages/react-native-nitro-markdown/cpp/core/MarkdownJson.hpp",
     "packages/react-native-nitro-markdown/cpp/core/MarkdownTypes.hpp",
     "packages/react-native-nitro-markdown/cpp/core/NitroMD4CParser.cpp",
     "packages/react-native-nitro-markdown/cpp/core/NitroMD4CParser.hpp",
@@ -107,11 +109,10 @@
     "packages/react-native-nitro-markdown/src/utils/link-security.ts",
     "packages/react-native-nitro-markdown/src/utils/parse-input.ts",
     "packages/react-native-nitro-markdown/src/utils/parse-pipeline.ts",
-    "packages/react-native-nitro-markdown/src/utils/render-parser.ts",
     "packages/react-native-nitro-markdown/src/utils/stream-timeline.ts",
     "packages/react-native-nitro-markdown/src/utils/text-content.ts"
   ],
-  "replayInputsSha256": "222b53aa52f2649d38aaf73a344970eb7ee12889385b4a5cd7a3615da114b1bf",
+  "replayInputsSha256": "e228caa2ec05602b0330e766e4142ab38b460d0ee563f86ab7f82dd533da05ea",
   "replayInputs": [
     "e2e/markdown-replay-coverage.json",
     "e2e/qa-api.ad",
