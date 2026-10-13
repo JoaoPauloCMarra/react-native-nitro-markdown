@@ -118,6 +118,27 @@ describe("table renderer", () => {
     expect(textNodesWith(renderer, "cell:Apple")).toHaveLength(1);
   });
 
+  it("drops the rows when a custom table_row renderer does not render children", () => {
+    const renderer = renderMarkdown(tableAst(), {
+      renderers: {
+        table_row: () => createElement("Text", null, "dropped"),
+      },
+    });
+
+    expect(textNodesWith(renderer, "dropped")).toHaveLength(3);
+    expect(textNodesWith(renderer, "Apple")).toHaveLength(0);
+    expect(textNodesWith(renderer, "Name")).toHaveLength(0);
+  });
+
+  it("keeps the default rows when a custom table_row renderer returns undefined", () => {
+    const renderer = renderMarkdown(tableAst(), {
+      renderers: { table_row: () => undefined },
+    });
+
+    expect(textNodesWith(renderer, "Apple")).toHaveLength(1);
+    expect(textNodesWith(renderer, "Name")).toHaveLength(1);
+  });
+
   it("applies header text style and colour to real header cells", () => {
     const renderer = renderMarkdown(tableAst());
     const header = textNodesWith(renderer, "Name");

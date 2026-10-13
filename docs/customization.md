@@ -91,8 +91,12 @@ const renderers: MarkdownRenderers = {
 ```
 
 Table parts are honoured as well. `table_cell` replaces the cell content inside
-the sized cell, while `table_head`, `table_body` and `table_row` receive the
-default layout element as `children` so a renderer can wrap it.
+the sized cell. `table_head`, `table_body` and `table_row` receive the default
+layout element as `children`, and the renderer must render `children`: a
+renderer that returns something else replaces the whole header, body or row,
+and the cells inside it are not drawn. Return `undefined` to keep the default.
+These three node types are drawn only by the table layout, so a standalone
+`table_head`, `table_body` or `table_row` node renders nothing.
 
 For stronger typing, use the node-specific renderer props:
 

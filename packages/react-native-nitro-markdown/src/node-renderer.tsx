@@ -533,11 +533,6 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
     case "table_cell":
       return <TableCell node={node} Renderer={NodeRenderer} />;
 
-    case "table_head":
-    case "table_body":
-    case "table_row":
-      return null;
-
     default:
       return null;
   }
