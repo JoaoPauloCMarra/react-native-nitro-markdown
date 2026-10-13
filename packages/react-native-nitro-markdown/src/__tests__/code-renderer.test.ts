@@ -6,6 +6,7 @@ import { CodeBlock } from "../renderers/code";
 import { defaultMarkdownTheme } from "../theme";
 import type { CodeHighlighter } from "../utils/code-highlight";
 import { hostType } from "./host-type";
+import { spyOnConsoleErrorIgnoringRendererDeprecation } from "./console-spy";
 
 const highlighter: CodeHighlighter = () => [
   { text: "const", type: "keyword" },
@@ -36,19 +37,7 @@ const renderCode = (renderer?: ReactTestRenderer) => {
     return renderer;
   }
   let created: ReactTestRenderer | undefined;
-  const consoleErrorSpy = jest
-    .spyOn(console, "error")
-    .mockImplementation((message?: unknown, ...args: unknown[]) => {
-      if (
-        typeof message === "string" &&
-        message.includes("react-test-renderer is deprecated")
-      ) {
-        return;
-      }
-      process.stderr.write(
-        [message, ...args].map((arg) => String(arg)).join(" ") + "\n",
-      );
-    });
+  const consoleErrorSpy = spyOnConsoleErrorIgnoringRendererDeprecation();
 
   try {
     act(() => {

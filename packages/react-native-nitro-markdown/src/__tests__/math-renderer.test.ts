@@ -13,25 +13,14 @@ import {
 import { NodeRenderer } from "../node-renderer";
 import { defaultMarkdownTheme } from "../theme";
 import { hostType } from "./host-type";
+import { spyOnConsoleErrorIgnoringRendererDeprecation } from "./console-spy";
 
 jest.mock("ratex-react-native", () => ({ RaTeXView: "RaTeXView" }));
 
 describe("MathBlock renderer", () => {
   it("renders block math with RaTeX inside a horizontal scroll container", () => {
     let renderer: ReactTestRenderer | undefined;
-    const consoleErrorSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation((message?: unknown, ...args: unknown[]) => {
-        if (
-          typeof message === "string" &&
-          message.includes("react-test-renderer is deprecated")
-        ) {
-          return;
-        }
-        process.stderr.write(
-          [message, ...args].map((arg) => String(arg)).join(" ") + "\n",
-        );
-      });
+    const consoleErrorSpy = spyOnConsoleErrorIgnoringRendererDeprecation();
 
     try {
       act(() => {
@@ -298,19 +287,7 @@ describe("MathBlock renderer", () => {
 
   it("renders math as monospace text without the RaTeX subpath", () => {
     let renderer: ReactTestRenderer | undefined;
-    const consoleErrorSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation((message?: unknown, ...args: unknown[]) => {
-        if (
-          typeof message === "string" &&
-          message.includes("react-test-renderer is deprecated")
-        ) {
-          return;
-        }
-        process.stderr.write(
-          [message, ...args].map((arg) => String(arg)).join(" ") + "\n",
-        );
-      });
+    const consoleErrorSpy = spyOnConsoleErrorIgnoringRendererDeprecation();
 
     try {
       act(() => {
@@ -343,19 +320,7 @@ describe("MathBlock renderer", () => {
   it("routes math nodes through mathRenderers with context styles", () => {
     let renderer: ReactTestRenderer | undefined;
     const inlineStyle = { marginHorizontal: 7 };
-    const consoleErrorSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation((message?: unknown, ...args: unknown[]) => {
-        if (
-          typeof message === "string" &&
-          message.includes("react-test-renderer is deprecated")
-        ) {
-          return;
-        }
-        process.stderr.write(
-          [message, ...args].map((arg) => String(arg)).join(" ") + "\n",
-        );
-      });
+    const consoleErrorSpy = spyOnConsoleErrorIgnoringRendererDeprecation();
 
     try {
       act(() => {

@@ -4,6 +4,7 @@ import { Markdown, type MarkdownPlugin } from "../markdown";
 import type { MarkdownNode } from "../headless";
 import { MarkdownError } from "../errors";
 import { mockParser } from "./setup";
+import { spyOnConsoleErrorIgnoringRendererDeprecation } from "./console-spy";
 
 jest.mock("../renderers/math", () => ({
   ...jest.requireActual("../renderers/math"),
@@ -26,19 +27,7 @@ describe("Markdown plugin pipeline", () => {
     ];
     const onParseComplete = jest.fn();
     let renderer: ReactTestRenderer | undefined;
-    const consoleErrorSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation((message?: unknown, ...args: unknown[]) => {
-        if (
-          typeof message === "string" &&
-          message.includes("react-test-renderer is deprecated")
-        ) {
-          return;
-        }
-        process.stderr.write(
-          [message, ...args].map((arg) => String(arg)).join(" ") + "\n",
-        );
-      });
+    const consoleErrorSpy = spyOnConsoleErrorIgnoringRendererDeprecation();
 
     try {
       act(() => {
@@ -185,19 +174,7 @@ describe("Markdown plugin pipeline", () => {
     const onParseComplete = jest.fn();
     let renderer: ReactTestRenderer | undefined;
     const markdown = "parse-cache-bypass markdown input";
-    const consoleErrorSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation((message?: unknown, ...args: unknown[]) => {
-        if (
-          typeof message === "string" &&
-          message.includes("react-test-renderer is deprecated")
-        ) {
-          return;
-        }
-        process.stderr.write(
-          [message, ...args].map((arg) => String(arg)).join(" ") + "\n",
-        );
-      });
+    const consoleErrorSpy = spyOnConsoleErrorIgnoringRendererDeprecation();
 
     try {
       act(() => {
@@ -345,19 +322,7 @@ describe("Markdown plugin pipeline", () => {
       ],
     };
     const onParseComplete = jest.fn();
-    const consoleErrorSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation((message?: unknown, ...args: unknown[]) => {
-        if (
-          typeof message === "string" &&
-          message.includes("react-test-renderer is deprecated")
-        ) {
-          return;
-        }
-        process.stderr.write(
-          [message, ...args].map((arg) => String(arg)).join(" ") + "\n",
-        );
-      });
+    const consoleErrorSpy = spyOnConsoleErrorIgnoringRendererDeprecation();
 
     try {
       act(() => {
@@ -592,19 +557,7 @@ describe("Markdown plugin pipeline", () => {
     const renderers = {
       paragraph: renderParagraph,
     };
-    const consoleErrorSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation((message?: unknown, ...args: unknown[]) => {
-        if (
-          typeof message === "string" &&
-          message.includes("react-test-renderer is deprecated")
-        ) {
-          return;
-        }
-        process.stderr.write(
-          [message, ...args].map((arg) => String(arg)).join(" ") + "\n",
-        );
-      });
+    const consoleErrorSpy = spyOnConsoleErrorIgnoringRendererDeprecation();
     let renderer: ReactTestRenderer | undefined;
 
     try {
