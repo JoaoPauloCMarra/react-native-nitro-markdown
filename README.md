@@ -162,7 +162,9 @@ so the first frame renders without parsing. Full guide:
 **[Streaming](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/streaming.md)**.
 
 Session ranges use JavaScript UTF-16 units. An index inside a surrogate pair
-(including emoji) is rejected with `invalid_range` instead of rounded.
+(including emoji) is rejected with `invalid_range` instead of rounded. Both
+`getTextRange()` and `replace()` also throw `invalid_range` for a range that is
+not finite, is negative, or is reversed.
 
 ### Display math fences
 
@@ -282,7 +284,7 @@ default code token colors. Compose with `mergeThemes`. Full guide:
 | `options.math`           | `true`                     | Inline and block math nodes.                                                                                                                                                                                                                                                                        |
 | `options.html`           | `false`                    | Preserve raw HTML nodes for custom renderers.                                                                                                                                                                                                                                                       |
 | `options.sourceOffsets`  | `true`                     | Optional source mapping. `true` emits per-node `beg`/`end` as JavaScript UTF-16 indices; `false` omits them and skips the native UTF-16 map. Headless consumers should choose `false` unless they need source ranges. The ordinary string render fast path chooses `false` automatically when safe. |
-| `options.maxInputLength` | `10485760`                 | Maximum accepted input length in UTF-8 bytes. Oversized inputs fail with a typed `input_too_large` error instead of being parsed. Values above the hard cap are clamped. Documents inside the cap that exceed the native AST budgets (100,000 nodes, 500,000 units of AST work) fail with `input_too_complex`. |
+| `options.maxInputLength` | `10485760`                 | Maximum accepted input length in UTF-8 bytes. Oversized inputs fail with a typed `input_too_large` error instead of being parsed. Values above the hard cap are clamped. Documents inside the cap that exceed the native AST budgets (100,000 nodes) fail with `input_too_complex`. |
 | `options.freezeAst`      | `false`                    | Freeze parsed AST nodes and child arrays before exposing them to plugins, transforms, renderers, and callbacks.                                                                                                                                                                                     |
 | `parseCache`             | `true`                     | Reuse parsed ASTs for repeated content. The cache is scoped per `<Markdown>` instance (max 32 entries) and only holds documents up to 24,000 UTF-16 characters; longer documents are not cached or counted. Per-instance hit/miss/eviction counters are reported via `onParseComplete`'s `cacheStats`. |
 | `sourceAst`              | `undefined`                | Render a pre-parsed AST instead of parsing `children`.                                                                                                                                                                                                                                              |

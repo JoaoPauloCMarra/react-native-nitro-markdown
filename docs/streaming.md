@@ -85,7 +85,9 @@ flushes that batch with a full read, so no chunk is lost.
 
 Session ranges are JavaScript UTF-16 `[from, to)` units. Boundaries inside a
 surrogate pair (including emoji) are rejected with `invalid_range`; they are
-never rounded to consume or replace the whole code point.
+never rounded to consume or replace the whole code point. `getTextRange` and
+`replace` also reject ranges that are not finite, are negative, or are reversed
+with `invalid_range`.
 
 The session buffer cap is measured in UTF-8 bytes (10,485,760), the same unit
 as the parser's `maxInputLength`. A write that would grow the buffer above the

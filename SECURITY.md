@@ -27,7 +27,7 @@ documented here so app owners can reason about what is and is not guaranteed.
     before any native call.
   - C++ boundary: the parser rejects inputs above the same hard cap (measured
     in bytes), and rejects documents that exceed its AST budgets (100,000
-    nodes, 500,000 units of AST work, 64 MiB of serialized AST JSON) with a
+    nodes, 64 MiB of serialized AST JSON) with a
     typed `input_too_complex` error.
 - The native session (`MarkdownSession`) bounds its buffer at 10,485,760 UTF-8
   bytes, the same unit as the parser cap, and rejects invalid ranges with

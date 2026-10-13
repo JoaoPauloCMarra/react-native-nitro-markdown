@@ -1084,7 +1084,12 @@ private:
         TestRunner::assertEqual("ello", session->getTextRange(1.0, 100.0), "Session range clamps end");
         TestRunner::assertEqual("", session->getTextRange(100.0, 200.0), "Session range clamps empty tail");
         TestRunner::assertEqual("", session->getTextRange(2.0, 2.0), "Session ASCII empty range stays empty");
-        TestRunner::assertEqual("", session->getTextRange(std::numeric_limits<double>::quiet_NaN(), 0.0), "Session invalid range is empty");
+        TestRunner::assertEqual(
+            "Invalid range: from=NaN and to=" + std::to_string(0.0) +
+                " must be finite, from must be >= 0, and to must be >= from",
+            errorOf([&]() { (void)session->getTextRange(std::numeric_limits<double>::quiet_NaN(), 0.0); }),
+            "Session getTextRange rejects a non-finite range"
+        );
 
         auto unicodeSession = std::make_shared<HybridMarkdownSession>();
         unicodeSession->reset("A😀B");
@@ -1465,8 +1470,7 @@ private:
         } catch (const std::runtime_error& error) {
             const std::string message = error.what();
             workBudgetThrew =
-                message.find("Markdown AST node/work budget") != std::string::npos ||
-                message.find("Markdown AST child/work budget") != std::string::npos;
+                message.find("Markdown AST node budget") != std::string::npos;
         }
         TestRunner::assertTrue(
             workBudgetThrew,
@@ -3903,7 +3907,7 @@ private:
             const bool bounded = ast
                 ? countAllNodes(ast) <= kMaxAstNodes && maxNodeDepth(ast) <= kMaxAstDepth
                 : error.find("Markdown AST depth exceeds the maximum of") == 0 ||
-                    error.find("Markdown AST node/work budget exceeds the maximum of") == 0;
+                    error.find("Markdown AST node budget exceeds the maximum of") == 0;
             TestRunner::assertTrue(
                 bounded,
                 name + " ends in a bounded tree or a budget error (" +
@@ -3920,7 +3924,7 @@ private:
         HybridMarkdownParser binding;
         ParserOptions options{true, true};
         const std::string nodeBudgetError =
-            "Markdown AST node/work budget exceeds the maximum of " + std::to_string(kMaxAstWork);
+            astNodeBudgetExceededMessage();
 
         const std::string softBreaks = repeatToSize("a\n", 120000);
         TestRunner::assertEqual(
@@ -4013,7 +4017,7 @@ private:
         auto overBudget = std::make_shared<MarkdownNode>(NodeType::Document);
         overBudget->children.assign(kMaxAstNodes, leaf);
         TestRunner::assertEqual(
-            "Markdown AST node/work budget exceeds the maximum of " + std::to_string(kMaxAstWork),
+            astNodeBudgetExceededMessage(),
             errorOf([&]() { (void)flattenNodeText(overBudget); }),
             "Flatten: a tree above the node budget fails deterministically"
         );
@@ -4173,9 +4177,22 @@ private:
 
         TestRunner::assertEqual("he", session->getTextRange(0.5, 2.9), "Session numerics: fractional range truncates toward zero");
         TestRunner::assertEqual("hello", session->getTextRange(-0.0, 1e300), "Session numerics: negative zero and huge end clamp");
-        TestRunner::assertEqual("", session->getTextRange(0.0, inf), "Session numerics: infinite getTextRange end is empty");
-        TestRunner::assertEqual("", session->getTextRange(-1.0, 3.0), "Session numerics: negative getTextRange start is empty");
-        TestRunner::assertEqual("", session->getTextRange(3.0, 1.0), "Session numerics: inverted getTextRange is empty");
+        const std::string rangeSuffix = " must be finite, from must be >= 0, and to must be >= from";
+        TestRunner::assertEqual(
+            "Invalid range: from=" + std::to_string(0.0) + " and to=Inf" + rangeSuffix,
+            errorOf([&]() { (void)session->getTextRange(0.0, inf); }),
+            "Session numerics: infinite getTextRange end throws"
+        );
+        TestRunner::assertEqual(
+            "Invalid range: from=" + std::to_string(-1.0) + " and to=" + std::to_string(3.0) + rangeSuffix,
+            errorOf([&]() { (void)session->getTextRange(-1.0, 3.0); }),
+            "Session numerics: negative getTextRange start throws"
+        );
+        TestRunner::assertEqual(
+            "Invalid range: from=" + std::to_string(3.0) + " and to=" + std::to_string(1.0) + rangeSuffix,
+            errorOf([&]() { (void)session->getTextRange(3.0, 1.0); }),
+            "Session numerics: inverted getTextRange throws"
+        );
         TestRunner::assertEqual("", session->getTextRange(1e300, 1e301), "Session numerics: range past the end is empty");
         TestRunner::assertEqual("hello", session->getTextRange(0.0, 4294967296.0), "Session numerics: end above 2^32 clamps");
 
@@ -5672,7 +5689,7 @@ private:
             const bool bounded = ast
                 ? countAllNodes(ast) <= kMaxAstNodes && maxNodeDepth(ast) <= kMaxAstDepth
                 : error.find("Markdown AST depth exceeds the maximum of") == 0 ||
-                    error.find("Markdown AST node/work budget exceeds the maximum of") == 0;
+                    error.find("Markdown AST node budget exceeds the maximum of") == 0;
             TestRunner::assertTrue(
                 bounded,
                 name + " ends in a bounded tree or a budget error (" +

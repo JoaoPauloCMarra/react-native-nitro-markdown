@@ -209,18 +209,13 @@ public:
     std::exception_ptr callbackException;
     char parserLog[128] = {0};
     size_t nodeCount = 0;
-    size_t childSlotCount = 0;
-    size_t workCount = 0;
 
     std::shared_ptr<MarkdownNode> makeNode(NodeType type) {
-        if (nodeCount >= kMaxAstNodes || workCount >= kMaxAstWork) {
-            callbackError =
-                "Markdown AST node/work budget exceeds the maximum of " +
-                std::to_string(kMaxAstWork);
+        if (nodeCount >= kMaxAstNodes) {
+            callbackError = astNodeBudgetExceededMessage();
             throw std::runtime_error(callbackError);
         }
         nodeCount += 1;
-        workCount += 1;
         return std::make_shared<MarkdownNode>(type);
     }
 
@@ -229,21 +224,11 @@ public:
         std::shared_ptr<MarkdownNode> child
     ) {
         if (!parent || !child) return;
-        if (childSlotCount >= kMaxAstChildSlots || workCount >= kMaxAstWork) {
-            callbackError =
-                "Markdown AST child/work budget exceeds the maximum of " +
-                std::to_string(kMaxAstWork);
-            throw std::runtime_error(callbackError);
-        }
-        childSlotCount += 1;
-        workCount += 1;
         parent->addChild(std::move(child));
     }
     
     void reset() {
         nodeCount = 0;
-        childSlotCount = 0;
-        workCount = 0;
         root = makeNode(NodeType::Document);
         while (!nodeStack.empty()) nodeStack.pop();
         nodeStack.push(root);

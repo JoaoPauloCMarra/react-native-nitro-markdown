@@ -12,8 +12,11 @@ namespace NitroMarkdown {
 
 constexpr std::size_t kMaxAstDepth = 256;
 constexpr std::size_t kMaxAstNodes = 100'000;
-constexpr std::size_t kMaxAstChildSlots = 250'000;
-constexpr std::size_t kMaxAstWork = 500'000;
+
+inline std::string astNodeBudgetExceededMessage() {
+    return "Markdown AST node budget exceeds the maximum of " +
+        std::to_string(kMaxAstNodes) + " nodes";
+}
 
 class MarkdownOutOfMemory final : public std::bad_alloc {
 public:

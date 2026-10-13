@@ -241,7 +241,9 @@ function createMockSession() {
     getTextRange: jest.fn((from: number, to: number) => {
       assertActive();
       if (!Number.isFinite(from) || !Number.isFinite(to) || from < 0 || to < 0 || from > to) {
-        return "";
+        throw new Error(
+          `Invalid range: from=${from} and to=${to} must be finite, from must be >= 0, and to must be >= from`,
+        );
       }
       const start = Math.max(0, Math.min(Math.trunc(from), buffer.length));
       const end = Math.max(start, Math.min(Math.trunc(to), buffer.length));

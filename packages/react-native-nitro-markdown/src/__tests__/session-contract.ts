@@ -180,8 +180,11 @@ const runScenario = (
       session.reset("hello");
       return {
         name: scenario.name,
-        pass: session.getTextRange(Number.NaN, 0) === "",
-        detail: session.getTextRange(Number.NaN, 0),
+        pass:
+          expectThrows(() => session.getTextRange(Number.NaN, 0)) &&
+          expectThrows(() => session.getTextRange(-1, 3)) &&
+          expectThrows(() => session.getTextRange(3, 1)),
+        detail: session.getAllText(),
       };
     }
     case "clear-empties-buffer": {

@@ -167,13 +167,6 @@ double HybridMarkdownSession::getLength() {
 }
 
 std::string HybridMarkdownSession::getTextRange(double from, double to) try {
-    if (
-        !std::isfinite(from) || !std::isfinite(to) || from < 0.0 || to < 0.0 ||
-        from > to
-    ) {
-        return "";
-    }
-
     std::lock_guard<std::mutex> lock(mutex_);
     ensureActiveLocked();
     const auto [start, end] = validateAndClampRange(from, to, bufferUtf16Length_);
