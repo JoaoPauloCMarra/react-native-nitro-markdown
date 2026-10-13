@@ -3,12 +3,12 @@ import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import {
   Markdown,
   MarkdownStream,
-  createMarkdownSession,
   darkMarkdownTheme,
   minimalMarkdownTheme,
   type AstTransform,
   type CustomRenderers,
   type MarkdownPlugin,
+  useMarkdownSession,
 } from "react-native-nitro-markdown";
 import { mathRenderers } from "react-native-nitro-markdown/math";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -130,7 +130,8 @@ export default function MarkdownE2eRenderScreen() {
   const readyIdsRef = useRef<string[]>([]);
   const [elapsed, setElapsed] = useState("(idle)");
   const [streamStatus, setStreamStatus] = useState("(idle)");
-  const [session] = useState(() => createMarkdownSession(""));
+  const sessionController = useMarkdownSession("");
+  const session = sessionController.getSession();
   const [startedAt, setStartedAt] = useState(
     () => globalThis.performance?.now?.() ?? Date.now(),
   );
