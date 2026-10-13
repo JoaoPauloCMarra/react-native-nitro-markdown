@@ -3,7 +3,6 @@ import {
   useEffect,
   useRef,
   useCallback,
-  useMemo,
   useLayoutEffect,
   startTransition,
   type FC,
@@ -22,7 +21,7 @@ import {
 } from "./use-markdown-stream";
 import { getNextStreamAst, parseMarkdownAst } from "./utils/incremental-ast";
 import { freezeMarkdownNode } from "./utils/freeze-ast";
-import { normalizeParserOptions } from "./utils/parse-pipeline";
+import { useStableParserOptions } from "./utils/parse-pipeline";
 
 type MarkdownOnError = NonNullable<MarkdownProps["onError"]>;
 
@@ -193,40 +192,7 @@ export function useMarkdownStreamState({
   plugins,
 }: UseMarkdownStreamStateOptions): MarkdownStreamState {
   const activeSession = resolveMarkdownSession(session);
-  const parserOptionGfm = options?.gfm;
-  const parserOptionMath = options?.math;
-  const parserOptionHtml = options?.html;
-  const parserOptionSourceOffsets = options?.sourceOffsets;
-  const parserOptionMaxInputLength = options?.maxInputLength;
-  const parserOptionFreezeAst = options?.freezeAst;
-  const parserOptions = useMemo(
-    () =>
-      normalizeParserOptions(
-        Object.assign(
-          {},
-          parserOptionGfm === undefined ? null : { gfm: parserOptionGfm },
-          parserOptionMath === undefined ? null : { math: parserOptionMath },
-          parserOptionHtml === undefined ? null : { html: parserOptionHtml },
-          parserOptionSourceOffsets === undefined
-            ? null
-            : { sourceOffsets: parserOptionSourceOffsets },
-          parserOptionMaxInputLength === undefined
-            ? null
-            : { maxInputLength: parserOptionMaxInputLength },
-          parserOptionFreezeAst === undefined
-            ? null
-            : { freezeAst: parserOptionFreezeAst },
-        ),
-      ),
-    [
-      parserOptionGfm,
-      parserOptionMath,
-      parserOptionHtml,
-      parserOptionSourceOffsets,
-      parserOptionMaxInputLength,
-      parserOptionFreezeAst,
-    ],
-  );
+  const parserOptions = useStableParserOptions(options);
   const canParseSessionNatively =
     parserOptions != null
       ? typeof activeSession.parseWithOptions === "function"
@@ -245,8 +211,8 @@ export function useMarkdownStreamState({
       type: "document",
       children: [],
     };
-    return parserOptionFreezeAst ? freezeMarkdownNode(ast) : ast;
-  }, [parserOptionFreezeAst]);
+    return parserOptions?.freezeAst ? freezeMarkdownNode(ast) : ast;
+  }, [parserOptions?.freezeAst]);
   const hasBeforeParsePlugins =
     plugins?.some((plugin) => typeof plugin.beforeParse === "function") ??
     false;

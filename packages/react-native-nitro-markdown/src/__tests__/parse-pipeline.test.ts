@@ -1,4 +1,7 @@
+import { createElement } from "react";
+import { act, create } from "react-test-renderer";
 import type { MarkdownNode } from "../headless";
+import type { ParserOptions } from "../Markdown.nitro";
 import type { MarkdownPlugin } from "../markdown";
 import {
   applyAfterParsePlugins,
@@ -8,7 +11,9 @@ import {
   hashString,
   materializeMarkdownNode,
   normalizeParserOptions,
+  PARSER_OPTION_KEYS,
   parseWithNativeParser,
+  useStableParserOptions,
   safeOnError,
   sortPluginsByPriority,
   warnInDev,
@@ -19,6 +24,7 @@ import {
   freezeMarkdownNode,
 } from "../utils/freeze-ast";
 import { mockParser } from "./setup";
+import { spyOnConsoleErrorIgnoringRendererDeprecation } from "./console-spy";
 
 const ROOT_NODE: MarkdownNode = {
   type: "document",
@@ -483,6 +489,41 @@ describe("parse pipeline utilities", () => {
       }),
     ).toBe("gfm:1|math:0|html:1|sourceOffsets:0|maxInputLength:42|freezeAst:1");
     expect(getParserOptionsKey({ freezeAst: false })).toContain("freezeAst:0");
+  });
+
+  it("covers every parser option and drops unknown keys", () => {
+    expect([...PARSER_OPTION_KEYS].sort()).toEqual([
+      "freezeAst",
+      "gfm",
+      "html",
+      "math",
+      "maxInputLength",
+      "sourceOffsets",
+    ]);
+    expect(
+      normalizeParserOptions({ gfm: true, futureFlag: true } as ParserOptions),
+    ).toEqual({ gfm: true });
+  });
+
+  it("keeps parser options referentially stable while their values are equal", () => {
+    const seen: (ParserOptions | undefined)[] = [];
+    const Probe = ({ options }: { options?: ParserOptions }) => {
+      seen.push(useStableParserOptions(options));
+      return null;
+    };
+    const consoleErrorSpy = spyOnConsoleErrorIgnoringRendererDeprecation();
+    let renderer!: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(createElement(Probe, { options: { gfm: true } }));
+    });
+    act(() => renderer.update(createElement(Probe, { options: { gfm: true } })));
+    act(() => renderer.update(createElement(Probe, { options: { gfm: false } })));
+    act(() => renderer.unmount());
+    consoleErrorSpy.mockRestore();
+
+    expect(seen[0]).toEqual({ gfm: true });
+    expect(seen[1]).toBe(seen[0]);
+    expect(seen[2]).toEqual({ gfm: false });
   });
 
   it("removes empty parser options and preserves explicit values", () => {
