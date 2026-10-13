@@ -12,6 +12,7 @@ const {
   ProcessTreeTerminationError,
   runProcess,
 } = require("./process-runner.js");
+const { runReleasePipeline } = require("./publish-pipeline.js");
 
 const PACKAGE_NAME = "react-native-nitro-markdown";
 const VALID_TAG_PATTERN = /^[a-zA-Z0-9._-]+$/;
@@ -508,7 +509,7 @@ async function main() {
   if (options.dryRun) log("Mode: DRY RUN (no actual publish)", "yellow");
   console.log("");
 
-  const publish = async () => {
+  const verify = async () => {
     await runPreflight({ ...options, version });
 
     if (!options.skipDocs) validateReleaseDocs(version);
@@ -516,7 +517,9 @@ async function main() {
 
     if (!options.skipChecks) await runVerification();
     else log("Skipping verification checks", "yellow");
+  };
 
+  const publish = async () => {
     await validatePackedFiles();
 
     const publishCommand = options.dryRun ? "bun" : "npm";
@@ -553,10 +556,17 @@ async function main() {
     console.log("");
   };
 
+  const release = () =>
+    runReleasePipeline({
+      verify,
+      withDocsRestored: withPackageDocsRestored,
+      pack: publish,
+    });
+
   if (options.dryRun) {
-    await withGeneratedDirectoryRestored(() => withPackageDocsRestored(publish));
+    await withGeneratedDirectoryRestored(release);
   } else {
-    await withPackageDocsRestored(publish);
+    await release();
   }
 }
 
