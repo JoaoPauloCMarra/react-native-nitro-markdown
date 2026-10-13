@@ -86,10 +86,8 @@
 ## Documentation Maintenance
 
 - Update `CHANGELOG.md` when bumping versions or fixing bugs.
-- PR body is the current version's CHANGELOG section. The GitHub release
-  description must match it. Do not add Summary, Test plan, or extra sections.
+- PR and GitHub release descriptions follow the workspace `AGENTS.md` section "PR And Release Descriptions": the same short text for both, with the full detail kept in `CHANGELOG.md`.
 - Keep `README.md` paths repo-relative (never absolute local filesystem paths).
-- Do not add `## Test` sections to PR descriptions or release notes.
 
 ## Web Stance
 
