@@ -1330,6 +1330,20 @@ private:
             disposedFailures == 10,
             "Session dispose-rejects-all-operations"
         );
+        const std::string disposedRangeError = errorOf([&]() {
+            (void)disposed->getTextRange(std::numeric_limits<double>::quiet_NaN(), 0.0);
+        });
+        TestRunner::assertTrue(
+            disposedRangeError.find("destroyed") != std::string::npos,
+            "Session reports a disposed session before an invalid getTextRange range, like replace"
+        );
+        const std::string disposedReplaceError = errorOf([&]() {
+            (void)disposed->replace(std::numeric_limits<double>::quiet_NaN(), 0.0, "x");
+        });
+        TestRunner::assertTrue(
+            disposedReplaceError.find("destroyed") != std::string::npos,
+            "Session reports a disposed session before an invalid replace range"
+        );
         scenarioRan("dispose-rejects-all-operations");
 
         for (const char* scenario : kSessionScenarios) {

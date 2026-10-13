@@ -162,6 +162,18 @@ describe("createMarkdownSession", () => {
     expect(session.getAllText()).toBe("hello");
   });
 
+  it("reports a disposed session before an invalid range", () => {
+    const session = createMarkdownSession();
+    session.dispose();
+
+    for (const call of [
+      () => session.getTextRange(Number.NaN, 0),
+      () => session.replace(Number.NaN, 0, "x"),
+    ]) {
+      expect(call).toThrow(expect.objectContaining({ code: "destroyed" }));
+    }
+  });
+
   it("rejects invalid getTextRange ranges with a typed error", () => {
     const session = createMarkdownSession();
 
