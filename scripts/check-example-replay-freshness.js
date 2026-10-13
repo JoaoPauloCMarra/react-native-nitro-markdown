@@ -2,6 +2,7 @@ const { spawnSync } = require("node:child_process");
 const { createHash } = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const { inside, validateSuite } = require("./replay-manifest");
 
 const manifestRelativePath = "e2e/markdown-replay-coverage.json";
 const lockRelativePath = "e2e/markdown-replay-source-lock.json";
@@ -88,36 +89,6 @@ const runtimeFileRules = [
   "apps/example/package.json",
   "apps/example/tsconfig.json",
 ];
-
-function inside(root, relativePath) {
-  const absolute = path.resolve(root, relativePath);
-  const relative = path.relative(path.resolve(root), absolute);
-  if (
-    relative === ".." ||
-    relative.startsWith(`..${path.sep}`) ||
-    path.isAbsolute(relative)
-  ) {
-    throw new Error(
-      `Replay coverage path escapes the repository: ${relativePath}`,
-    );
-  }
-  if (fs.existsSync(absolute)) {
-    const resolved = path.relative(
-      fs.realpathSync(root),
-      fs.realpathSync(absolute),
-    );
-    if (
-      resolved === ".." ||
-      resolved.startsWith(`..${path.sep}`) ||
-      path.isAbsolute(resolved)
-    ) {
-      throw new Error(
-        `Replay coverage path escapes the repository through a symlink: ${relativePath}`,
-      );
-    }
-  }
-  return absolute;
-}
 
 function isSecretPath(relativePath) {
   const basename = path.posix.basename(relativePath);
@@ -244,30 +215,7 @@ function readCoverageManifest(root, manifestPath = manifestRelativePath) {
   const suitePaths = new Set();
   const suiteFiles = new Map();
   for (const suite of manifest.suites) {
-    if (
-      !suite ||
-      typeof suite.id !== "string" ||
-      !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(suite.id) ||
-      suiteIds.has(suite.id) ||
-      typeof suite.path !== "string" ||
-      !suite.path.startsWith("e2e/") ||
-      suite.path.includes("..") ||
-      suite.path.includes("\\") ||
-      !suite.path.endsWith(".ad") ||
-      suitePaths.has(suite.path) ||
-      typeof suite.purpose !== "string" ||
-      suite.purpose.trim() === ""
-    ) {
-      throw new Error(
-        "Markdown replay manifest contains an invalid or duplicate flow",
-      );
-    }
-    suiteIds.add(suite.id);
-    suitePaths.add(suite.path);
-    const suiteFile = inside(absoluteRoot, suite.path);
-    if (!fs.existsSync(suiteFile) || !fs.lstatSync(suiteFile).isFile()) {
-      throw new Error(`Replay flow is missing: ${suite.path}`);
-    }
+    const suiteFile = validateSuite(suite, absoluteRoot, suiteIds, suitePaths);
     const source = fs.readFileSync(suiteFile, "utf8");
     const commands = source
       .split(/\r?\n/)
@@ -277,9 +225,6 @@ function readCoverageManifest(root, manifestPath = manifestRelativePath) {
       throw new Error(
         `${suite.path} must close its app flow as its final command`,
       );
-    }
-    if (suite.requires !== undefined && suite.requires !== "http-fixture") {
-      throw new Error(`${suite.path} names an unknown replay prerequisite`);
     }
     if ((suite.requires === "http-fixture") !== source.includes("${FIXTURE_URL}")) {
       throw new Error(

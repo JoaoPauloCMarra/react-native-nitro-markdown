@@ -19,6 +19,7 @@ import {
   runExampleReplay,
 } from "./run-example-replay.js";
 import { createExampleReplayHttpFixture } from "./example-replay-http-fixture.js";
+import { validateSuite } from "./replay-manifest.js";
 
 const projectRoot = path.resolve(__dirname, "..");
 
@@ -718,4 +719,25 @@ test("HTTP image fixture counts served images per path and stores no bodies", as
   } finally {
     await fixture.close();
   }
+});
+
+test("the shared suite validator rejects unknown prerequisites and duplicates", () => {
+  const flow = {
+    id: "valid-flow",
+    path: "e2e/qa-smoke.ad",
+    purpose: "smoke",
+  };
+  assert.doesNotThrow(() =>
+    validateSuite(flow, projectRoot, new Set(), new Set()),
+  );
+  assert.throws(
+    () =>
+      validateSuite({ ...flow, requires: "network" }, projectRoot, new Set(), new Set()),
+    /invalid or duplicate flow/,
+  );
+  assert.throws(
+    () =>
+      validateSuite(flow, projectRoot, new Set(["valid-flow"]), new Set()),
+    /invalid or duplicate flow/,
+  );
 });

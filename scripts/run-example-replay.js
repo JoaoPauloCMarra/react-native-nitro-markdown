@@ -4,6 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { isIP } = require("node:net");
+const { FLOW_ID_PATTERN, validateSuite } = require("./replay-manifest");
 
 const projectRoot = path.resolve(__dirname, "..");
 const coveragePath = path.join(
@@ -45,7 +46,7 @@ function parseArgs(argv) {
       throw new Error(`${flag} requires a value\n${usage()}`);
     }
     if (flag === "--flow") {
-      if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)) {
+      if (!FLOW_ID_PATTERN.test(value)) {
         throw new Error(`Invalid replay flow id: ${value}`);
       }
       if (flows.includes(value)) {
@@ -151,34 +152,6 @@ function parseFixtureUrl(value) {
   return url.origin;
 }
 
-function inside(root, relativePath) {
-  const absolute = path.resolve(root, relativePath);
-  const relative = path.relative(path.resolve(root), absolute);
-  if (
-    relative === ".." ||
-    relative.startsWith(`..${path.sep}`) ||
-    path.isAbsolute(relative)
-  ) {
-    throw new Error(`Replay path escapes the repository: ${relativePath}`);
-  }
-  if (fs.existsSync(absolute)) {
-    const resolved = path.relative(
-      fs.realpathSync(root),
-      fs.realpathSync(absolute),
-    );
-    if (
-      resolved === ".." ||
-      resolved.startsWith(`..${path.sep}`) ||
-      path.isAbsolute(resolved)
-    ) {
-      throw new Error(
-        `Replay path escapes the repository through a symlink: ${relativePath}`,
-      );
-    }
-  }
-  return absolute;
-}
-
 function readSuites(
   manifestFile = coveragePath,
   selectedFlowIds = [],
@@ -199,31 +172,7 @@ function readSuites(
   const ids = new Set();
   const paths = new Set();
   const suites = manifest.suites.map((suite) => {
-    if (
-      !suite ||
-      typeof suite.id !== "string" ||
-      !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(suite.id) ||
-      ids.has(suite.id) ||
-      typeof suite.path !== "string" ||
-      !suite.path.startsWith("e2e/") ||
-      suite.path.includes("..") ||
-      suite.path.includes("\\") ||
-      !suite.path.endsWith(".ad") ||
-      paths.has(suite.path) ||
-      typeof suite.purpose !== "string" ||
-      suite.purpose.trim() === "" ||
-      (suite.requires !== undefined && suite.requires !== "http-fixture")
-    ) {
-      throw new Error(
-        "Markdown replay manifest contains an invalid or duplicate flow",
-      );
-    }
-    ids.add(suite.id);
-    paths.add(suite.path);
-    const suiteFile = inside(root, suite.path);
-    if (!fs.existsSync(suiteFile) || !fs.lstatSync(suiteFile).isFile()) {
-      throw new Error(`Replay flow is missing: ${suite.path}`);
-    }
+    validateSuite(suite, root, ids, paths);
     return suite;
   });
   const unknownFlow = selectedFlowIds.find((id) => !ids.has(id));
