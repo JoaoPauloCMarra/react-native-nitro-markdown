@@ -57,7 +57,7 @@ async function run(command, args, options = {}) {
     ...options,
   });
 
-  if (result.signal) throw new ProcessInterrupted(result.signal);
+  if (result.interruptedBy) throw new ProcessInterrupted(result.interruptedBy);
   if (result.error) {
     log(`Failed to run ${command}: ${result.error.message}`, "red");
     return false;
@@ -75,7 +75,7 @@ async function runQuiet(command, args, options = {}) {
     ...options,
   });
 
-  if (result.signal) throw new ProcessInterrupted(result.signal);
+  if (result.interruptedBy) throw new ProcessInterrupted(result.interruptedBy);
   return {
     status: result.exitCode,
     stdout: result.stdout.trim(),
@@ -99,7 +99,7 @@ async function runAsync({ label, command, args, cwd = projectRoot }) {
     durationMs: Date.now() - startedAt,
     code: result.exitCode,
     error: result.error,
-    signal: result.signal,
+    interruptedBy: result.interruptedBy,
   };
 }
 
@@ -120,8 +120,10 @@ async function runParallelSteps(label, steps) {
   }
 
   console.log("");
-  const interrupted = results.find((result) => result.signal);
-  if (interrupted?.signal) throw new ProcessInterrupted(interrupted.signal);
+  const interrupted = results.find((result) => result.interruptedBy);
+  if (interrupted?.interruptedBy) {
+    throw new ProcessInterrupted(interrupted.interruptedBy);
+  }
   if (failed) throw new Error("One or more package checks failed");
 }
 
@@ -419,7 +421,7 @@ async function runPackageDocs(mode) {
     cwd: packageDir,
     stdio: "inherit",
   });
-  if (result.signal) throw new ProcessInterrupted(result.signal);
+  if (result.interruptedBy) throw new ProcessInterrupted(result.interruptedBy);
   if (!result.ok) {
     throw new Error(`${mode} package document lifecycle step failed`);
   }

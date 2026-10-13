@@ -31,7 +31,7 @@ class ProcessInterrupted extends Error {
     super(`Process interrupted by ${signal}`);
     this.name = "ProcessInterrupted";
     this.signal = signal;
-    this.exitCode = SIGNAL_EXIT_CODES[signal] ?? 1;
+    this.exitCode = signalExitCode(signal);
   }
 }
 
@@ -685,6 +685,7 @@ async function runProcess({
       ok: false,
       code: null,
       signal: null,
+      interruptedBy: null,
       exitCode: 1,
       error,
       stdout: "",
@@ -782,6 +783,7 @@ async function runProcess({
       ok: !timedOut && !receivedSignal && result.code === 0 && !result.error,
       code: result.code,
       signal,
+      interruptedBy: receivedSignal ?? null,
       exitCode,
       error: result.error,
       stdout: toCapturedText(stdoutChunks),
