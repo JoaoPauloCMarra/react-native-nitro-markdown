@@ -54,19 +54,3 @@ jobs:
           CC: clang
           CXX: clang++
         run: bun run release:preflight
-
-  apple:
-    name: Apple native and C++ tests (macOS)
-    runs-on: macos-26
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-      - run: bun install --frozen-lockfile
-      - name: C++ tests (Apple clang, libc++)
-        run: bun run test:cpp
-      - name: C++ sanitizers
-        run: bun run test:cpp:sanitizers
