@@ -396,6 +396,7 @@ public:
         testAstDepthLimit();
         testImageWithTitle();
         testHorizontalRule();
+        testThematicBreakAfterLinkReferenceDefinition();
         testEntityText();
         testTestOnlyExtensionFlags();
         testCallbackNullUserdataGuards();
@@ -2864,6 +2865,29 @@ private:
         }
     }
 
+    static void testThematicBreakAfterLinkReferenceDefinition() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+        const std::string source = "[a]: /u\n---\nafter";
+        auto result = parser.parse(source, options);
+
+        TestRunner::assertNotNull(result.get(), "RefDefThematicBreak: parse result");
+        if (!result) return;
+        auto rule = findFirstNode(result, NodeType::HorizontalRule);
+        TestRunner::assertNotNull(rule.get(), "RefDefThematicBreak: line after a reference definition is a rule");
+        if (rule) {
+            TestRunner::assertEqual("8", std::to_string(rule->beg), "RefDefThematicBreak: rule begin offset");
+            TestRunner::assertEqual("11", std::to_string(rule->end), "RefDefThematicBreak: rule end offset");
+        }
+        auto heading = findFirstNode(result, NodeType::Heading);
+        TestRunner::assertTrue(heading == nullptr, "RefDefThematicBreak: not parsed as a setext heading");
+        auto paragraph = findFirstNode(result, NodeType::Paragraph);
+        TestRunner::assertNotNull(paragraph.get(), "RefDefThematicBreak: following paragraph kept");
+        if (paragraph) {
+            TestRunner::assertEqual("12", std::to_string(paragraph->beg), "RefDefThematicBreak: paragraph begin offset");
+        }
+    }
+
     static void testEntityText() {
         MD4CParser parser;
         ParserOptions options{true, true};
@@ -5044,9 +5068,9 @@ private:
             }
         }
         TestRunner::assertEqual(
-            "14084455836454379281",
+            "15848312858691512385",
             std::to_string(hash),
-            "Golden: production-flag JSON, offsets and plain text are byte-identical to the 0.13.0 output"
+            "Golden: production-flag JSON, offsets and plain text are byte-identical to the previous release output (updated for the md4c 0.6.0 reference-definition rule fix)"
         );
     }
 
