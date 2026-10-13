@@ -25,10 +25,12 @@ stay safe.
 
 ### Changed
 
+- The bundled `nitromd` parser is synchronized with official MD4C release 0.6.0 (2026-09-17), keeping the source-range callback extension. It brings upstream fixes for memory handling on error paths, list endings, thematic breaks after link reference definitions, URI autolink schemes and oversized sparse tables. The new upstream syntax extensions stay disabled.
 - The parse-error text uses the same monospace fallback as code, HTML and math (`Courier` on iOS) when `theme.fontFamilies.mono` is not set.
 
 ### Fixed
 
+- A `---` line directly after a link reference definition is now a horizontal rule with its source range instead of paragraph text.
 - The AST budget error names the limit that was exceeded ("Markdown AST node budget exceeds the maximum of 100000 nodes"). The child-slot and work budgets could never trigger and are removed from the documentation; `input_too_complex` is unchanged.
 
 ## [0.14.0] - 2026-10-03
