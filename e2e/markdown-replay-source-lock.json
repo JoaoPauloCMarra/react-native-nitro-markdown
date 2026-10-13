@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "runtimeSourceSha256": "88853f0d157899371e00c6cbdb93293910b967b6be1fa6e60a7d24070331f3fa",
+  "runtimeSourceSha256": "fa17c2bc5c35dfc756f983654e713f10c4e7058f9238520a49957a880c0768bf",
   "runtimeSourceFiles": [
     "apps/example/app.config.js",
     "apps/example/app/(tabs)/_layout.tsx",
@@ -27,6 +27,7 @@
     "apps/example/markdown-test-data.ts",
     "apps/example/metro.config.js",
     "apps/example/package.json",
+    "apps/example/plugins/with-fast-gradle.js",
     "apps/example/plugins/with-ios-linker-cleanup.js",
     "apps/example/theme.ts",
     "apps/example/tsconfig.json",
