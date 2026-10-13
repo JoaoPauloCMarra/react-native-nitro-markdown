@@ -1,4 +1,5 @@
 #include "HybridMarkdownSession.hpp"
+#include "../core/MarkdownJson.hpp"
 
 #include <algorithm>
 #ifdef NITRO_MARKDOWN_TESTING
@@ -90,7 +91,7 @@ std::string numberString(double value) {
 
 HybridMarkdownSession::HybridMarkdownSession()
     : HybridObject(TAG), HybridMarkdownSessionSpec() {
-    parser_ = std::make_unique<HybridMarkdownParser>();
+    parser_ = std::make_unique<::NitroMarkdown::MD4CParser>();
 }
 
 HybridMarkdownSession::~HybridMarkdownSession() {
@@ -167,13 +168,6 @@ double HybridMarkdownSession::getLength() {
 }
 
 std::string HybridMarkdownSession::getTextRange(double from, double to) try {
-    if (
-        !std::isfinite(from) || !std::isfinite(to) || from < 0.0 || to < 0.0 ||
-        from > to
-    ) {
-        return "";
-    }
-
     std::lock_guard<std::mutex> lock(mutex_);
     ensureActiveLocked();
     const auto [start, end] = validateAndClampRange(from, to, bufferUtf16Length_);
@@ -191,13 +185,21 @@ std::string HybridMarkdownSession::getTextRange(double from, double to) try {
 std::string HybridMarkdownSession::parse() {
     std::lock_guard<std::mutex> lock(mutex_);
     ensureActiveLocked();
-    return parser_->parse(buffer_);
+    return ::NitroMarkdown::parseMarkdownToJson(
+        *parser_,
+        buffer_,
+        defaultInternalParserOptions()
+    );
 }
 
 std::string HybridMarkdownSession::parseWithOptions(const ParserOptions& options) {
     std::lock_guard<std::mutex> lock(mutex_);
     ensureActiveLocked();
-    return parser_->parseWithOptions(buffer_, options);
+    return ::NitroMarkdown::parseMarkdownToJson(
+        *parser_,
+        buffer_,
+        toInternalParserOptions(options)
+    );
 }
 
 std::function<void()> HybridMarkdownSession::addListener(

@@ -2,33 +2,19 @@ import { mockParser } from "./setup";
 import type { MarkdownNode } from "../headless";
 import {
   getNextStreamAst,
-  parseMarkdownAst,
   reuseStableAstNodes,
 } from "../utils/incremental-ast";
-import { cloneMarkdownNode } from "../utils/parse-pipeline";
+import {
+  cloneMarkdownNode,
+  parseWithNativeParser,
+} from "../utils/parse-pipeline";
 import { getTextContent } from "../headless";
-
-const setTrailingPathEnd = (ast: MarkdownNode, end: number): MarkdownNode => {
-  const mutableAst = cloneMarkdownNode(ast);
-  const update = (node: MarkdownNode): void => {
-    node.end = end;
-    const children = node.children;
-    if (children && children.length > 0) {
-      const lastChild = children[children.length - 1];
-      if (lastChild) {
-        update(lastChild);
-      }
-    }
-  };
-  update(mutableAst);
-  return mutableAst;
-};
 
 describe("incremental AST", () => {
   beforeEach(() => jest.clearAllMocks());
 
   it("forwards parser options for direct AST parsing", () => {
-    parseMarkdownAst("| A |\n|---|\n| B |", { gfm: true });
+    parseWithNativeParser("| A |\n|---|\n| B |", { gfm: true });
 
     expect(mockParser.parseWithOptions).toHaveBeenCalledWith(
       "| A |\n|---|\n| B |",
@@ -40,7 +26,7 @@ describe("incremental AST", () => {
 
   it("returns the previous AST when text is unchanged", () => {
     const previousText = "Hello";
-    const previousAst = parseMarkdownAst(previousText);
+    const previousAst = parseWithNativeParser(previousText);
     jest.clearAllMocks();
 
     const nextAst = getNextStreamAst({
@@ -55,10 +41,7 @@ describe("incremental AST", () => {
 
   it("avoids reparsing for plain text append", () => {
     const previousText = "Hello";
-    const previousAst = setTrailingPathEnd(
-      parseMarkdownAst(previousText),
-      previousText.length,
-    );
+    const previousAst = parseWithNativeParser(previousText);
     jest.clearAllMocks();
 
     const nextAst = getNextStreamAst({
@@ -73,10 +56,7 @@ describe("incremental AST", () => {
 
   it("freezes incrementally materialized ASTs when requested", () => {
     const previousText = "Hello";
-    const previousAst = setTrailingPathEnd(
-      parseMarkdownAst(previousText),
-      previousText.length,
-    );
+    const previousAst = parseWithNativeParser(previousText);
 
     const nextAst = getNextStreamAst({
       previousAst,
@@ -99,12 +79,9 @@ describe("incremental AST", () => {
     ["Email user@example.", "com"],
     ["Email user@example.com", "extra"],
   ])("reparses automatic links across %s + %s", (previousText, chunk) => {
-    const previousAst = setTrailingPathEnd(
-      parseMarkdownAst(previousText),
-      previousText.length,
-    );
+    const previousAst = parseWithNativeParser(previousText);
     const nextText = previousText + chunk;
-    const parseCurrent = jest.fn(() => parseMarkdownAst(nextText));
+    const parseCurrent = jest.fn(() => parseWithNativeParser(nextText));
 
     getNextStreamAst({ previousAst, previousText, nextText, parseCurrent });
 
@@ -113,10 +90,7 @@ describe("incremental AST", () => {
 
   it("keeps the plain append shortcut after a completed link token", () => {
     const previousText = "Visit https://example.com then";
-    const previousAst = setTrailingPathEnd(
-      parseMarkdownAst(previousText),
-      previousText.length,
-    );
+    const previousAst = parseWithNativeParser(previousText);
     const parseCurrent = jest.fn();
 
     getNextStreamAst({
@@ -131,10 +105,7 @@ describe("incremental AST", () => {
 
   it("uses JavaScript UTF-16 lengths for accented and emoji appends", () => {
     const previousText = "Olá 👋";
-    const previousAst = setTrailingPathEnd(
-      parseMarkdownAst(previousText),
-      previousText.length,
-    );
+    const previousAst = parseWithNativeParser(previousText);
     jest.clearAllMocks();
 
     const nextText = `${previousText} mundo`;
@@ -151,10 +122,7 @@ describe("incremental AST", () => {
 
   it("forces full parse when append starts after a line boundary", () => {
     const previousText = "> Quote\n\n";
-    const previousAst = setTrailingPathEnd(
-      parseMarkdownAst(previousText),
-      previousText.length,
-    );
+    const previousAst = parseWithNativeParser(previousText);
     jest.clearAllMocks();
 
     getNextStreamAst({
@@ -168,10 +136,7 @@ describe("incremental AST", () => {
 
   it("forces full parse after carriage-return block boundaries", () => {
     const previousText = "Line\r";
-    const previousAst = setTrailingPathEnd(
-      parseMarkdownAst(previousText),
-      previousText.length,
-    );
+    const previousAst = parseWithNativeParser(previousText);
     jest.clearAllMocks();
 
     getNextStreamAst({
@@ -185,7 +150,7 @@ describe("incremental AST", () => {
 
   it("reuses stable nodes after a full parse fallback", () => {
     const previousText = "Stable\n\nBefore\n";
-    const previousAst = parseMarkdownAst(previousText);
+    const previousAst = parseWithNativeParser(previousText);
     const stableParagraph = previousAst.children?.[0];
     jest.clearAllMocks();
 
@@ -242,7 +207,7 @@ describe("incremental AST", () => {
 
   it("falls back to full parse when incremental disabled", () => {
     const previousText = "Hello";
-    const previousAst = parseMarkdownAst(previousText);
+    const previousAst = parseWithNativeParser(previousText);
     jest.clearAllMocks();
 
     getNextStreamAst({
@@ -257,10 +222,9 @@ describe("incremental AST", () => {
 
   it("falls back to full parse when the trailing text end is stale", () => {
     const previousText = "Hello";
-    const previousAst = setTrailingPathEnd(
-      parseMarkdownAst(previousText),
-      previousText.length - 1,
-    );
+    const previousAst = cloneMarkdownNode(parseWithNativeParser(previousText));
+    const trailingLeaf = previousAst.children![0]!.children![0]!;
+    trailingLeaf.end = previousText.length - 1;
     jest.clearAllMocks();
 
     getNextStreamAst({
@@ -274,7 +238,7 @@ describe("incremental AST", () => {
 
   it("falls back to parse when trailing leaf is not text", () => {
     const previousText = "# Title\n\n---";
-    const previousAst = parseMarkdownAst(previousText);
+    const previousAst = parseWithNativeParser(previousText);
     jest.clearAllMocks();
 
     getNextStreamAst({
@@ -288,10 +252,7 @@ describe("incremental AST", () => {
 
   it("appends inside open fenced code blocks without reparsing", () => {
     const previousText = "Intro\n\n```ts\nconst a = 1;\n";
-    const previousAst = setTrailingPathEnd(
-      parseMarkdownAst(previousText),
-      previousText.length,
-    );
+    const previousAst = parseWithNativeParser(previousText);
     const nextText = `${previousText}const b = 2;\n`;
     jest.clearAllMocks();
 
@@ -303,10 +264,9 @@ describe("incremental AST", () => {
 
   it("falls back to full parse when fenced code append cannot update the trailing leaf", () => {
     const previousText = "Intro\n\n```ts\nconst a = 1;\n";
-    const previousAst = setTrailingPathEnd(
-      parseMarkdownAst(previousText),
-      previousText.length - 1,
-    );
+    const previousAst = cloneMarkdownNode(parseWithNativeParser(previousText));
+    const codeLeaf = previousAst.children![1]!.children![0]!;
+    codeLeaf.end = previousText.length - 1;
     jest.clearAllMocks();
 
     getNextStreamAst({
@@ -320,7 +280,7 @@ describe("incremental AST", () => {
 
   it("forces full parse when fenced code block may close", () => {
     const previousText = "Intro\n\n```ts\nconst a = 1;\n";
-    const previousAst = parseMarkdownAst(previousText);
+    const previousAst = parseWithNativeParser(previousText);
     const nextText = `${previousText}\`\`\`\n\nAfter`;
     jest.clearAllMocks();
 
@@ -331,10 +291,7 @@ describe("incremental AST", () => {
 
   it("allows incremental append after a closed fenced code block", () => {
     const previousText = "Intro\n\n```ts\nconst a = 1;\n```\n\nAfter";
-    const previousAst = setTrailingPathEnd(
-      parseMarkdownAst(previousText),
-      previousText.length,
-    );
+    const previousAst = parseWithNativeParser(previousText);
     jest.clearAllMocks();
 
     getNextStreamAst({
@@ -360,10 +317,7 @@ describe("incremental AST", () => {
     ["~~~ts\nconst a = 1;\n~~~~\nAfter", "\nNext", true],
     ["    ```ts\nconst a = 1;\n", "more\n", true],
   ])("preserves fence boundaries for %j plus %j", (previousText, chunk, shouldParse) => {
-    const previousAst = setTrailingPathEnd(
-      parseMarkdownAst(previousText),
-      previousText.length,
-    );
+    const previousAst = parseWithNativeParser(previousText);
     jest.clearAllMocks();
 
     getNextStreamAst({
@@ -377,10 +331,7 @@ describe("incremental AST", () => {
 
   it("keeps append-only plain-text updates on the incremental path", () => {
     let previousText = "Hello";
-    let previousAst = setTrailingPathEnd(
-      parseMarkdownAst(previousText),
-      previousText.length,
-    );
+    let previousAst = parseWithNativeParser(previousText);
     jest.clearAllMocks();
 
     for (let i = 0; i < 200; i++) {
@@ -406,10 +357,7 @@ describe("incremental AST", () => {
   ])(
     "full-parses when %j gains %j and may start a block",
     (previousText, chunk) => {
-      const previousAst = setTrailingPathEnd(
-        parseMarkdownAst(previousText),
-        previousText.length,
-      );
+      const previousAst = parseWithNativeParser(previousText);
       jest.clearAllMocks();
 
       getNextStreamAst({
@@ -424,10 +372,7 @@ describe("incremental AST", () => {
 
   it("keeps the incremental path for trailing text that cannot start a block", () => {
     const previousText = "Total:\n12 apples";
-    const previousAst = setTrailingPathEnd(
-      parseMarkdownAst(previousText),
-      previousText.length,
-    );
+    const previousAst = parseWithNativeParser(previousText);
     jest.clearAllMocks();
 
     getNextStreamAst({

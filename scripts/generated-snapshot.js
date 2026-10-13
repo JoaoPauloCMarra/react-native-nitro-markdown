@@ -474,7 +474,6 @@ async function readExistingSnapshotRoot(root) {
 async function swapSnapshotRoot(parent, root, temporaryRoot, snapshotExists) {
   let backupRoot;
   let targetMoved = false;
-  let temporaryMoved = false;
   let committed = false;
 
   try {
@@ -493,7 +492,6 @@ async function swapSnapshotRoot(parent, root, temporaryRoot, snapshotExists) {
 
     if (snapshotExists) {
       await fsOps.rename(temporaryRoot, root);
-      temporaryMoved = true;
       temporaryRoot = undefined;
     }
     committed = true;
@@ -520,9 +518,6 @@ async function swapSnapshotRoot(parent, root, temporaryRoot, snapshotExists) {
     }
     if (committed && backupRoot) {
       await fsOps.rm(backupRoot, { force: true, recursive: true }).catch(() => {});
-    }
-    if (temporaryMoved) {
-      temporaryMoved = false;
     }
   }
 }
@@ -552,19 +547,6 @@ async function restoreDirectorySnapshot(
   } catch (error) {
     await fsOps.rm(temporaryRoot, { force: true, recursive: true }).catch(() => {});
     throw error;
-  }
-}
-
-async function withDirectoryRestored(
-  packageParent,
-  generatedSubdirectory,
-  task,
-) {
-  const snapshot = await snapshotDirectory(packageParent, generatedSubdirectory);
-  try {
-    return await task();
-  } finally {
-    await restoreDirectorySnapshot(packageParent, generatedSubdirectory, snapshot);
   }
 }
 
@@ -651,5 +633,4 @@ module.exports = {
   snapshotDirectory,
   setSnapshotFsForTest,
   resetSnapshotFsForTest,
-  withDirectoryRestored,
 };

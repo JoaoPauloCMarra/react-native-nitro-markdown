@@ -186,9 +186,9 @@ expected (mitigated by taking checkpoints only at closed top-level blocks).
 
 ## Alternatives considered
 
-- **Serialization cache (shipped).** Removes re-serialization cost only; the
-  parse stays O(document). Delivered as the interim measure described in the
-  background.
+- **Serialization cache (removed in 0.13.0).** Removed re-serialization cost
+  only; the parse stayed O(document). It was the interim measure described in
+  the background and no longer exists in the code.
 - **JS-side AST merging** (`src/utils/incremental-ast.ts`). Already reuses
   stable nodes for React rendering, but depends on the native full parse and
   cannot reduce parse cost.

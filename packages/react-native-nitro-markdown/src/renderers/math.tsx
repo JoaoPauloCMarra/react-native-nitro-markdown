@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { getCachedStyles } from "./style-cache";
 import { useMarkdownContext } from "../MarkdownContext";
-import type { MarkdownTheme } from "../theme";
+import { getMonoFontFamily, type MarkdownTheme } from "../theme";
 
 export type LatexViewProps = {
   latex: string;
@@ -195,9 +195,7 @@ const createMathStyles = (theme: MarkdownTheme) =>
       marginHorizontal: 2,
     },
     mathInlineFallback: {
-      fontFamily:
-        theme.fontFamilies.mono ??
-        Platform.select({ ios: "Courier", android: "monospace" }),
+      fontFamily: getMonoFontFamily(theme),
       fontSize: theme.fontSizes.s,
       color: theme.colors.code,
       ...(Platform.OS === "android" && { includeFontPadding: false }),
@@ -242,9 +240,7 @@ const createMathStyles = (theme: MarkdownTheme) =>
       overflow: "hidden",
     },
     mathBlockFallback: {
-      fontFamily:
-        theme.fontFamilies.mono ??
-        Platform.select({ ios: "Courier", android: "monospace" }),
+      fontFamily: getMonoFontFamily(theme),
       fontSize: theme.fontSizes.m,
       color: theme.colors.code,
       textAlign: "center",

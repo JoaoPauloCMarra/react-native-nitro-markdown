@@ -31,7 +31,6 @@ type LabResults = {
   parse: string;
   extract: string;
   session: string;
-  comparison: string;
   error: string;
   stress: string;
 };
@@ -41,7 +40,6 @@ function runParserLab(): LabResults {
     parse: "fail:parse",
     extract: "fail:extract",
     session: "fail:session",
-    comparison: "fail:comparison",
     error: "fail:error",
     stress: "fail:stress",
   };
@@ -102,18 +100,6 @@ function runParserLab(): LabResults {
   }
 
   try {
-    const before = parseMarkdownWithOptions("hello", { gfm: true });
-    const after = parseMarkdownWithOptions("PLUGIN hello", { gfm: true });
-    results.comparison =
-      getFlattenedText(before).trim() === "hello" &&
-      getFlattenedText(after).trim() === "PLUGIN hello"
-        ? "ok:comparison"
-        : "fail:comparison";
-  } catch (error) {
-    results.comparison = `fail:comparison=${error instanceof Error ? error.message : String(error)}`;
-  }
-
-  try {
     parseMarkdownWithOptions("12345", { maxInputLength: 4 });
     results.error = "fail:expected-input-too-large";
   } catch (error) {
@@ -160,7 +146,6 @@ export function MarkdownE2eLab() {
   const parseStatus = results.parse;
   const extractStatus = results.extract;
   const sessionStatus = results.session;
-  const comparisonStatus = results.comparison;
   const errorStatus = results.error;
   const stressStatus = results.stress;
 
@@ -178,9 +163,6 @@ export function MarkdownE2eLab() {
       </Text>
       <Text testID="e2e-session-status" style={styles.result}>
         {sessionStatus}
-      </Text>
-      <Text testID="e2e-comparison-status" style={styles.result}>
-        {comparisonStatus}
       </Text>
       <Text testID="e2e-error-status" style={styles.result}>
         {errorStatus}

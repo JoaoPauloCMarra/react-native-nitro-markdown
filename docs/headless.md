@@ -40,7 +40,7 @@ native iOS or Android runtime; it does not run on Node.js, servers, or web.
 > **Input bounds.** Inputs larger than `options.maxInputLength` (default
 > 10,485,760 UTF-8 bytes) are rejected with a typed `input_too_large` error
 > before any native call. The native parser enforces the same hard cap in
-> bytes, plus AST budgets (100,000 nodes, 500,000 units of AST work, 64 MiB of
+> bytes, plus AST budgets (100,000 nodes, 64 MiB of
 > AST JSON). A document inside the byte cap that exceeds a budget fails with
 > `input_too_complex`.
 

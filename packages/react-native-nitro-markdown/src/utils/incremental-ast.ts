@@ -1,10 +1,7 @@
-import {
-  parseMarkdown,
-  parseMarkdownWithOptions,
-  type MarkdownNode,
-} from "../headless";
+import type { MarkdownNode } from "../headless";
 import type { ParserOptions } from "../Markdown.nitro";
 import { freezeMarkdownNode } from "./freeze-ast";
+import { parseWithNativeParser } from "./parse-pipeline";
 
 const PLAIN_TEXT_APPEND_PATTERN = /[`*_~[\]#!<>()|$\n\r]/;
 const FENCE_LINE_PATTERN = /(?:^|\n) {0,3}(```+|~~~+)/;
@@ -24,13 +21,6 @@ const hasAmbiguousLinkBoundary = (
     trailingText.lastIndexOf("\t"),
   ) + 1;
   return LINK_BOUNDARY_PATTERN.test(trailingText.slice(tokenStart));
-};
-
-const parseAst = (text: string, options?: ParserOptions): MarkdownNode => {
-  if (options) {
-    return parseMarkdownWithOptions(text, options);
-  }
-  return parseMarkdown(text);
 };
 
 const materializeIncrementalAst = (
@@ -270,7 +260,7 @@ const parseAstWithStableNodes = (
   return materializeIncrementalAst(
     reuseStableAstNodes(
       previousAst,
-      parseCurrent ? parseCurrent() : parseAst(text, options),
+      parseCurrent ? parseCurrent() : parseWithNativeParser(text, options),
     ),
     options,
   );
@@ -343,11 +333,4 @@ export const getNextStreamAst = ({
   // Correctness-first fallback: full reparse for all non-trivial appends.
   // Incremental append is only used for plain text chunks at the true trailing leaf.
   return parseAstWithStableNodes(previousAst, nextText, options, parseCurrent);
-};
-
-export const parseMarkdownAst = (
-  text: string,
-  options?: ParserOptions,
-): MarkdownNode => {
-  return parseAst(text, options);
 };

@@ -95,6 +95,7 @@ export async function runCodegen(
     temporaryGeneratedDirectory,
   ];
   let processTreeStopped = false;
+  let restoreNeeded = true;
   try {
     const processResult = await runProcess({
       command,
@@ -109,10 +110,14 @@ export async function runCodegen(
       killGraceMs,
       identityMode: options.identityMode,
     });
-    processTreeStopped = processResult.treeGone;
+    processTreeStopped = true;
 
     const afterCurrent = await snapshotDirectory(targetParent, targetSubdirectory);
     const trackedDirectoryChanged = !snapshotsMatch(before, afterCurrent);
+    restoreNeeded =
+      trackedDirectoryChanged ||
+      processResult.exitCode !== 0 ||
+      processResult.timedOut;
     const generated = await snapshotDirectory(temporaryRoot, "generated");
     const outputChanges =
       processResult.exitCode === 0 && !processResult.timedOut
@@ -130,7 +135,13 @@ export async function runCodegen(
   } finally {
     if (processTreeStopped) {
       try {
-        await restoreDirectorySnapshot(targetParent, targetSubdirectory, before);
+        if (restoreNeeded) {
+          await restoreDirectorySnapshot(
+            targetParent,
+            targetSubdirectory,
+            before,
+          );
+        }
       } finally {
         await rm(temporaryRoot, { force: true, recursive: true });
       }

@@ -4,10 +4,12 @@
 #include "flatten.hpp"
 #include "FlattenCorpus.hpp"
 #include "ConformanceCorpus.hpp"
+#include "SessionScenarioCorpus.hpp"
 #include "../bindings/HybridMarkdownParser.hpp"
 #include "../bindings/HybridMarkdownSession.hpp"
 #include "../nitromd/nitromd.h"
 #include <iostream>
+#include <set>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -394,6 +396,7 @@ public:
         testAstDepthLimit();
         testImageWithTitle();
         testHorizontalRule();
+        testThematicBreakAfterLinkReferenceDefinition();
         testEntityText();
         testTestOnlyExtensionFlags();
         testCallbackNullUserdataGuards();
@@ -416,7 +419,6 @@ public:
         testConcurrentOptions();
         testNullCharOffsets();
         testLinkAttributes();
-        testOversizedInputClamp();
         testOffsets();
         testUtf16Offsets();
         testParseLatencyBudgets();
@@ -1005,26 +1007,10 @@ private:
     static void testHybridMarkdownSessionCorpus() {
         using ::margelo::nitro::Markdown::HybridMarkdownSession;
 
-        const std::vector<std::string> corpus = {
-            "append-extends-buffer",
-            "append-notifies-range",
-            "reset-replaces-buffer",
-            "reset-notifies-full-range",
-            "replace-inserts-in-place",
-            "replace-notifies-insert-range",
-            "replace-clamps-out-of-bounds",
-            "replace-rejects-invalid-range",
-            "getTextRange-clamps",
-            "getTextRange-rejects-invalid",
-            "clear-empties-buffer",
-            "clear-notifies-zero-range",
-            "dispose-rejects-all-operations",
-            "unsubscribe-stops-notifications",
-            "listeners-see-snapshot-ranges",
-            "append-rejects-buffer-cap",
-            "replace-rejects-buffer-cap",
+        std::set<std::string> executedScenarios;
+        const auto scenarioRan = [&executedScenarios](const char* name) {
+            executedScenarios.insert(name);
         };
-        TestRunner::assertTrue(corpus.size() == 17, "Session corpus has all scenarios");
 
         auto resetSession = std::make_shared<HybridMarkdownSession>();
         std::vector<std::pair<double, double>> resetRanges;
@@ -1037,10 +1023,12 @@ private:
             resetSession->getAllText(),
             "Session reset-replaces-buffer"
         );
+        scenarioRan("reset-replaces-buffer");
         TestRunner::assertTrue(
             resetRanges.back() == std::pair<double, double>{0.0, 11.0},
             "Session reset-notifies-full-range"
         );
+        scenarioRan("reset-notifies-full-range");
         resetUnsubscribe();
 
         auto session = std::make_shared<HybridMarkdownSession>();
@@ -1053,10 +1041,12 @@ private:
             session->append(" world");
             return session->getAllText();
         }(), "Session append extends buffer");
+        scenarioRan("append-extends-buffer");
         TestRunner::assertTrue(
             ranges.back() == std::pair<double, double>{5.0, 11.0},
             "Session append notifies inserted range"
         );
+        scenarioRan("append-notifies-range");
 
         session->reset("hello world");
         ranges.clear();
@@ -1066,10 +1056,12 @@ private:
             session->getAllText(),
             "Session replace-inserts-in-place"
         );
+        scenarioRan("replace-inserts-in-place");
         TestRunner::assertTrue(
             ranges.back() == std::pair<double, double>{5.0, 11.0},
             "Session replace-notifies-insert-range"
         );
+        scenarioRan("replace-notifies-insert-range");
 
         session->reset("hello");
         ranges.clear();
@@ -1079,12 +1071,20 @@ private:
             ranges.back() == std::pair<double, double>{5.0, 6.0},
             "Session replace reports clamped range"
         );
+        scenarioRan("replace-clamps-out-of-bounds");
 
         session->reset("hello");
         TestRunner::assertEqual("ello", session->getTextRange(1.0, 100.0), "Session range clamps end");
         TestRunner::assertEqual("", session->getTextRange(100.0, 200.0), "Session range clamps empty tail");
+        scenarioRan("getTextRange-clamps");
         TestRunner::assertEqual("", session->getTextRange(2.0, 2.0), "Session ASCII empty range stays empty");
-        TestRunner::assertEqual("", session->getTextRange(std::numeric_limits<double>::quiet_NaN(), 0.0), "Session invalid range is empty");
+        TestRunner::assertEqual(
+            "Invalid range: from=NaN and to=" + std::to_string(0.0) +
+                " must be finite, from must be >= 0, and to must be >= from",
+            errorOf([&]() { (void)session->getTextRange(std::numeric_limits<double>::quiet_NaN(), 0.0); }),
+            "Session getTextRange rejects a non-finite range"
+        );
+        scenarioRan("getTextRange-rejects-invalid");
 
         auto unicodeSession = std::make_shared<HybridMarkdownSession>();
         unicodeSession->reset("A😀B");
@@ -1168,16 +1168,19 @@ private:
         );
         session->clear();
         TestRunner::assertEqual("", session->getAllText(), "Session clear empties buffer");
+        scenarioRan("clear-empties-buffer");
         TestRunner::assertTrue(session->getHighlightPosition() == 0.0, "Session clear resets highlight");
         TestRunner::assertTrue(
             ranges.back() == std::pair<double, double>{0.0, 0.0},
             "Session clear notifies zero range"
         );
+        scenarioRan("clear-notifies-zero-range");
 
         unsubscribe();
         const auto rangeCount = ranges.size();
         session->append("after unsubscribe");
         TestRunner::assertTrue(ranges.size() == rangeCount, "Session unsubscribe stops notifications");
+        scenarioRan("unsubscribe-stops-notifications");
 
         bool invalidRangeThrew = false;
         try {
@@ -1186,6 +1189,7 @@ private:
             invalidRangeThrew = true;
         }
         TestRunner::assertTrue(invalidRangeThrew, "Session replace rejects invalid range");
+        scenarioRan("replace-rejects-invalid-range");
 
         auto snapshotSession = std::make_shared<HybridMarkdownSession>();
         std::vector<std::pair<double, double>> snapshotRanges;
@@ -1202,6 +1206,7 @@ private:
             },
             "Session listeners-see-snapshot-ranges"
         );
+        scenarioRan("listeners-see-snapshot-ranges");
         snapshotUnsubscribe();
 
         const auto isByteCapError = [](const std::runtime_error& error) {
@@ -1221,6 +1226,7 @@ private:
             appendCapThrew = isByteCapError(error);
         }
         TestRunner::assertTrue(appendCapThrew, "Session append enforces buffer cap");
+        scenarioRan("append-rejects-buffer-cap");
 
         bool replaceCapThrew = false;
         try {
@@ -1229,6 +1235,7 @@ private:
             replaceCapThrew = isByteCapError(error);
         }
         TestRunner::assertTrue(replaceCapThrew, "Session replace enforces buffer cap");
+        scenarioRan("replace-rejects-buffer-cap");
         TestRunner::assertTrue(
             capped->replace(0.0, 1.0, "!") == 10.0 * 1024 * 1024,
             "Session replace accepts a same-size edit at the byte cap"
@@ -1324,8 +1331,29 @@ private:
             disposedFailures == 10,
             "Session dispose-rejects-all-operations"
         );
-    }
+        const std::string disposedRangeError = errorOf([&]() {
+            (void)disposed->getTextRange(std::numeric_limits<double>::quiet_NaN(), 0.0);
+        });
+        TestRunner::assertTrue(
+            disposedRangeError.find("destroyed") != std::string::npos,
+            "Session reports a disposed session before an invalid getTextRange range, like replace"
+        );
+        const std::string disposedReplaceError = errorOf([&]() {
+            (void)disposed->replace(std::numeric_limits<double>::quiet_NaN(), 0.0, "x");
+        });
+        TestRunner::assertTrue(
+            disposedReplaceError.find("destroyed") != std::string::npos,
+            "Session reports a disposed session before an invalid replace range"
+        );
+        scenarioRan("dispose-rejects-all-operations");
 
+        for (const char* scenario : kSessionScenarios) {
+            TestRunner::assertTrue(
+                executedScenarios.count(scenario) == 1,
+                std::string("Session scenario has an executed check: ") + scenario
+            );
+        }
+    }
     static void testHybridMarkdownParserBinding() {
         using ::margelo::nitro::Markdown::HybridMarkdownParser;
         using BindingParserOptions = ::margelo::nitro::Markdown::ParserOptions;
@@ -1465,8 +1493,7 @@ private:
         } catch (const std::runtime_error& error) {
             const std::string message = error.what();
             workBudgetThrew =
-                message.find("Markdown AST node/work budget") != std::string::npos ||
-                message.find("Markdown AST child/work budget") != std::string::npos;
+                message.find("Markdown AST node budget") != std::string::npos;
         }
         TestRunner::assertTrue(
             workBudgetThrew,
@@ -1636,25 +1663,6 @@ private:
         }
     }
 
-    static void testOversizedInputClamp() {
-        size_t maxSize = static_cast<size_t>(std::numeric_limits<MD_SIZE>::max());
-        TestRunner::assertEqual(
-            std::to_string(maxSize),
-            std::to_string(MD4CParser::clampInputSizeForTest(maxSize)),
-            "Clamp size at max"
-        );
-
-        if (maxSize < std::numeric_limits<size_t>::max()) {
-            size_t over = maxSize + 1;
-            TestRunner::assertEqual(
-                std::to_string(maxSize),
-                std::to_string(MD4CParser::clampInputSizeForTest(over)),
-                "Clamp oversized input"
-            );
-        } else {
-            TestRunner::assertTrue(true, "Clamp oversized input skipped");
-        }
-    }
     static void testEmptyInput() {
         MD4CParser parser;
         ParserOptions options{true, true};
@@ -2857,6 +2865,29 @@ private:
         }
     }
 
+    static void testThematicBreakAfterLinkReferenceDefinition() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+        const std::string source = "[a]: /u\n---\nafter";
+        auto result = parser.parse(source, options);
+
+        TestRunner::assertNotNull(result.get(), "RefDefThematicBreak: parse result");
+        if (!result) return;
+        auto rule = findFirstNode(result, NodeType::HorizontalRule);
+        TestRunner::assertNotNull(rule.get(), "RefDefThematicBreak: line after a reference definition is a rule");
+        if (rule) {
+            TestRunner::assertEqual("8", std::to_string(rule->beg), "RefDefThematicBreak: rule begin offset");
+            TestRunner::assertEqual("11", std::to_string(rule->end), "RefDefThematicBreak: rule end offset");
+        }
+        auto heading = findFirstNode(result, NodeType::Heading);
+        TestRunner::assertTrue(heading == nullptr, "RefDefThematicBreak: not parsed as a setext heading");
+        auto paragraph = findFirstNode(result, NodeType::Paragraph);
+        TestRunner::assertNotNull(paragraph.get(), "RefDefThematicBreak: following paragraph kept");
+        if (paragraph) {
+            TestRunner::assertEqual("12", std::to_string(paragraph->beg), "RefDefThematicBreak: paragraph begin offset");
+        }
+    }
+
     static void testEntityText() {
         MD4CParser parser;
         ParserOptions options{true, true};
@@ -3903,7 +3934,7 @@ private:
             const bool bounded = ast
                 ? countAllNodes(ast) <= kMaxAstNodes && maxNodeDepth(ast) <= kMaxAstDepth
                 : error.find("Markdown AST depth exceeds the maximum of") == 0 ||
-                    error.find("Markdown AST node/work budget exceeds the maximum of") == 0;
+                    error.find("Markdown AST node budget exceeds the maximum of") == 0;
             TestRunner::assertTrue(
                 bounded,
                 name + " ends in a bounded tree or a budget error (" +
@@ -3920,7 +3951,7 @@ private:
         HybridMarkdownParser binding;
         ParserOptions options{true, true};
         const std::string nodeBudgetError =
-            "Markdown AST node/work budget exceeds the maximum of " + std::to_string(kMaxAstWork);
+            astNodeBudgetExceededMessage();
 
         const std::string softBreaks = repeatToSize("a\n", 120000);
         TestRunner::assertEqual(
@@ -4013,7 +4044,7 @@ private:
         auto overBudget = std::make_shared<MarkdownNode>(NodeType::Document);
         overBudget->children.assign(kMaxAstNodes, leaf);
         TestRunner::assertEqual(
-            "Markdown AST node/work budget exceeds the maximum of " + std::to_string(kMaxAstWork),
+            astNodeBudgetExceededMessage(),
             errorOf([&]() { (void)flattenNodeText(overBudget); }),
             "Flatten: a tree above the node budget fails deterministically"
         );
@@ -4173,9 +4204,22 @@ private:
 
         TestRunner::assertEqual("he", session->getTextRange(0.5, 2.9), "Session numerics: fractional range truncates toward zero");
         TestRunner::assertEqual("hello", session->getTextRange(-0.0, 1e300), "Session numerics: negative zero and huge end clamp");
-        TestRunner::assertEqual("", session->getTextRange(0.0, inf), "Session numerics: infinite getTextRange end is empty");
-        TestRunner::assertEqual("", session->getTextRange(-1.0, 3.0), "Session numerics: negative getTextRange start is empty");
-        TestRunner::assertEqual("", session->getTextRange(3.0, 1.0), "Session numerics: inverted getTextRange is empty");
+        const std::string rangeSuffix = " must be finite, from must be >= 0, and to must be >= from";
+        TestRunner::assertEqual(
+            "Invalid range: from=" + std::to_string(0.0) + " and to=Inf" + rangeSuffix,
+            errorOf([&]() { (void)session->getTextRange(0.0, inf); }),
+            "Session numerics: infinite getTextRange end throws"
+        );
+        TestRunner::assertEqual(
+            "Invalid range: from=" + std::to_string(-1.0) + " and to=" + std::to_string(3.0) + rangeSuffix,
+            errorOf([&]() { (void)session->getTextRange(-1.0, 3.0); }),
+            "Session numerics: negative getTextRange start throws"
+        );
+        TestRunner::assertEqual(
+            "Invalid range: from=" + std::to_string(3.0) + " and to=" + std::to_string(1.0) + rangeSuffix,
+            errorOf([&]() { (void)session->getTextRange(3.0, 1.0); }),
+            "Session numerics: inverted getTextRange throws"
+        );
         TestRunner::assertEqual("", session->getTextRange(1e300, 1e301), "Session numerics: range past the end is empty");
         TestRunner::assertEqual("hello", session->getTextRange(0.0, 4294967296.0), "Session numerics: end above 2^32 clamps");
 
@@ -5024,9 +5068,9 @@ private:
             }
         }
         TestRunner::assertEqual(
-            "14084455836454379281",
+            "15848312858691512385",
             std::to_string(hash),
-            "Golden: production-flag JSON, offsets and plain text are byte-identical to the 0.13.0 output"
+            "Golden: production-flag JSON, offsets and plain text are byte-identical to the previous release output (updated for the md4c 0.6.0 reference-definition rule fix)"
         );
     }
 
@@ -5672,7 +5716,7 @@ private:
             const bool bounded = ast
                 ? countAllNodes(ast) <= kMaxAstNodes && maxNodeDepth(ast) <= kMaxAstDepth
                 : error.find("Markdown AST depth exceeds the maximum of") == 0 ||
-                    error.find("Markdown AST node/work budget exceeds the maximum of") == 0;
+                    error.find("Markdown AST node budget exceeds the maximum of") == 0;
             TestRunner::assertTrue(
                 bounded,
                 name + " ends in a bounded tree or a budget error (" +

@@ -35,7 +35,8 @@ import {
 } from "./renderers/math";
 import { Paragraph } from "./renderers/paragraph";
 import { TableRenderer } from "./renderers/table";
-import type { MarkdownTheme } from "./theme";
+import { TableCell } from "./renderers/table/cell-content";
+import { getMonoFontFamily, type MarkdownTheme } from "./theme";
 
 const isInline = (type: MarkdownNode["type"]): boolean => {
   return (
@@ -491,6 +492,7 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
                 index={index}
                 ordered={node.ordered ?? false}
                 start={node.start ?? 1}
+                {...(nodeStyles?.list_item ? { style: nodeStyles.list_item } : {})}
               >
                 <NodeRenderer
                   node={child}
@@ -528,11 +530,8 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
         />
       );
 
-    case "table_head":
-    case "table_body":
-    case "table_row":
     case "table_cell":
-      return null;
+      return <TableCell node={node} Renderer={NodeRenderer} />;
 
     default:
       return null;
@@ -579,7 +578,7 @@ export const createBaseStyles = (theme: MarkdownTheme) =>
     errorText: {
       color: "#f87171",
       fontSize: 14,
-      fontFamily: theme.fontFamilies.mono ?? "monospace",
+      fontFamily: getMonoFontFamily(theme),
       ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
     text: {

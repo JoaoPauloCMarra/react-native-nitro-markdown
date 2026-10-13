@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { MarkdownNode } from "../headless";
 import {
   parseMarkdown,
@@ -9,7 +10,6 @@ import {
   cloneMarkdownNode as cloneValidatedMarkdownNode,
   freezeMarkdownNode,
 } from "./freeze-ast";
-import { parseMarkdownForRender } from "./render-parser";
 
 export type MarkdownErrorPhase = "parse" | "before-plugin" | "after-plugin";
 
@@ -80,68 +80,68 @@ export const materializeMarkdownNode = (
   return freezeAst ? freezeMarkdownNode(clone) : clone;
 };
 
-export const getParserOptionsKey = (options?: ParserOptions): string => {
-  if (!options) {
-    return "gfm:default|math:default|html:default|sourceOffsets:default|maxInputLength:default|freezeAst:default";
-  }
-
-  const gfm = options.gfm === undefined ? "default" : options.gfm ? "1" : "0";
-  const math =
-    options.math === undefined ? "default" : options.math ? "1" : "0";
-  const html =
-    options.html === undefined ? "default" : options.html ? "1" : "0";
-  const sourceOffsets =
-    options.sourceOffsets === undefined
-      ? "default"
-      : options.sourceOffsets
-        ? "1"
-        : "0";
-  const maxInputLength =
-    options.maxInputLength === undefined
-      ? "default"
-      : String(options.maxInputLength);
-  const freezeAst =
-    options.freezeAst === undefined ? "default" : options.freezeAst ? "1" : "0";
-  return `gfm:${gfm}|math:${math}|html:${html}|sourceOffsets:${sourceOffsets}|maxInputLength:${maxInputLength}|freezeAst:${freezeAst}`;
+const PARSER_OPTION_FLAGS: Record<keyof ParserOptions, true> = {
+  gfm: true,
+  math: true,
+  html: true,
+  sourceOffsets: true,
+  maxInputLength: true,
+  freezeAst: true,
 };
+
+export const PARSER_OPTION_KEYS = Object.keys(
+  PARSER_OPTION_FLAGS,
+) as (keyof ParserOptions)[];
+
+const formatParserOptionValue = (value: unknown): string => {
+  if (value === undefined) return "default";
+  if (typeof value === "boolean") return value ? "1" : "0";
+  return String(value);
+};
+
+export const getParserOptionsKey = (options?: ParserOptions): string =>
+  PARSER_OPTION_KEYS.map(
+    (key) => `${key}:${formatParserOptionValue(options?.[key])}`,
+  ).join("|");
 
 export const normalizeParserOptions = (
   options?: ParserOptions,
 ): ParserOptions | undefined => {
   if (!options) return undefined;
 
-  const gfm = options.gfm;
-  const math = options.math;
-  const html = options.html;
-  const sourceOffsets = options.sourceOffsets;
-  const maxInputLength = options.maxInputLength;
-  const freezeAst = options.freezeAst;
+  const normalized: Record<string, unknown> = {};
+  for (const key of PARSER_OPTION_KEYS) {
+    if (options[key] !== undefined) normalized[key] = options[key];
+  }
+  return Object.keys(normalized).length === 0
+    ? undefined
+    : (normalized as ParserOptions);
+};
 
-  if (
-    gfm === undefined &&
-    math === undefined &&
-    html === undefined &&
-    sourceOffsets === undefined &&
-    maxInputLength === undefined &&
-    freezeAst === undefined
-  ) {
-    return undefined;
-  }
+const parseParserOptionValue = (
+  key: keyof ParserOptions,
+  token: string,
+): boolean | number | undefined => {
+  if (token === "default") return undefined;
+  if (key === "maxInputLength") return Number(token);
+  return token === "1";
+};
 
-  const normalized: ParserOptions = {};
-  if (gfm !== undefined) normalized.gfm = gfm;
-  if (math !== undefined) normalized.math = math;
-  if (html !== undefined) normalized.html = html;
-  if (sourceOffsets !== undefined) {
-    normalized.sourceOffsets = sourceOffsets;
-  }
-  if (maxInputLength !== undefined) {
-    normalized.maxInputLength = maxInputLength;
-  }
-  if (freezeAst !== undefined) {
-    normalized.freezeAst = freezeAst;
-  }
-  return normalized;
+export const useStableParserOptions = (
+  options?: ParserOptions,
+): ParserOptions | undefined => {
+  const optionsKey = getParserOptionsKey(options);
+  return useMemo(() => {
+    const decoded: Record<string, boolean | number> = {};
+    optionsKey.split("|").forEach((entry, index) => {
+      const key = PARSER_OPTION_KEYS[index]!;
+      const value = parseParserOptionValue(key, entry.slice(key.length + 1));
+      if (value !== undefined) decoded[key] = value;
+    });
+    return Object.keys(decoded).length === 0
+      ? undefined
+      : (decoded as ParserOptions);
+  }, [optionsKey]);
 };
 
 export const parseWithNativeParser = (
@@ -152,13 +152,6 @@ export const parseWithNativeParser = (
     return parseMarkdownWithOptions(text, options);
   }
   return parseMarkdown(text);
-};
-
-export const parseWithNativeParserForRender = (
-  text: string,
-  options?: ParserOptions,
-): MarkdownNode => {
-  return parseMarkdownForRender(text, options);
 };
 
 export const sortPluginsByPriority = (

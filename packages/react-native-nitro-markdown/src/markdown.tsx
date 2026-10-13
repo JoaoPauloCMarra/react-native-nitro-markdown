@@ -44,9 +44,8 @@ import {
   getParserOptionsKey,
   hashString,
   materializeMarkdownNode,
-  normalizeParserOptions,
+  useStableParserOptions,
   parseWithNativeParser,
-  parseWithNativeParserForRender,
   safeOnError,
   sortPluginsByPriority,
   warnInDev,
@@ -125,11 +124,10 @@ const getCachedParsedAst = (
   cache: Map<string, ParseAstCacheEntry>,
   stats: { hits: number; misses: number; evictions: number },
   freezeAst: boolean,
-  parse: typeof parseWithNativeParser = parseWithNativeParser,
   cloneAst = true,
 ): MarkdownNode => {
   if (text.length > MAX_CACHEABLE_TEXT_LENGTH) {
-    return parse(text, options);
+    return parseWithNativeParser(text, options);
   }
 
   const cacheKey = `${getParserOptionsKey(options)}|${text.length}|${hashString(text)}`;
@@ -144,7 +142,7 @@ const getCachedParsedAst = (
   }
 
   stats.misses += 1;
-  const parsedNode = parse(text, options);
+  const parsedNode = parseWithNativeParser(text, options);
   cache.set(cacheKey, {
     text,
     ast: cloneAst ? materializeMarkdownNode(parsedNode, true) : parsedNode,
@@ -305,12 +303,7 @@ export const Markdown: FC<MarkdownProps> = ({
   highlightCode,
   errorText = "Error parsing markdown",
 }) => {
-  const parserOptionGfm = options?.gfm;
-  const parserOptionMath = options?.math;
-  const parserOptionHtml = options?.html;
-  const parserOptionSourceOffsets = options?.sourceOffsets;
-  const parserOptionMaxInputLength = options?.maxInputLength;
-  const parserOptionFreezeAst = options?.freezeAst;
+  const stableParserOptions = useStableParserOptions(options);
 
   /* eslint-disable react-hooks/refs -- Refs updated/read intentionally to avoid re-parsing on callback identity changes */
   const onErrorRef = useRef(onError);
@@ -352,32 +345,16 @@ export const Markdown: FC<MarkdownProps> = ({
         !hasAstTransforms &&
         (!plugins || plugins.length === 0) &&
         !hasCustomRenderers &&
-        parserOptionFreezeAst !== true;
+        stableParserOptions?.freezeAst !== true;
       const canOmitRenderOffsets =
         canUseRenderFastPath &&
-        parserOptionSourceOffsets === undefined;
+        stableParserOptions?.sourceOffsets === undefined;
       const markdownToParse = safeSourceAst
         ? children
         : applyBeforeParsePlugins(children, sortedPlugins, onErrorRef.current);
-      const parserOptions = normalizeParserOptions(
-        Object.assign(
-          {},
-          parserOptionGfm === undefined ? null : { gfm: parserOptionGfm },
-          parserOptionMath === undefined ? null : { math: parserOptionMath },
-          parserOptionHtml === undefined ? null : { html: parserOptionHtml },
-          parserOptionSourceOffsets === undefined
-            ? canOmitRenderOffsets
-              ? { sourceOffsets: false }
-              : null
-            : { sourceOffsets: parserOptionSourceOffsets },
-          parserOptionMaxInputLength === undefined
-            ? null
-            : { maxInputLength: parserOptionMaxInputLength },
-          parserOptionFreezeAst === undefined
-            ? null
-            : { freezeAst: parserOptionFreezeAst },
-        ),
-      );
+      const parserOptions = canOmitRenderOffsets
+        ? { ...stableParserOptions, sourceOffsets: false }
+        : stableParserOptions;
       let parsedAst = safeSourceAst
         ? safeSourceAst
         : parseCache
@@ -387,14 +364,9 @@ export const Markdown: FC<MarkdownProps> = ({
               parseAstCacheRef.current!,
               cacheStatsRef.current,
               parserOptions?.freezeAst === true,
-              canUseRenderFastPath
-                ? parseWithNativeParserForRender
-                : parseWithNativeParser,
               !canUseRenderFastPath,
             )
-          : (canUseRenderFastPath
-              ? parseWithNativeParserForRender
-              : parseWithNativeParser)(markdownToParse, parserOptions);
+          : parseWithNativeParser(markdownToParse, parserOptions);
       parsedAst = applyAfterParsePlugins(
         parsedAst,
         sortedPlugins,
@@ -441,12 +413,7 @@ export const Markdown: FC<MarkdownProps> = ({
     }
   }, [
     children,
-    parserOptionGfm,
-    parserOptionMath,
-    parserOptionHtml,
-    parserOptionSourceOffsets,
-    parserOptionMaxInputLength,
-    parserOptionFreezeAst,
+    stableParserOptions,
     sourceAst,
     parseCache,
     astTransform,
@@ -460,12 +427,7 @@ export const Markdown: FC<MarkdownProps> = ({
     onParsingInProgress?.();
   }, [
     children,
-    parserOptionGfm,
-    parserOptionMath,
-    parserOptionHtml,
-    parserOptionSourceOffsets,
-    parserOptionMaxInputLength,
-    parserOptionFreezeAst,
+    stableParserOptions,
     onParsingInProgress,
   ]);
 

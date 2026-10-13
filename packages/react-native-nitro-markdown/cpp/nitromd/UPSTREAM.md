@@ -10,10 +10,13 @@ external is fetched at install or build time; the engine ships as package source
 - Author: Martin Mitáš, © 2016–2026
 - License: MIT (retained in the `nitromd.h` / `nitromd.c` headers)
 
-- Synced from upstream `master` at commit
+- Synced from upstream release `v0.6.0` (tag commit
+  `d4eeb1ace5d0a64d6a1245e97bf9c8105c4f3df7`, 2026-09-17). The previous sync was upstream `master` at
   `3e7ace20d262028baf702db9850520f017c25591` (2026-08-17).
-- This commit contains the upstream 0.5.3 changes and the current work-in-progress
-  parser fixes and extensions. NitroMarkdown keeps its existing enabled flag set,
+- This release contains the upstream 0.6.0 fixes: error-path memory management (#398, #399, #400), list ending (#413),
+  thematic break after a link reference definition (#414), the sparse-table output guard (#345), and URI autolink scheme
+  validation (#368). It also adds the opt-in insert, highlight, footnote, admonition, superscript, subscript, spoiler and
+  blank-line extensions. NitroMarkdown keeps its existing enabled flag set,
   so new upstream extensions remain opt-in and do not change the package grammar.
 
 ## Local modifications
@@ -38,7 +41,8 @@ The fork is deliberately minimal so upstream fixes stay easy to re-apply:
    unsigned capacity and allocation byte size before narrowing. The fixed
    admonition tag lengths are explicitly converted to `MD_OFFSET`.
 
-Everything else is stock md4c. The C++ wrapper lives in
+Everything else is stock md4c. When resolving the 0.6.0 sync, the table-row code uses the upstream cell-offset logic with the
+source-offset arguments added, and the reference-definition thematic break fix records the break's source range. The C++ wrapper lives in
 `../core/NitroMD4CParser.{hpp,cpp}` and is the only intended entry point.
 
 ## Build wiring

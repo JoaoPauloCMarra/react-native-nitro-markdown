@@ -146,6 +146,19 @@ ${lines.join("\n")}
 `;
 }
 
+function generateSessionScenarioHeader(corpusPath, names) {
+  const lines = names.map((name) => `  "${cLiteral(name)}",`);
+  return `// Generated from ${corpusPath} by scripts/test-cpp.js. Do not edit.
+#pragma once
+#include <vector>
+namespace NitroMarkdown {
+inline const std::vector<const char*> kSessionScenarios = {
+${lines.join("\n")}
+};
+}
+`;
+}
+
 function writeCorpusHeaders(generatedDir) {
   const flattenPath = path.join(packageRoot, "src", "__fixtures__", "flatten-corpus.json");
   const conformancePath = path.join(
@@ -155,12 +168,26 @@ function writeCorpusHeaders(generatedDir) {
     "conformance-corpus.json",
   );
 
+  const sessionScenariosPath = path.join(
+    packageRoot,
+    "src",
+    "__fixtures__",
+    "session-scenarios.json",
+  );
+
   const flattenCorpus = JSON.parse(fs.readFileSync(flattenPath, "utf8"));
   const conformanceCorpus = JSON.parse(fs.readFileSync(conformancePath, "utf8"));
 
   fs.writeFileSync(
     path.join(generatedDir, "FlattenCorpus.hpp"),
     generateCorpusHeader(flattenPath, flattenCorpus),
+  );
+  fs.writeFileSync(
+    path.join(generatedDir, "SessionScenarioCorpus.hpp"),
+    generateSessionScenarioHeader(
+      sessionScenariosPath,
+      JSON.parse(fs.readFileSync(sessionScenariosPath, "utf8")),
+    ),
   );
   fs.writeFileSync(
     path.join(generatedDir, "ConformanceCorpus.hpp"),

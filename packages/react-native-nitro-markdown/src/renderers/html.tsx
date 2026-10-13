@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { getCachedStyles } from "./style-cache";
 import { useMarkdownContext } from "../MarkdownContext";
-import type { MarkdownTheme } from "../theme";
+import { getMonoFontFamily, type MarkdownTheme } from "../theme";
 
 type HtmlInlineProps = {
   content?: string;
@@ -46,10 +46,6 @@ export const HtmlBlock: FC<HtmlBlockProps> = ({ content, style }) => {
 type HtmlStyles = ReturnType<typeof createHtmlStyles>;
 
 const htmlStylesCache = new WeakMap<MarkdownTheme, HtmlStyles>();
-
-const getMonoFontFamily = (theme: MarkdownTheme) =>
-  theme.fontFamilies.mono ??
-  Platform.select({ ios: "Courier", android: "monospace" });
 
 const createHtmlStyles = (theme: MarkdownTheme) =>
   StyleSheet.create({

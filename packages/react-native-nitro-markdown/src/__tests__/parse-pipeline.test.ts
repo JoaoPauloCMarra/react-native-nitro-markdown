@@ -1,4 +1,7 @@
+import { createElement } from "react";
+import { act, create } from "react-test-renderer";
 import type { MarkdownNode } from "../headless";
+import type { ParserOptions } from "../Markdown.nitro";
 import type { MarkdownPlugin } from "../markdown";
 import {
   applyAfterParsePlugins,
@@ -8,7 +11,9 @@ import {
   hashString,
   materializeMarkdownNode,
   normalizeParserOptions,
+  PARSER_OPTION_KEYS,
   parseWithNativeParser,
+  useStableParserOptions,
   safeOnError,
   sortPluginsByPriority,
   warnInDev,
@@ -19,6 +24,7 @@ import {
   freezeMarkdownNode,
 } from "../utils/freeze-ast";
 import { mockParser } from "./setup";
+import { spyOnConsoleErrorIgnoringRendererDeprecation } from "./console-spy";
 
 const ROOT_NODE: MarkdownNode = {
   type: "document",
@@ -106,13 +112,13 @@ describe("parse pipeline utilities", () => {
 
   it("bounds a proxy that changes values between validation and cloning", () => {
     const changingRoot = (
-      field: "children" | "metadata",
+      field: "children",
       replacement: unknown,
     ): MarkdownNode => {
       let reads = 0;
       const target: Record<string, unknown> = {
-        type: field === "children" ? "document" : "text",
-        [field]: field === "children" ? [] : { values: [] },
+        type: "document",
+        [field]: [],
       };
       return new Proxy(target, {
         getOwnPropertyDescriptor(source, key) {
@@ -142,14 +148,6 @@ describe("parse pipeline utilities", () => {
     }
     expectInvalid(changingRoot("children", [deepNode]));
 
-    const metadataArray = [] as unknown[] & { extra?: boolean };
-    Object.defineProperty(metadataArray, "extra", {
-      configurable: true,
-      enumerable: true,
-      value: true,
-    });
-    expectInvalid(changingRoot("metadata", { values: metadataArray }));
-
     const manyNodes = Array.from({ length: 100_001 }, () => ({
       type: "text" as const,
       content: "x",
@@ -157,16 +155,7 @@ describe("parse pipeline utilities", () => {
     expectInvalid(changingRoot("children", manyNodes));
   });
 
-  it("validates the documented node fields and JSON-like metadata iteratively", () => {
-    const metadata = {
-      nullValue: null,
-      undefinedValue: undefined,
-      booleanValue: true,
-      numberValue: 42,
-      stringValue: "é",
-      nested: { emoji: "😀" },
-      values: [{ nestedValue: false }],
-    };
+  it("validates the documented node fields iteratively", () => {
     const child = {
       type: "heading" as const,
       content: "heading",
@@ -182,7 +171,6 @@ describe("parse pipeline utilities", () => {
       align: "center" as const,
       beg: 0,
       end: 7,
-      metadata,
     };
     const root = {
       type: "document" as const,
@@ -200,27 +188,17 @@ describe("parse pipeline utilities", () => {
       beg: undefined,
       end: undefined,
       children: [child],
-      metadata,
-    } as unknown as MarkdownNode & { metadata: typeof metadata };
+    } as unknown as MarkdownNode;
 
     expect(() => freezeMarkdownNode(root)).not.toThrow();
     expect(Object.isFrozen(root)).toBe(true);
-    expect(Object.isFrozen(metadata.nested)).toBe(true);
-    expect(Object.isFrozen(metadata.values)).toBe(true);
-    expect(Object.isFrozen(metadata.values[0])).toBe(true);
 
     const clone = cloneMarkdownNode(root);
     expect(clone).not.toBe(root);
     expect(clone.children?.[0]).not.toBe(child);
-    expect((clone as typeof root).metadata).not.toBe(metadata);
-    expect((clone as typeof root).metadata.nested).not.toBe(metadata.nested);
-    expect((clone as typeof root).metadata.values).not.toBe(metadata.values);
-    expect((clone as typeof root).metadata.values[0]).not.toBe(
-      metadata.values[0],
-    );
   });
 
-  it("rejects invalid scalar, property, metadata, and array shapes", () => {
+  it("rejects invalid scalar, property, and array shapes", () => {
     const expectInvalid = (node: unknown) => {
       expect(() => freezeMarkdownNode(node as MarkdownNode)).toThrow(
         expect.objectContaining({ code: "invalid_ast" }),
@@ -244,13 +222,8 @@ describe("parse pipeline utilities", () => {
       type: "text",
       content: "a".repeat(MAX_AST_STRING_BYTES + 1),
     });
-    expectInvalid({ type: "text", metadata: Symbol("metadata") });
+    expectInvalid({ type: "text", metadata: { values: [] } });
     expectInvalid({ type: "document", children: ["not-a-node"] });
-    expectInvalid({ type: "text", metadata: { values: [Symbol("value")] } });
-    expectInvalid({ type: "text", metadata: { values: [() => "value"] } });
-    expectInvalid({ type: "text", metadata: { value: Number.NaN } });
-    expectInvalid({ type: "text", metadata: { value: 1n } });
-    expectInvalid({ type: "text", metadata: new Date() });
 
     const symbolKeyNode = { type: "text" } as Record<PropertyKey, unknown>;
     Object.defineProperty(symbolKeyNode, Symbol("unexpected"), {
@@ -263,11 +236,6 @@ describe("parse pipeline utilities", () => {
     longKeyNode["k".repeat(257)] = true;
     expectInvalid(longKeyNode);
 
-    expectInvalid({
-      type: "text",
-      metadata: { ["k".repeat(257)]: true },
-    });
-
     const nonIndexedArray = [] as unknown[] & { extra?: boolean };
     nonIndexedArray.extra = true;
     expectInvalid({ type: "document", children: nonIndexedArray });
@@ -275,9 +243,9 @@ describe("parse pipeline utilities", () => {
     const sparseArray = new Array<MarkdownNode>(1);
     expectInvalid({ type: "document", children: sparseArray });
 
-    const revokedMetadata = Proxy.revocable({}, {});
-    revokedMetadata.revoke();
-    expectInvalid({ type: "document", metadata: revokedMetadata.proxy });
+    const revokedChildren = Proxy.revocable([], {});
+    revokedChildren.revoke();
+    expectInvalid({ type: "document", children: revokedChildren.proxy });
 
     const throwingKeys = new Proxy(
       { type: "text" },
@@ -320,15 +288,16 @@ describe("parse pipeline utilities", () => {
   });
 
   it("rejects incompatible shared roles and aggregate array work", () => {
-    const shared = { type: "text", content: "shared" } as MarkdownNode & {
-      metadata?: unknown;
-    };
+    const shared = { type: "text", content: "shared" } as MarkdownNode;
+    const sharedAsChildren = [shared];
     expect(() =>
       freezeMarkdownNode({
         type: "document",
-        children: [shared],
-        metadata: { shared },
-      } as MarkdownNode),
+        children: [
+          { type: "paragraph", children: sharedAsChildren },
+          sharedAsChildren as unknown as MarkdownNode,
+        ],
+      }),
     ).toThrow(expect.objectContaining({ code: "invalid_ast" }));
 
     const sharedLeaf = { type: "text" as const, content: "shared" };
@@ -370,9 +339,7 @@ describe("parse pipeline utilities", () => {
     );
   });
 
-  it("freezes a deep AST and reachable metadata without using the call stack", () => {
-    const metadataTags = ["shared"];
-    const metadata = { tags: metadataTags };
+  it("freezes a deep AST without using the call stack", () => {
     const nodes: MarkdownNode[] = [{ type: "text", content: "leaf" }];
     for (let index = 0; index < MAX_AST_DEPTH - 2; index += 1) {
       nodes.push({ type: "paragraph", children: [nodes[nodes.length - 1]!] });
@@ -380,14 +347,11 @@ describe("parse pipeline utilities", () => {
     const root = {
       type: "document" as const,
       children: [nodes[nodes.length - 1]!],
-      metadata,
-    } as unknown as MarkdownNode & { metadata: typeof metadata };
+    } as unknown as MarkdownNode;
 
     expect(() => freezeMarkdownNode(root)).not.toThrow();
     expect(Object.isFrozen(root)).toBe(true);
     expect(Object.isFrozen(root.children)).toBe(true);
-    expect(Object.isFrozen(metadata)).toBe(true);
-    expect(Object.isFrozen(metadataTags)).toBe(true);
     expect(Object.isFrozen(nodes[0])).toBe(true);
     expect(Object.isFrozen(nodes[nodes.length - 1])).toBe(true);
   });
@@ -483,6 +447,66 @@ describe("parse pipeline utilities", () => {
       }),
     ).toBe("gfm:1|math:0|html:1|sourceOffsets:0|maxInputLength:42|freezeAst:1");
     expect(getParserOptionsKey({ freezeAst: false })).toContain("freezeAst:0");
+  });
+
+  it("covers every parser option and drops unknown keys", () => {
+    expect([...PARSER_OPTION_KEYS].sort()).toEqual([
+      "freezeAst",
+      "gfm",
+      "html",
+      "math",
+      "maxInputLength",
+      "sourceOffsets",
+    ]);
+    expect(
+      normalizeParserOptions({ gfm: true, futureFlag: true } as ParserOptions),
+    ).toEqual({ gfm: true });
+  });
+
+  it("keeps parser options referentially stable while their values are equal", () => {
+    const seen: (ParserOptions | undefined)[] = [];
+    const Probe = ({ options }: { options?: ParserOptions }) => {
+      seen.push(useStableParserOptions(options));
+      return null;
+    };
+    const consoleErrorSpy = spyOnConsoleErrorIgnoringRendererDeprecation();
+    let renderer!: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(createElement(Probe, { options: { gfm: true } }));
+    });
+    act(() => renderer.update(createElement(Probe, { options: { gfm: true } })));
+    act(() => renderer.update(createElement(Probe, { options: { gfm: false } })));
+    act(() => renderer.unmount());
+    consoleErrorSpy.mockRestore();
+
+    expect(seen[0]).toEqual({ gfm: true });
+    expect(seen[1]).toBe(seen[0]);
+    expect(seen[2]).toEqual({ gfm: false });
+  });
+
+  it("reports the real value of a non-finite maxInputLength", () => {
+    const seen: (ParserOptions | undefined)[] = [];
+    const Probe = ({ options }: { options?: ParserOptions }) => {
+      seen.push(useStableParserOptions(options));
+      return null;
+    };
+    const consoleErrorSpy = spyOnConsoleErrorIgnoringRendererDeprecation();
+    let renderer!: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(createElement(Probe, { options: { maxInputLength: Number.NaN } }));
+    });
+    act(() =>
+      renderer.update(
+        createElement(Probe, { options: { maxInputLength: Number.POSITIVE_INFINITY } }),
+      ),
+    );
+    act(() => renderer.update(createElement(Probe, { options: { gfm: false, html: true } })));
+    act(() => renderer.unmount());
+    consoleErrorSpy.mockRestore();
+
+    expect(seen[0]?.maxInputLength).toBeNaN();
+    expect(seen[1]).toEqual({ maxInputLength: Number.POSITIVE_INFINITY });
+    expect(seen[2]).toEqual({ gfm: false, html: true });
   });
 
   it("removes empty parser options and preserves explicit values", () => {

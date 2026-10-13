@@ -18,11 +18,7 @@ describe("toMarkdownError legacy classification", () => {
       ["HybridMarkdownSession is destroyed", "destroyed"],
       ["Buffer size limit exceeded (max 10485760 bytes)", "buffer_limit"],
       [
-        "Markdown AST node/work budget exceeds the maximum of 500000",
-        "input_too_complex",
-      ],
-      [
-        "Markdown AST child/work budget exceeds the maximum of 500000",
+        "Markdown AST node budget exceeds the maximum of 100000 nodes",
         "input_too_complex",
       ],
       [
@@ -164,6 +160,40 @@ describe("createMarkdownSession", () => {
     expect(() => session.replace(-1, 0, "!")).toThrow("Invalid range");
     expect(() => session.replace(2, 1, "!")).toThrow("Invalid range");
     expect(session.getAllText()).toBe("hello");
+  });
+
+  it("reports a disposed session before an invalid range", () => {
+    const session = createMarkdownSession();
+    session.dispose();
+
+    for (const call of [
+      () => session.getTextRange(Number.NaN, 0),
+      () => session.replace(Number.NaN, 0, "x"),
+    ]) {
+      expect(call).toThrow(expect.objectContaining({ code: "destroyed" }));
+    }
+  });
+
+  it("rejects invalid getTextRange ranges with a typed error", () => {
+    const session = createMarkdownSession();
+
+    session.reset("hello");
+
+    for (const [from, to] of [
+      [Number.NaN, 0],
+      [0, Number.POSITIVE_INFINITY],
+      [-1, 3],
+      [3, 1],
+    ] as const) {
+      let caught: unknown;
+      try {
+        session.getTextRange(from, to);
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toMatchObject({ code: "invalid_range", source: "session" });
+    }
+    expect(session.getTextRange(1, 100)).toBe("ello");
   });
 
   it("uses UTF-16 boundaries without rounding surrogate pairs", () => {

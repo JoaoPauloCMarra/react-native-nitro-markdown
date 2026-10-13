@@ -12,6 +12,7 @@ const {
   ProcessTreeTerminationError,
   runProcess,
 } = require("./process-runner.js");
+const { runReleasePipeline } = require("./publish-pipeline.js");
 
 const PACKAGE_NAME = "react-native-nitro-markdown";
 const VALID_TAG_PATTERN = /^[a-zA-Z0-9._-]+$/;
@@ -44,10 +45,6 @@ function log(message, color = "green") {
   console.log(colors[color](message));
 }
 
-function formatCommand(command, args) {
-  return [command, ...args].join(" ");
-}
-
 async function run(command, args, options = {}) {
   const result = await runProcess({
     command,
@@ -57,7 +54,7 @@ async function run(command, args, options = {}) {
     ...options,
   });
 
-  if (result.signal) throw new ProcessInterrupted(result.signal);
+  if (result.interruptedBy) throw new ProcessInterrupted(result.interruptedBy);
   if (result.error) {
     log(`Failed to run ${command}: ${result.error.message}`, "red");
     return false;
@@ -75,54 +72,13 @@ async function runQuiet(command, args, options = {}) {
     ...options,
   });
 
-  if (result.signal) throw new ProcessInterrupted(result.signal);
+  if (result.interruptedBy) throw new ProcessInterrupted(result.interruptedBy);
   return {
     status: result.exitCode,
     stdout: result.stdout.trim(),
     stderr: result.stderr.trim(),
     error: result.error,
   };
-}
-
-async function runAsync({ label, command, args, cwd = projectRoot }) {
-  const startedAt = Date.now();
-  log(`${label} started: ${formatCommand(command, args)}`, "cyan");
-  const result = await runProcess({
-    command,
-    args,
-    cwd,
-    stdio: "inherit",
-  });
-  return {
-    label,
-    ok: result.ok,
-    durationMs: Date.now() - startedAt,
-    code: result.exitCode,
-    error: result.error,
-    signal: result.signal,
-  };
-}
-
-async function runParallelSteps(label, steps) {
-  log(label, "cyan");
-  const results = await Promise.all(steps.map(runAsync));
-  let failed = false;
-
-  for (const result of results) {
-    const duration = `${(result.durationMs / 1000).toFixed(1)}s`;
-    if (result.ok) {
-      console.log(`  ✓ ${result.label} (${duration})`);
-    } else {
-      failed = true;
-      log(`  ✗ ${result.label} failed (${duration})`, "red");
-      if (result.error) log(`    ${result.error.message}`, "red");
-    }
-  }
-
-  console.log("");
-  const interrupted = results.find((result) => result.signal);
-  if (interrupted?.signal) throw new ProcessInterrupted(interrupted.signal);
-  if (failed) throw new Error("One or more package checks failed");
 }
 
 function askQuestion(question) {
@@ -155,8 +111,6 @@ function parseArgs(args) {
     } else if (arg === "--skip-preflight") {
       parsed.skipPreflight = true;
     } else if (arg === "--skip-checks") {
-      parsed.skipChecks = true;
-    } else if (arg === "--skip-verify") {
       parsed.skipChecks = true;
     } else if (arg === "--skip-docs") {
       parsed.skipDocs = true;
@@ -419,7 +373,7 @@ async function runPackageDocs(mode) {
     cwd: packageDir,
     stdio: "inherit",
   });
-  if (result.signal) throw new ProcessInterrupted(result.signal);
+  if (result.interruptedBy) throw new ProcessInterrupted(result.interruptedBy);
   if (!result.ok) {
     throw new Error(`${mode} package document lifecycle step failed`);
   }
@@ -496,15 +450,7 @@ async function runPreflight({ dryRun, skipPreflight, version }) {
 }
 
 async function runVerification() {
-  await runParallelSteps("Running independent package checks in parallel...", [
-    { label: "lint", command: "bun", args: ["run", "lint"], cwd: projectRoot },
-    { label: "JS coverage", command: "bun", args: ["run", "test:coverage"], cwd: packageDir },
-  ]);
-
-  await runStep("Running C++ coverage...", "bun", ["run", "test:cpp:coverage"], {
-    cwd: packageDir,
-  });
-  await runStep("Running repo typecheck...", "bun", ["run", "typecheck"], {
+  await runStep("Running the CI gate...", "bun", ["run", "check:ci"], {
     cwd: projectRoot,
   });
   // Root build regenerates Nitro bindings before compiling, so publish
@@ -563,7 +509,7 @@ async function main() {
   if (options.dryRun) log("Mode: DRY RUN (no actual publish)", "yellow");
   console.log("");
 
-  const publish = async () => {
+  const verify = async () => {
     await runPreflight({ ...options, version });
 
     if (!options.skipDocs) validateReleaseDocs(version);
@@ -571,7 +517,9 @@ async function main() {
 
     if (!options.skipChecks) await runVerification();
     else log("Skipping verification checks", "yellow");
+  };
 
+  const publish = async () => {
     await validatePackedFiles();
 
     const publishCommand = options.dryRun ? "bun" : "npm";
@@ -608,10 +556,17 @@ async function main() {
     console.log("");
   };
 
+  const release = () =>
+    runReleasePipeline({
+      verify,
+      withDocsRestored: withPackageDocsRestored,
+      pack: publish,
+    });
+
   if (options.dryRun) {
-    await withGeneratedDirectoryRestored(() => withPackageDocsRestored(publish));
+    await withGeneratedDirectoryRestored(release);
   } else {
-    await withPackageDocsRestored(publish);
+    await release();
   }
 }
 

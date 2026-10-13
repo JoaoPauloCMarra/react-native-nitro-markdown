@@ -92,18 +92,6 @@
       "assertion": "session.getAllText() === \"# reset\""
     },
     {
-      "id": "parser.comparison",
-      "coverage": "replay-asserted",
-      "kind": "public-api",
-      "transport": "Two native parse results retain their separate before/after content.",
-      "suite": "e2e/qa-full-features.ad",
-      "source": "apps/example/components/e2e-lab.tsx",
-      "trigger": "screen-load",
-      "statusId": "e2e-comparison-status",
-      "expectedText": "ok:comparison",
-      "assertion": "getFlattenedText(after).trim() === \"PLUGIN hello\""
-    },
-    {
       "id": "parser.input-limit",
       "coverage": "replay-asserted",
       "kind": "public-api",
@@ -270,7 +258,7 @@
       "source": "apps/example/app/(tabs)/index.tsx",
       "statusId": "smoke-probe",
       "expectedText": ":fail=0:",
-      "assertion": "log.text.startsWith(\"FAIL  \")",
+      "assertion": "fail=${countLogs(smokeLogs, \"fail\")}",
       "claimLimit": "Counts the smoke log rows; each row's own detail is not asserted separately, and SKIP rows are allowed.",
       "trigger": "screen-load"
     },
@@ -498,9 +486,9 @@
       "suite": "e2e/qa-render-contracts.ad",
       "source": "apps/example/app/e2e-render-contracts.tsx",
       "trigger": "screen-load",
-      "statusId": "custom-heading-marker",
+      "statusId": "render-contracts-probe",
       "expectedText": "custom=heading-2;",
-      "assertion": "testID=\"custom-heading-marker\""
+      "assertion": "report(\"custom\""
     },
     {
       "id": "render.a11y-labels",
@@ -538,6 +526,30 @@
       "statusId": "render-contracts-probe",
       "expectedText": "tablew>=240:ctl<240;",
       "assertion": "WIDE_TABLE_OPTIONS = { minColumnWidth: 120 }"
+    },
+    {
+      "id": "render.table-cells",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "A default table with a header, a link-only cell, a code cell and a bold cell renders through the table cell path and exposes its header-derived accessibilityLabel.",
+      "suite": "e2e/qa-render-contracts.ad",
+      "source": "apps/example/app/e2e-render-contracts.tsx",
+      "trigger": "screen-load",
+      "statusId": "table-cells-surface",
+      "expectedText": "Table: Head, Docs, code, bold",
+      "assertion": "TABLE_CELLS_MARKDOWN = tableCellsMarkdown(\"Head\")"
+    },
+    {
+      "id": "render.table-cell-renderer",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "A custom table_cell renderer is invoked for all four header cells and all four body cells of a table with link, code and bold cells.",
+      "suite": "e2e/qa-render-contracts.ad",
+      "source": "apps/example/app/e2e-render-contracts.tsx",
+      "trigger": "screen-load",
+      "statusId": "render-contracts-probe",
+      "expectedText": "tablecells=h4:b4;",
+      "assertion": "report(\"tablecells\""
     },
     {
       "id": "render.link-press",

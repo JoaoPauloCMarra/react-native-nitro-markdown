@@ -5,6 +5,7 @@ import {
   Markdown,
   TableRenderer,
   createMarkdownSession,
+  getFlattenedText,
   useMarkdownStreamState,
   type CodeHighlighter,
   type CustomRenderers,
@@ -24,6 +25,10 @@ const MATH_OPTIONS = { math: true } as const;
 const CODE_LANGUAGE_THEME = { showCodeLanguage: true } as const;
 const WIDE_TABLE_OPTIONS = { minColumnWidth: 120 } as const;
 const TABLE_MARKDOWN = "| Alpha | Beta |\n|---|---|\n| a | b |";
+const tableCellsMarkdown = (firstHeader: string) =>
+  `| ${firstHeader} | [Docs](https://example.test/docs) | \`code\` | **bold** |\n|---|---|---|---|\n| h1 | [Link](https://example.test/link) | \`c1\` | **b1** |`;
+const TABLE_CELLS_MARKDOWN = tableCellsMarkdown("Head");
+const CUSTOM_CELL_TABLE_MARKDOWN = tableCellsMarkdown("Custom");
 const BEFORE_PARSE_PLUGINS: MarkdownPlugin[] = [{ name: "e2e-before-parse", beforeParse: (markdown) => markdown }];
 const PARSE_ERROR_OPTIONS = { maxInputLength: 4 } as const;
 
@@ -115,6 +120,15 @@ export default function MarkdownRenderContractsScreen() {
   const controlTableRenderers = useMemo<CustomRenderers>(() => ({
     table: (props) => <MeasuredTable {...props} onWidth={(width) => setTableWidths((current) => ({ ...current, control: width }))} />,
   }), []);
+  const seenCells = useRef({ header: new Set<string>(), body: new Set<string>() });
+  const tableCellRenderers = useMemo<CustomRenderers>(() => ({
+    table_cell: ({ node, children }) => {
+      const seen = seenCells.current;
+      (node.isHeader ? seen.header : seen.body).add(getFlattenedText(node));
+      report("tablecells", `tablecells=h${seen.header.size}:b${seen.body.size}`);
+      return <View style={styles.shrink}>{children}</View>;
+    },
+  }), [report]);
   const linkRenderers = useMemo<CustomRenderers>(() => ({
     paragraph: ({ children }) => (
       <View testID="link-press-target" style={styles.shrink}>
@@ -156,6 +170,10 @@ export default function MarkdownRenderContractsScreen() {
           <Markdown renderers={wideTableRenderers} tableOptions={WIDE_TABLE_OPTIONS}>{TABLE_MARKDOWN}</Markdown>
         </View>
         <Markdown renderers={controlTableRenderers}>{TABLE_MARKDOWN}</Markdown>
+        <View testID="table-cells-surface">
+          <Markdown>{TABLE_CELLS_MARKDOWN}</Markdown>
+        </View>
+        <Markdown renderers={tableCellRenderers}>{CUSTOM_CELL_TABLE_MARKDOWN}</Markdown>
         <View testID="math-surface">
           <Markdown options={MATH_OPTIONS} renderers={mathRenderers}>{"$$E2Emath^{2}$$"}</Markdown>
         </View>

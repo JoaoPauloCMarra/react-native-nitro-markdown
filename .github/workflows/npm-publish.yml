@@ -23,15 +23,15 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BUN_VERSION: "1.3.14"
+  BUN_VERSION: "1.4.3"
   NODE_VERSION: "24"
-  NPM_VERSION: "11.19.0"
+  NPM_VERSION: "12.2.0"
   PACKAGE_DIR: packages/react-native-nitro-markdown
 
 jobs:
   validate:
     name: Validate release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     outputs:
       package_name: ${{ steps.metadata.outputs.package_name }}
@@ -74,20 +74,20 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: Checkout release tag
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        uses: actions/checkout@v7
         with:
           clean: true
           ref: refs/tags/${{ steps.validate_inputs.outputs.release_tag }}
           persist-credentials: false
 
       - name: Setup Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
           no-cache: true
@@ -175,7 +175,7 @@ jobs:
     name: Publish package
     if: ${{ github.event_name == 'release' && needs.validate.outputs.already_published != 'true' }}
     needs: validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       id-token: write
@@ -210,7 +210,7 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: Checkout validated release commit
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        uses: actions/checkout@v7
         with:
           clean: true
           ref: ${{ needs.validate.outputs.release_commit }}
@@ -231,14 +231,14 @@ jobs:
           fi
 
       - name: Setup Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
           no-cache: true
@@ -266,7 +266,7 @@ jobs:
     name: Verify public registry
     if: ${{ always() && needs.validate.result == 'success' && github.event_name == 'release' }}
     needs: [validate, publish]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     env:
       PACKAGE_NAME: ${{ needs.validate.outputs.package_name }}
       PACKAGE_VERSION: ${{ needs.validate.outputs.package_version }}
@@ -302,14 +302,14 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: Checkout release tag
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        uses: actions/checkout@v7
         with:
           clean: true
           ref: refs/tags/${{ steps.validate_inputs.outputs.release_tag }}
           persist-credentials: false
 
       - name: Setup Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false

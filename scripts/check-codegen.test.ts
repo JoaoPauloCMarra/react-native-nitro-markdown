@@ -4,6 +4,7 @@ import {
   mkdtemp,
   readFile,
   rm,
+  stat,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -111,6 +112,41 @@ describe("codegen check process guard", () => {
       expect(result.timedOut).toBe(false);
       expect(result.trackedDirectoryChanged).toBe(true);
       expect(await readFile(file, "utf8")).toBe("original");
+    } finally {
+      await rm(parent, { force: true, recursive: true });
+    }
+  });
+
+  test("leaves an unchanged generated tree untouched after a clean run", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "nitro-markdown-codegen-clean-"));
+    const directory = join(parent, "generated");
+    await mkdir(directory);
+    const file = join(directory, "generated.txt");
+    await writeFile(file, "original");
+    const before = {
+      directory: await stat(directory, { bigint: true }),
+      file: await stat(file, { bigint: true }),
+    };
+
+    try {
+      const result = await runCodegen({
+        command: process.execPath,
+        args: ["-e", "0"],
+        generatedDirectory: directory,
+        timeoutMs: 1000,
+        killGraceMs: 20,
+        stdout: "ignore",
+        stderr: "ignore",
+      });
+
+      expect(result).toMatchObject({ exitCode: 0, trackedDirectoryChanged: false });
+      const after = {
+        directory: await stat(directory, { bigint: true }),
+        file: await stat(file, { bigint: true }),
+      };
+      expect(after.directory.ino).toBe(before.directory.ino);
+      expect(after.file.ino).toBe(before.file.ino);
+      expect(after.file.mtimeNs).toBe(before.file.mtimeNs);
     } finally {
       await rm(parent, { force: true, recursive: true });
     }

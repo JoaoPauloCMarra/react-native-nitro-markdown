@@ -22,7 +22,7 @@ install `ratex-react-native` or remove the `/math` import. The main entry and
 ### Parse fails with `input_too_complex`
 
 The document is within the byte cap but exceeds a native AST budget (100,000
-nodes or 500,000 units of AST work). Split very long documents, or render them
+nodes). Split very long documents, or render them
 in parts. See the [error codes](./api-reference.md#headless-exports).
 
 ### Streaming updates too often / janky

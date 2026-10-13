@@ -1,6 +1,6 @@
 #pragma once
 
-#include "HybridMarkdownParser.hpp"
+#include "ParserOptionsMapping.hpp"
 #include "HybridMarkdownSessionSpec.hpp"
 #include <cstddef>
 #include <functional>
@@ -53,7 +53,7 @@ private:
     size_t unsettledTailBytes_ = 0;
     size_t rangeUtf16Offset_ = 0;
     size_t rangeByteOffset_ = 0;
-    std::unique_ptr<HybridMarkdownParser> parser_;
+    std::unique_ptr<::NitroMarkdown::MD4CParser> parser_;
     double highlightPosition_ = 0.0;
     bool disposed_ = false;
     size_t nextListenerId_ = 0;

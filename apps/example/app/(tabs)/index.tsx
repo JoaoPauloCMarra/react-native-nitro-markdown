@@ -132,17 +132,47 @@ type LogEntry = {
   type: "header" | "pass" | "fail" | "info" | "skip" | "spacer";
 };
 
-type LatexBenchmarkTarget = {
-  renderer: "ratex" | "legacy-mathjax";
-  startedAt: number;
-  token: number;
-};
+const countLogs = (logs: readonly LogEntry[], type: LogEntry["type"]): number =>
+  logs.filter((log) => log.type === type).length;
 
-type RenderBenchmarkTarget = {
-  kind: "nitro" | "nitro-long";
-  startedAt: number;
-  token: number;
-};
+type LatexBenchmarkRenderer = "ratex" | "legacy-mathjax";
+type RenderBenchmarkKind = "nitro" | "nitro-long";
+
+function useLayoutTimer<Payload>() {
+  const [target, setTarget] = useState<{
+    payload: Payload;
+    token: number;
+  } | null>(null);
+  const resolverRef = useRef<((layoutAt: number) => void) | null>(null);
+
+  const measure = useCallback((payload: Payload): Promise<number | null> => {
+    const startedAt = global.performance.now();
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const timeout = setTimeout(() => finish(null), MEASURE_TIMEOUT_MS);
+      const finish = (value: number | null) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        resolverRef.current = null;
+        setTarget(null);
+        resolve(value);
+      };
+      resolverRef.current = (layoutAt: number) => finish(layoutAt - startedAt);
+      setTarget({ payload, token: Math.random() });
+    });
+  }, []);
+
+  const onLayout = useCallback(() => {
+    const resolve = resolverRef.current;
+    if (!resolve) return;
+    const layoutAt = global.performance.now();
+    setTimeout(() => resolve(layoutAt), MEASURE_SETTLE_MS);
+  }, []);
+
+  return { target, measure, onLayout };
+}
 
 type BenchmarkResults = {
   nitroTime: number;
@@ -775,9 +805,9 @@ async function runSmokeTests(): Promise<LogEntry[]> {
 
   spacer();
 
-  const passed = logs.filter((l) => l.type === "pass").length;
-  const failed = logs.filter((l) => l.type === "fail").length;
-  const skipped = logs.filter((l) => l.type === "skip").length;
+  const passed = countLogs(logs, "pass");
+  const failed = countLogs(logs, "fail");
+  const skipped = countLogs(logs, "skip");
   const total = passed + failed;
 
   header("SUMMARY");
@@ -799,13 +829,9 @@ export default function BenchmarkScreen() {
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"idle" | "smoke" | "bench">("idle");
   const [isBenchmarkRunning, setIsBenchmarkRunning] = useState(false);
-  const [latexBenchmarkTarget, setLatexBenchmarkTarget] =
-    useState<LatexBenchmarkTarget | null>(null);
   const tabHeight = useBottomTabHeight();
-  const latexBenchmarkResolverRef = useRef<((layoutAt: number) => void) | null>(null);
-  const [renderBenchmarkTarget, setRenderBenchmarkTarget] =
-    useState<RenderBenchmarkTarget | null>(null);
-  const renderBenchmarkResolverRef = useRef<((layoutAt: number) => void) | null>(null);
+  const latexTimer = useLayoutTimer<LatexBenchmarkRenderer>();
+  const renderTimer = useLayoutTimer<RenderBenchmarkKind>();
 
   const wait = (ms: number) =>
     new Promise((resolve) => setTimeout(resolve, ms));
@@ -834,68 +860,12 @@ export default function BenchmarkScreen() {
     };
   };
 
-  const measureLatexRenderer = (
-    renderer: LatexBenchmarkTarget["renderer"],
-  ): Promise<number | null> => {
-    const startedAt = global.performance.now();
-
-    return new Promise((resolve) => {
-      let settled = false;
-      const finish = (value: number | null) => {
-        if (settled) return;
-        settled = true;
-        latexBenchmarkResolverRef.current = null;
-        setLatexBenchmarkTarget(null);
-        resolve(value);
-      };
-      latexBenchmarkResolverRef.current = (layoutAt: number) =>
-        finish(layoutAt - startedAt);
-      setTimeout(() => finish(null), MEASURE_TIMEOUT_MS);
-      setLatexBenchmarkTarget({ renderer, startedAt, token: Math.random() });
-    });
-  };
-
-  const handleLatexBenchmarkLayout = useCallback(() => {
-    const resolve = latexBenchmarkResolverRef.current;
-    if (!resolve) return;
-    const layoutAt = global.performance.now();
-    setTimeout(() => resolve(layoutAt), MEASURE_SETTLE_MS);
-  }, []);
-
-  const measureRender = (
-    kind: RenderBenchmarkTarget["kind"],
-  ): Promise<number | null> => {
-    const startedAt = global.performance.now();
-
-    return new Promise((resolve) => {
-      let settled = false;
-      const finish = (value: number | null) => {
-        if (settled) return;
-        settled = true;
-        renderBenchmarkResolverRef.current = null;
-        setRenderBenchmarkTarget(null);
-        resolve(value);
-      };
-      renderBenchmarkResolverRef.current = (layoutAt: number) =>
-        finish(layoutAt - startedAt);
-      setTimeout(() => finish(null), MEASURE_TIMEOUT_MS);
-      setRenderBenchmarkTarget({ kind, startedAt, token: Math.random() });
-    });
-  };
-
-  const handleRenderBenchmarkLayout = useCallback(() => {
-    const resolve = renderBenchmarkResolverRef.current;
-    if (!resolve) return;
-    const layoutAt = global.performance.now();
-    setTimeout(() => resolve(layoutAt), MEASURE_SETTLE_MS);
-  }, []);
-
   const measureRenderMedian = async (
-    kind: RenderBenchmarkTarget["kind"],
+    kind: RenderBenchmarkKind,
   ): Promise<number | null> => {
     const samples: number[] = [];
     for (let index = 0; index < RENDER_SAMPLE_COUNT; index++) {
-      const result = await measureRender(kind);
+      const result = await renderTimer.measure(kind);
       if (result !== null) samples.push(result);
       await wait(80);
     }
@@ -967,10 +937,10 @@ export default function BenchmarkScreen() {
     );
 
     const mathjaxTime = await isolate(
-      () => measureLatexRenderer("legacy-mathjax"),
+      () => latexTimer.measure("legacy-mathjax"),
       null,
     );
-    const ratexTime = await isolate(() => measureLatexRenderer("ratex"), null);
+    const ratexTime = await isolate(() => latexTimer.measure("ratex"), null);
     const nitroRenderTime = await isolate(
       () => measureRenderMedian("nitro"),
       null,
@@ -999,7 +969,7 @@ export default function BenchmarkScreen() {
   const smokeProbeLabel = error
     ? "smoke:error;"
     : mode === "smoke" && smokeLogs.length > 0
-      ? `smoke:pass=${smokeLogs.filter((log) => log.text.startsWith("PASS  ")).length}:fail=${smokeLogs.filter((log) => log.text.startsWith("FAIL  ")).length}:skip=${smokeLogs.filter((log) => log.text.startsWith("SKIP  ")).length};`
+      ? `smoke:pass=${countLogs(smokeLogs, "pass")}:fail=${countLogs(smokeLogs, "fail")}:skip=${countLogs(smokeLogs, "skip")};`
       : "smoke:idle;";
 
   return (
@@ -1171,17 +1141,17 @@ export default function BenchmarkScreen() {
 
       </ScrollView>
 
-      {latexBenchmarkTarget ? (
+      {latexTimer.target ? (
         <View
-          key={`${latexBenchmarkTarget.renderer}-${latexBenchmarkTarget.token}`}
+          key={`${latexTimer.target.payload}-${latexTimer.target.token}`}
           pointerEvents="none"
           style={styles.latexBenchmarkHost}
-          onLayout={handleLatexBenchmarkLayout}
+          onLayout={latexTimer.onLayout}
         >
           <Markdown
             options={{ gfm: true, math: true }}
             renderers={
-              latexBenchmarkTarget.renderer === "legacy-mathjax"
+              latexTimer.target.payload === "legacy-mathjax"
                 ? legacyMathRenderers
                 : mathRenderers
             }
@@ -1191,14 +1161,14 @@ export default function BenchmarkScreen() {
         </View>
       ) : null}
 
-      {renderBenchmarkTarget ? (
+      {renderTimer.target ? (
         <View
-          key={`${renderBenchmarkTarget.kind}-${renderBenchmarkTarget.token}`}
+          key={`${renderTimer.target.payload}-${renderTimer.target.token}`}
           pointerEvents="none"
           style={styles.latexBenchmarkHost}
-          onLayout={handleRenderBenchmarkLayout}
+          onLayout={renderTimer.onLayout}
         >
-          {renderBenchmarkTarget.kind === "nitro" ? (
+          {renderTimer.target.payload === "nitro" ? (
             <Markdown options={{ gfm: true }}>{RENDER_BENCH_MARKDOWN}</Markdown>
           ) : (
             <Markdown

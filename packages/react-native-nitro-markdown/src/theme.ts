@@ -210,6 +210,11 @@ type ViewNodeType =
   | "line_break"
   | "soft_break";
 
+/**
+ * Per-node style overrides. `line_break` and `soft_break` render as plain
+ * text and cannot carry a style; their keys are accepted for type
+ * compatibility and have no effect.
+ */
 export type NodeStyleOverrides = Partial<
   { [K in TextNodeType]: TextStyle } & { [K in ViewNodeType]: ViewStyle }
 >;
@@ -269,6 +274,10 @@ export const minimalMarkdownTheme: MarkdownTheme = {
   },
   showCodeLanguage: false,
 };
+
+export const getMonoFontFamily = (theme: MarkdownTheme): string | undefined =>
+  theme.fontFamilies.mono ??
+  Platform.select({ ios: "Courier", android: "monospace" });
 
 export const mergeThemes = (
   base: MarkdownTheme,

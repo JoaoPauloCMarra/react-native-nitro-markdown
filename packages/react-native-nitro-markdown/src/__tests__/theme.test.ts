@@ -1,5 +1,6 @@
 import "./setup";
 import {
+  getMonoFontFamily,
   mergeThemes,
   defaultMarkdownTheme,
   darkMarkdownTheme,
@@ -145,5 +146,21 @@ describe("code token palette contrast", () => {
         ratio: true,
       });
     }
+  });
+});
+
+describe("getMonoFontFamily", () => {
+  it("prefers the themed mono family and falls back to a platform monospace font", () => {
+    expect(
+      getMonoFontFamily(
+        mergeThemes(defaultMarkdownTheme, { fontFamilies: { mono: "Menlo" } }),
+      ),
+    ).toBe("Menlo");
+    expect(
+      getMonoFontFamily({
+        ...defaultMarkdownTheme,
+        fontFamilies: { ...defaultMarkdownTheme.fontFamilies, mono: undefined },
+      }),
+    ).toMatch(/^(Courier|monospace)$/);
   });
 });

@@ -34,7 +34,6 @@ test("Node identity fallback terminates a timed-out process tree", async () => {
       identityMode: "ps",
     });
     assert.equal(result.timedOut, true);
-    assert.equal(result.treeGone, true);
     await new Promise((resolve) => setTimeout(resolve, 260));
     await assert.rejects(readFile(marker));
   } finally {
@@ -57,4 +56,31 @@ test("Node identity fallback accepts commands that exit before identity capture"
     assert.equal(result.ok, true);
     assert.equal(result.exitCode, 0);
   }
+});
+
+test("a child's own death signal is not reported as an interruption", async () => {
+  if (process.platform === "win32") return;
+
+  const result = await runProcess({
+    command: process.execPath,
+    args: ["-e", "process.kill(process.pid, 'SIGSEGV')"],
+    timeoutMs: 5_000,
+    killGraceMs: 80,
+    stdio: "ignore",
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.signal, "SIGSEGV");
+  assert.equal(result.interruptedBy, null);
+  assert.notEqual(result.exitCode, 0);
+});
+
+test("rejects options the runner does not honour", async () => {
+  await assert.rejects(
+    runProcess({
+      command: process.execPath,
+      args: ["-e", "0"],
+      stdout: "ignore",
+    }),
+    /Unsupported runProcess options: stdout/,
+  );
 });

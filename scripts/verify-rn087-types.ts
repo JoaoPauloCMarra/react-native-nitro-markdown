@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Glob } from "bun";
+import { packageSourceEntries } from "./package-source-entries";
 
 type JsonRecord = Record<string, unknown>;
 type DependencyMap = Record<string, string>;
@@ -57,6 +58,8 @@ async function main(): Promise<void> {
     /\/package\.json$/,
     "/src",
   );
+  const packageDirectory = packageManifestPath.replace(/\/package\.json$/, "");
+  const sourceEntries = packageSourceEntries(packageManifest, packageDirectory);
   const sourceEntry = join(sourceDirectory, "index.ts");
   const temporaryRoot = await mkdtemp(join(tmpdir(), "nitro-rn087-types-"));
 
@@ -124,7 +127,7 @@ async function main(): Promise<void> {
             target: "ES2020",
             types: ["node", "react", "react-native"],
           },
-          include: [sourceEntry, `${sourceDirectory}/**/*.d.ts`],
+          include: [...sourceEntries, `${sourceDirectory}/**/*.d.ts`],
         },
         null,
         2,

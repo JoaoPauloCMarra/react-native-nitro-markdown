@@ -905,21 +905,6 @@ describe("MarkdownStream", () => {
       rangeText: " world",
     });
 
-    const realisticAst = {
-      type: "document",
-      beg: 0,
-      end: 5,
-      children: [
-        {
-          type: "paragraph",
-          beg: 0,
-          end: 5,
-          children: [{ type: "text", beg: 0, end: 5, content: "hello" }],
-        },
-      ],
-    };
-    mockParser.parse.mockImplementationOnce(() => JSON.stringify(realisticAst));
-
     act(() => {
       TestRenderer.create(
         React.createElement(MarkdownStream, {

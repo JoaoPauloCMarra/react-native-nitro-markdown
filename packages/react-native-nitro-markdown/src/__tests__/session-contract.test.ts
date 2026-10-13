@@ -14,6 +14,12 @@ describe("shared session contract corpus (JS adapter and C++ harness)", () => {
     expect(failures).toEqual([]);
   });
 
+  it("lists each scenario name once", () => {
+    const names = SESSION_SCENARIO_CORPUS.map((scenario) => scenario.name);
+    expect(new Set(names).size).toBe(names.length);
+    expect(names.every((name) => name.length > 0)).toBe(true);
+  });
+
   it("covers range, error, disposal, and listener semantics", () => {
     const names = SESSION_SCENARIO_CORPUS.map((scenario) => scenario.name);
     expect(names).toEqual(

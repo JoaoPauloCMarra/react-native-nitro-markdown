@@ -162,7 +162,9 @@ so the first frame renders without parsing. Full guide:
 **[Streaming](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/streaming.md)**.
 
 Session ranges use JavaScript UTF-16 units. An index inside a surrogate pair
-(including emoji) is rejected with `invalid_range` instead of rounded.
+(including emoji) is rejected with `invalid_range` instead of rounded. Both
+`getTextRange()` and `replace()` also throw `invalid_range` for a range that is
+not finite, is negative, or is reversed.
 
 ### Display math fences
 
@@ -282,7 +284,7 @@ default code token colors. Compose with `mergeThemes`. Full guide:
 | `options.math`           | `true`                     | Inline and block math nodes.                                                                                                                                                                                                                                                                        |
 | `options.html`           | `false`                    | Preserve raw HTML nodes for custom renderers.                                                                                                                                                                                                                                                       |
 | `options.sourceOffsets`  | `true`                     | Optional source mapping. `true` emits per-node `beg`/`end` as JavaScript UTF-16 indices; `false` omits them and skips the native UTF-16 map. Headless consumers should choose `false` unless they need source ranges. The ordinary string render fast path chooses `false` automatically when safe. |
-| `options.maxInputLength` | `10485760`                 | Maximum accepted input length in UTF-8 bytes. Oversized inputs fail with a typed `input_too_large` error instead of being parsed. Values above the hard cap are clamped. Documents inside the cap that exceed the native AST budgets (100,000 nodes, 500,000 units of AST work) fail with `input_too_complex`. |
+| `options.maxInputLength` | `10485760`                 | Maximum accepted input length in UTF-8 bytes. Oversized inputs fail with a typed `input_too_large` error instead of being parsed. Values above the hard cap are clamped. Documents inside the cap that exceed the native AST budgets (100,000 nodes) fail with `input_too_complex`. |
 | `options.freezeAst`      | `false`                    | Freeze parsed AST nodes and child arrays before exposing them to plugins, transforms, renderers, and callbacks.                                                                                                                                                                                     |
 | `parseCache`             | `true`                     | Reuse parsed ASTs for repeated content. The cache is scoped per `<Markdown>` instance (max 32 entries) and only holds documents up to 24,000 UTF-16 characters; longer documents are not cached or counted. Per-instance hit/miss/eviction counters are reported via `onParseComplete`'s `cacheStats`. |
 | `sourceAst`              | `undefined`                | Render a pre-parsed AST instead of parsing `children`.                                                                                                                                                                                                                                              |
@@ -525,6 +527,23 @@ prerequisites, and limits on what each flow proves.
 When several devices are available, set `ANDROID_SERIAL` for Android and
 `EXAMPLE_SMOKE_IOS_UDID` for iOS. The iOS smoke check stops if it cannot select
 one booted simulator.
+
+### Example app build speed
+
+The example app is generated (Expo CNG), so build settings live in tracked
+config: `apps/example/app.config.js` and `apps/example/plugins/with-fast-gradle.js`.
+They apply on the next `example:prebuild`.
+
+| Setting | Where | Default | Override |
+| --- | --- | --- | --- |
+| Gradle build cache and parallel projects (`org.gradle.caching`, `org.gradle.parallel`) | `with-fast-gradle.js` | on | edit the plugin, or pass `--no-build-cache` / `--no-parallel` to Gradle |
+| Gradle and Kotlin daemon memory (`-Xmx6g`, `kotlin.daemon.jvmargs=-Xmx3g`) | `with-fast-gradle.js` | on | lower the values on hosts with less than 16 GB |
+| Android ABIs (`buildArchs`) | `app.config.js` | all four ABIs, so release APKs run on phones | `NITRO_ANDROID_ARCHS=x86_64 bun run example:prebuild -- --platform android` builds an emulator-only app; use comma-separated values for several ABIs |
+| iOS `ccache` (`ios.ccacheEnabled`) | `app.config.js` | on | install it with `brew install ccache`; see [React Native local caches](https://reactnative.dev/docs/build-speed#local-caches) |
+
+The Gradle configuration cache stays off because `example:android:assemble`
+runs with `--no-configuration-cache`. `useFrameworks` and the prebuilt React
+Native core are unchanged.
 
 ## Contributing
 

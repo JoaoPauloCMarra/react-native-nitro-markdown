@@ -48,18 +48,9 @@ std::string flattenNodeText(const std::shared_ptr<MarkdownNode>& node) {
     std::vector<Frame> frames;
     frames.push_back({node, 0, {}});
     size_t nodeCount = 0;
-    size_t childSlotCount = 0;
-    size_t workCount = 0;
     while (!frames.empty()) {
         auto& frame = frames.back();
         if (frame.node && frame.nextChild < frame.node->children.size()) {
-            if (++childSlotCount > kMaxAstChildSlots ||
-                ++workCount > kMaxAstWork) {
-                throw std::runtime_error(
-                    "Markdown AST child/work budget exceeds the maximum of " +
-                    std::to_string(kMaxAstWork)
-                );
-            }
             if (frames.size() >= kMaxAstDepth) {
                 throw std::runtime_error(
                     "Markdown AST depth exceeds the maximum of " +
@@ -70,11 +61,8 @@ std::string flattenNodeText(const std::shared_ptr<MarkdownNode>& node) {
             continue;
         }
 
-        if (++nodeCount > kMaxAstNodes || ++workCount > kMaxAstWork) {
-            throw std::runtime_error(
-                "Markdown AST node/work budget exceeds the maximum of " +
-                std::to_string(kMaxAstWork)
-            );
+        if (++nodeCount > kMaxAstNodes) {
+            throw std::runtime_error(astNodeBudgetExceededMessage());
         }
 
         std::string value;

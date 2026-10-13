@@ -67,6 +67,11 @@ replacing a renderer:
 </Markdown>
 ```
 
+`line_break` and `soft_break` render as plain text and cannot carry a style, so
+their keys have no effect. Table styles apply to the matching table part:
+`table_head` and `table_body` wrap the header and body rows, `table_row` styles
+each row, and `table_cell` styles each cell container.
+
 ## Custom renderers
 
 Replace the component used for any node type. Renderers receive parsed nodes
@@ -84,6 +89,20 @@ const renderers: MarkdownRenderers = {
 
 <Markdown renderers={renderers}>{"Custom paragraph renderer"}</Markdown>;
 ```
+
+Table parts are honoured as well. `table_cell` replaces the cell content inside
+the sized cell. `table_head`, `table_body` and `table_row` receive the default
+layout element as `children`, and the renderer must render `children`: a
+renderer that returns something else replaces the whole header, body or row,
+and the cells inside it are not drawn. Return `undefined` to keep the default.
+A custom `table_cell` renderer runs twice per cell: once for display and once
+in the off-screen pass that measures column widths, so it must not have side
+effects that assume a single call. The measured width includes whatever the
+renderer returns. A custom `table_cell` receives no table text style: style the
+returned elements yourself, or read `theme.colors.tableHeaderText` and
+`theme.colors.text` from your theme.
+These three node types are drawn only by the table layout, so a standalone
+`table_head`, `table_body` or `table_row` node renders nothing.
 
 For stronger typing, use the node-specific renderer props:
 

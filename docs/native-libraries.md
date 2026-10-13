@@ -20,5 +20,5 @@ C++ JSON writer plus `JSON.parse` on the JavaScript side.
 | comrak | Rejected. Rust/C ABI plus a GFM dialect that does not match md4c output. |
 | syntect | Rejected. Highlighting stays on `defaultHighlighter` / `CodeHighlighter` so themes stay in JavaScript. |
 
-Incremental parse, fragment JSON cache, and UTF-16 offset math stay in-tree.
+Incremental parse and UTF-16 offset math stay in-tree.
 Do not describe `astTransform` as a parser-plugin syntax extension.

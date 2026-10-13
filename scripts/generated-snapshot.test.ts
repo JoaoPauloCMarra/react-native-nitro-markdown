@@ -18,7 +18,6 @@ import {
   restoreDirectorySnapshot,
   setSnapshotFsForTest,
   snapshotDirectory,
-  withDirectoryRestored,
 } from "./generated-snapshot.js";
 
 const temporaryDirectories: string[] = [];
@@ -70,22 +69,6 @@ describe("generated directory snapshots", () => {
       expect.objectContaining({ mode: expect.any(Number) }),
     );
     expect((await stat(join(directory, "mode.txt"))).mode & 0o777).toBe(0o640);
-    expect(await snapshotDirectory(parent, "generated")).toEqual(before);
-  });
-
-  test("restores a safe injected build in a finally path", async () => {
-    const { parent, directory } = await createFixture();
-    const before = await snapshotDirectory(parent, "generated");
-
-    await expect(
-      withDirectoryRestored(parent, "generated", async () => {
-        await writeFile(join(directory, "kept.txt"), "build output");
-        await unlink(join(directory, "deleted.txt"));
-        await writeFile(join(directory, "created.txt"), "build output");
-        throw new Error("injected build failure");
-      }),
-    ).rejects.toThrow("injected build failure");
-
     expect(await snapshotDirectory(parent, "generated")).toEqual(before);
   });
 
