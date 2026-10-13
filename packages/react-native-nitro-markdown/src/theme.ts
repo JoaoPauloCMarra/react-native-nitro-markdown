@@ -275,6 +275,10 @@ export const minimalMarkdownTheme: MarkdownTheme = {
   showCodeLanguage: false,
 };
 
+export const getMonoFontFamily = (theme: MarkdownTheme): string | undefined =>
+  theme.fontFamilies.mono ??
+  Platform.select({ ios: "Courier", android: "monospace" });
+
 export const mergeThemes = (
   base: MarkdownTheme,
   partial?: PartialMarkdownTheme,

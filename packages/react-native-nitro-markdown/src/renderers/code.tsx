@@ -17,7 +17,7 @@ import {
   type TokenType,
 } from "../utils/code-highlight";
 import type { MarkdownNode } from "../headless";
-import type { MarkdownTheme } from "../theme";
+import { getMonoFontFamily, type MarkdownTheme } from "../theme";
 
 type TokenStyles = Partial<Record<TokenType, TextStyle>>;
 
@@ -149,10 +149,6 @@ type InlineCodeStyles = ReturnType<typeof createInlineStyles>;
 
 const codeBlockStylesCache = new WeakMap<MarkdownTheme, CodeBlockStyles>();
 const inlineCodeStylesCache = new WeakMap<MarkdownTheme, InlineCodeStyles>();
-
-const getMonoFontFamily = (theme: MarkdownTheme) =>
-  theme.fontFamilies.mono ??
-  Platform.select({ ios: "Courier", android: "monospace" });
 
 const createCodeStyles = (theme: MarkdownTheme) =>
   StyleSheet.create({

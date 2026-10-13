@@ -36,7 +36,7 @@ import {
 import { Paragraph } from "./renderers/paragraph";
 import { TableRenderer } from "./renderers/table";
 import { TableCell } from "./renderers/table/cell-content";
-import type { MarkdownTheme } from "./theme";
+import { getMonoFontFamily, type MarkdownTheme } from "./theme";
 
 const isInline = (type: MarkdownNode["type"]): boolean => {
   return (
@@ -583,7 +583,7 @@ export const createBaseStyles = (theme: MarkdownTheme) =>
     errorText: {
       color: "#f87171",
       fontSize: 14,
-      fontFamily: theme.fontFamilies.mono ?? "monospace",
+      fontFamily: getMonoFontFamily(theme),
       ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
     text: {
