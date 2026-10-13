@@ -18,7 +18,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@babel/runtime": "^7.29.7",
+    "@babel/runtime": "^7.29.10",
     "@expo/vector-icons": "^15.1.1",
     "expo": "~57.0.28",
     "expo-asset": "~57.0.19",

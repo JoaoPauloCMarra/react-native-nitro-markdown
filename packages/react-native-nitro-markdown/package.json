@@ -130,9 +130,9 @@
     "@types/react-test-renderer": "^19.3.0",
     "commonmark": "^0.31.2",
     "markdown-it": "^14.3.2",
-    "marked": "^18.0.14",
+    "marked": "^18.1.1",
     "ratex-react-native": "0.1.14",
-    "react-native-builder-bob": "^0.43.1",
+    "react-native-builder-bob": "^0.43.2",
     "react-test-renderer": "19.2.3",
     "size-limit": "^13.1.1",
     "typescript": "~6.0.3"
