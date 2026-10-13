@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [Next]
+
+### Breaking changes
+
+None.
+
+### Fixed
+
+- `renderers.table_cell`, `table_row`, `table_head` and `table_body` now take effect in the default table. `table_cell` replaces the cell content; the other three receive the default layout element as `children`.
+- `styles.list_item` now styles list items, and `styles.table_head`, `table_body`, `table_row` and `table_cell` style the matching table parts. `line_break` and `soft_break` keys remain in `NodeStyleOverrides` but cannot carry styles.
+- Table header and body cells now render their text with the cell text style, so header weight, size and `theme.colors.tableHeaderText` apply. This is a visible change: header text is smaller and bolder, and body cell text uses the 14pt cell style instead of the paragraph text style.
+
 ## [0.14.0] - 2026-10-03
 
 ### Breaking changes

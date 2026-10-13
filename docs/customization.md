@@ -67,6 +67,11 @@ replacing a renderer:
 </Markdown>
 ```
 
+`line_break` and `soft_break` render as plain text and cannot carry a style, so
+their keys have no effect. Table styles apply to the matching table part:
+`table_head` and `table_body` wrap the header and body rows, `table_row` styles
+each row, and `table_cell` styles each cell container.
+
 ## Custom renderers
 
 Replace the component used for any node type. Renderers receive parsed nodes
@@ -84,6 +89,10 @@ const renderers: MarkdownRenderers = {
 
 <Markdown renderers={renderers}>{"Custom paragraph renderer"}</Markdown>;
 ```
+
+Table parts are honoured as well. `table_cell` replaces the cell content inside
+the sized cell, while `table_head`, `table_body` and `table_row` receive the
+default layout element as `children` so a renderer can wrap it.
 
 For stronger typing, use the node-specific renderer props:
 

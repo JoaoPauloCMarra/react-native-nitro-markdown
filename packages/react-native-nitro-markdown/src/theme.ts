@@ -210,6 +210,11 @@ type ViewNodeType =
   | "line_break"
   | "soft_break";
 
+/**
+ * Per-node style overrides. `line_break` and `soft_break` render as plain
+ * text and cannot carry a style; their keys are accepted for type
+ * compatibility and have no effect.
+ */
 export type NodeStyleOverrides = Partial<
   { [K in TextNodeType]: TextStyle } & { [K in ViewNodeType]: ViewStyle }
 >;

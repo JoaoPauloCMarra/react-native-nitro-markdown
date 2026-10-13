@@ -10,17 +10,27 @@ type ExtractedTableData = {
   headers: MarkdownNode[];
   rows: MarkdownNode[][];
   alignments: (string | undefined)[];
+  head: MarkdownNode | undefined;
+  headRow: MarkdownNode | undefined;
+  body: MarkdownNode | undefined;
+  rowNodes: MarkdownNode[];
 };
 
 export const extractTableData = (node: MarkdownNode): ExtractedTableData => {
   const headers: MarkdownNode[] = [];
   const rows: MarkdownNode[][] = [];
   const alignments: (string | undefined)[] = [];
+  const rowNodes: MarkdownNode[] = [];
+  let head: MarkdownNode | undefined;
+  let headRow: MarkdownNode | undefined;
+  let body: MarkdownNode | undefined;
 
   for (const child of node.children ?? []) {
     if (child.type === "table_head") {
+      head = child;
       for (const row of child.children ?? []) {
         if (row.type === "table_row") {
+          headRow ??= row;
           for (const cell of row.children ?? []) {
             headers.push(cell);
             alignments.push(cell.align);
@@ -28,8 +38,10 @@ export const extractTableData = (node: MarkdownNode): ExtractedTableData => {
         }
       }
     } else if (child.type === "table_body") {
+      body = child;
       for (const row of child.children ?? []) {
         if (row.type === "table_row") {
+          rowNodes.push(row);
           const rowCells: MarkdownNode[] = [];
           for (const cell of row.children ?? []) {
             rowCells.push(cell);
@@ -40,7 +52,7 @@ export const extractTableData = (node: MarkdownNode): ExtractedTableData => {
     }
   }
 
-  return { headers, rows, alignments };
+  return { headers, rows, alignments, head, headRow, body, rowNodes };
 };
 
 export const estimateColumnWidths = (

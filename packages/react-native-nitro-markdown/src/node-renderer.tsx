@@ -35,6 +35,7 @@ import {
 } from "./renderers/math";
 import { Paragraph } from "./renderers/paragraph";
 import { TableRenderer } from "./renderers/table";
+import { TableCell } from "./renderers/table/cell-content";
 import type { MarkdownTheme } from "./theme";
 
 const isInline = (type: MarkdownNode["type"]): boolean => {
@@ -491,6 +492,7 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
                 index={index}
                 ordered={node.ordered ?? false}
                 start={node.start ?? 1}
+                {...(nodeStyles?.list_item ? { style: nodeStyles.list_item } : {})}
               >
                 <NodeRenderer
                   node={child}
@@ -528,10 +530,12 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
         />
       );
 
+    case "table_cell":
+      return <TableCell node={node} Renderer={NodeRenderer} />;
+
     case "table_head":
     case "table_body":
     case "table_row":
-    case "table_cell":
       return null;
 
     default:

@@ -4,18 +4,19 @@ import {
   useRef,
   useReducer,
   useCallback,
+  Fragment,
   type FC,
+  type ReactElement,
+  type ReactNode,
   type ComponentType,
 } from "react";
 import {
   View,
   StyleSheet,
   ScrollView,
-  Platform,
   type ViewStyle,
   type LayoutChangeEvent,
 } from "react-native";
-import { CellContent } from "./cell-content";
 import {
   columnWidthsReducer,
   DEFAULT_MIN_COLUMN_WIDTH,
@@ -28,6 +29,7 @@ import {
   computeMeasuredColumnWidths,
   expectedCellKeysOf,
 } from "./table-measurement";
+import type { MarkdownNode } from "../../headless";
 import { readTextContent } from "../../utils/text-content";
 import {
   useMarkdownContext,
@@ -37,7 +39,7 @@ import { getCachedStyles } from "../style-cache";
 import type { MarkdownTheme } from "../../theme";
 
 type TableRendererProps = {
-  node: import("../../headless").MarkdownNode;
+  node: MarkdownNode;
   Renderer: ComponentType<NodeRendererProps>;
   style?: ViewStyle;
 };
@@ -49,14 +51,15 @@ export const TableRenderer: FC<TableRendererProps> = ({
   Renderer,
   style,
 }) => {
-  const { theme, tableOptions } = useMarkdownContext();
+  const { theme, tableOptions, renderers, styles: nodeStyles } =
+    useMarkdownContext();
 
   const minColumnWidth =
     tableOptions?.minColumnWidth ?? DEFAULT_MIN_COLUMN_WIDTH;
   const measurementStabilizeMs =
     tableOptions?.measurementStabilizeMs ?? DEFAULT_MEASUREMENT_STABILIZE_MS;
 
-  const { headers, rows, alignments } = useMemo(
+  const { headers, rows, alignments, head, headRow, body, rowNodes } = useMemo(
     () => extractTableData(node),
     [node],
   );
@@ -180,6 +183,30 @@ export const TableRenderer: FC<TableRendererProps> = ({
     [columnCount, expectedCellKeys, needsMeasurement, rows.length, minColumnWidth],
   );
 
+  const renderCell = (cell: MarkdownNode) => (
+    <Renderer
+      node={cell}
+      depth={0}
+      inListItem={false}
+      parentIsText={false}
+    />
+  );
+
+  const wrapWithCustomRenderer = (
+    type: "table_head" | "table_body" | "table_row",
+    partNode: MarkdownNode | undefined,
+    defaultElement: ReactElement,
+  ): ReactNode => {
+    const custom = renderers[type];
+    if (!custom || !partNode) return defaultElement;
+    const result = custom({
+      node: partNode,
+      children: defaultElement,
+      Renderer,
+    });
+    return result === undefined ? defaultElement : result;
+  };
+
   const getAlignment = (
     index: number,
   ): "flex-start" | "center" | "flex-end" => {
@@ -228,7 +255,7 @@ export const TableRenderer: FC<TableRendererProps> = ({
                   );
                 }}
               >
-                <CellContent node={cell} Renderer={Renderer} styles={styles} />
+                {renderCell(cell)}
               </View>
             ))}
           </View>
@@ -245,11 +272,7 @@ export const TableRenderer: FC<TableRendererProps> = ({
                     );
                   }}
                 >
-                  <CellContent
-                    node={cell}
-                    Renderer={Renderer}
-                    styles={styles}
-                  />
+                  {renderCell(cell)}
                 </View>
               ))}
             </View>
@@ -264,60 +287,74 @@ export const TableRenderer: FC<TableRendererProps> = ({
         bounces={false}
       >
         <View style={[styles.table, tableBackgroundStyle]}>
-          <View style={styles.headerRow}>
-            {headers.map((cell, colIndex) => (
-              <View
-                key={`header-${colIndex}`}
-                style={[
-                  styles.headerCell,
-                  {
-                    width: resolvedWidths[colIndex] ?? minColumnWidth,
-                    alignItems: getAlignment(colIndex),
-                  },
-                  colIndex === columnCount - 1 && styles.lastCell,
-                ]}
-              >
-                <CellContent
-                  node={cell}
-                  Renderer={Renderer}
-                  styles={styles}
-                  textStyle={styles.headerText}
-                />
-              </View>
-            ))}
-          </View>
+          {wrapWithCustomRenderer(
+            "table_head",
+            head,
+            <View style={nodeStyles?.table_head}>
+              {wrapWithCustomRenderer(
+                "table_row",
+                headRow,
+                <View style={[styles.headerRow, nodeStyles?.table_row]}>
+                  {headers.map((cell, colIndex) => (
+                    <View
+                      key={`header-${colIndex}`}
+                      style={[
+                        styles.headerCell,
+                        {
+                          width: resolvedWidths[colIndex] ?? minColumnWidth,
+                          alignItems: getAlignment(colIndex),
+                        },
+                        colIndex === columnCount - 1 && styles.lastCell,
+                        nodeStyles?.table_cell,
+                      ]}
+                    >
+                      {renderCell(cell)}
+                    </View>
+                  ))}
+                </View>,
+              )}
+            </View>,
+          )}
 
-          {rows.map((row, rowIndex) => (
-            <View
-              key={`row-${rowIndex}`}
-              style={[
-                styles.bodyRow,
-                rowIndex === rows.length - 1 && styles.lastRow,
-                rowIndex % 2 === 0 ? styles.evenRow : styles.oddRow,
-              ]}
-            >
-              {row.map((cell, colIndex) => (
-                <View
-                  key={`cell-${rowIndex}-${colIndex}`}
-                  style={[
-                    styles.bodyCell,
-                    {
-                      width: resolvedWidths[colIndex] ?? minColumnWidth,
-                      alignItems: getAlignment(colIndex),
-                    },
-                    colIndex === columnCount - 1 && styles.lastCell,
-                  ]}
-                >
-                  <CellContent
-                    node={cell}
-                    Renderer={Renderer}
-                    styles={styles}
-                    textStyle={styles.cellText}
-                  />
-                </View>
+          {wrapWithCustomRenderer(
+            "table_body",
+            body,
+            <View style={nodeStyles?.table_body}>
+              {rows.map((row, rowIndex) => (
+                <Fragment key={`row-${rowIndex}`}>
+                  {wrapWithCustomRenderer(
+                    "table_row",
+                    rowNodes[rowIndex],
+                    <View
+                      style={[
+                        styles.bodyRow,
+                        rowIndex === rows.length - 1 && styles.lastRow,
+                        rowIndex % 2 === 0 ? styles.evenRow : styles.oddRow,
+                        nodeStyles?.table_row,
+                      ]}
+                    >
+                      {row.map((cell, colIndex) => (
+                        <View
+                          key={`cell-${rowIndex}-${colIndex}`}
+                          style={[
+                            styles.bodyCell,
+                            {
+                              width: resolvedWidths[colIndex] ?? minColumnWidth,
+                              alignItems: getAlignment(colIndex),
+                            },
+                            colIndex === columnCount - 1 && styles.lastCell,
+                            nodeStyles?.table_cell,
+                          ]}
+                        >
+                          {renderCell(cell)}
+                        </View>
+                      ))}
+                    </View>,
+                  )}
+                </Fragment>
               ))}
-            </View>
-          ))}
+            </View>,
+          )}
         </View>
       </ScrollView>
     </View>
@@ -397,25 +434,6 @@ const createTableStyles = (theme: MarkdownTheme) => {
     },
     lastCell: {
       borderRightWidth: 0,
-    },
-    headerText: {
-      color: colors.tableHeaderText || "#9ca3af",
-      fontSize: 12,
-      fontWeight: "600",
-      fontFamily: theme.fontFamilies?.regular,
-      ...(Platform.OS === "android" && { includeFontPadding: false }),
-    },
-    cellText: {
-      color: colors.text || "#e5e7eb",
-      fontSize: 14,
-      lineHeight: 20,
-      fontFamily: theme.fontFamilies?.regular,
-      ...(Platform.OS === "android" && { includeFontPadding: false }),
-    },
-    cellContentWrapper: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      alignItems: "center",
     },
   });
 };
