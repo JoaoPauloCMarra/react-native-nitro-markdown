@@ -85,69 +85,33 @@ inline void appendEscapedJsonString(Writer& output, std::string_view input) {
 
     for (size_t index = 0; index < input.size(); index++) {
         const unsigned char c = static_cast<unsigned char>(input[index]);
+        char control[6];
+        std::string_view escape;
         switch (c) {
-            case '"':
-                if (index > safeStart) {
-                    output.append(std::string_view(input.data() + safeStart, index - safeStart));
-                }
-                output.append("\\\"");
-                safeStart = index + 1;
+            case '"': escape = "\\\""; break;
+            case '\\': escape = "\\\\"; break;
+            case '\b': escape = "\\b"; break;
+            case '\f': escape = "\\f"; break;
+            case '\n': escape = "\\n"; break;
+            case '\r': escape = "\\r"; break;
+            case '\t': escape = "\\t"; break;
+            default:
+                if (c > 0x1f) continue;
+                control[0] = '\\';
+                control[1] = 'u';
+                control[2] = '0';
+                control[3] = '0';
+                control[4] = kHex[(c >> 4) & 0x0f];
+                control[5] = kHex[c & 0x0f];
+                escape = std::string_view(control, sizeof(control));
                 break;
-            case '\\':
-                if (index > safeStart) {
-                    output.append(std::string_view(input.data() + safeStart, index - safeStart));
-                }
-                output.append("\\\\");
-                safeStart = index + 1;
-                break;
-            case '\b':
-                if (index > safeStart) {
-                    output.append(std::string_view(input.data() + safeStart, index - safeStart));
-                }
-                output.append("\\b");
-                safeStart = index + 1;
-                break;
-            case '\f':
-                if (index > safeStart) {
-                    output.append(std::string_view(input.data() + safeStart, index - safeStart));
-                }
-                output.append("\\f");
-                safeStart = index + 1;
-                break;
-            case '\n':
-                if (index > safeStart) {
-                    output.append(std::string_view(input.data() + safeStart, index - safeStart));
-                }
-                output.append("\\n");
-                safeStart = index + 1;
-                break;
-            case '\r':
-                if (index > safeStart) {
-                    output.append(std::string_view(input.data() + safeStart, index - safeStart));
-                }
-                output.append("\\r");
-                safeStart = index + 1;
-                break;
-            case '\t':
-                if (index > safeStart) {
-                    output.append(std::string_view(input.data() + safeStart, index - safeStart));
-                }
-                output.append("\\t");
-                safeStart = index + 1;
-                break;
-            default: {
-                if (c <= 0x1f) {
-                    if (index > safeStart) {
-                        output.append(std::string_view(input.data() + safeStart, index - safeStart));
-                    }
-                    output.append("\\u00");
-                    output.push(kHex[(c >> 4) & 0x0f]);
-                    output.push(kHex[c & 0x0f]);
-                    safeStart = index + 1;
-                }
-                break;
-            }
         }
+
+        if (index > safeStart) {
+            output.append(std::string_view(input.data() + safeStart, index - safeStart));
+        }
+        output.append(escape);
+        safeStart = index + 1;
     }
 
     if (safeStart < input.size()) {
@@ -165,17 +129,8 @@ inline void appendStringField(Writer& output, const char* key, std::string_view 
     output.push('"');
 }
 
-template <typename Writer>
-inline void appendIntField(Writer& output, const char* key, int value) {
-    output.push(',');
-    output.push('"');
-    output.append(key);
-    output.append("\":");
-    appendInteger(output, value);
-}
-
-template <typename Writer>
-inline void appendOffsetField(Writer& output, const char* key, unsigned int value) {
+template <typename Writer, typename T>
+inline void appendNumberField(Writer& output, const char* key, T value) {
     output.push(',');
     output.push('"');
     output.append(key);
@@ -231,17 +186,17 @@ void appendNodeJson(
     output.push('"');
 
     if (includeOffsets) {
-        appendOffsetField(output, "beg", node->beg);
-        appendOffsetField(output, "end", node->end);
+        appendNumberField(output, "beg", node->beg);
+        appendNumberField(output, "end", node->end);
     }
     if (node->content.has_value()) appendStringField(output, "content", node->content.value());
-    if (node->level.has_value()) appendIntField(output, "level", node->level.value());
+    if (node->level.has_value()) appendNumberField(output, "level", node->level.value());
     if (node->href.has_value()) appendStringField(output, "href", node->href.value());
     if (node->title.has_value()) appendStringField(output, "title", node->title.value());
     if (node->alt.has_value()) appendStringField(output, "alt", node->alt.value());
     if (node->language.has_value()) appendStringField(output, "language", node->language.value());
     if (node->ordered.has_value()) appendBoolField(output, "ordered", node->ordered.value());
-    if (node->start.has_value()) appendIntField(output, "start", node->start.value());
+    if (node->start.has_value()) appendNumberField(output, "start", node->start.value());
     if (node->checked.has_value()) appendBoolField(output, "checked", node->checked.value());
     if (node->isHeader.has_value()) appendBoolField(output, "isHeader", node->isHeader.value());
     if (node->align.has_value()) {
@@ -323,10 +278,10 @@ std::string HybridMarkdownParser::nodeToJson(
     const InternalParserOptions& options
 ) {
     JsonWriter writer;
-    const size_t reserveSize = source.size() > (kMaxJsonSize - 256) / 2
-        ? kMaxJsonSize
-        : std::max<size_t>(4096, source.size() * 2 + 256);
-    writer.reserve(reserveSize);
+    writer.reserve(std::max<size_t>(
+        4096,
+        std::min<size_t>(source.size() * 2 + 256, kMaxJsonSize)
+    ));
     appendNodeJson(writer, node, options.sourceOffsets);
     return std::move(writer).take();
 }

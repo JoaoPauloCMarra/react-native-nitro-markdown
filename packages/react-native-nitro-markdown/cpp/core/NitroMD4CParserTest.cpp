@@ -418,7 +418,6 @@ public:
         testConcurrentOptions();
         testNullCharOffsets();
         testLinkAttributes();
-        testOversizedInputClamp();
         testOffsets();
         testUtf16Offsets();
         testParseLatencyBudgets();
@@ -1649,25 +1648,6 @@ private:
         }
     }
 
-    static void testOversizedInputClamp() {
-        size_t maxSize = static_cast<size_t>(std::numeric_limits<MD_SIZE>::max());
-        TestRunner::assertEqual(
-            std::to_string(maxSize),
-            std::to_string(MD4CParser::clampInputSizeForTest(maxSize)),
-            "Clamp size at max"
-        );
-
-        if (maxSize < std::numeric_limits<size_t>::max()) {
-            size_t over = maxSize + 1;
-            TestRunner::assertEqual(
-                std::to_string(maxSize),
-                std::to_string(MD4CParser::clampInputSizeForTest(over)),
-                "Clamp oversized input"
-            );
-        } else {
-            TestRunner::assertTrue(true, "Clamp oversized input skipped");
-        }
-    }
     static void testEmptyInput() {
         MD4CParser parser;
         ParserOptions options{true, true};

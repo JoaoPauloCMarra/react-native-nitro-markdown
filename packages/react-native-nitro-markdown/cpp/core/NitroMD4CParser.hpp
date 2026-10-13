@@ -43,10 +43,6 @@ public:
     static std::string parseFailureMessageForTest(int result, const char* parserLog);
     static int offsetBeforeBaseForTest();
     static int offsetPastBaseForTest();
-    static size_t clampInputSizeForTest(size_t inputSize) {
-        size_t maxSize = static_cast<size_t>(std::numeric_limits<MD_SIZE>::max());
-        return inputSize > maxSize ? maxSize : inputSize;
-    }
     bool lastParseTrackedOffsets = true;
 #endif
     

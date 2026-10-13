@@ -23,13 +23,10 @@ namespace {
 static constexpr size_t kMaxInputBytes = 10 * 1024 * 1024;
 static constexpr size_t kMinImageAltBudgetBytes = 4096;
 
-size_t clampInputSize(size_t inputSize) {
-    size_t maxSize = static_cast<size_t>(std::numeric_limits<MD_SIZE>::max());
-    if (inputSize > maxSize) {
-        return maxSize;
-    }
-    return inputSize;
-}
+static_assert(
+    kMaxInputBytes <= static_cast<size_t>(std::numeric_limits<MD_SIZE>::max()),
+    "The input cap must fit the md4c size type"
+);
 
 // Safe pointer offset calculation — guards against out-of-allocation arithmetic.
 // md4c callbacks receive pointers into the input buffer, so arithmetic is valid
@@ -328,6 +325,31 @@ public:
         return {sourceOffset(byteBeg), lastTextEnd};
     }
 
+    std::shared_ptr<MarkdownNode> makeTableCell(
+        const MD_BLOCK_TD_DETAIL* detail,
+        bool isHeader
+    ) {
+        auto node = makeNode(NodeType::TableCell);
+        node->isHeader = isHeader;
+        switch (detail->align) {
+            case MD_ALIGN_LEFT: node->align = TextAlign::Left; break;
+            case MD_ALIGN_CENTER: node->align = TextAlign::Center; break;
+            case MD_ALIGN_RIGHT: node->align = TextAlign::Right; break;
+            default: node->align = TextAlign::Default; break;
+        }
+        return node;
+    }
+
+    void appendBreakNode(NodeType type, bool hardBreak) {
+        flushText();
+        const auto [beg, end] = sourceBreakRange(hardBreak);
+        if (nodeStack.empty()) return;
+        auto node = makeNode(type);
+        node->beg = beg;
+        node->end = end;
+        addChild(nodeStack.top(), std::move(node));
+    }
+
     std::pair<OFF, OFF> sourceBreakRange(bool hardBreak) {
         if (!sourceOffsetsTracked) return {0, 0};
 
@@ -607,31 +629,15 @@ public:
                 break;
             }
 
-            case MD_BLOCK_TH: {
-                auto* d = static_cast<MD_BLOCK_TD_DETAIL*>(detail);
-                auto node = impl->makeNode(NodeType::TableCell);
-                node->isHeader = true;
-                switch (d->align) {
-                    case MD_ALIGN_LEFT: node->align = TextAlign::Left; break;
-                    case MD_ALIGN_CENTER: node->align = TextAlign::Center; break;
-                    case MD_ALIGN_RIGHT: node->align = TextAlign::Right; break;
-                    default: node->align = TextAlign::Default; break;
-                }
-                impl->pushNode(node, off);
-                break;
-            }
-
+            case MD_BLOCK_TH:
             case MD_BLOCK_TD: {
-                auto* d = static_cast<MD_BLOCK_TD_DETAIL*>(detail);
-                auto node = impl->makeNode(NodeType::TableCell);
-                node->isHeader = false;
-                switch (d->align) {
-                    case MD_ALIGN_LEFT: node->align = TextAlign::Left; break;
-                    case MD_ALIGN_CENTER: node->align = TextAlign::Center; break;
-                    case MD_ALIGN_RIGHT: node->align = TextAlign::Right; break;
-                    default: node->align = TextAlign::Default; break;
-                }
-                impl->pushNode(node, off);
+                impl->pushNode(
+                    impl->makeTableCell(
+                        static_cast<MD_BLOCK_TD_DETAIL*>(detail),
+                        type == MD_BLOCK_TH
+                    ),
+                    off
+                );
                 break;
             }
 
@@ -803,42 +809,23 @@ public:
 
         switch (type) {
             case MD_TEXT_NULLCHAR: {
-                const auto [beg, end] = impl->sourceRange(text, 1);
+                const OFF beg = impl->sourceRange(text, 1).first;
                 if (impl->currentText.empty()) impl->currentTextBeg = beg;
                 impl->currentText += '\0';
-                impl->lastTextEnd = end;
                 break;
             }
 
             case MD_TEXT_BR:
-                impl->flushText();
-                {
-                    const auto [beg, end] = impl->sourceBreakRange(true);
-                    if (!impl->nodeStack.empty()) {
-                        auto node = impl->makeNode(NodeType::LineBreak);
-                        node->beg = beg;
-                        node->end = end;
-                        impl->addChild(impl->nodeStack.top(), std::move(node));
-                    }
-                }
+                impl->appendBreakNode(NodeType::LineBreak, true);
                 break;
 
             case MD_TEXT_SOFTBR:
-                impl->flushText();
-                {
-                    const auto [beg, end] = impl->sourceBreakRange(false);
-                    if (!impl->nodeStack.empty()) {
-                        auto node = impl->makeNode(NodeType::SoftBreak);
-                        node->beg = beg;
-                        node->end = end;
-                        impl->addChild(impl->nodeStack.top(), std::move(node));
-                    }
-                }
+                impl->appendBreakNode(NodeType::SoftBreak, false);
                 break;
 
             case MD_TEXT_HTML:
                 impl->flushText();
-                if (!impl->nodeStack.empty() && text && size > 0) {
+                if (!impl->nodeStack.empty()) {
                     const auto [beg, end] = impl->sourceRange(text, size);
 
                     if (impl->nodeStack.top()->type == NodeType::HtmlBlock) {
@@ -849,7 +836,6 @@ public:
                             htmlBlock->content = std::string(text, size);
                         }
                         htmlBlock->end = end;
-                        impl->lastTextEnd = end;
                         break;
                     }
 
@@ -858,32 +844,19 @@ public:
                     node->beg = beg;
                     node->end = end;
                     impl->addChild(impl->nodeStack.top(), node);
-                    impl->lastTextEnd = end;
                 }
                 break;
 
             case MD_TEXT_ENTITY:
-                if (text && size > 0) {
-                    const auto [beg, end] = impl->sourceRange(text, size);
-                    if (impl->currentText.empty()) impl->currentTextBeg = beg;
-                    impl->currentText.append(text, size);
-                    impl->lastTextEnd = end;
-                }
-                break;
-
             case MD_TEXT_NORMAL:
             case MD_TEXT_CODE:
             case MD_TEXT_LATEXMATH:
             default: {
-                if (text && size > 0) {
-                    const auto [beg, end] = impl->sourceRange(text, size);
-
-                    if (impl->currentText.empty()) {
-                        impl->currentTextBeg = beg;
-                    }
-                    impl->currentText.append(text, size);
-                    impl->lastTextEnd = end;
+                const OFF beg = impl->sourceRange(text, size).first;
+                if (impl->currentText.empty()) {
+                    impl->currentTextBeg = beg;
                 }
+                impl->currentText.append(text, size);
                 break;
             }
         }
@@ -922,7 +895,7 @@ std::shared_ptr<MarkdownNode> MD4CParser::parseWithFlags(
             " bytes"
         );
     }
-    size_t inputSize = clampInputSize(markdown.size());
+    const size_t inputSize = markdown.size();
     impl.setInput(markdown.c_str(), inputSize, options.sourceOffsets);
     impl.forceCallbackFailure = forceCallbackFailure;
     const size_t bomBytes =
