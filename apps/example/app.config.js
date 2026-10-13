@@ -1,4 +1,8 @@
 const httpFixture = process.env.EXPO_PUBLIC_MARKDOWN_HTTP_FIXTURE === "1";
+const androidArchs = (process.env.NITRO_ANDROID_ARCHS ?? "")
+  .split(",")
+  .map((arch) => arch.trim())
+  .filter(Boolean);
 
 module.exports = {
   "expo": {
@@ -30,16 +34,19 @@ module.exports = {
             "targetSdkVersion": 36,
             "buildToolsVersion": "36.0.0",
             "usePrecompiledHeaders": true,
+            ...(androidArchs.length > 0 ? { "buildArchs": androidArchs } : {}),
             ...(httpFixture ? { "usesCleartextTraffic": true } : {})
           },
           "ios": {
             "deploymentTarget": "16.4",
-            "enableSceneSupport": true
+            "enableSceneSupport": true,
+            "ccacheEnabled": true
           }
         }
       ],
       "expo-system-ui",
       "expo-status-bar",
+      "./plugins/with-fast-gradle",
       "./plugins/with-ios-linker-cleanup"
     ],
     "experiments": {

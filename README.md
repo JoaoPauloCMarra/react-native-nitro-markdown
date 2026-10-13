@@ -528,6 +528,23 @@ When several devices are available, set `ANDROID_SERIAL` for Android and
 `EXAMPLE_SMOKE_IOS_UDID` for iOS. The iOS smoke check stops if it cannot select
 one booted simulator.
 
+### Example app build speed
+
+The example app is generated (Expo CNG), so build settings live in tracked
+config: `apps/example/app.config.js` and `apps/example/plugins/with-fast-gradle.js`.
+They apply on the next `example:prebuild`.
+
+| Setting | Where | Default | Override |
+| --- | --- | --- | --- |
+| Gradle build cache and parallel projects (`org.gradle.caching`, `org.gradle.parallel`) | `with-fast-gradle.js` | on | edit the plugin, or pass `--no-build-cache` / `--no-parallel` to Gradle |
+| Gradle and Kotlin daemon memory (`-Xmx6g`, `kotlin.daemon.jvmargs=-Xmx3g`) | `with-fast-gradle.js` | on | lower the values on hosts with less than 16 GB |
+| Android ABIs (`buildArchs`) | `app.config.js` | all four ABIs, so release APKs run on phones | `NITRO_ANDROID_ARCHS=x86_64 bun run example:prebuild -- --platform android` builds an emulator-only app; use comma-separated values for several ABIs |
+| iOS `ccache` (`ios.ccacheEnabled`) | `app.config.js` | on | install it with `brew install ccache`; see [React Native local caches](https://reactnative.dev/docs/build-speed#local-caches) |
+
+The Gradle configuration cache stays off because `example:android:assemble`
+runs with `--no-configuration-cache`. `useFrameworks` and the prebuilt React
+Native core are unchanged.
+
 ## Contributing
 
 ```sh
