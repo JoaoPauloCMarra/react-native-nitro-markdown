@@ -502,7 +502,7 @@ function waitForClose(child) {
   return { promise, state };
 }
 
-async function waitForTreeGone(completion, completionState, group, timeoutMs) {
+async function waitForTreeGone(completionState, group, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   let emptyPolls = 0;
   while (true) {
@@ -537,7 +537,6 @@ async function waitForTreeGone(completion, completionState, group, timeoutMs) {
 
 async function terminateProcessTree({
   child,
-  completion,
   completionState,
   detached,
   group,
@@ -562,7 +561,6 @@ async function terminateProcessTree({
   }
 
   let stopped = await waitForTreeGone(
-    completion,
     completionState,
     group,
     graceMs,
@@ -590,7 +588,6 @@ async function terminateProcessTree({
       );
     }
     stopped = await waitForTreeGone(
-      completion,
       completionState,
       group,
       Math.max(graceMs, FORCE_KILL_REAP_MS),
@@ -654,8 +651,15 @@ async function runProcess({
   timeoutMs,
   killGraceMs,
   identityMode,
+  ...unexpectedOptions
 }) {
   if (!command) throw new Error("A process command is required");
+  const unexpectedKeys = Object.keys(unexpectedOptions);
+  if (unexpectedKeys.length > 0) {
+    throw new TypeError(
+      `Unsupported runProcess options: ${unexpectedKeys.join(", ")}`,
+    );
+  }
   const effectiveTimeoutMs = resolveBoundedTimeout(
     timeoutMs,
     "NITRO_MARKDOWN_PROCESS_TIMEOUT_MS",
@@ -692,7 +696,6 @@ async function runProcess({
       stderr: "",
       timedOut: false,
       forceKilled: false,
-      treeGone: true,
     };
   }
 
@@ -715,7 +718,6 @@ async function runProcess({
         }
         return terminateProcessTree({
           child,
-          completion: completion.promise,
           completionState: completion.state,
           detached,
           group,
@@ -753,7 +755,6 @@ async function runProcess({
       terminated = await requestTermination();
     } else if (group) {
       const treeStatus = await waitForTreeGone(
-        completion.promise,
         completion.state,
         group,
         effectiveKillGraceMs,
@@ -790,7 +791,6 @@ async function runProcess({
       stderr: toCapturedText(stderrChunks),
       timedOut,
       forceKilled: terminated?.forceKilled ?? false,
-      treeGone: true,
     };
   } finally {
     process.removeListener("SIGINT", handleSignal);

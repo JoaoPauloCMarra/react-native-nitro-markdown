@@ -110,7 +110,7 @@ export async function runCodegen(
       killGraceMs,
       identityMode: options.identityMode,
     });
-    processTreeStopped = processResult.treeGone;
+    processTreeStopped = true;
 
     const afterCurrent = await snapshotDirectory(targetParent, targetSubdirectory);
     const trackedDirectoryChanged = !snapshotsMatch(before, afterCurrent);

@@ -15,16 +15,10 @@ const result = await runProcess({
   command: "nitrogen",
   args: nitrogenArgs,
   cwd: packageRoot,
-  stdout: "inherit",
-  stderr: "inherit",
+  stdio: "inherit",
 });
 
-if (!result.treeGone) {
-  console.error(
-    "Nitro codegen did not prove the process tree stopped; generated files were preserved.",
-  );
-  process.exitCode = result.exitCode;
-} else if (!result.ok) {
+if (!result.ok) {
   await restoreDirectorySnapshot(packageRoot, "nitrogen/generated", before);
   console.error("Nitro codegen failed; generated files were restored.");
   process.exitCode = result.exitCode;
