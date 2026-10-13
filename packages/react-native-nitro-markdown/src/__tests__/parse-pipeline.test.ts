@@ -484,6 +484,31 @@ describe("parse pipeline utilities", () => {
     expect(seen[2]).toEqual({ gfm: false });
   });
 
+  it("reports the real value of a non-finite maxInputLength", () => {
+    const seen: (ParserOptions | undefined)[] = [];
+    const Probe = ({ options }: { options?: ParserOptions }) => {
+      seen.push(useStableParserOptions(options));
+      return null;
+    };
+    const consoleErrorSpy = spyOnConsoleErrorIgnoringRendererDeprecation();
+    let renderer!: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(createElement(Probe, { options: { maxInputLength: Number.NaN } }));
+    });
+    act(() =>
+      renderer.update(
+        createElement(Probe, { options: { maxInputLength: Number.POSITIVE_INFINITY } }),
+      ),
+    );
+    act(() => renderer.update(createElement(Probe, { options: { gfm: false, html: true } })));
+    act(() => renderer.unmount());
+    consoleErrorSpy.mockRestore();
+
+    expect(seen[0]?.maxInputLength).toBeNaN();
+    expect(seen[1]).toEqual({ maxInputLength: Number.POSITIVE_INFINITY });
+    expect(seen[2]).toEqual({ gfm: false, html: true });
+  });
+
   it("removes empty parser options and preserves explicit values", () => {
     expect(normalizeParserOptions()).toBeUndefined();
     expect(normalizeParserOptions({})).toBeUndefined();

@@ -118,14 +118,30 @@ export const normalizeParserOptions = (
     : (normalized as ParserOptions);
 };
 
+const parseParserOptionValue = (
+  key: keyof ParserOptions,
+  token: string,
+): boolean | number | undefined => {
+  if (token === "default") return undefined;
+  if (key === "maxInputLength") return Number(token);
+  return token === "1";
+};
+
 export const useStableParserOptions = (
   options?: ParserOptions,
 ): ParserOptions | undefined => {
-  const serialized = JSON.stringify(normalizeParserOptions(options) ?? null);
-  return useMemo(
-    () => (JSON.parse(serialized) as ParserOptions | null) ?? undefined,
-    [serialized],
-  );
+  const optionsKey = getParserOptionsKey(options);
+  return useMemo(() => {
+    const decoded: Record<string, boolean | number> = {};
+    optionsKey.split("|").forEach((entry, index) => {
+      const key = PARSER_OPTION_KEYS[index]!;
+      const value = parseParserOptionValue(key, entry.slice(key.length + 1));
+      if (value !== undefined) decoded[key] = value;
+    });
+    return Object.keys(decoded).length === 0
+      ? undefined
+      : (decoded as ParserOptions);
+  }, [optionsKey]);
 };
 
 export const parseWithNativeParser = (
