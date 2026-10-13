@@ -258,7 +258,7 @@
       "source": "apps/example/app/(tabs)/index.tsx",
       "statusId": "smoke-probe",
       "expectedText": ":fail=0:",
-      "assertion": "log.text.startsWith(\"FAIL  \")",
+      "assertion": "fail=${countLogs(smokeLogs, \"fail\")}",
       "claimLimit": "Counts the smoke log rows; each row's own detail is not asserted separately, and SKIP rows are allowed.",
       "trigger": "screen-load"
     },
@@ -486,9 +486,9 @@
       "suite": "e2e/qa-render-contracts.ad",
       "source": "apps/example/app/e2e-render-contracts.tsx",
       "trigger": "screen-load",
-      "statusId": "custom-heading-marker",
+      "statusId": "render-contracts-probe",
       "expectedText": "custom=heading-2;",
-      "assertion": "testID=\"custom-heading-marker\""
+      "assertion": "report(\"custom\""
     },
     {
       "id": "render.a11y-labels",

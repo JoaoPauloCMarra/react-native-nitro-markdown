@@ -132,6 +132,9 @@ type LogEntry = {
   type: "header" | "pass" | "fail" | "info" | "skip" | "spacer";
 };
 
+const countLogs = (logs: readonly LogEntry[], type: LogEntry["type"]): number =>
+  logs.filter((log) => log.type === type).length;
+
 type LatexBenchmarkTarget = {
   renderer: "ratex" | "legacy-mathjax";
   startedAt: number;
@@ -775,9 +778,9 @@ async function runSmokeTests(): Promise<LogEntry[]> {
 
   spacer();
 
-  const passed = logs.filter((l) => l.type === "pass").length;
-  const failed = logs.filter((l) => l.type === "fail").length;
-  const skipped = logs.filter((l) => l.type === "skip").length;
+  const passed = countLogs(logs, "pass");
+  const failed = countLogs(logs, "fail");
+  const skipped = countLogs(logs, "skip");
   const total = passed + failed;
 
   header("SUMMARY");
@@ -999,7 +1002,7 @@ export default function BenchmarkScreen() {
   const smokeProbeLabel = error
     ? "smoke:error;"
     : mode === "smoke" && smokeLogs.length > 0
-      ? `smoke:pass=${smokeLogs.filter((log) => log.text.startsWith("PASS  ")).length}:fail=${smokeLogs.filter((log) => log.text.startsWith("FAIL  ")).length}:skip=${smokeLogs.filter((log) => log.text.startsWith("SKIP  ")).length};`
+      ? `smoke:pass=${countLogs(smokeLogs, "pass")}:fail=${countLogs(smokeLogs, "fail")}:skip=${countLogs(smokeLogs, "skip")};`
       : "smoke:idle;";
 
   return (

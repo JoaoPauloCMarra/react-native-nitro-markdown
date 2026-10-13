@@ -90,6 +90,14 @@ const runtimeFileRules = [
   "apps/example/tsconfig.json",
 ];
 
+function expectedTextFollowsStatus(suite, statusId, expectedText) {
+  const statusIndex = suite.indexOf(`wait id="${statusId}"`);
+  return (
+    statusIndex !== -1 &&
+    suite.indexOf(`wait text "${expectedText}"`, statusIndex) !== -1
+  );
+}
+
 function isSecretPath(relativePath) {
   const basename = path.posix.basename(relativePath);
   return (
@@ -341,9 +349,9 @@ function readCoverageManifest(root, manifestPath = manifestRelativePath) {
         `${feature.id} status is not observed in ${feature.suite}`,
       );
     }
-    if (!suite.includes(`wait text "${feature.expectedText}"`)) {
+    if (!expectedTextFollowsStatus(suite, feature.statusId, feature.expectedText)) {
       throw new Error(
-        `${feature.id} expected text is missing from ${feature.suite}`,
+        `${feature.id} expected text does not follow its status wait in ${feature.suite}`,
       );
     }
   }
@@ -494,6 +502,7 @@ module.exports = {
   hasTestId,
   checkReplayFreshness,
   collectRuntimeFiles,
+  expectedTextFollowsStatus,
   readCoverageManifest,
   refreshReplayLock,
 };
