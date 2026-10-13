@@ -14,26 +14,6 @@ export type CodeHighlighter = (
   code: string,
 ) => HighlightedToken[];
 
-/**
- * Languages with fixture-backed keyword tables in `defaultHighlighter`.
- * Any other language falls back to a single default token — the built-in
- * highlighter does not pretend to understand it.
- */
-export const SUPPORTED_HIGHLIGHT_LANGUAGES: readonly string[] = [
-  "javascript",
-  "js",
-  "jsx",
-  "typescript",
-  "ts",
-  "tsx",
-  "python",
-  "py",
-  "bash",
-  "sh",
-  "shell",
-  "zsh",
-];
-
 const JS_KEYWORDS = new Set([
   "const",
   "let",
@@ -128,45 +108,62 @@ const SHELL_KEYWORDS = new Set([
   "export",
 ]);
 
-function getKeywords(language: string): Set<string> | null {
-  const lang = language.toLowerCase();
-  if (lang === "python" || lang === "py") return PYTHON_KEYWORDS;
-  if (lang === "bash" || lang === "sh" || lang === "shell" || lang === "zsh")
-    return SHELL_KEYWORDS;
-  if (
-    lang === "javascript" ||
-    lang === "js" ||
-    lang === "jsx" ||
-    lang === "typescript" ||
-    lang === "ts" ||
-    lang === "tsx"
-  ) {
-    return JS_KEYWORDS;
-  }
-  return null;
-}
+type LanguageProfile = {
+  keywords: Set<string>;
+  hashComments: boolean;
+};
 
-function tokenizeLine(line: string, language: string): HighlightedToken[] {
-  const keywords = getKeywords(language) ?? new Set<string>();
+const JS_PROFILE: LanguageProfile = { keywords: JS_KEYWORDS, hashComments: false };
+const PYTHON_PROFILE: LanguageProfile = {
+  keywords: PYTHON_KEYWORDS,
+  hashComments: true,
+};
+const SHELL_PROFILE: LanguageProfile = {
+  keywords: SHELL_KEYWORDS,
+  hashComments: true,
+};
+
+const LANGUAGE_PROFILES: ReadonlyMap<string, LanguageProfile> = new Map([
+  ["javascript", JS_PROFILE],
+  ["js", JS_PROFILE],
+  ["jsx", JS_PROFILE],
+  ["typescript", JS_PROFILE],
+  ["ts", JS_PROFILE],
+  ["tsx", JS_PROFILE],
+  ["python", PYTHON_PROFILE],
+  ["py", PYTHON_PROFILE],
+  ["bash", SHELL_PROFILE],
+  ["sh", SHELL_PROFILE],
+  ["shell", SHELL_PROFILE],
+  ["zsh", SHELL_PROFILE],
+]);
+
+/**
+ * Languages with fixture-backed keyword tables in `defaultHighlighter`.
+ * Any other language falls back to a single default token — the built-in
+ * highlighter does not pretend to understand it.
+ */
+export const SUPPORTED_HIGHLIGHT_LANGUAGES: readonly string[] = [
+  ...LANGUAGE_PROFILES.keys(),
+];
+
+function tokenizeLine(
+  line: string,
+  profile: LanguageProfile,
+): HighlightedToken[] {
+  const { keywords, hashComments } = profile;
   const tokens: HighlightedToken[] = [];
 
   // Full-line comment detection
   const trimmed = line.trimStart();
-  const lang = language.toLowerCase();
-  const isPythonLike = lang === "python" || lang === "py";
-  const isShellLike =
-    lang === "bash" || lang === "sh" || lang === "shell" || lang === "zsh";
 
-  if (
-    trimmed.startsWith("//") ||
-    (trimmed.startsWith("#") && (isShellLike || isPythonLike))
-  ) {
+  if (trimmed.startsWith("//") || (trimmed.startsWith("#") && hashComments)) {
     return [{ text: line, type: "comment" }];
   }
 
   // Only include # as comment for shell/python languages
   const commentPattern =
-    isShellLike || isPythonLike ? "\/\/[^\\n]*|#[^\\n]*" : "\/\/[^\\n]*";
+    hashComments ? "\/\/[^\\n]*|#[^\\n]*" : "\/\/[^\\n]*";
   const tokenRegex = new RegExp(
     `("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'|\`(?:[^\`\\\\]|\\\\.)*\`)|(\\b\\d+(?:\\.\\d+)?\\b)|(${commentPattern})|([a-zA-Z_$][a-zA-Z0-9_$]*)|([+\\-*/%=<>!&|^~?:]+)|([(\\)\\[\\]{},;.])|(\\s+)|(.)`,
     "g",
@@ -208,7 +205,8 @@ export function defaultHighlighter(
     return [{ text: code, type: "default" }];
   }
 
-  if (!SUPPORTED_HIGHLIGHT_LANGUAGES.includes(language.toLowerCase())) {
+  const profile = LANGUAGE_PROFILES.get(language.toLowerCase());
+  if (!profile) {
     return [{ text: code, type: "default" }];
   }
 
@@ -216,7 +214,7 @@ export function defaultHighlighter(
   const lines = code.split("\n");
   const result: HighlightedToken[] = [];
   for (let i = 0; i < lines.length; i++) {
-    result.push(...tokenizeLine(lines[i] ?? "", language));
+    result.push(...tokenizeLine(lines[i] ?? "", profile));
     if (i < lines.length - 1) {
       result.push({ text: "\n", type: "default" });
     }
