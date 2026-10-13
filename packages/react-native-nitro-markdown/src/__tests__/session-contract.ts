@@ -1,61 +1,27 @@
 import type { MarkdownSession } from "../specs/MarkdownSession.nitro";
 import { MAX_PARSE_INPUT_LENGTH } from "../errors";
+import sessionScenarioNames from "../__fixtures__/session-scenarios.json";
 
 /**
  * Shared session contract scenarios (X3 corpus).
  *
- * This module defines the cross-platform session contract as one scenario
- * list. The Jest gate runs it against the JavaScript session adapter, and the
- * C++ harness runs the same scenario names against the source-owned
- * HybridMarkdownSession used by both native platforms.
+ * The scenario names live in `__fixtures__/session-scenarios.json`. The Jest
+ * gate runs them against the JavaScript session adapter, and the C++ harness
+ * receives the same list as a generated header and requires an executed check
+ * for every name against the source-owned HybridMarkdownSession used by both
+ * native platforms.
  *
  * Every scenario below is implementation-agnostic. Listener range snapshots
  * are coalesced by the streaming hook before a parse flush; the session itself
  * reports each mutation range.
  */
-export type SessionScenarioName =
-  | "append-extends-buffer"
-  | "append-notifies-range"
-  | "reset-replaces-buffer"
-  | "reset-notifies-full-range"
-  | "replace-inserts-in-place"
-  | "replace-notifies-insert-range"
-  | "replace-clamps-out-of-bounds"
-  | "replace-rejects-invalid-range"
-  | "getTextRange-clamps"
-  | "getTextRange-rejects-invalid"
-  | "clear-empties-buffer"
-  | "clear-notifies-zero-range"
-  | "dispose-rejects-all-operations"
-  | "unsubscribe-stops-notifications"
-  | "listeners-see-snapshot-ranges"
-  | "append-rejects-buffer-cap"
-  | "replace-rejects-buffer-cap";
+export type SessionScenario = { name: string };
 
-export type SessionScenario = { name: SessionScenarioName };
-
-export const SESSION_SCENARIO_CORPUS: SessionScenario[] = [
-  { name: "append-extends-buffer" },
-  { name: "append-notifies-range" },
-  { name: "reset-replaces-buffer" },
-  { name: "reset-notifies-full-range" },
-  { name: "replace-inserts-in-place" },
-  { name: "replace-notifies-insert-range" },
-  { name: "replace-clamps-out-of-bounds" },
-  { name: "replace-rejects-invalid-range" },
-  { name: "getTextRange-clamps" },
-  { name: "getTextRange-rejects-invalid" },
-  { name: "clear-empties-buffer" },
-  { name: "clear-notifies-zero-range" },
-  { name: "dispose-rejects-all-operations" },
-  { name: "unsubscribe-stops-notifications" },
-  { name: "listeners-see-snapshot-ranges" },
-  { name: "append-rejects-buffer-cap" },
-  { name: "replace-rejects-buffer-cap" },
-];
+export const SESSION_SCENARIO_CORPUS: SessionScenario[] =
+  sessionScenarioNames.map((name) => ({ name }));
 
 export type SessionScenarioResult = {
-  name: SessionScenarioName;
+  name: string;
   pass: boolean;
   detail?: string;
 };

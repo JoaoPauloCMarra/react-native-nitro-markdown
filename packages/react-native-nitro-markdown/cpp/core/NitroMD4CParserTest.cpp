@@ -4,10 +4,12 @@
 #include "flatten.hpp"
 #include "FlattenCorpus.hpp"
 #include "ConformanceCorpus.hpp"
+#include "SessionScenarioCorpus.hpp"
 #include "../bindings/HybridMarkdownParser.hpp"
 #include "../bindings/HybridMarkdownSession.hpp"
 #include "../nitromd/nitromd.h"
 #include <iostream>
+#include <set>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -1005,26 +1007,10 @@ private:
     static void testHybridMarkdownSessionCorpus() {
         using ::margelo::nitro::Markdown::HybridMarkdownSession;
 
-        const std::vector<std::string> corpus = {
-            "append-extends-buffer",
-            "append-notifies-range",
-            "reset-replaces-buffer",
-            "reset-notifies-full-range",
-            "replace-inserts-in-place",
-            "replace-notifies-insert-range",
-            "replace-clamps-out-of-bounds",
-            "replace-rejects-invalid-range",
-            "getTextRange-clamps",
-            "getTextRange-rejects-invalid",
-            "clear-empties-buffer",
-            "clear-notifies-zero-range",
-            "dispose-rejects-all-operations",
-            "unsubscribe-stops-notifications",
-            "listeners-see-snapshot-ranges",
-            "append-rejects-buffer-cap",
-            "replace-rejects-buffer-cap",
+        std::set<std::string> executedScenarios;
+        const auto scenarioRan = [&executedScenarios](const char* name) {
+            executedScenarios.insert(name);
         };
-        TestRunner::assertTrue(corpus.size() == 17, "Session corpus has all scenarios");
 
         auto resetSession = std::make_shared<HybridMarkdownSession>();
         std::vector<std::pair<double, double>> resetRanges;
@@ -1037,10 +1023,12 @@ private:
             resetSession->getAllText(),
             "Session reset-replaces-buffer"
         );
+        scenarioRan("reset-replaces-buffer");
         TestRunner::assertTrue(
             resetRanges.back() == std::pair<double, double>{0.0, 11.0},
             "Session reset-notifies-full-range"
         );
+        scenarioRan("reset-notifies-full-range");
         resetUnsubscribe();
 
         auto session = std::make_shared<HybridMarkdownSession>();
@@ -1053,10 +1041,12 @@ private:
             session->append(" world");
             return session->getAllText();
         }(), "Session append extends buffer");
+        scenarioRan("append-extends-buffer");
         TestRunner::assertTrue(
             ranges.back() == std::pair<double, double>{5.0, 11.0},
             "Session append notifies inserted range"
         );
+        scenarioRan("append-notifies-range");
 
         session->reset("hello world");
         ranges.clear();
@@ -1066,10 +1056,12 @@ private:
             session->getAllText(),
             "Session replace-inserts-in-place"
         );
+        scenarioRan("replace-inserts-in-place");
         TestRunner::assertTrue(
             ranges.back() == std::pair<double, double>{5.0, 11.0},
             "Session replace-notifies-insert-range"
         );
+        scenarioRan("replace-notifies-insert-range");
 
         session->reset("hello");
         ranges.clear();
@@ -1079,10 +1071,12 @@ private:
             ranges.back() == std::pair<double, double>{5.0, 6.0},
             "Session replace reports clamped range"
         );
+        scenarioRan("replace-clamps-out-of-bounds");
 
         session->reset("hello");
         TestRunner::assertEqual("ello", session->getTextRange(1.0, 100.0), "Session range clamps end");
         TestRunner::assertEqual("", session->getTextRange(100.0, 200.0), "Session range clamps empty tail");
+        scenarioRan("getTextRange-clamps");
         TestRunner::assertEqual("", session->getTextRange(2.0, 2.0), "Session ASCII empty range stays empty");
         TestRunner::assertEqual(
             "Invalid range: from=NaN and to=" + std::to_string(0.0) +
@@ -1090,6 +1084,7 @@ private:
             errorOf([&]() { (void)session->getTextRange(std::numeric_limits<double>::quiet_NaN(), 0.0); }),
             "Session getTextRange rejects a non-finite range"
         );
+        scenarioRan("getTextRange-rejects-invalid");
 
         auto unicodeSession = std::make_shared<HybridMarkdownSession>();
         unicodeSession->reset("A😀B");
@@ -1173,16 +1168,19 @@ private:
         );
         session->clear();
         TestRunner::assertEqual("", session->getAllText(), "Session clear empties buffer");
+        scenarioRan("clear-empties-buffer");
         TestRunner::assertTrue(session->getHighlightPosition() == 0.0, "Session clear resets highlight");
         TestRunner::assertTrue(
             ranges.back() == std::pair<double, double>{0.0, 0.0},
             "Session clear notifies zero range"
         );
+        scenarioRan("clear-notifies-zero-range");
 
         unsubscribe();
         const auto rangeCount = ranges.size();
         session->append("after unsubscribe");
         TestRunner::assertTrue(ranges.size() == rangeCount, "Session unsubscribe stops notifications");
+        scenarioRan("unsubscribe-stops-notifications");
 
         bool invalidRangeThrew = false;
         try {
@@ -1191,6 +1189,7 @@ private:
             invalidRangeThrew = true;
         }
         TestRunner::assertTrue(invalidRangeThrew, "Session replace rejects invalid range");
+        scenarioRan("replace-rejects-invalid-range");
 
         auto snapshotSession = std::make_shared<HybridMarkdownSession>();
         std::vector<std::pair<double, double>> snapshotRanges;
@@ -1207,6 +1206,7 @@ private:
             },
             "Session listeners-see-snapshot-ranges"
         );
+        scenarioRan("listeners-see-snapshot-ranges");
         snapshotUnsubscribe();
 
         const auto isByteCapError = [](const std::runtime_error& error) {
@@ -1226,6 +1226,7 @@ private:
             appendCapThrew = isByteCapError(error);
         }
         TestRunner::assertTrue(appendCapThrew, "Session append enforces buffer cap");
+        scenarioRan("append-rejects-buffer-cap");
 
         bool replaceCapThrew = false;
         try {
@@ -1234,6 +1235,7 @@ private:
             replaceCapThrew = isByteCapError(error);
         }
         TestRunner::assertTrue(replaceCapThrew, "Session replace enforces buffer cap");
+        scenarioRan("replace-rejects-buffer-cap");
         TestRunner::assertTrue(
             capped->replace(0.0, 1.0, "!") == 10.0 * 1024 * 1024,
             "Session replace accepts a same-size edit at the byte cap"
@@ -1329,8 +1331,15 @@ private:
             disposedFailures == 10,
             "Session dispose-rejects-all-operations"
         );
-    }
+        scenarioRan("dispose-rejects-all-operations");
 
+        for (const char* scenario : kSessionScenarios) {
+            TestRunner::assertTrue(
+                executedScenarios.count(scenario) == 1,
+                std::string("Session scenario has an executed check: ") + scenario
+            );
+        }
+    }
     static void testHybridMarkdownParserBinding() {
         using ::margelo::nitro::Markdown::HybridMarkdownParser;
         using BindingParserOptions = ::margelo::nitro::Markdown::ParserOptions;

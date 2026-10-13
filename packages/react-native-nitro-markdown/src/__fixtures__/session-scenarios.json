@@ -1,0 +1,19 @@
+[
+  "append-extends-buffer",
+  "append-notifies-range",
+  "reset-replaces-buffer",
+  "reset-notifies-full-range",
+  "replace-inserts-in-place",
+  "replace-notifies-insert-range",
+  "replace-clamps-out-of-bounds",
+  "replace-rejects-invalid-range",
+  "getTextRange-clamps",
+  "getTextRange-rejects-invalid",
+  "clear-empties-buffer",
+  "clear-notifies-zero-range",
+  "dispose-rejects-all-operations",
+  "unsubscribe-stops-notifications",
+  "listeners-see-snapshot-ranges",
+  "append-rejects-buffer-cap",
+  "replace-rejects-buffer-cap"
+]
