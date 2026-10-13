@@ -30,7 +30,7 @@ if (packageManifest.name !== "react-native-nitro-markdown") {
   );
 }
 
-// Complex markdown test data (same as used in the app)
+// Node-only benchmark fixture; the device benchmark has a separate fixture.
 const COMPLEX_MARKDOWN = `# 🚀 Nitro Markdown Comprehensive Demo
 
 Welcome to the **high-performance** markdown parser powered by \`md4c\` and **Nitro Modules**.
@@ -277,7 +277,6 @@ function runComparison() {
       env: {
         ...process.env,
         NODE_ENV: "production",
-        NITRO_MARKDOWN_BENCHMARK_WORKER: "1",
       },
     });
 

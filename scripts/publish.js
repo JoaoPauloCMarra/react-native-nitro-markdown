@@ -111,8 +111,6 @@ function parseArgs(args) {
       parsed.skipPreflight = true;
     } else if (arg === "--skip-checks") {
       parsed.skipChecks = true;
-    } else if (arg === "--skip-verify") {
-      parsed.skipChecks = true;
     } else if (arg === "--skip-docs") {
       parsed.skipDocs = true;
     } else if (arg === "--yes" || arg === "-y") {
