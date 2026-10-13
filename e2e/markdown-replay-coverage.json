@@ -528,6 +528,30 @@
       "assertion": "WIDE_TABLE_OPTIONS = { minColumnWidth: 120 }"
     },
     {
+      "id": "render.table-cells",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "A default table with a header, a link-only cell, a code cell and a bold cell renders through the table cell path and exposes its header-derived accessibilityLabel.",
+      "suite": "e2e/qa-render-contracts.ad",
+      "source": "apps/example/app/e2e-render-contracts.tsx",
+      "trigger": "screen-load",
+      "statusId": "table-cells-surface",
+      "expectedText": "Table: Head, Docs, code, bold",
+      "assertion": "TABLE_CELLS_MARKDOWN = tableCellsMarkdown(\"Head\")"
+    },
+    {
+      "id": "render.table-cell-renderer",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "A custom table_cell renderer is invoked for all four header cells and all four body cells of a table with link, code and bold cells.",
+      "suite": "e2e/qa-render-contracts.ad",
+      "source": "apps/example/app/e2e-render-contracts.tsx",
+      "trigger": "screen-load",
+      "statusId": "render-contracts-probe",
+      "expectedText": "tablecells=h4:b4;",
+      "assertion": "report(\"tablecells\""
+    },
+    {
       "id": "render.link-press",
       "coverage": "replay-asserted",
       "kind": "public-api",
