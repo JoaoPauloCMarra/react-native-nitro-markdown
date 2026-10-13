@@ -1,4 +1,4 @@
-import type { FC, ComponentType } from "react";
+import type { FC, ComponentType, ReactNode } from "react";
 import { View, Text, StyleSheet, Platform } from "react-native";
 import type { MarkdownNode } from "../../headless";
 import {
@@ -54,19 +54,45 @@ export const TableCell: FC<TableCellProps> = ({ node, Renderer }) => {
     );
   }
 
-  return (
-    <View style={styles.cellContentWrapper}>
-      {children.map((child, idx) => (
-        <Renderer
-          key={childKey(child, idx)}
-          node={child}
-          depth={0}
-          inListItem={false}
-          parentIsText={false}
-        />
-      ))}
-    </View>
-  );
+  const blocks: ReactNode[] = [];
+  let run: MarkdownNode[] = [];
+  const flushRun = () => {
+    if (run.length === 0) return;
+    const first = run[0]!;
+    blocks.push(
+      <Text key={`run-${childKey(first, blocks.length)}`} style={textStyle}>
+        {run.map((child, idx) => (
+          <Renderer
+            key={childKey(child, idx)}
+            node={child}
+            depth={0}
+            inListItem={false}
+            parentIsText
+          />
+        ))}
+      </Text>,
+    );
+    run = [];
+  };
+  children.forEach((child, idx) => {
+    if (TEXT_FLOW_TYPES.has(child.type)) {
+      run.push(child);
+      return;
+    }
+    flushRun();
+    blocks.push(
+      <Renderer
+        key={childKey(child, idx)}
+        node={child}
+        depth={0}
+        inListItem={false}
+        parentIsText={false}
+      />,
+    );
+  });
+  flushRun();
+
+  return <View style={styles.cellContentWrapper}>{blocks}</View>;
 };
 
 type CellStyles = ReturnType<typeof createCellStyles>;

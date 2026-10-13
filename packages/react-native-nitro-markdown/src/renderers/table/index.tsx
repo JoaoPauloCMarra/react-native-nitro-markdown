@@ -247,7 +247,7 @@ export const TableRenderer: FC<TableRendererProps> = ({
             {headers.map((cell, colIndex) => (
               <View
                 key={`measure-header-${colIndex}`}
-                style={styles.measurementCell}
+                style={[styles.measurementCell, nodeStyles?.table_cell]}
                 onLayout={(e: LayoutChangeEvent) => {
                   onCellLayout(
                     cellKeyOf({ row: 0, col: colIndex, isHeader: true }),
@@ -264,7 +264,7 @@ export const TableRenderer: FC<TableRendererProps> = ({
               {row.map((cell, colIndex) => (
                 <View
                   key={`measure-cell-${rowIndex}-${colIndex}`}
-                  style={styles.measurementCell}
+                  style={[styles.measurementCell, nodeStyles?.table_cell]}
                   onLayout={(e: LayoutChangeEvent) => {
                     onCellLayout(
                       cellKeyOf({ row: rowIndex, col: colIndex, isHeader: false }),

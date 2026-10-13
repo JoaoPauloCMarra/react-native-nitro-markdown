@@ -188,3 +188,89 @@ describe("table renderer", () => {
     expect([0.5, 0.6, 0.7, 0.8, 0.9].every((value) => opacities.has(value))).toBe(true);
   });
 });
+
+describe("table cells with non-text inline children", () => {
+  it("keeps the header text style around inline math", () => {
+    const ast: MarkdownNode = {
+      type: "document",
+      children: [
+        {
+          type: "table",
+          children: [
+            {
+              type: "table_head",
+              children: [
+                {
+                  type: "table_row",
+                  children: [
+                    {
+                      type: "table_cell",
+                      isHeader: true,
+                      children: [
+                        { type: "text", content: "Total " },
+                        { type: "math_inline", children: [{ type: "text", content: "x^2" }] },
+                        { type: "text", content: " end" },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              type: "table_body",
+              children: [
+                {
+                  type: "table_row",
+                  children: [{ type: "table_cell", children: [{ type: "text", content: "v" }] }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const renderer = renderMarkdown(ast, { options: { math: true } });
+
+    for (const text of ["Total ", " end"]) {
+      const nodes = textNodesWith(renderer, text);
+      expect(nodes.length).toBeGreaterThan(0);
+      const style = flatten(nodes[0]!.props.style);
+      expect(style["fontWeight"]).toBe("600");
+      expect(style["fontSize"]).toBe(12);
+    }
+  });
+});
+
+describe("table measurement pass", () => {
+  const measuredTable = (): MarkdownNode => tableAst();
+
+  it("applies styles.table_cell to the measurement cells", () => {
+    const renderer = renderMarkdown(measuredTable(), {
+      styles: { table_cell: { paddingHorizontal: 20 } },
+      tableOptions: { measurementStabilizeMs: 0 },
+    });
+    const measurementCells = renderer.root.findAll(
+      (node) =>
+        node.type === hostType("View") &&
+        typeof node.props.onLayout === "function" &&
+        flatten(node.props.style)["paddingHorizontal"] === 20,
+    );
+
+    expect(measurementCells).toHaveLength(6);
+  });
+
+  it("runs a custom table_cell renderer for display and for measurement", () => {
+    const calls: string[] = [];
+    renderMarkdown(measuredTable(), {
+      renderers: {
+        table_cell: ({ node }: { node: MarkdownNode }) => {
+          calls.push(node.children?.[0]?.content ?? "");
+          return createElement("Text", null, node.children?.[0]?.content ?? "");
+        },
+      },
+      tableOptions: { measurementStabilizeMs: 0 },
+    });
+
+    expect(calls.filter((value) => value === "Apple").length).toBeGreaterThanOrEqual(2);
+  });
+});
