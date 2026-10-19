@@ -110,17 +110,17 @@ const SHELL_KEYWORDS = new Set([
 
 type LanguageProfile = {
   keywords: Set<string>;
-  hashComments: boolean;
+  lineComment: "//" | "#";
 };
 
-const JS_PROFILE: LanguageProfile = { keywords: JS_KEYWORDS, hashComments: false };
+const JS_PROFILE: LanguageProfile = { keywords: JS_KEYWORDS, lineComment: "//" };
 const PYTHON_PROFILE: LanguageProfile = {
   keywords: PYTHON_KEYWORDS,
-  hashComments: true,
+  lineComment: "#",
 };
 const SHELL_PROFILE: LanguageProfile = {
   keywords: SHELL_KEYWORDS,
-  hashComments: true,
+  lineComment: "#",
 };
 
 const LANGUAGE_PROFILES: ReadonlyMap<string, LanguageProfile> = new Map([
@@ -151,19 +151,17 @@ function tokenizeLine(
   line: string,
   profile: LanguageProfile,
 ): HighlightedToken[] {
-  const { keywords, hashComments } = profile;
+  const { keywords, lineComment } = profile;
   const tokens: HighlightedToken[] = [];
 
   // Full-line comment detection
   const trimmed = line.trimStart();
 
-  if (trimmed.startsWith("//") || (trimmed.startsWith("#") && hashComments)) {
+  if (trimmed.startsWith(lineComment)) {
     return [{ text: line, type: "comment" }];
   }
 
-  // Only include # as comment for shell/python languages
-  const commentPattern =
-    hashComments ? "\/\/[^\\n]*|#[^\\n]*" : "\/\/[^\\n]*";
+  const commentPattern = `${lineComment}[^\\n]*`;
   const tokenRegex = new RegExp(
     `("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'|\`(?:[^\`\\\\]|\\\\.)*\`)|(\\b\\d+(?:\\.\\d+)?\\b)|(${commentPattern})|([a-zA-Z_$][a-zA-Z0-9_$]*)|([+\\-*/%=<>!&|^~?:]+)|([(\\)\\[\\]{},;.])|(\\s+)|(.)`,
     "g",

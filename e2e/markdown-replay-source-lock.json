@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "runtimeSourceSha256": "6a07b23496a93315eed056997d9d5f3d550cab1e9aebf12377f6209c729ea42a",
+  "runtimeSourceSha256": "230ad4685b1c07d8a54127582c7ad5a26daa4761b1ec98b0e2fbd1f883260860",
   "runtimeSourceFiles": [
     "apps/example/app.config.js",
     "apps/example/app/(tabs)/_layout.tsx",
@@ -18,6 +18,7 @@
     "apps/example/app/e2e.tsx",
     "apps/example/assets/adaptive-icon.png",
     "apps/example/assets/icon.png",
+    "apps/example/ast-utils.ts",
     "apps/example/babel.config.js",
     "apps/example/components/e2e-gate.tsx",
     "apps/example/components/e2e-lab.tsx",
@@ -43,12 +44,15 @@
     "packages/react-native-nitro-markdown/cpp/bindings/HybridMarkdownParser.hpp",
     "packages/react-native-nitro-markdown/cpp/bindings/HybridMarkdownSession.cpp",
     "packages/react-native-nitro-markdown/cpp/bindings/HybridMarkdownSession.hpp",
+    "packages/react-native-nitro-markdown/cpp/bindings/ParserOptionsMapping.cpp",
     "packages/react-native-nitro-markdown/cpp/bindings/ParserOptionsMapping.hpp",
     "packages/react-native-nitro-markdown/cpp/core/MarkdownJson.cpp",
     "packages/react-native-nitro-markdown/cpp/core/MarkdownJson.hpp",
     "packages/react-native-nitro-markdown/cpp/core/MarkdownTypes.hpp",
     "packages/react-native-nitro-markdown/cpp/core/NitroMD4CParser.cpp",
     "packages/react-native-nitro-markdown/cpp/core/NitroMD4CParser.hpp",
+    "packages/react-native-nitro-markdown/cpp/core/SourceOffsetMap.cpp",
+    "packages/react-native-nitro-markdown/cpp/core/SourceOffsetMap.hpp",
     "packages/react-native-nitro-markdown/cpp/core/flatten.cpp",
     "packages/react-native-nitro-markdown/cpp/core/flatten.hpp",
     "packages/react-native-nitro-markdown/cpp/nitromd/nitromd.c",
@@ -94,7 +98,6 @@
     "packages/react-native-nitro-markdown/src/renderers/math.tsx",
     "packages/react-native-nitro-markdown/src/renderers/paragraph.tsx",
     "packages/react-native-nitro-markdown/src/renderers/style-cache.ts",
-    "packages/react-native-nitro-markdown/src/renderers/table.tsx",
     "packages/react-native-nitro-markdown/src/renderers/table/cell-content.tsx",
     "packages/react-native-nitro-markdown/src/renderers/table/index.tsx",
     "packages/react-native-nitro-markdown/src/renderers/table/table-measurement.ts",
@@ -113,7 +116,7 @@
     "packages/react-native-nitro-markdown/src/utils/stream-timeline.ts",
     "packages/react-native-nitro-markdown/src/utils/text-content.ts"
   ],
-  "replayInputsSha256": "e228caa2ec05602b0330e766e4142ab38b460d0ee563f86ab7f82dd533da05ea",
+  "replayInputsSha256": "da4f3b9e1d1bc8ae9898899641436ee8d24e74f3dfdf50e2e87ffea421711640",
   "replayInputs": [
     "e2e/markdown-replay-coverage.json",
     "e2e/qa-api.ad",

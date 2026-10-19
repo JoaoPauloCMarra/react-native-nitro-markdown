@@ -7,10 +7,10 @@ import {
   getFlattenedText,
   parseMarkdown,
   parseMarkdownWithOptions,
-  type MarkdownNode,
 } from "react-native-nitro-markdown";
 import { MarkdownPipelineSmoke } from "./markdown-pipeline-smoke";
 import { ExampleActionButton } from "./example-ui";
+import { collectNodeTypes } from "../ast-utils";
 import { EXAMPLE_COLORS } from "../theme";
 
 const SAMPLE = `# E2E parse
@@ -49,14 +49,7 @@ function runParserLab(): LabResults {
       gfm: true,
       math: true,
     });
-    const types = new Set<string>();
-    const walk = (node: MarkdownNode) => {
-      types.add(node.type);
-      for (const child of node.children ?? []) {
-        walk(child);
-      }
-    };
-    walk(ast);
+    const types = collectNodeTypes(ast);
     const passed =
       ast.type === "document" &&
       ["heading", "list", "table", "math_inline"].every((type) =>
@@ -143,32 +136,26 @@ function runParserLab(): LabResults {
 export function MarkdownE2eLab() {
   const [results, setResults] = useState<LabResults>(() => runParserLab());
 
-  const parseStatus = results.parse;
-  const extractStatus = results.extract;
-  const sessionStatus = results.session;
-  const errorStatus = results.error;
-  const stressStatus = results.stress;
-
   return (
     <View testID="e2e-lab" style={styles.lab} accessibilityLabel="E2E Lab">
       <Text style={styles.title}>Parser lab</Text>
       <Text style={styles.subtitle}>
-        Auto-runs on open. Buttons re-run individual cases.
+        Auto-runs on open. Re-run all repeats every case.
       </Text>
       <Text testID="e2e-parse-status" style={styles.result}>
-        {parseStatus}
+        {results.parse}
       </Text>
       <Text testID="e2e-extract-status" style={styles.result}>
-        {extractStatus}
+        {results.extract}
       </Text>
       <Text testID="e2e-session-status" style={styles.result}>
-        {sessionStatus}
+        {results.session}
       </Text>
       <Text testID="e2e-error-status" style={styles.result}>
-        {errorStatus}
+        {results.error}
       </Text>
       <Text testID="e2e-stress-result" style={styles.result}>
-        {stressStatus}
+        {results.stress}
       </Text>
 
       <MarkdownPipelineSmoke />

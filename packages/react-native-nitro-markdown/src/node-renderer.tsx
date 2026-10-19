@@ -34,7 +34,8 @@ import {
   normalizeInlineMathContent,
 } from "./renderers/math";
 import { Paragraph } from "./renderers/paragraph";
-import { TableRenderer } from "./renderers/table";
+import { createThemedStyles } from "./renderers/style-cache";
+import { TableRenderer } from "./renderers/table/index";
 import { TableCell } from "./renderers/table/cell-content";
 import { getMonoFontFamily, type MarkdownTheme } from "./theme";
 
@@ -376,7 +377,6 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
       return (
         <Image
           url={node.href ?? ""}
-          Renderer={NodeRenderer}
           {...(node.title ? { title: node.title } : {})}
           {...(node.alt ? { alt: node.alt } : {})}
           {...(nodeStyles?.image ? { style: nodeStyles.image } : {})}
@@ -549,17 +549,6 @@ export const NodeRenderer = memo(NodeRendererComponent, (previousProps, nextProp
 
 export type BaseStyles = ReturnType<typeof createBaseStyles>;
 
-export const getBaseStyles = (theme: MarkdownTheme): BaseStyles => {
-  const cached = baseStylesCache.get(theme);
-  if (cached) return cached;
-
-  const created = createBaseStyles(theme);
-  baseStylesCache.set(theme, created);
-  return created;
-};
-
-const baseStylesCache = new WeakMap<MarkdownTheme, BaseStyles>();
-
 export const createBaseStyles = (theme: MarkdownTheme) =>
   StyleSheet.create({
     container: {
@@ -601,3 +590,5 @@ export const createBaseStyles = (theme: MarkdownTheme) =>
       ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
   });
+
+export const getBaseStyles = createThemedStyles(createBaseStyles);

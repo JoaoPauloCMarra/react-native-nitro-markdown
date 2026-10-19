@@ -193,10 +193,10 @@ export function parseMarkdown(
   text: string,
   options?: ParserOptions,
 ): MarkdownNode {
-  assertInputWithinBounds(text, options);
   if (options != null) {
     return parseMarkdownWithOptions(text, options);
   }
+  assertInputWithinBounds(text, options);
   if (
     MarkdownParserModule != null &&
     typeof MarkdownParserModule.parse === "function"
@@ -350,7 +350,9 @@ export const getFlattenedText = (node: MarkdownNode): string =>
  * it skips emitting the offsets natively, avoiding this post-hoc tree walk and
  * the JSON cost of serializing/parsing them in the first place.
  */
-export function stripSourceOffsets(node: MarkdownNode): MarkdownNode {
+export function stripSourceOffsets(
+  node: MarkdownNode,
+): MarkdownNodeWithoutSourceOffsets {
   const cloned = cloneMarkdownNode(node);
   const pending: MarkdownNode[] = [cloned];
   while (pending.length > 0) {

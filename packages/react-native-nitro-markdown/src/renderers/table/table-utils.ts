@@ -1,7 +1,7 @@
 import type { MarkdownNode } from "../../headless";
 import { readTextContent } from "../../utils/text-content";
 
-const COLUMN_MEASUREMENT_PADDING = 8;
+export const COLUMN_MEASUREMENT_PADDING = 8;
 const APPROX_CHAR_WIDTH = 7;
 const MAX_ESTIMATED_CHARS = 120;
 const ESTIMATED_WIDTH_STEP = 24;

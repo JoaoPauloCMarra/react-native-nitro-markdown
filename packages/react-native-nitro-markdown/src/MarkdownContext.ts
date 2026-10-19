@@ -5,6 +5,7 @@ import {
   type ComponentType,
 } from "react";
 import type { MarkdownNode } from "./headless";
+import type { MarkdownErrorPhase } from "./utils/parse-pipeline";
 import {
   defaultMarkdownTheme,
   type MarkdownTheme,
@@ -139,6 +140,7 @@ export type MarkdownContextValue = {
   highlightCode?: boolean | CodeHighlighter;
   tableOptions?: TableOptions;
   imageOptions?: UrlSafetyOptions;
+  onError?: (error: unknown, phase: MarkdownErrorPhase) => void;
 };
 
 export const MarkdownContext = createContext<MarkdownContextValue>({

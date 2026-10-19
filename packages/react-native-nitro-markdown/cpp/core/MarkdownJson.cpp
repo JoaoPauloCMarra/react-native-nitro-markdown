@@ -13,12 +13,10 @@ namespace NitroMarkdown {
 
 namespace {
 
-static constexpr size_t kMaxJsonSize = 64 * 1024 * 1024;
-
 [[noreturn]] void throwJsonSizeError(size_t size) {
     throw std::runtime_error(
         "Markdown JSON output size " + std::to_string(size) +
-        " bytes exceeds the maximum of " + std::to_string(kMaxJsonSize) +
+        " bytes exceeds the maximum of " + std::to_string(kMaxOutputBytes) +
         " bytes"
     );
 }
@@ -26,7 +24,7 @@ static constexpr size_t kMaxJsonSize = 64 * 1024 * 1024;
 class JsonWriter final {
 public:
     void reserve(size_t capacity) {
-        reallocate(std::min(capacity, kMaxJsonSize));
+        reallocate(std::min(capacity, kMaxOutputBytes));
     }
 
     void append(std::string_view value) {
@@ -45,12 +43,12 @@ public:
 
 private:
     void grow(size_t extra) {
-        if (extra > kMaxJsonSize - output_.size()) {
+        if (extra > kMaxOutputBytes - output_.size()) {
             throwJsonSizeError(output_.size() + extra);
         }
         const size_t needed = output_.size() + extra;
         if (needed > capacity_) {
-            reallocate(std::min(std::max(needed, capacity_ * 2), kMaxJsonSize));
+            reallocate(std::min(std::max(needed, capacity_ * 2), kMaxOutputBytes));
         }
     }
 
@@ -66,8 +64,8 @@ private:
     size_t capacity_ = 0;
 };
 
-template <typename Writer, typename T>
-inline void appendInteger(Writer& output, T value) {
+template <typename T>
+inline void appendInteger(JsonWriter& output, T value) {
     char buffer[std::numeric_limits<T>::digits10 + 3];
     const auto result = std::to_chars(buffer, buffer + sizeof(buffer), value);
     if (result.ec != std::errc()) {
@@ -76,8 +74,7 @@ inline void appendInteger(Writer& output, T value) {
     output.append(std::string_view(buffer, static_cast<size_t>(result.ptr - buffer)));
 }
 
-template <typename Writer>
-inline void appendEscapedJsonString(Writer& output, std::string_view input) {
+inline void appendEscapedJsonString(JsonWriter& output, std::string_view input) {
     static constexpr char kHex[] = "0123456789abcdef";
     size_t safeStart = 0;
 
@@ -117,8 +114,7 @@ inline void appendEscapedJsonString(Writer& output, std::string_view input) {
     }
 }
 
-template <typename Writer>
-inline void appendStringField(Writer& output, const char* key, std::string_view value) {
+inline void appendStringField(JsonWriter& output, const char* key, std::string_view value) {
     output.push(',');
     output.push('"');
     output.append(key);
@@ -127,8 +123,8 @@ inline void appendStringField(Writer& output, const char* key, std::string_view 
     output.push('"');
 }
 
-template <typename Writer, typename T>
-inline void appendNumberField(Writer& output, const char* key, T value) {
+template <typename T>
+inline void appendNumberField(JsonWriter& output, const char* key, T value) {
     output.push(',');
     output.push('"');
     output.append(key);
@@ -136,8 +132,7 @@ inline void appendNumberField(Writer& output, const char* key, T value) {
     appendInteger(output, value);
 }
 
-template <typename Writer>
-inline void appendBoolField(Writer& output, const char* key, bool value) {
+inline void appendBoolField(JsonWriter& output, const char* key, bool value) {
     output.push(',');
     output.push('"');
     output.append(key);
@@ -145,9 +140,8 @@ inline void appendBoolField(Writer& output, const char* key, bool value) {
     output.append(value ? "true" : "false");
 }
 
-template <typename Writer>
 void appendNodeJson(
-    Writer& output,
+    JsonWriter& output,
     const std::shared_ptr<MarkdownNode>& node,
     bool includeOffsets
 ) {
@@ -199,17 +193,17 @@ std::string serializeMarkdownJson(
     JsonWriter writer;
     writer.reserve(std::max<size_t>(
         4096,
-        std::min<size_t>(sourceBytes * 2 + 256, kMaxJsonSize)
+        std::min<size_t>(sourceBytes * 2 + 256, kMaxOutputBytes)
     ));
     appendNodeJson(writer, node, includeOffsets);
     return std::move(writer).take();
 }
 
 std::string parseMarkdownToJson(
-    MD4CParser& parser,
     const std::string& text,
     const ParserOptions& options
 ) try {
+    MD4CParser parser;
     return serializeMarkdownJson(
         parser.parse(text, options),
         text.size(),

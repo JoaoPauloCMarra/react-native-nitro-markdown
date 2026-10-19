@@ -8,16 +8,16 @@ custom native build. It cannot run in Expo Go.
 
 | Dependency                                                                             | Minimum                                                                   |
 | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| React Native                                                                           | `>=0.77` (New Architecture / Fabric; Nitro 0.37 minimum); tested on `0.86.3` |
-| Expo                                                                                   | SDK `>=53` development build; tested on SDK 57                            |
+| React Native                                                                           | `>=0.77` (New Architecture / Fabric; Nitro 0.37 minimum); tested on `0.88.0` |
+| Expo                                                                                   | SDK `>=53` development build; tested on SDK 58                            |
 | [react-native-nitro-modules](https://www.npmjs.com/package/react-native-nitro-modules) | `>=0.37.0 <0.38.0` (peer dependency)                                      |
 | [ratex-react-native](https://www.npmjs.com/package/ratex-react-native)                 | Optional peer. Only needed for the `react-native-nitro-markdown/math` subpath. |
-| iOS                                                                                    | The app's React Native floor (`min_ios_version_supported`, 15.1 on RN 0.77–0.86) |
+| iOS                                                                                    | The app's React Native floor (`min_ios_version_supported`, 15.1 on RN 0.77–0.88) |
 | Android                                                                                | `minSdkVersion` 24                                                        |
 
 `react-native-nitro-modules` is a required peer dependency because parsing runs
 in native code. Supports React Native >= 0.77 / Expo SDK >= 53 (the Nitro
-Modules 0.37 minimum); tested on React Native 0.86.3 / Expo SDK 57.
+Modules 0.37 minimum); tested on React Native 0.88.0 / Expo SDK 58.
 
 ## Expo (development build)
 
@@ -49,7 +49,7 @@ text. To draw LaTeX with [RaTeX](https://github.com/erweixin/RaTeX), install
 `ratex-react-native` and pass the renderers from the `/math` subpath:
 
 ```sh
-bunx expo install ratex-react-native@0.1.14   # or: bun add ratex-react-native@0.1.14
+bunx expo install ratex-react-native@0.1.15   # or: bun add ratex-react-native@0.1.15
 ```
 
 ```tsx
@@ -61,7 +61,7 @@ import { mathRenderers } from "react-native-nitro-markdown/math";
 </Markdown>;
 ```
 
-`ratex-react-native@0.1.14` requires React Native `>=0.84` and React
+`ratex-react-native@0.1.15` requires React Native `>=0.84` and React
 `>=19.2`, so RaTeX math rendering needs React Native 0.84 or later (an Expo SDK that
 ships React Native 0.84 or later). On React Native 0.77–0.83, do not install it and do not import
 the `/math` subpath; math stays readable as monospace text. The main entry and

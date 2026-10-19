@@ -88,6 +88,23 @@ describe("defaultHighlighter", () => {
     });
   });
 
+  it("python floor division is not a comment", () => {
+    const division = defaultHighlighter("python", "x = a // b");
+    expect(division.find((t) => t.type === "comment")).toBeUndefined();
+    expect(joinTokenTexts(division)).toBe("x = a // b");
+
+    const trailing = defaultHighlighter("python", "x = 1  # c");
+    expect(trailing.filter((t) => t.type === "comment").map((t) => t.text)).toEqual(["# c"]);
+    expect(defaultHighlighter("python", "# c")[0]!.type).toBe("comment");
+
+    const shell = defaultHighlighter("bash", "ls //host");
+    expect(shell.find((t) => t.type === "comment")).toBeUndefined();
+
+    const js = defaultHighlighter("javascript", "a = 1 // c");
+    expect(js.filter((t) => t.type === "comment").map((t) => t.text)).toEqual(["// c"]);
+    expect(defaultHighlighter("javascript", "// c")[0]!.type).toBe("comment");
+  });
+
   it("concatenated token texts equal the original code", () => {
     const code = 'const x = 42; // hello\nreturn "world";';
     const tokens = defaultHighlighter("javascript", code);

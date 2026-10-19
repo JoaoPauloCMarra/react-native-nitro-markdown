@@ -5,6 +5,7 @@ const fs = require("fs");
 const net = require("net");
 const os = require("os");
 const path = require("path");
+const { log } = require("./console-log.js");
 
 const projectRoot = path.resolve(__dirname, "..");
 const exampleDir = path.join(projectRoot, "apps/example");
@@ -15,17 +16,6 @@ const bundleId = "com.nitromarkdown.example";
 const packageName = "com.nitromarkdown.example";
 const port = Number(process.env.EXAMPLE_SMOKE_PORT ?? 8081);
 const launchWaitMs = Number(process.env.EXAMPLE_SMOKE_LAUNCH_WAIT_MS ?? 15000);
-
-const colors = {
-  green: (text) => `\x1b[32m${text}\x1b[0m`,
-  yellow: (text) => `\x1b[33m${text}\x1b[0m`,
-  red: (text) => `\x1b[31m${text}\x1b[0m`,
-  cyan: (text) => `\x1b[36m${text}\x1b[0m`,
-};
-
-function log(message, color = "green") {
-  console.log(colors[color](message));
-}
 
 function parseArgs(argv) {
   const options = {
@@ -131,13 +121,17 @@ function isPortOpen(host, targetPort) {
   });
 }
 
+async function isMetroListening() {
+  return (
+    (await isPortOpen("127.0.0.1", port)) ||
+    (await isPortOpen("::1", port)) ||
+    (await isPortOpen("localhost", port))
+  );
+}
+
 async function waitForMetro() {
   for (let i = 0; i < 40; i += 1) {
-    if (
-      (await isPortOpen("127.0.0.1", port)) ||
-      (await isPortOpen("::1", port)) ||
-      (await isPortOpen("localhost", port))
-    ) {
+    if (await isMetroListening()) {
       return;
     }
     await wait(500);
@@ -154,11 +148,7 @@ function createDevClientUrl(host) {
 async function startMetroIfNeeded(enabled) {
   if (!enabled) return null;
 
-  if (
-    (await isPortOpen("127.0.0.1", port)) ||
-    (await isPortOpen("::1", port)) ||
-    (await isPortOpen("localhost", port))
-  ) {
+  if (await isMetroListening()) {
     log(`Metro already listening on ${port}`, "cyan");
     return null;
   }
@@ -191,8 +181,7 @@ function ensureOutputDir() {
 function createReporter() {
   const tests = [];
   return {
-    record(platform, name, status, reason) {
-      const kind = name.startsWith("tab ") ? "content" : "infra";
+    record(platform, name, status, reason, kind = "infra") {
       tests.push({ platform, name, kind, status, reason: reason ?? null });
       const icon = status === "passed" ? "✓" : status === "skipped" ? "⊘" : "✗";
       const detail = status === "passed" ? "" : ` (${reason ?? "no reason"})`;
@@ -333,6 +322,7 @@ async function runAndroidSmoke(reporter) {
         `tab ${tab.label} content`,
         "skipped",
         "uiautomator dump is unavailable on this device",
+        "content",
       );
       continue;
     }
@@ -349,15 +339,6 @@ async function runAndroidSmoke(reporter) {
     reporter.record("android", `tab ${tab.label} visible`, "passed");
 
     const bounds = androidFindTextBounds(dump, tab.label);
-    if (!bounds) {
-      reporter.record(
-        "android",
-        `tab ${tab.label} tappable`,
-        "skipped",
-        "tab label bounds not found in UI dump",
-      );
-      continue;
-    }
 
     run("adb", ["shell", "input", "tap", String(bounds.x), String(bounds.y)], {
       stdio: "ignore",
@@ -371,17 +352,25 @@ async function runAndroidSmoke(reporter) {
         `tab ${tab.label} content`,
         "skipped",
         "uiautomator dump is unavailable after tap",
+        "content",
       );
       continue;
     }
     if (androidDumpContains(afterTap, tab.expected)) {
-      reporter.record("android", `tab ${tab.label} content`, "passed");
+      reporter.record(
+        "android",
+        `tab ${tab.label} content`,
+        "passed",
+        undefined,
+        "content",
+      );
     } else {
       reporter.record(
         "android",
         `tab ${tab.label} content`,
         "failed",
         `expected marker "${tab.expected}" not found after tapping "${tab.label}"`,
+        "content",
       );
     }
   }
@@ -455,6 +444,7 @@ async function runIosSmoke(reporter) {
       `tab ${tab} content`,
       "skipped",
       "iOS content assertions require an accessibility driver; screenshot artifact captured",
+      "content",
     );
   }
 }

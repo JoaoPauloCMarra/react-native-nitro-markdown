@@ -10,7 +10,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import { getCachedStyles } from "./style-cache";
+import { createThemedStyles } from "./style-cache";
 import { useMarkdownContext } from "../MarkdownContext";
 import { getMonoFontFamily, type MarkdownTheme } from "../theme";
 
@@ -38,9 +38,6 @@ type MathInlineProps = {
   LatexView?: LatexViewComponent;
 };
 
-type MathStyles = ReturnType<typeof createMathStyles>;
-
-const mathStylesCache = new WeakMap<MarkdownTheme, MathStyles>();
 const INLINE_DISPLAY_MATH_PATTERN =
   /\\(?:frac|dfrac|tfrac|sqrt|sum|prod|int|lim|begin|matrix|pmatrix|bmatrix|cases)\b/;
 
@@ -249,13 +246,15 @@ const createMathStyles = (theme: MarkdownTheme) =>
     },
   });
 
+const getMathStyles = createThemedStyles(createMathStyles);
+
 export const MathInline: FC<MathInlineProps> = ({
   content,
   style,
   LatexView: RaTeXView,
 }) => {
   const { theme } = useMarkdownContext();
-  const styles = getCachedStyles(mathStylesCache, theme, createMathStyles);
+  const styles = getMathStyles(theme);
 
   if (!content) return null;
 
@@ -299,7 +298,7 @@ export const MathBlock: FC<MathBlockProps> = ({
   LatexView: RaTeXView,
 }) => {
   const { theme } = useMarkdownContext();
-  const styles = getCachedStyles(mathStylesCache, theme, createMathStyles);
+  const styles = getMathStyles(theme);
 
   if (!content) return null;
 

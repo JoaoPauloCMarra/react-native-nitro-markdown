@@ -44,22 +44,22 @@ expectValue(
   "package workspace React Native",
   developmentDependency(root, "react-native") ??
     developmentDependency(packageManifest, "react-native"),
-  "0.86.3",
+  "0.88.0",
 );
 expectValue(
   "example Expo",
   dependencyValue(example, "dependencies", "expo"),
-  "~57.0.28",
+  "~58.0.16",
 );
 expectValue(
   "example React Native",
   dependencyValue(example, "dependencies", "react-native"),
-  "0.86.3",
+  "0.88.0",
 );
 expectValue(
   "example React",
   dependencyValue(example, "dependencies", "react"),
-  "19.2.3",
+  "19.3.0",
 );
 expectValue(
   "example Nitro Modules",
@@ -94,15 +94,15 @@ expectValue(
   rootOverrides != null && typeof rootOverrides === "object"
     ? (rootOverrides as JsonRecord)["expo"]
     : undefined,
-  "~57.0.28",
+  "~58.0.16",
 );
 if (
   rootOverrides != null &&
   typeof rootOverrides === "object" &&
-  (rootOverrides as JsonRecord)["react-native"] !== "0.86.3"
+  (rootOverrides as JsonRecord)["react-native"] !== "0.88.0"
 ) {
   failures.push(
-    "root overrides.react-native must stay pinned to 0.86.3 for the Expo SDK 57 workspace",
+    "root overrides.react-native must stay pinned to 0.88.0 for the Expo SDK 58 workspace",
   );
 }
 
@@ -111,18 +111,18 @@ for (const manifest of [root, packageManifest]) {
     manifest,
     "@react-native/babel-preset",
   );
-  if (babelPreset !== undefined && babelPreset !== "^0.86.3") {
+  if (babelPreset !== undefined && babelPreset !== "^0.88.0") {
     failures.push(
-      `@react-native/babel-preset must use ^0.86.3, got "${String(babelPreset)}"`,
+      `@react-native/babel-preset must use ^0.88.0, got "${String(babelPreset)}"`,
     );
   }
   const jestPreset = developmentDependency(
     manifest,
     "@react-native/jest-preset",
   );
-  if (jestPreset !== undefined && jestPreset !== "0.86.3") {
+  if (jestPreset !== undefined && jestPreset !== "0.88.0") {
     failures.push(
-      `@react-native/jest-preset must use 0.86.3, got "${String(jestPreset)}"`,
+      `@react-native/jest-preset must use 0.88.0, got "${String(jestPreset)}"`,
     );
   }
 }
@@ -140,5 +140,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  "Expo SDK 57 workspace and RN 0.87 compatibility baselines are aligned.",
+  "Expo SDK 58 workspace and RN 0.87 compatibility baselines are aligned.",
 );

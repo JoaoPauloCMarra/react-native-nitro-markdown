@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [0.16.0] - 2026-10-15
+
+### Breaking changes
+
+- `MarkdownErrorPhase` gains `"transform"`. A throwing `astTransform` now calls `onError(error, "transform")` and keeps the parsed AST, and a throwing `highlightCode` renders the code block as plain text and calls `onError(error, "transform")`. Before, a throwing `astTransform` was only logged in development and a throwing `highlightCode` crashed the whole `Markdown` tree. Migration: add a `"transform"` case to an exhaustive `switch` on the phase.
+
+### Fixed
+
+- `extractPlainText`, `getFlattenedText` and `onParseComplete.text` include inline math text (`$x^2$`). It was dropped on both the native and JavaScript paths.
+- Native plain-text extraction now matches the JavaScript fallback: HTML blocks contribute their content, an image with empty alt uses its title, and leading or trailing Unicode spaces (for example U+3000) are trimmed.
+- Table text inherits the surrounding color in the minimal styling strategy and uses `theme.fontSizes`. It used hard-coded dark-theme colors that were nearly invisible on a light background.
+- The image accessibility label keeps literal characters such as `_`, `$` and `#` from the alt text, and the error state shows the alt as plain text.
+- Screen readers can reach table body cells. The table container no longer collapses its content into a header-only label.
+- The default highlighter no longer treats `//` as a comment in Python or shell code.
+- The code language label uses the same monospace font as the code.
+- Stream session listener errors are logged through the native logger, so they appear in Android logs.
+- Android builds apply the hardening compiler flags to the C parser sources too.
+
+### Compatibility
+
+- Tested with Expo SDK 58 (React Native 0.88.0, React 19.3.0).
+
 ## [0.15.0] - 2026-10-13
 
 ### Breaking changes

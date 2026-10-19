@@ -34,15 +34,7 @@ public:
     static int enterSpanNullUserdataForTest();
     static int leaveSpanNullUserdataForTest();
     static int textNullUserdataForTest();
-    static std::vector<OFF> sourceOffsetsForTest(const std::string& text);
-    static std::vector<OFF> sourceOffsetsForTest(
-        const std::string& text,
-        const std::vector<size_t>& byteOffsets
-    );
-    static size_t sourceOffsetMapBytesForTest(const std::string& text);
     static std::string parseFailureMessageForTest(int result, const char* parserLog);
-    static int offsetBeforeBaseForTest();
-    static int offsetPastBaseForTest();
     bool lastParseTrackedOffsets = true;
 #endif
     

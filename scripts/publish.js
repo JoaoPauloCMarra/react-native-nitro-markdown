@@ -12,18 +12,11 @@ const {
   ProcessTreeTerminationError,
   runProcess,
 } = require("./process-runner.js");
+const { log } = require("./console-log.js");
 const { runReleasePipeline } = require("./publish-pipeline.js");
+const { validateDistTag } = require("./validate-release-tags.js");
 
 const PACKAGE_NAME = "react-native-nitro-markdown";
-const VALID_TAG_PATTERN = /^[a-zA-Z0-9._-]+$/;
-
-const colors = {
-  green: (text) => `\x1b[32m${text}\x1b[0m`,
-  yellow: (text) => `\x1b[33m${text}\x1b[0m`,
-  red: (text) => `\x1b[31m${text}\x1b[0m`,
-  cyan: (text) => `\x1b[36m${text}\x1b[0m`,
-  bold: (text) => `\x1b[1m${text}\x1b[0m`,
-};
 
 const projectRoot = path.resolve(__dirname, "..");
 const packageDir = path.join(projectRoot, "packages", PACKAGE_NAME);
@@ -40,10 +33,6 @@ const generatedParent = packageDir;
 const generatedSubdirectory = path.join("nitrogen", "generated");
 
 class PublishCancelled extends Error {}
-
-function log(message, color = "green") {
-  console.log(colors[color](message));
-}
 
 async function run(command, args, options = {}) {
   const result = await runProcess({
@@ -123,9 +112,7 @@ function parseArgs(args) {
     }
   }
 
-  if (!VALID_TAG_PATTERN.test(parsed.tag)) {
-    throw new Error(`Invalid npm tag: ${parsed.tag}`);
-  }
+  validateDistTag(parsed.tag);
 
   return parsed;
 }
@@ -570,15 +557,19 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  if (error instanceof PublishCancelled) {
-    process.exitCode = 0;
-    return;
-  }
-  if (error instanceof ProcessInterrupted) {
-    process.exitCode = error.exitCode;
-    return;
-  }
-  log(`Publish failed: ${error.message}`, "red");
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((error) => {
+    if (error instanceof PublishCancelled) {
+      process.exitCode = 0;
+      return;
+    }
+    if (error instanceof ProcessInterrupted) {
+      process.exitCode = error.exitCode;
+      return;
+    }
+    log(`Publish failed: ${error.message}`, "red");
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { parseArgs };

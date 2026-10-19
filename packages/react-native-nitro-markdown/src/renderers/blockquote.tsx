@@ -1,6 +1,6 @@
 import type { FC, ReactNode } from "react";
 import { View, StyleSheet, type ViewStyle } from "react-native";
-import { getCachedStyles } from "./style-cache";
+import { createThemedStyles } from "./style-cache";
 import { useMarkdownContext } from "../MarkdownContext";
 import type { MarkdownTheme } from "../theme";
 
@@ -11,14 +11,10 @@ type BlockquoteProps = {
 
 export const Blockquote: FC<BlockquoteProps> = ({ children, style }) => {
   const { theme } = useMarkdownContext();
-  const styles = getCachedStyles(stylesCache, theme, createStyles);
+  const styles = getBlockquoteStyles(theme);
 
   return <View style={[styles.blockquote, style]}>{children}</View>;
 };
-
-type BlockquoteStyles = ReturnType<typeof createStyles>;
-
-const stylesCache = new WeakMap<MarkdownTheme, BlockquoteStyles>();
 
 const createStyles = (theme: MarkdownTheme) =>
   StyleSheet.create({
@@ -33,3 +29,5 @@ const createStyles = (theme: MarkdownTheme) =>
       borderRadius: theme.borderRadius.s,
     },
   });
+
+const getBlockquoteStyles = createThemedStyles(createStyles);

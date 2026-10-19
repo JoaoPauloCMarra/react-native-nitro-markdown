@@ -8,6 +8,9 @@ import {
 import { useBottomTabHeight } from "../../hooks/use-bottom-tab-height";
 import { EXAMPLE_COLORS } from "../../theme";
 
+const tabIconColor = (focused: boolean) =>
+  focused ? EXAMPLE_COLORS.accent : EXAMPLE_COLORS.textMuted;
+
 export default function TabsLayout() {
   const tabBarHeight = useBottomTabHeight();
   const insets = useSafeAreaInsets();
@@ -54,8 +57,8 @@ export default function TabsLayout() {
             title: "Benchmark",
             tabBarLabel: "Bench",
             tabBarAccessibilityLabel: "Benchmark",
-            tabBarIcon: ({ color }) => (
-              <Ionicons name="speedometer-outline" size={24} color={color} />
+            tabBarIcon: ({ focused }) => (
+              <Ionicons name="speedometer-outline" size={24} color={tabIconColor(focused)} />
             ),
           }}
         />
@@ -65,8 +68,8 @@ export default function TabsLayout() {
             title: "Standard Markdown",
             tabBarLabel: "Default",
             tabBarAccessibilityLabel: "Standard markdown",
-            tabBarIcon: ({ color }) => (
-              <Ionicons name="document-text-outline" size={24} color={color} />
+            tabBarIcon: ({ focused }) => (
+              <Ionicons name="document-text-outline" size={24} color={tabIconColor(focused)} />
             ),
           }}
         />
@@ -76,8 +79,8 @@ export default function TabsLayout() {
             title: "Style Overrides",
             tabBarLabel: "Styles",
             tabBarAccessibilityLabel: "Style overrides",
-            tabBarIcon: ({ color }) => (
-              <Ionicons name="color-palette-outline" size={24} color={color} />
+            tabBarIcon: ({ focused }) => (
+              <Ionicons name="color-palette-outline" size={24} color={tabIconColor(focused)} />
             ),
           }}
         />
@@ -87,8 +90,8 @@ export default function TabsLayout() {
             title: "Custom Components",
             tabBarLabel: "Custom",
             tabBarAccessibilityLabel: "Custom components",
-            tabBarIcon: ({ color }) => (
-              <Ionicons name="layers-outline" size={24} color={color} />
+            tabBarIcon: ({ focused }) => (
+              <Ionicons name="layers-outline" size={24} color={tabIconColor(focused)} />
             ),
           }}
         />
@@ -98,8 +101,8 @@ export default function TabsLayout() {
             title: "Token Stream",
             tabBarLabel: "Stream",
             tabBarAccessibilityLabel: "Token stream",
-            tabBarIcon: ({ color }) => (
-              <Ionicons name="flash-outline" size={24} color={color} />
+            tabBarIcon: ({ focused }) => (
+              <Ionicons name="flash-outline" size={24} color={tabIconColor(focused)} />
             ),
           }}
         />

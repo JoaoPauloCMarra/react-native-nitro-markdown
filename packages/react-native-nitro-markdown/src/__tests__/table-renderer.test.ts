@@ -158,6 +158,20 @@ describe("table renderer", () => {
     expect(style["lineHeight"]).toBe(20);
   });
 
+  it("table text inherits colour in the minimal theme", () => {
+    const renderer = renderMarkdown(tableAst(), {
+      stylingStrategy: "minimal",
+      theme: { fontSizes: { xs: 11, s: 13 } },
+    });
+    const header = flatten(textNodesWith(renderer, "Name")[0]!.props.style);
+    const body = flatten(textNodesWith(renderer, "Apple")[0]!.props.style);
+
+    expect(header["color"]).toBeUndefined();
+    expect(body["color"]).toBeUndefined();
+    expect(header["fontSize"]).toBe(11);
+    expect(body["fontSize"]).toBe(13);
+  });
+
   it("applies list_item, table_row and table_cell style overrides", () => {
     const ast: MarkdownNode = {
       type: "document",

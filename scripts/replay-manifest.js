@@ -1,19 +1,12 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { isOutsideRelative } = require("./path-guards.js");
 
 const FLOW_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-function isOutside(relative) {
-  return (
-    relative === ".." ||
-    relative.startsWith(`..${path.sep}`) ||
-    path.isAbsolute(relative)
-  );
-}
-
 function inside(root, relativePath) {
   const absolute = path.resolve(root, relativePath);
-  if (isOutside(path.relative(path.resolve(root), absolute))) {
+  if (isOutsideRelative(path.relative(path.resolve(root), absolute))) {
     throw new Error(`Replay path escapes the repository: ${relativePath}`);
   }
   if (fs.existsSync(absolute)) {
@@ -21,7 +14,7 @@ function inside(root, relativePath) {
       fs.realpathSync(root),
       fs.realpathSync(absolute),
     );
-    if (isOutside(resolved)) {
+    if (isOutsideRelative(resolved)) {
       throw new Error(
         `Replay path escapes the repository through a symlink: ${relativePath}`,
       );
@@ -59,4 +52,12 @@ function validateSuite(suite, root, seenIds, seenPaths) {
   return suiteFile;
 }
 
-module.exports = { FLOW_ID_PATTERN, inside, validateSuite };
+function hasManifestHeader(manifest, entry) {
+  return (
+    manifest.version === 1 &&
+    Array.isArray(manifest.suites) &&
+    (entry === undefined || manifest.entry === entry)
+  );
+}
+
+module.exports = { FLOW_ID_PATTERN, hasManifestHeader, inside, validateSuite };

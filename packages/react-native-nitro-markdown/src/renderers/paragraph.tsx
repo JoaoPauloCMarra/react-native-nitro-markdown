@@ -1,6 +1,6 @@
 import type { FC, ReactNode } from "react";
 import { View, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
-import { getCachedStyles } from "./style-cache";
+import { createThemedStyles } from "./style-cache";
 import { useMarkdownContext } from "../MarkdownContext";
 import type { MarkdownTheme } from "../theme";
 
@@ -16,7 +16,7 @@ export const Paragraph: FC<ParagraphProps> = ({
   style,
 }) => {
   const { theme } = useMarkdownContext();
-  const styles = getCachedStyles(stylesCache, theme, createStyles);
+  const styles = getParagraphStyles(theme);
 
   return (
     <View
@@ -30,10 +30,6 @@ export const Paragraph: FC<ParagraphProps> = ({
     </View>
   );
 };
-
-type ParagraphStyles = ReturnType<typeof createStyles>;
-
-const stylesCache = new WeakMap<MarkdownTheme, ParagraphStyles>();
 
 const createStyles = (theme: MarkdownTheme) =>
   StyleSheet.create({
@@ -51,3 +47,5 @@ const createStyles = (theme: MarkdownTheme) =>
       marginTop: 0,
     },
   });
+
+const getParagraphStyles = createThemedStyles(createStyles);

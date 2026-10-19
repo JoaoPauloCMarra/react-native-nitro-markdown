@@ -50,7 +50,7 @@ CommonMark plus GitHub Flavored Markdown:
 | `tableOptions`           | defaults    | Table measurement and minimum column widths.                                                                                                    |
 | `onLinkPress`            | open URL    | Intercept link taps; return `false` to prevent the default.                                                                                     |
 | `onParsingInProgress`    | —           | Deprecated compatibility callback invoked after the current parse render commits. Use `onParseComplete` or `MarkdownStream` state for new code. |
-| `onError`                | —           | `(error, phase, pluginName?)` for parser/plugin failures.                                                                                       |
+| `onError`                | —           | `(error, phase, pluginName?)` for parser, plugin, `astTransform` and `highlightCode` failures.                                                                                       |
 
 `parseCache` keeps an internal AST cache per `<Markdown>` instance keyed by
 content + parser options, so re-rendering the same Markdown avoids re-parsing.

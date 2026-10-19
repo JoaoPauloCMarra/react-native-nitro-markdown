@@ -42,3 +42,13 @@ test("a failed verification never prepares the package docs", async () => {
   ).rejects.toThrow("gate failed");
   expect(events).toEqual([]);
 });
+
+test("rejects -x, 1x, v1.2.3 as publish dist-tags", () => {
+  const { parseArgs } = require("./publish.js");
+
+  for (const tag of ["-x", "1x", "v1.2.3"]) {
+    expect(() => parseArgs([`--tag=${tag}`])).toThrow();
+  }
+  expect(parseArgs(["--tag=next"]).tag).toBe("next");
+  expect(parseArgs([]).tag).toBe("latest");
+});

@@ -1,12 +1,13 @@
 #include "HybridMarkdownSession.hpp"
 #include "../core/MarkdownJson.hpp"
 
+#include <NitroModules/NitroLogger.hpp>
+
 #include <algorithm>
 #ifdef NITRO_MARKDOWN_TESTING
 #include <atomic>
 #endif
 #include <cmath>
-#include <iostream>
 #include <limits>
 #include <stdexcept>
 
@@ -90,9 +91,7 @@ std::string numberString(double value) {
 } // namespace
 
 HybridMarkdownSession::HybridMarkdownSession()
-    : HybridObject(TAG), HybridMarkdownSessionSpec() {
-    parser_ = std::make_unique<::NitroMarkdown::MD4CParser>();
-}
+    : HybridObject(TAG), HybridMarkdownSessionSpec() {}
 
 HybridMarkdownSession::~HybridMarkdownSession() {
     dispose();
@@ -116,8 +115,8 @@ double HybridMarkdownSession::append(const std::string& chunk) try {
     {
         std::lock_guard<std::mutex> lock(mutex_);
         ensureActiveLocked();
-        if (chunk.size() > kMaxBufferSize - buffer_.size()) {
-            validateBufferSizeLocked(kMaxBufferSize + 1);
+        if (chunk.size() > ::NitroMarkdown::kMaxInputBytes - buffer_.size()) {
+            validateBufferSizeLocked(::NitroMarkdown::kMaxInputBytes + 1);
         }
         const size_t settledByteLength = buffer_.size() - unsettledTailBytes_;
         from = bufferUtf16Length_ - unsettledTailBytes_;
@@ -185,21 +184,13 @@ std::string HybridMarkdownSession::getTextRange(double from, double to) try {
 std::string HybridMarkdownSession::parse() {
     std::lock_guard<std::mutex> lock(mutex_);
     ensureActiveLocked();
-    return ::NitroMarkdown::parseMarkdownToJson(
-        *parser_,
-        buffer_,
-        defaultInternalParserOptions()
-    );
+    return ::NitroMarkdown::parseMarkdownToJson(buffer_, InternalParserOptions{});
 }
 
 std::string HybridMarkdownSession::parseWithOptions(const ParserOptions& options) {
     std::lock_guard<std::mutex> lock(mutex_);
     ensureActiveLocked();
-    return ::NitroMarkdown::parseMarkdownToJson(
-        *parser_,
-        buffer_,
-        toInternalParserOptions(options)
-    );
+    return ::NitroMarkdown::parseMarkdownToJson(buffer_, toInternalParserOptions(options));
 }
 
 std::function<void()> HybridMarkdownSession::addListener(
@@ -272,8 +263,8 @@ double HybridMarkdownSession::replace(
         const size_t startByte = byteOffsetForUtf16(buffer_, start);
         const size_t endByte = byteOffsetForUtf16(buffer_, end, startByte, start);
         const size_t retainedBytes = buffer_.size() - (endByte - startByte);
-        if (text.size() > kMaxBufferSize - retainedBytes) {
-            validateBufferSizeLocked(kMaxBufferSize + 1);
+        if (text.size() > ::NitroMarkdown::kMaxInputBytes - retainedBytes) {
+            validateBufferSizeLocked(::NitroMarkdown::kMaxInputBytes + 1);
         }
         buffer_.replace(startByte, endByte - startByte, text);
         const Utf16Scan scan = scanUtf16(buffer_, 0);
@@ -304,7 +295,6 @@ void HybridMarkdownSession::dispose() {
     unsettledTailBytes_ = 0;
     rangeUtf16Offset_ = 0;
     rangeByteOffset_ = 0;
-    parser_.reset();
     highlightPosition_ = 0.0;
 }
 
@@ -341,9 +331,9 @@ void HybridMarkdownSession::ensureActiveLocked() const {
 }
 
 void HybridMarkdownSession::validateBufferSizeLocked(size_t size) const {
-    if (size > kMaxBufferSize) {
+    if (size > ::NitroMarkdown::kMaxInputBytes) {
         throw std::runtime_error(
-            "Buffer size limit exceeded (max " + std::to_string(kMaxBufferSize) + " bytes)"
+            "Buffer size limit exceeded (max " + std::to_string(::NitroMarkdown::kMaxInputBytes) + " bytes)"
         );
     }
 }
@@ -390,17 +380,11 @@ size_t HybridMarkdownSession::byteOffsetForUtf16(
         const size_t sequenceLength = utf8SequenceLength(bytes + byteIndex, text.size() - byteIndex);
         const size_t sequenceUnits = sequenceLength == 4 ? 2 : 1;
         if (utf16Offset == currentOffset) return byteIndex;
-        if (
-            utf16Offset > currentOffset &&
-            utf16Offset < currentOffset + sequenceUnits
-        ) {
-            if (sequenceUnits == 2) {
-                throw std::runtime_error(
-                    "Invalid range: UTF-16 index " + std::to_string(utf16Offset) +
-                    " splits a surrogate pair"
-                );
-            }
-            return byteIndex;
+        if (sequenceUnits == 2 && utf16Offset == currentOffset + 1) {
+            throw std::runtime_error(
+                "Invalid range: UTF-16 index " + std::to_string(utf16Offset) +
+                " splits a surrogate pair"
+            );
         }
         byteIndex += sequenceLength;
         currentOffset += sequenceUnits;
@@ -452,10 +436,17 @@ void HybridMarkdownSession::notifyListeners(
         try {
             listener(from, to);
         } catch (const std::exception& error) {
-            std::cerr << "[NitroMarkdown] Listener callback threw an exception: "
-                      << error.what() << std::endl;
+            Logger::nativeLog(
+                LogLevel::Error,
+                "NitroMarkdown",
+                std::string("Listener callback threw an exception: ") + error.what()
+            );
         } catch (...) {
-            std::cerr << "[NitroMarkdown] Listener callback threw an unknown exception" << std::endl;
+            Logger::nativeLog(
+                LogLevel::Error,
+                "NitroMarkdown",
+                "Listener callback threw an unknown exception"
+            );
         }
     }
 }

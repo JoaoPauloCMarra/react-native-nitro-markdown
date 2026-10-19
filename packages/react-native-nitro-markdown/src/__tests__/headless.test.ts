@@ -376,7 +376,12 @@ describe("getFlattenedText", () => {
 
   it("handles inline types", () => {
     expect(getFlattenedText({ type: "code_inline", content: "foo()" })).toBe("foo()");
-    expect(getFlattenedText({ type: "math_inline", content: "E=mc^2" })).toBe("E=mc^2");
+    expect(
+      getFlattenedText({
+        type: "math_inline",
+        children: [{ type: "text", content: "E=mc^2" }],
+      }),
+    ).toBe("E=mc^2");
     expect(getFlattenedText({ type: "html_inline", content: "<br>" })).toBe("<br>");
     expect(getFlattenedText({ type: "text" })).toBe("");
   });
@@ -482,8 +487,8 @@ describe("sourceOffsets option", () => {
 describe("stripSourceOffsets", () => {
   it("removes beg and end from a single node", () => {
     const result = stripSourceOffsets({ type: "text", content: "hello", beg: 0, end: 5 });
-    expect(result.beg).toBeUndefined();
-    expect(result.end).toBeUndefined();
+    expect(Reflect.get(result, "beg")).toBeUndefined();
+    expect(Reflect.get(result, "end")).toBeUndefined();
     expect(result.content).toBe("hello");
   });
 
@@ -495,8 +500,8 @@ describe("stripSourceOffsets", () => {
       children: [{ type: "text", content: "hi", beg: 0, end: 2 }],
     };
     const result = stripSourceOffsets(node);
-    expect(result.beg).toBeUndefined();
-    expect(result.children![0]!.beg).toBeUndefined();
+    expect(Reflect.get(result, "beg")).toBeUndefined();
+    expect(Reflect.get(result.children![0]!, "beg")).toBeUndefined();
   });
 
   it("does not add children key when original has none", () => {

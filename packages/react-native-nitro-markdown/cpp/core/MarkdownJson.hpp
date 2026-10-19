@@ -15,7 +15,6 @@ std::string serializeMarkdownJson(
 );
 
 std::string parseMarkdownToJson(
-    MD4CParser& parser,
     const std::string& text,
     const ParserOptions& options
 );

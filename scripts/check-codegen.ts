@@ -10,7 +10,11 @@ import {
   snapshotDirectory,
   snapshotsMatch,
 } from "./generated-snapshot.js";
-import { runProcess } from "./process-runner.js";
+import {
+  MAX_PROCESS_TIMEOUT_MS,
+  resolveBoundedTimeout,
+  runProcess,
+} from "./process-runner.js";
 
 const repositoryDirectory = fileURLToPath(new URL("..", import.meta.url));
 const packageDirectory = join(
@@ -46,21 +50,11 @@ export type CodegenRunResult = {
   changedFiles: string[];
   trackedDirectoryChanged: boolean;
   signal?: string;
+  crashSignal?: string;
 };
 
-function positiveInteger(value: number, label: string): number {
-  if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new Error(`${label} must be a positive integer`);
-  }
-  return value;
-}
-
-function configuredTimeout(name: string, fallback: number): number {
-  const value = process.env[name];
-  if (value === undefined) return fallback;
-  const parsed = Number(value);
-  return positiveInteger(parsed, name);
-}
+const TIMEOUT_ENV = "NITRO_MARKDOWN_CODEGEN_TIMEOUT_MS";
+const KILL_GRACE_ENV = "NITRO_MARKDOWN_CODEGEN_KILL_GRACE_MS";
 
 export async function runCodegen(
   options: CodegenRunOptions = {},
@@ -72,18 +66,17 @@ export async function runCodegen(
   const targetSubdirectory =
     options.generatedSubdirectory ??
     (options.generatedDirectory ? basename(targetDirectory) : "nitrogen/generated");
-  const timeoutMs = positiveInteger(
-    options.timeoutMs ??
-      configuredTimeout("NITRO_MARKDOWN_CODEGEN_TIMEOUT_MS", DEFAULT_TIMEOUT_MS),
-    "codegen timeout",
+  const timeoutMs = resolveBoundedTimeout(
+    options.timeoutMs,
+    TIMEOUT_ENV,
+    DEFAULT_TIMEOUT_MS,
+    MAX_PROCESS_TIMEOUT_MS,
   );
-  const killGraceMs = positiveInteger(
-    options.killGraceMs ??
-      configuredTimeout(
-        "NITRO_MARKDOWN_CODEGEN_KILL_GRACE_MS",
-        DEFAULT_KILL_GRACE_MS,
-      ),
-    "codegen kill grace",
+  const killGraceMs = resolveBoundedTimeout(
+    options.killGraceMs,
+    KILL_GRACE_ENV,
+    DEFAULT_KILL_GRACE_MS,
+    MAX_PROCESS_TIMEOUT_MS,
   );
   const before = await snapshotDirectory(targetParent, targetSubdirectory);
   const temporaryRoot = await mkdtemp(join(tmpdir(), "nitro-markdown-codegen-"));
@@ -130,7 +123,10 @@ export async function runCodegen(
       forceKilled: processResult.forceKilled,
       changedFiles: outputChanges,
       trackedDirectoryChanged,
-      signal: processResult.signal ?? undefined,
+      signal: processResult.interruptedBy ?? undefined,
+      crashSignal: processResult.interruptedBy || processResult.timedOut
+        ? undefined
+        : processResult.signal ?? undefined,
     };
   } finally {
     if (processTreeStopped) {
@@ -157,11 +153,19 @@ async function main(): Promise<number> {
     console.error(`Codegen interrupted by ${result.signal}; original files were restored.`);
     return result.exitCode;
   }
+  if (result.crashSignal) {
+    console.error(
+      `Nitro codegen child crashed with ${result.crashSignal}; the tracked generated directory was left as found.`,
+    );
+    return result.exitCode;
+  }
   if (result.timedOut) {
     console.error(
-      `Nitro codegen timed out after ${configuredTimeout(
-        "NITRO_MARKDOWN_CODEGEN_TIMEOUT_MS",
+      `Nitro codegen timed out after ${resolveBoundedTimeout(
+        undefined,
+        TIMEOUT_ENV,
         DEFAULT_TIMEOUT_MS,
+        MAX_PROCESS_TIMEOUT_MS,
       )}ms; child terminated${result.forceKilled ? " with SIGKILL" : " with SIGTERM"}.`,
     );
     return result.exitCode;

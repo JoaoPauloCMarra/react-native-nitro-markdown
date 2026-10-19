@@ -10,11 +10,11 @@ import {
   type CodeHighlighter,
   type CustomRenderers,
   type MarkdownErrorPhase,
-  type MarkdownNode,
   type MarkdownParseCompleteResult,
   type MarkdownPlugin,
 } from "react-native-nitro-markdown";
 import { mathRenderers } from "react-native-nitro-markdown/math";
+import { collectNodeTypes } from "../ast-utils";
 import { EXAMPLE_COLORS } from "../theme";
 
 type Report = (key: string, token: string) => void;
@@ -30,13 +30,6 @@ const tableCellsMarkdown = (firstHeader: string) =>
 const TABLE_CELLS_MARKDOWN = tableCellsMarkdown("Head");
 const CUSTOM_CELL_TABLE_MARKDOWN = tableCellsMarkdown("Custom");
 const BEFORE_PARSE_PLUGINS: MarkdownPlugin[] = [{ name: "e2e-before-parse", beforeParse: (markdown) => markdown }];
-const PARSE_ERROR_OPTIONS = { maxInputLength: 4 } as const;
-
-const collectTypes = (node: MarkdownNode, types: Set<string> = new Set()): Set<string> => {
-  types.add(node.type);
-  node.children?.forEach((child) => collectTypes(child, types));
-  return types;
-};
 
 function MeasuredTable({ node, Renderer, onWidth }: Parameters<NonNullable<CustomRenderers["table"]>>[0] & { onWidth: (width: number) => void }) {
   return (
@@ -68,7 +61,7 @@ function StreamBeforeParseProbe({ report }: { report: Report }) {
 function StreamParseErrorProbe({ report }: { report: Report }) {
   const [session] = useState(() => createMarkdownSession("# Longer than four bytes"));
   const onError = useCallback((_error: Error, phase: MarkdownErrorPhase) => report("streamerr", `streamerr=${phase}`), [report]);
-  useMarkdownStreamState({ session, options: PARSE_ERROR_OPTIONS, onError });
+  useMarkdownStreamState({ session, options: ERROR_OPTIONS, onError });
   useEffect(() => () => session.dispose(), [session]);
   return null;
 }
@@ -89,7 +82,7 @@ export default function MarkdownRenderContractsScreen() {
   );
   const onHtmlParsed = useCallback(
     ({ ast }: MarkdownParseCompleteResult) => {
-      const types = collectTypes(ast);
+      const types = collectNodeTypes(ast);
       report("html", `html=${types.has("html_inline") ? "inline" : "none"}+${types.has("html_block") ? "block" : "none"}`);
     },
     [report],
@@ -114,12 +107,14 @@ export default function MarkdownRenderContractsScreen() {
       );
     },
   }), [report]);
-  const wideTableRenderers = useMemo<CustomRenderers>(() => ({
-    table: (props) => <MeasuredTable {...props} onWidth={(width) => setTableWidths((current) => ({ ...current, wide: width }))} />,
-  }), []);
-  const controlTableRenderers = useMemo<CustomRenderers>(() => ({
-    table: (props) => <MeasuredTable {...props} onWidth={(width) => setTableWidths((current) => ({ ...current, control: width }))} />,
-  }), []);
+  const makeMeasuredTableRenderers = useCallback(
+    (key: "wide" | "control"): CustomRenderers => ({
+      table: (props) => <MeasuredTable {...props} onWidth={(width) => setTableWidths((current) => ({ ...current, [key]: width }))} />,
+    }),
+    [],
+  );
+  const wideTableRenderers = useMemo(() => makeMeasuredTableRenderers("wide"), [makeMeasuredTableRenderers]);
+  const controlTableRenderers = useMemo(() => makeMeasuredTableRenderers("control"), [makeMeasuredTableRenderers]);
   const seenCells = useRef({ header: new Set<string>(), body: new Set<string>() });
   const tableCellRenderers = useMemo<CustomRenderers>(() => ({
     table_cell: ({ node, children }) => {

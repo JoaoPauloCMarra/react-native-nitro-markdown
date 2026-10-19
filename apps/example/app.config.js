@@ -30,9 +30,9 @@ module.exports = {
         "expo-build-properties",
         {
           "android": {
-            "compileSdkVersion": 36,
+            "compileSdkVersion": 37,
             "targetSdkVersion": 36,
-            "buildToolsVersion": "36.0.0",
+            "buildToolsVersion": "37.0.0",
             "usePrecompiledHeaders": true,
             ...(androidArchs.length > 0 ? { "buildArchs": androidArchs } : {}),
             ...(httpFixture ? { "usesCleartextTraffic": true } : {})

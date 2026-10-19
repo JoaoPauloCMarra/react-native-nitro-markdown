@@ -7,15 +7,25 @@
 #include <new>
 #include <cstddef>
 #include <string_view>
+#include <stdexcept>
 
 namespace NitroMarkdown {
 
 constexpr std::size_t kMaxAstDepth = 256;
 constexpr std::size_t kMaxAstNodes = 100'000;
+constexpr std::size_t kMaxInputBytes = 10 * 1024 * 1024;
+constexpr std::size_t kMaxOutputBytes = 64 * 1024 * 1024;
 
 inline std::string astNodeBudgetExceededMessage() {
     return "Markdown AST node budget exceeds the maximum of " +
         std::to_string(kMaxAstNodes) + " nodes";
+}
+
+[[noreturn]] inline void throwFlattenedTextSizeExceeded() {
+    throw std::runtime_error(
+        "Markdown flattened text exceeds the maximum of " +
+        std::to_string(kMaxOutputBytes) + " bytes"
+    );
 }
 
 class MarkdownOutOfMemory final : public std::bad_alloc {

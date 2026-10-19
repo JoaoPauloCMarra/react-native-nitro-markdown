@@ -1,12 +1,10 @@
 import { useRef, useCallback, useState, useEffect, useMemo } from "react";
-import { createMarkdownSession } from "./MarkdownSession";
+import { createMarkdownSession, type MarkdownSession } from "./MarkdownSession";
 import {
   createTimestampTimeline,
   resolveHighlightPosition,
   type TimestampTimeline,
 } from "./utils/stream-timeline";
-
-export type MarkdownSession = ReturnType<typeof createMarkdownSession>;
 
 export function useMarkdownSession(initialText?: string) {
   const sessionRef = useRef<MarkdownSession | null>(null);
