@@ -93,8 +93,10 @@ describe("codegen check process guard", () => {
     const result = await withTempGeneratedDirectory((generatedDirectory) =>
       runCodegen({
         generatedDirectory,
-        command: process.execPath,
-        args: ["-e", "process.kill(process.pid, 'SIGSEGV')"],
+        // Bun installs its own SIGSEGV handler on Linux, so a plain shell
+        // provides a child that really dies from the signal.
+        command: "/bin/sh",
+        args: ["-c", "kill -SEGV $$"],
         timeoutMs: 1000,
         killGraceMs: 20,
         stdout: "ignore",
