@@ -112,14 +112,14 @@ function generateCorpusHeader(corpusPath, entries) {
   const lines = entries.map((entry) => {
     return `  {"${cLiteral(entry.name)}", "${cLiteral(entry.markdown)}", "${cLiteral(
       entry.expected,
-    )}"},`;
+    )}", "${cLiteral(JSON.stringify(entry.options ?? {}))}"},`;
   });
   return `// Generated from ${corpusPath} by scripts/test-cpp.js. Do not edit.
 #pragma once
 #include <string>
 #include <vector>
 namespace NitroMarkdown {
-struct FlattenCorpusEntry { const char* name; const char* markdown; const char* expected; };
+struct FlattenCorpusEntry { const char* name; const char* markdown; const char* expected; const char* optionsJson; };
 inline const std::vector<FlattenCorpusEntry> kFlattenCorpus = {
 ${lines.join("\n")}
 };
@@ -221,6 +221,29 @@ function ensureDir(dirPath) {
   }
 }
 
+const INSTRUMENTED_MODES = {
+  coverage: {
+    compileFlags: "-fprofile-instr-generate -fcoverage-mapping -O0 -g",
+    linkFlags: "-fprofile-instr-generate -fcoverage-mapping",
+    env: (buildDir) => ({
+      LLVM_PROFILE_FILE: path.join(buildDir, "coverage-%p.profraw"),
+    }),
+  },
+  sanitizers: {
+    compileFlags: "-fsanitize=address,undefined -fno-omit-frame-pointer -O1 -g",
+    linkFlags: "-fsanitize=address,undefined",
+    env: () => ({
+      ASAN_OPTIONS: "halt_on_error=1:detect_leaks=0",
+      UBSAN_OPTIONS: "halt_on_error=1:print_stacktrace=1",
+    }),
+  },
+  tsan: {
+    compileFlags: "-fsanitize=thread -fno-omit-frame-pointer -O1 -g",
+    linkFlags: "-fsanitize=thread",
+    env: () => ({ TSAN_OPTIONS: "halt_on_error=1" }),
+  },
+};
+
 async function main() {
   const args = new Set(process.argv.slice(2));
   const collectCoverage = args.has("--coverage");
@@ -261,12 +284,19 @@ async function main() {
     process.exit(1);
   }
 
+  const instrumentation = collectCoverage
+    ? INSTRUMENTED_MODES.coverage
+    : runSanitizers
+      ? INSTRUMENTED_MODES.sanitizers
+      : runThreadSanitizer
+        ? INSTRUMENTED_MODES.tsan
+        : null;
   const llvmCov = collectCoverage ? commandPath("llvm-cov") : null;
   const llvmProfdata = collectCoverage ? commandPath("llvm-profdata") : null;
-  const cCompiler = collectCoverage
+  const cCompiler = instrumentation
     ? commandPath(process.env.CC || "clang")
     : null;
-  const cxxCompiler = collectCoverage
+  const cxxCompiler = instrumentation
     ? commandPath(process.env.CXX || "clang++")
     : null;
   if (
@@ -277,16 +307,9 @@ async function main() {
     process.exit(1);
   }
 
-  const useSanitizerCompiler = runSanitizers || runThreadSanitizer;
-  const sanitizerCCompiler = useSanitizerCompiler
-    ? commandPath(process.env.CC || "clang")
-    : null;
-  const sanitizerCxxCompiler = useSanitizerCompiler
-    ? commandPath(process.env.CXX || "clang++")
-    : null;
   if (
-    useSanitizerCompiler &&
-    (!sanitizerCCompiler || !sanitizerCxxCompiler || isWindows)
+    (runSanitizers || runThreadSanitizer) &&
+    (!cCompiler || !cxxCompiler || isWindows)
   ) {
     log(
       "C++ sanitizer execution is unsupported here; clang/clang++ on macOS or Linux is required",
@@ -370,6 +393,57 @@ protected:
 `,
     "utf8",
   );
+  fs.writeFileSync(
+    path.join(nitroVirtualDir, "NitroLogger.hpp"),
+    `#pragma once
+#include <mutex>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace margelo::nitro {
+
+enum class LogLevel { Debug, Info, Warning, Error };
+
+class Logger final {
+public:
+  struct Entry {
+    LogLevel level;
+    std::string tag;
+    std::string message;
+  };
+
+  template <typename... Args>
+  static void log(LogLevel, const char*, const char*, Args...) {}
+
+  static void nativeLog(LogLevel level, const char* tag, const std::string& message) {
+    std::lock_guard<std::mutex> lock(mutex());
+    entries().push_back({level, tag, message});
+  }
+
+  static std::vector<Entry> takeEntriesForTest() {
+    std::lock_guard<std::mutex> lock(mutex());
+    return std::exchange(entries(), {});
+  }
+
+private:
+  Logger() = delete;
+
+  static std::mutex& mutex() {
+    static std::mutex value;
+    return value;
+  }
+
+  static std::vector<Entry>& entries() {
+    static std::vector<Entry> value;
+    return value;
+  }
+};
+
+} // namespace margelo::nitro
+`,
+    "utf8",
+  );
   writeCorpusHeaders(generatedDir);
 
   log("Configuring with CMake...");
@@ -379,40 +453,20 @@ protected:
     cmakeGenerator = "-G Ninja";
   }
 
-  const coverageFlags = collectCoverage
+  const instrumentationFlags = instrumentation
     ? [
         "-DCMAKE_BUILD_TYPE=Debug",
         `-DCMAKE_C_COMPILER=${shellQuote(cCompiler)}`,
         `-DCMAKE_CXX_COMPILER=${shellQuote(cxxCompiler)}`,
-        '-DCMAKE_C_FLAGS="-fprofile-instr-generate -fcoverage-mapping -O0 -g"',
-        '-DCMAKE_CXX_FLAGS="-fprofile-instr-generate -fcoverage-mapping -O0 -g"',
-        '-DCMAKE_EXE_LINKER_FLAGS="-fprofile-instr-generate -fcoverage-mapping"',
-      ].join(" ")
-    : "";
-  const sanitizerFlags = runSanitizers
-    ? [
-        "-DCMAKE_BUILD_TYPE=Debug",
-        `-DCMAKE_C_COMPILER=${shellQuote(sanitizerCCompiler)}`,
-        `-DCMAKE_CXX_COMPILER=${shellQuote(sanitizerCxxCompiler)}`,
-        '-DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -O1 -g"',
-        '-DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -O1 -g"',
-        '-DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"',
-      ].join(" ")
-    : "";
-  const threadSanitizerFlags = runThreadSanitizer
-    ? [
-        "-DCMAKE_BUILD_TYPE=Debug",
-        `-DCMAKE_C_COMPILER=${shellQuote(sanitizerCCompiler)}`,
-        `-DCMAKE_CXX_COMPILER=${shellQuote(sanitizerCxxCompiler)}`,
-        '-DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer -O1 -g"',
-        '-DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer -O1 -g"',
-        '-DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"',
+        `-DCMAKE_C_FLAGS="${instrumentation.compileFlags}"`,
+        `-DCMAKE_CXX_FLAGS="${instrumentation.compileFlags}"`,
+        `-DCMAKE_EXE_LINKER_FLAGS="${instrumentation.linkFlags}"`,
       ].join(" ")
     : "";
   const perfFlags = runPerf
     ? "-DCMAKE_BUILD_TYPE=Release -DNITRO_MARKDOWN_PERF_ASSERTS=ON"
     : "";
-  const cmakeConfigCommand = `cmake ${cmakeGenerator} ${coverageFlags} ${sanitizerFlags} ${threadSanitizerFlags} ${perfFlags} "${cppDir}"`.trim();
+  const cmakeConfigCommand = `cmake ${cmakeGenerator} ${instrumentationFlags} ${perfFlags} "${cppDir}"`.trim();
 
   if (!(await execCommand(cmakeConfigCommand, { cwd: buildDir }))) {
     log("CMake configuration failed", "red");
@@ -452,17 +506,9 @@ protected:
     process.exit(1);
   }
 
-  const testEnv = collectCoverage
-    ? { ...process.env, LLVM_PROFILE_FILE: path.join(buildDir, "coverage-%p.profraw") }
-    : runSanitizers
-      ? {
-          ...process.env,
-          ASAN_OPTIONS: "halt_on_error=1:detect_leaks=0",
-          UBSAN_OPTIONS: "halt_on_error=1:print_stacktrace=1",
-        }
-      : runThreadSanitizer
-        ? { ...process.env, TSAN_OPTIONS: "halt_on_error=1" }
-        : process.env;
+  const testEnv = instrumentation
+    ? { ...process.env, ...instrumentation.env(buildDir) }
+    : process.env;
 
   if (!(await execCommand(`"${testExecutable}"`, { cwd: buildDir, env: testEnv }))) {
     log("Tests failed", "red");

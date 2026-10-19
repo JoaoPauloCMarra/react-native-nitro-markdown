@@ -146,7 +146,10 @@ const plugins: MarkdownPlugin[] = [
 
 Pipeline order: `beforeParse` plugins → parse (or `sourceAst`) → `afterParse`
 plugins → `astTransform` → render. Higher `priority` runs first (stable sort).
-`onError` receives `(error, phase, pluginName?)` for parser and plugin failures.
+`onError` receives `(error, phase, pluginName?)` for parser, plugin, `astTransform`
+and `highlightCode` failures. `phase` is `"parse"`, `"before-plugin"`,
+`"after-plugin"` or `"transform"`; a throwing `astTransform` keeps the parsed AST and
+a throwing `highlightCode` renders the code block as plain text.
 
 > A `beforeParse` plugin forces a full parse, which disables incremental AST
 > reuse during [streaming](./streaming.md).

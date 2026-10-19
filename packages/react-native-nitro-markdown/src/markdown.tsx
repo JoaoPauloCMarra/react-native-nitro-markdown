@@ -17,6 +17,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import type { MarkdownNode } from "./headless";
+import { cloneMarkdownNode } from "./utils/freeze-ast";
 import { readFlattenedText } from "./utils/text-content";
 import type { ParserOptions } from "./Markdown.nitro";
 import {
@@ -40,7 +41,6 @@ import type { UrlSafetyOptions } from "./utils/link-security";
 import {
   applyAfterParsePlugins,
   applyBeforeParsePlugins,
-  cloneMarkdownNode,
   getParserOptionsKey,
   hashString,
   materializeMarkdownNode,
@@ -392,6 +392,7 @@ export const Markdown: FC<MarkdownProps> = ({
             "[react-native-nitro-markdown] astTransform threw; falling back to parsed AST.",
             error,
           );
+          safeOnError(onErrorRef.current, error, ERROR_PHASE.TRANSFORM);
           ast = parsedAst;
         }
       }
@@ -466,11 +467,17 @@ export const Markdown: FC<MarkdownProps> = ({
   }, [userTheme, stylingStrategy]);
 
   const baseStyles = getBaseStyles(theme);
+  const reportRenderError = useCallback(
+    (error: unknown, phase: MarkdownErrorPhase) =>
+      safeOnError(onErrorRef.current, error, phase),
+    [],
+  );
   const contextValue = useMemo<MarkdownContextValue>(
     () => ({
       renderers,
       theme,
       stylingStrategy,
+      onError: reportRenderError,
       ...(nodeStyles ? { styles: nodeStyles } : {}),
       ...(onLinkPress ? { onLinkPress } : {}),
       ...(tableOptions ? { tableOptions } : {}),
@@ -486,6 +493,7 @@ export const Markdown: FC<MarkdownProps> = ({
       tableOptions,
       imageOptions,
       highlightCode,
+      reportRenderError,
     ],
   );
 

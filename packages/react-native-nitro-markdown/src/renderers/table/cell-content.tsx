@@ -5,7 +5,7 @@ import {
   useMarkdownContext,
   type NodeRendererProps,
 } from "../../MarkdownContext";
-import { getCachedStyles } from "../style-cache";
+import { createThemedStyles } from "../style-cache";
 import type { MarkdownTheme } from "../../theme";
 
 type TableCellProps = {
@@ -30,7 +30,7 @@ const childKey = (child: MarkdownNode, idx: number) =>
 
 export const TableCell: FC<TableCellProps> = ({ node, Renderer }) => {
   const { theme } = useMarkdownContext();
-  const styles = getCachedStyles(cellStylesCache, theme, createCellStyles);
+  const styles = getCellStyles(theme);
   const textStyle = node.isHeader ? styles.headerText : styles.cellText;
   const children = node.children;
 
@@ -95,25 +95,21 @@ export const TableCell: FC<TableCellProps> = ({ node, Renderer }) => {
   return <View style={styles.cellContentWrapper}>{blocks}</View>;
 };
 
-type CellStyles = ReturnType<typeof createCellStyles>;
-
-const cellStylesCache = new WeakMap<MarkdownTheme, CellStyles>();
-
 const createCellStyles = (theme: MarkdownTheme) => {
   const colors = theme?.colors || {};
 
   return StyleSheet.create({
     headerText: {
-      color: colors.tableHeaderText || "#9ca3af",
-      fontSize: 12,
+      color: colors.tableHeaderText,
+      fontSize: theme.fontSizes.xs,
       fontWeight: "600",
       fontFamily: theme.fontFamilies?.regular,
       ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
     cellText: {
-      color: colors.text || "#e5e7eb",
-      fontSize: 14,
-      lineHeight: 20,
+      color: colors.text,
+      fontSize: theme.fontSizes.s,
+      lineHeight: Math.round(theme.fontSizes.s * 1.4),
       fontFamily: theme.fontFamilies?.regular,
       ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
@@ -124,3 +120,5 @@ const createCellStyles = (theme: MarkdownTheme) => {
     },
   });
 };
+
+const getCellStyles = createThemedStyles(createCellStyles);

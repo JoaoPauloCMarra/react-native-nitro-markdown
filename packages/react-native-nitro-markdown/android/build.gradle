@@ -56,12 +56,16 @@ android {
     buildConfigField "boolean", "IS_NEW_ARCHITECTURE_ENABLED", isNewArchitectureEnabled().toString()
     consumerProguardFiles 'consumer-rules.pro'
 
+    // -fstack-protector-strong replaces -fstack-protector-all (better coverage/perf
+    // tradeoff). -Wformat/-Werror=format-security guard against format-string exploits.
+    // -D_FORTIFY_SOURCE=2 enables glibc/Bionic source fortification for buffer overflows.
+    // Applied to both C (md4c) and C++ sources.
+    def hardeningFlags = "-fstack-protector-strong -Wformat -Werror=format-security -D_FORTIFY_SOURCE=2"
+
     externalNativeBuild {
       cmake {
-        // -fstack-protector-strong replaces -fstack-protector-all (better coverage/perf
-        // tradeoff). -Wformat/-Werror=format-security guard against format-string exploits.
-        // -D_FORTIFY_SOURCE=2 enables glibc/Bionic source fortification for buffer overflows.
-        cppFlags "-frtti -fexceptions -Wall -Wextra -fstack-protector-strong -Wformat -Werror=format-security -D_FORTIFY_SOURCE=2"
+        cFlags hardeningFlags
+        cppFlags "-frtti -fexceptions -Wall -Wextra ${hardeningFlags}"
         arguments "-DANDROID_STL=c++_shared", "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
         abiFilters (*reactNativeArchitectures())
       }

@@ -1,5 +1,14 @@
 import type { MarkdownNode } from "../../headless";
 
+export type TableCellKey = {
+  row: number;
+  col: number;
+  isHeader: boolean;
+};
+
+export const cellKeyOf = ({ row, col, isHeader }: TableCellKey): string =>
+  isHeader ? `header-${col}` : `cell-${row}-${col}`;
+
 export type MeasuredColumnWidthsInput = {
   measuredWidths: ReadonlyMap<string, number>;
   columnCount: number;
@@ -23,13 +32,13 @@ export const computeMeasuredColumnWidths = ({
   const maxWidths: number[] = new Array<number>(columnCount).fill(0);
 
   for (let col = 0; col < columnCount; col++) {
-    const headerWidth = measuredWidths.get(`header-${col}`);
+    const headerWidth = measuredWidths.get(cellKeyOf({ row: 0, col, isHeader: true }));
     if (headerWidth && headerWidth > 0) {
       maxWidths[col] = Math.max(maxWidths[col] ?? 0, headerWidth);
     }
 
     for (let row = 0; row < rowCount; row++) {
-      const cellWidth = measuredWidths.get(`cell-${row}-${col}`);
+      const cellWidth = measuredWidths.get(cellKeyOf({ row, col, isHeader: false }));
       if (cellWidth && cellWidth > 0) {
         maxWidths[col] = Math.max(maxWidths[col] ?? 0, cellWidth);
       }
@@ -54,15 +63,6 @@ export const areAllCellsMeasured = ({
   expectedCellKeys,
 }: AllCellsMeasuredInput): boolean =>
   expectedCellKeys.every((key) => measuredCells.has(key));
-
-export type TableCellKey = {
-  row: number;
-  col: number;
-  isHeader: boolean;
-};
-
-export const cellKeyOf = ({ row, col, isHeader }: TableCellKey): string =>
-  isHeader ? `header-${col}` : `cell-${row}-${col}`;
 
 export const expectedCellKeysOf = ({
   headers,

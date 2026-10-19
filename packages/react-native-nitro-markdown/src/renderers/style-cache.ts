@@ -1,14 +1,15 @@
 import type { MarkdownTheme } from "../theme";
 
-export function getCachedStyles<T>(
-  cache: WeakMap<MarkdownTheme, T>,
-  theme: MarkdownTheme,
-  createStyles: (theme: MarkdownTheme) => T,
-): T {
-  const cached = cache.get(theme);
-  if (cached) return cached;
+export function createThemedStyles<T>(
+  create: (theme: MarkdownTheme) => T,
+): (theme: MarkdownTheme) => T {
+  const cache = new WeakMap<MarkdownTheme, T>();
+  return (theme) => {
+    const cached = cache.get(theme);
+    if (cached) return cached;
 
-  const styles = createStyles(theme);
-  cache.set(theme, styles);
-  return styles;
+    const styles = create(theme);
+    cache.set(theme, styles);
+    return styles;
+  };
 }

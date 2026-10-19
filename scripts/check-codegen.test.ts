@@ -87,6 +87,26 @@ describe("codegen check process guard", () => {
     });
   });
 
+  test("child SIGSEGV is reported as a crash", async () => {
+    if (process.platform === "win32") return;
+
+    const result = await withTempGeneratedDirectory((generatedDirectory) =>
+      runCodegen({
+        generatedDirectory,
+        command: process.execPath,
+        args: ["-e", "process.kill(process.pid, 'SIGSEGV')"],
+        timeoutMs: 1000,
+        killGraceMs: 20,
+        stdout: "ignore",
+        stderr: "ignore",
+      }),
+    );
+
+    expect(result.signal).toBeUndefined();
+    expect(result.crashSignal).toBe("SIGSEGV");
+    expect(result.exitCode).not.toBe(0);
+  });
+
   test("restores the tracked generated directory when a child mutates it", async () => {
     const parent = await mkdtemp(join(tmpdir(), "nitro-markdown-codegen-test-"));
     const directory = join(parent, "generated");

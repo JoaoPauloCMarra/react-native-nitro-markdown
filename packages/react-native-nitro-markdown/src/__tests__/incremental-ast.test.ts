@@ -4,10 +4,8 @@ import {
   getNextStreamAst,
   reuseStableAstNodes,
 } from "../utils/incremental-ast";
-import {
-  cloneMarkdownNode,
-  parseWithNativeParser,
-} from "../utils/parse-pipeline";
+import { cloneMarkdownNode } from "../utils/freeze-ast";
+import { parseWithNativeParser } from "../utils/parse-pipeline";
 import { getTextContent } from "../headless";
 
 describe("incremental AST", () => {

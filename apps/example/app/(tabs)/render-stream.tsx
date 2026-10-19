@@ -32,6 +32,7 @@ import {
   ExampleScreen,
   ExampleSectionLabel,
 } from "../../components/example-ui";
+import { countNodes } from "../../ast-utils";
 import { useBottomTabHeight } from "../../hooks/use-bottom-tab-height";
 import { EXAMPLE_COLORS } from "../../theme";
 import { ISSUE_74_STANDALONE_EQUALS_DISPLAY_MATH_MARKDOWN } from "../../markdown-test-data";
@@ -180,11 +181,6 @@ const MODE_OPTIONS: ModeOption[] = [
 function getRawPreviewText(text: string): string {
   if (text.length <= RAW_PREVIEW_MAX_CHARS) return text;
   return text.slice(text.length - RAW_PREVIEW_MAX_CHARS);
-}
-
-function countNodes(node: MarkdownNode | undefined): number {
-  if (!node) return 0;
-  return 1 + (node.children?.reduce((total, child) => total + countNodes(child), 0) ?? 0);
 }
 
 function getPreviewLines(text: string): string[] {
@@ -553,6 +549,13 @@ export default function TokenStreamScreen() {
     session.clear();
   }, [stopStream, session]);
 
+  const isStreamFinished = !isStreamMode && streamOffset >= DEMO_TEXT.length;
+
+  const restartStream = useCallback(() => {
+    clearStream();
+    startStream();
+  }, [clearStream, startStream]);
+
   useEffect(() => {
     return () => {
       if (streamIntervalRef.current) clearInterval(streamIntervalRef.current);
@@ -582,7 +585,13 @@ export default function TokenStreamScreen() {
             active={isStreamMode}
             tone="neutral"
             style={styles.btn}
-            onPress={isStreamMode ? stopStream : startStream}
+            onPress={
+              isStreamMode
+                ? stopStream
+                : isStreamFinished
+                  ? restartStream
+                  : startStream
+            }
             icon={
               <Ionicons
                 name={isStreamMode ? "pause" : "flash"}
@@ -593,7 +602,13 @@ export default function TokenStreamScreen() {
               />
             }
           >
-            {isStreamMode ? "Pause" : streamOffset > 0 ? "Resume" : "Start"}
+            {isStreamMode
+              ? "Pause"
+              : isStreamFinished
+                ? "Restart"
+                : streamOffset > 0
+                  ? "Resume"
+                  : "Start"}
           </ExampleActionButton>
           <ExampleActionButton
             testID="stream-clear"

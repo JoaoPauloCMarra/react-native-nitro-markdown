@@ -23,7 +23,9 @@ import { getNextStreamAst } from "./utils/incremental-ast";
 import { freezeMarkdownNode } from "./utils/freeze-ast";
 import {
   parseWithNativeParser,
+  safeOnError,
   useStableParserOptions,
+  warnInDev,
 } from "./utils/parse-pipeline";
 
 type MarkdownOnError = NonNullable<MarkdownProps["onError"]>;
@@ -74,33 +76,6 @@ const resolveStreamText = ({
 
   return session.getAllText();
 };
-
-function warnStreamError(message: string, error: unknown): void {
-  if (!__DEV__) return;
-
-  const warn = Reflect.get(console, "warn");
-  if (typeof warn === "function") {
-    warn.call(console, message, error);
-  }
-}
-
-function notifyStreamParseError(
-  onError: MarkdownOnError | undefined,
-  error: unknown,
-): void {
-  try {
-    onError?.(
-      error instanceof Error ? error : new Error(String(error)),
-      "parse",
-      undefined,
-    );
-  } catch (callbackError) {
-    warnStreamError(
-      "[NitroMarkdown] onError callback threw an exception:",
-      callbackError,
-    );
-  }
-}
 
 type StreamRenderState = {
   session: MarkdownSession;
@@ -236,7 +211,7 @@ export function useMarkdownStreamState({
       try {
         initialAst = parseSession(initialText);
       } catch (error) {
-        notifyStreamParseError(onError, error);
+        safeOnError(onError, error, "parse");
         initialAst = null;
       }
     }
@@ -339,7 +314,11 @@ export function useMarkdownStreamState({
         ast: derivedState.ast,
       };
       if (derivedState.parseFailure) {
-        notifyStreamParseError(onErrorRef.current, derivedState.parseFailure.error);
+        safeOnError(
+          onErrorRef.current,
+          derivedState.parseFailure.error,
+          "parse",
+        );
       }
       return;
     }
@@ -347,7 +326,7 @@ export function useMarkdownStreamState({
     try {
       initialText = activeSession.getAllText();
     } catch (error) {
-      warnStreamError("[NitroMarkdown] Failed to read stream session:", error);
+      warnInDev("[NitroMarkdown] Failed to read stream session:", error);
       return;
     }
     let initialAst: MarkdownNode | null = createEmptyAst();
@@ -355,7 +334,7 @@ export function useMarkdownStreamState({
       try {
         initialAst = parseSession(initialText);
       } catch (error) {
-        notifyStreamParseError(onErrorRef.current, error);
+        safeOnError(onErrorRef.current, error, "parse");
         initialAst = null;
       }
     }
@@ -409,7 +388,7 @@ export function useMarkdownStreamState({
         });
       } catch (error) {
         if (isCurrentSubscription()) {
-          warnStreamError(
+          warnInDev(
             "[NitroMarkdown] Failed to read stream session:",
             error,
           );
@@ -437,7 +416,7 @@ export function useMarkdownStreamState({
         }
       } catch (error) {
         if (isCurrentSubscription()) {
-          notifyStreamParseError(onErrorRef.current, error);
+          safeOnError(onErrorRef.current, error, "parse");
         }
         return;
       }
@@ -499,7 +478,7 @@ export function useMarkdownStreamState({
         scheduleFlush();
       });
     } catch (error) {
-      warnStreamError("[NitroMarkdown] Failed to subscribe to stream:", error);
+      warnInDev("[NitroMarkdown] Failed to subscribe to stream:", error);
     }
 
     if (pendingUpdateRef.current) {
@@ -512,7 +491,7 @@ export function useMarkdownStreamState({
       try {
         unsubscribe?.();
       } catch (error) {
-        warnStreamError(
+        warnInDev(
           "[NitroMarkdown] Failed to unsubscribe from stream:",
           error,
         );

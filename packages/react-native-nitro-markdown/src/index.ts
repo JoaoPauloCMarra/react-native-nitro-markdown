@@ -88,7 +88,7 @@ export { Blockquote } from "./renderers/blockquote";
 export { HorizontalRule } from "./renderers/horizontal-rule";
 export { CodeBlock, InlineCode } from "./renderers/code";
 export { List, ListItem, TaskListItem } from "./renderers/list";
-export { TableRenderer } from "./renderers/table";
+export { TableRenderer } from "./renderers/table/index";
 export { Image } from "./renderers/image";
 export { MathInline, MathBlock } from "./renderers/math";
 

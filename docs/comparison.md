@@ -51,6 +51,11 @@ bun scripts/benchmark-stream-ast.js e93be08e7079ca888ab66d60426e833884770191
 bun scripts/benchmark-stream-ast.js e93be08e7079ca888ab66d60426e833884770191 /tmp/stream-ast-benchmark.js
 ```
 
+`bun run benchmark` runs the same experiment against `HEAD`, and `--quick`
+shortens it to a smoke run (a script test runs it on every `test:lifecycle`).
+`bun run benchmark:compare` is the on-demand comparison with other JavaScript
+parsers; no gate runs it.
+
 The emitted file is a JavaScript expression. Evaluate it in the idle example
 app's debugger and retain the returned report. The harness loads production
 source for both versions and stubs native imports; fallback decisions use a
@@ -68,7 +73,7 @@ baselines in the same React Native process.
 | **Offsets on**    | 71.3 ms p50 | 57.0 ms p50      |
 | **Offsets off**   | 47.2 ms p50 | 37.6 ms p50      |
 
-The JavaScript baseline runs separately with `bun run benchmark`. Each parser
+The JavaScript baseline runs separately with `bun run benchmark:compare`. Each parser
 gets a fresh Node process, and the command prints the package version, fixture
 byte count, SHA-256, runtime, and p50/p95. The latest local baseline was on
 macOS arm64 with Node v24.15 and the `node-complex-markdown-v1` fixture

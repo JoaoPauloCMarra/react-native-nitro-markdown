@@ -12,9 +12,9 @@ import {
   parseMarkdownWithOptions,
   stripSourceOffsets,
   useStream,
-  type MarkdownNode,
 } from "react-native-nitro-markdown";
 import { parseMarkdown as parseHeadlessMarkdown } from "react-native-nitro-markdown/headless";
+import { hasSourceOffsets } from "../ast-utils";
 import { EXAMPLE_COLORS } from "../theme";
 
 const STREAM_TIMESTAMPS: Record<number, number> = { 0: 0, 1: 100, 2: 200 };
@@ -24,14 +24,6 @@ type Check = { key: string; run: () => string | Promise<string> };
 
 const errorCode = (error: unknown): string =>
   error instanceof MarkdownError ? error.code : "unexpected";
-
-const hasOffsets = (node: MarkdownNode): boolean => {
-  const offsets = node as MarkdownNode & { beg?: unknown; end?: unknown };
-  return typeof offsets.beg === "number" && typeof offsets.end === "number";
-};
-
-const anyOffsets = (node: MarkdownNode): boolean =>
-  hasOffsets(node) || (node.children ?? []).some(anyOffsets);
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -57,7 +49,7 @@ const CHECKS: Check[] = [
     run: () => {
       const withOffsets = parseMarkdown("# Offsets");
       const withoutOffsets = parseMarkdownWithOptions("# Offsets", { sourceOffsets: false });
-      return anyOffsets(withOffsets) && !anyOffsets(withoutOffsets) ? "ok" : "fail";
+      return hasSourceOffsets(withOffsets) && !hasSourceOffsets(withoutOffsets) ? "ok" : "fail";
     },
   },
   {
@@ -72,7 +64,7 @@ const CHECKS: Check[] = [
     run: () => {
       const ast = parseMarkdown("# Strip\n\ntext");
       const stripped = stripSourceOffsets(ast);
-      return anyOffsets(ast) && !anyOffsets(stripped) ? "ok" : "fail";
+      return hasSourceOffsets(ast) && !hasSourceOffsets(stripped) ? "ok" : "fail";
     },
   },
   {

@@ -7,11 +7,12 @@ const { transformSync } = require("@swc/core");
 
 const projectRoot = path.resolve(__dirname, "..");
 const sourcePath = "packages/react-native-nitro-markdown/src/utils/incremental-ast.ts";
-const baselineRef = process.argv[2];
-const outputPath = process.argv[3];
+const quick = process.argv.includes("--quick");
+const positional = process.argv.slice(2).filter((argument) => argument !== "--quick");
+const [baselineRef, outputPath] = positional;
 
-if (!baselineRef || process.argv.length > 4) {
-  throw new Error("Usage: bun scripts/benchmark-stream-ast.js <baseline-ref> [runtime-expression.js]");
+if (!baselineRef || positional.length > 2) {
+  throw new Error("Usage: bun scripts/benchmark-stream-ast.js <baseline-ref> [runtime-expression.js] [--quick]");
 }
 
 function git(args) {
@@ -31,7 +32,7 @@ function compile(source) {
   return `(() => {
     const exports = {};
     const require = (name) => {
-      if (name === "../headless" || name === "./freeze-ast") return {};
+      if (name === "../headless" || name === "./freeze-ast" || name === "./parse-pipeline") return {};
       throw new Error("Unexpected benchmark dependency: " + name);
     };
     ${code}
@@ -39,7 +40,7 @@ function compile(source) {
   })()`;
 }
 
-function experiment(before, after) {
+function experiment(before, after, config) {
   function ast(text) {
     return {
       type: "document",
@@ -59,7 +60,7 @@ function experiment(before, after) {
     return seed % max;
   }
 
-  for (let test = 0; test < 5000; test++) {
+  for (let test = 0; test < config.parityCases; test++) {
     let previousText = "";
     let appended = "";
     for (let i = 0; i < 20; i++) previousText += segments[random(segments.length)];
@@ -90,7 +91,7 @@ function experiment(before, after) {
   }
 
   const results = [];
-  for (const lines of [1000, 10000]) {
+  for (const lines of config.lines) {
     const previousText = "Ordinary text on this line.\n".repeat(lines) + "tail";
     const input = {
       previousText,
@@ -99,32 +100,35 @@ function experiment(before, after) {
     };
     const samples = { before: [], after: [] };
     const variants = { before, after };
-    for (let round = 0; round < 31; round++) {
+    for (let round = 0; round < config.rounds; round++) {
       const order = round % 2 ? ["after", "before"] : ["before", "after"];
       for (const name of order) {
         const start = performance.now();
-        for (let update = 0; update < 20; update++) variants[name](input);
-        if (round > 0) samples[name].push((performance.now() - start) / 20);
+        for (let update = 0; update < config.updates; update++) variants[name](input);
+        if (round > 0) samples[name].push((performance.now() - start) / config.updates);
       }
     }
     results.push({
       utf16Length: previousText.length,
       lines,
-      samples: 30,
-      updatesPerSample: 20,
+      samples: config.rounds - 1,
+      updatesPerSample: config.updates,
       beforeMs: percentiles(samples.before),
       afterMs: percentiles(samples.after),
     });
   }
   return {
-    parityCases: 5000,
+    parityCases: config.parityCases,
     scope: "Plain-text append helper; no native parse, rendering, or frame measurements",
     metric: "Quantiles of per-update time averaged within each batch, in milliseconds",
     results,
   };
 }
 
-const expression = `(${experiment.toString()})(${compile(beforeSource)}, ${compile(afterSource)})`;
+const config = quick
+  ? { parityCases: 200, lines: [100], rounds: 3, updates: 2 }
+  : { parityCases: 5000, lines: [1000, 10000], rounds: 31, updates: 20 };
+const expression = `(${experiment.toString()})(${compile(beforeSource)}, ${compile(afterSource)}, ${JSON.stringify(config)})`;
 if (outputPath) {
   fs.writeFileSync(outputPath, expression);
   console.log(`Runtime benchmark written to ${outputPath}; baseline ${baselineCommit}`);

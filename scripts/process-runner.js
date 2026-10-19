@@ -801,8 +801,7 @@ async function runProcess({
 module.exports = {
   ProcessInterrupted,
   ProcessTreeTerminationError,
-  DEFAULT_PROCESS_TIMEOUT_MS,
   MAX_PROCESS_TIMEOUT_MS,
-  SIGNAL_EXIT_CODES,
+  resolveBoundedTimeout,
   runProcess,
 };

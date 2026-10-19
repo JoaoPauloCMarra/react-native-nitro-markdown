@@ -3,7 +3,6 @@ import {
   useEffect,
   useMemo,
   useRef,
-  type ReactNode,
   type FC,
   type ComponentType,
 } from "react";
@@ -15,35 +14,9 @@ import {
   Platform,
   type ViewStyle,
 } from "react-native";
-import { parseMarkdownWithOptions, type MarkdownNode } from "../headless";
 import { useMarkdownContext } from "../MarkdownContext";
 import { getAllowedImageHref } from "../utils/link-security";
 import type { NodeRendererProps } from "../MarkdownContext";
-
-const renderInlineContent = (
-  node: MarkdownNode,
-  Renderer: ComponentType<NodeRendererProps>,
-): ReactNode => {
-  if (node.type === "paragraph" && node.children) {
-    return (
-      <>
-        {node.children.map((child, idx) => (
-          <Renderer key={idx} node={child} depth={0} inListItem={false} />
-        ))}
-      </>
-    );
-  }
-  return null;
-};
-
-/**
- * Strips markdown markers from image alt text so screen readers announce
- * plain content instead of raw markdown (e.g. `**bold**` -> `bold`).
- */
-const cleanAccessibilityLabel = (label?: string): string | undefined => {
-  if (!label) return undefined;
-  return label.replace(/[*_`[\]$~#]/g, "").trim();
-};
 
 type ImageProps = {
   url: string;
@@ -53,7 +26,7 @@ type ImageProps = {
   style?: ViewStyle;
 };
 
-export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
+export const Image: FC<ImageProps> = ({ url, title, alt, style }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [aspectRatio, setAspectRatio] = useState<number | undefined>(undefined);
@@ -167,36 +140,7 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
     };
   }, [allowedImageHref]);
 
-  const altContent = useMemo(() => {
-    if (!alt || !Renderer) return null;
-    if (
-      alt.includes("$") ||
-      alt.includes("*") ||
-      alt.includes("_") ||
-      alt.includes("`") ||
-      alt.includes("[")
-    ) {
-      try {
-        const ast = parseMarkdownWithOptions(alt, { math: true, gfm: true });
-        if (
-          ast?.type === "document" &&
-          ast.children?.[0]?.type === "paragraph"
-        ) {
-          const paragraph = ast.children[0];
-          const inlineContent = renderInlineContent(paragraph, Renderer);
-          if (inlineContent) {
-            return inlineContent;
-          }
-        }
-        return <Text style={styles.imageErrorText}>{alt}</Text>;
-      } catch {
-        return <Text style={styles.imageErrorText}>{alt}</Text>;
-      }
-    }
-    return <Text style={styles.imageErrorText}>{alt}</Text>;
-  }, [alt, Renderer, styles.imageErrorText]);
-
-  const accessibilityLabel = cleanAccessibilityLabel(alt || title);
+  const accessibilityLabel = alt || title || undefined;
 
   if (error || !allowedImageHref) {
     return (
@@ -215,11 +159,9 @@ export const Image: FC<ImageProps> = ({ url, title, alt, Renderer, style }) => {
           }}
         >
           <Text style={styles.imageErrorText}>🖼️ </Text>
-          {altContent || (
-            <Text style={styles.imageErrorText}>
-              {title || "Image failed to load"}
-            </Text>
-          )}
+          <Text style={styles.imageErrorText}>
+            {alt || title || "Image failed to load"}
+          </Text>
         </View>
       </View>
     );

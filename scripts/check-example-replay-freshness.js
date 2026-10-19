@@ -2,7 +2,11 @@ const { spawnSync } = require("node:child_process");
 const { createHash } = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
-const { inside, validateSuite } = require("./replay-manifest");
+const {
+  hasManifestHeader,
+  inside,
+  validateSuite,
+} = require("./replay-manifest");
 
 const manifestRelativePath = "e2e/markdown-replay-coverage.json";
 const lockRelativePath = "e2e/markdown-replay-source-lock.json";
@@ -124,8 +128,8 @@ function collectDirectoryFiles(root, relativeDirectory, kind) {
       const relative = path.relative(root, absolute).split(path.sep).join("/");
       if (isSecretPath(relative)) continue;
       const extension = path.extname(entry.name).toLowerCase();
-      if (kind === "asset" || (kind === "example" && assetExtensions.has(extension))) {
-        if (assetExtensions.has(extension)) files.push(relative);
+      if (kind === "example" && assetExtensions.has(extension)) {
+        files.push(relative);
         continue;
       }
       if (!sourceExtensions.has(extension)) continue;
@@ -198,10 +202,7 @@ function readCoverageManifest(root, manifestPath = manifestRelativePath) {
   const absoluteRoot = path.resolve(root);
   const manifestFile = inside(absoluteRoot, manifestPath);
   const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8"));
-  if (
-    manifest.version !== 1 ||
-    manifest.entry !== "scripts/run-example-replay.js"
-  ) {
+  if (!hasManifestHeader(manifest, "scripts/run-example-replay.js")) {
     throw new Error(
       "Markdown replay coverage manifest must use version 1 and name its runner",
     );

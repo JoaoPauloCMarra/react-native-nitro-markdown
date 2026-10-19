@@ -1,6 +1,6 @@
 import type { FC, ReactNode } from "react";
 import { View, Text, StyleSheet, Platform, type ViewStyle } from "react-native";
-import { getCachedStyles } from "./style-cache";
+import { createThemedStyles } from "./style-cache";
 import { useMarkdownContext } from "../MarkdownContext";
 import type { MarkdownTheme } from "../theme";
 
@@ -15,7 +15,7 @@ type ListProps = {
 // ordered/start stay on List for renderer API parity; markers render in ListItem.
 export const List: FC<ListProps> = ({ depth, children, style }) => {
   const { theme } = useMarkdownContext();
-  const styles = getCachedStyles(listStylesCache, theme, createListStyles);
+  const styles = getListStyles(theme);
   return (
     <View style={[styles.list, depth > 0 && styles.listNested, style]}>
       {children}
@@ -39,11 +39,7 @@ export const ListItem: FC<ListItemProps> = ({
   style,
 }) => {
   const { theme } = useMarkdownContext();
-  const styles = getCachedStyles(
-    listItemStylesCache,
-    theme,
-    createListItemStyles,
-  );
+  const styles = getListItemStyles(theme);
   const bullet = ordered ? `${start + index}.` : "•";
   return (
     <View style={[styles.listItem, style]}>
@@ -65,11 +61,7 @@ export const TaskListItem: FC<TaskListItemProps> = ({
   style,
 }) => {
   const { theme } = useMarkdownContext();
-  const styles = getCachedStyles(
-    taskListItemStylesCache,
-    theme,
-    createTaskListItemStyles,
-  );
+  const styles = getTaskListItemStyles(theme);
   return (
     <View
       style={[styles.taskListItem, style]}
@@ -86,17 +78,6 @@ export const TaskListItem: FC<TaskListItemProps> = ({
   );
 };
 
-type ListStyles = ReturnType<typeof createListStyles>;
-type ListItemStyles = ReturnType<typeof createListItemStyles>;
-type TaskListItemStyles = ReturnType<typeof createTaskListItemStyles>;
-
-const listStylesCache = new WeakMap<MarkdownTheme, ListStyles>();
-const listItemStylesCache = new WeakMap<MarkdownTheme, ListItemStyles>();
-const taskListItemStylesCache = new WeakMap<
-  MarkdownTheme,
-  TaskListItemStyles
->();
-
 const createListStyles = (theme: MarkdownTheme) =>
   StyleSheet.create({
     list: {
@@ -107,6 +88,8 @@ const createListStyles = (theme: MarkdownTheme) =>
       marginBottom: 0,
     },
   });
+
+const getListStyles = createThemedStyles(createListStyles);
 
 const createListItemStyles = (theme: MarkdownTheme) =>
   StyleSheet.create({
@@ -131,6 +114,8 @@ const createListItemStyles = (theme: MarkdownTheme) =>
       minWidth: 0,
     },
   });
+
+const getListItemStyles = createThemedStyles(createListItemStyles);
 
 const createTaskListItemStyles = (theme: MarkdownTheme) =>
   StyleSheet.create({
@@ -167,3 +152,5 @@ const createTaskListItemStyles = (theme: MarkdownTheme) =>
       minWidth: 0,
     },
   });
+
+const getTaskListItemStyles = createThemedStyles(createTaskListItemStyles);

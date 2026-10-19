@@ -22,7 +22,11 @@ import {
   DEFAULT_MIN_COLUMN_WIDTH,
   DEFAULT_MEASUREMENT_STABILIZE_MS,
 } from "./table-reducer";
-import { extractTableData, estimateColumnWidths } from "./table-utils";
+import {
+  COLUMN_MEASUREMENT_PADDING,
+  extractTableData,
+  estimateColumnWidths,
+} from "./table-utils";
 import {
   areAllCellsMeasured,
   cellKeyOf,
@@ -30,12 +34,11 @@ import {
   expectedCellKeysOf,
 } from "./table-measurement";
 import type { MarkdownNode } from "../../headless";
-import { readTextContent } from "../../utils/text-content";
 import {
   useMarkdownContext,
   type NodeRendererProps,
 } from "../../MarkdownContext";
-import { getCachedStyles } from "../style-cache";
+import { createThemedStyles } from "../style-cache";
 import type { MarkdownTheme } from "../../theme";
 
 type TableRendererProps = {
@@ -43,8 +46,6 @@ type TableRendererProps = {
   Renderer: ComponentType<NodeRendererProps>;
   style?: ViewStyle;
 };
-
-const COLUMN_MEASUREMENT_PADDING = 8;
 
 export const TableRenderer: FC<TableRendererProps> = ({
   node,
@@ -65,7 +66,7 @@ export const TableRenderer: FC<TableRendererProps> = ({
   );
 
   const columnCount = headers.length;
-  const styles = getCachedStyles(tableStylesCache, theme, createTableStyles);
+  const styles = getTableStyles(theme);
   const estimatedColumnWidths = useMemo(
     () => estimateColumnWidths(headers, rows, columnCount, minColumnWidth),
     [headers, rows, columnCount, minColumnWidth],
@@ -219,14 +220,9 @@ export const TableRenderer: FC<TableRendererProps> = ({
   const tableBackgroundStyle = useMemo(
     () => ({
       backgroundColor:
-        style?.backgroundColor ?? theme.colors.surface ?? "#111827",
+        style?.backgroundColor ?? theme.colors.surface,
     }),
     [style, theme.colors.surface],
-  );
-
-  const tableAccessibilityLabel = useMemo(
-    () => `Table: ${headers.map((cell) => readTextContent(cell).trim()).filter(Boolean).join(", ")}`,
-    [headers],
   );
 
   if (columnCount === 0) return null;
@@ -237,9 +233,7 @@ export const TableRenderer: FC<TableRendererProps> = ({
   return (
     <View
       style={[styles.container, style]}
-      accessible
       role="grid"
-      accessibilityLabel={tableAccessibilityLabel}
     >
       {needsMeasurement ? (
         <View style={styles.measurementContainer}>
@@ -361,10 +355,6 @@ export const TableRenderer: FC<TableRendererProps> = ({
   );
 };
 
-type TableStyles = ReturnType<typeof createTableStyles>;
-
-const tableStylesCache = new WeakMap<MarkdownTheme, TableStyles>();
-
 const createTableStyles = (theme: MarkdownTheme) => {
   const colors = theme?.colors || {};
   const borderRadius = theme?.borderRadius || { m: 8 };
@@ -393,24 +383,24 @@ const createTableStyles = (theme: MarkdownTheme) => {
       borderRadius: borderRadius.m,
       overflow: "hidden",
       borderWidth: 1,
-      borderColor: colors.tableBorder || "#374151",
+      borderColor: colors.tableBorder,
     },
     headerRow: {
       flexDirection: "row",
-      backgroundColor: colors.tableHeader || "#1f2937",
+      backgroundColor: colors.tableHeader,
       borderBottomWidth: 1,
-      borderBottomColor: colors.tableBorder || "#374151",
+      borderBottomColor: colors.tableBorder,
     },
     bodyRow: {
       flexDirection: "row",
       borderBottomWidth: 1,
-      borderBottomColor: colors.tableBorder || "#374151",
+      borderBottomColor: colors.tableBorder,
     },
     evenRow: {
-      backgroundColor: colors.tableRowEven || "transparent",
+      backgroundColor: colors.tableRowEven,
     },
     oddRow: {
-      backgroundColor: colors.tableRowOdd || "rgba(255,255,255,0.02)",
+      backgroundColor: colors.tableRowOdd,
     },
     lastRow: {
       borderBottomWidth: 0,
@@ -421,7 +411,7 @@ const createTableStyles = (theme: MarkdownTheme) => {
       paddingHorizontal: 12,
       minWidth: 60,
       borderRightWidth: 1,
-      borderRightColor: colors.tableBorder || "#374151",
+      borderRightColor: colors.tableBorder,
     },
     bodyCell: {
       flexShrink: 0,
@@ -429,7 +419,7 @@ const createTableStyles = (theme: MarkdownTheme) => {
       paddingHorizontal: 12,
       minWidth: 60,
       borderRightWidth: 1,
-      borderRightColor: colors.tableBorder || "#374151",
+      borderRightColor: colors.tableBorder,
       justifyContent: "center",
     },
     lastCell: {
@@ -437,3 +427,5 @@ const createTableStyles = (theme: MarkdownTheme) => {
     },
   });
 };
+
+const getTableStyles = createThemedStyles(createTableStyles);

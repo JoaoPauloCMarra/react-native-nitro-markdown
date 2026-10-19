@@ -18,6 +18,7 @@ import {
   parseMarkdown,
   parseMarkdownSession,
   parseMarkdownWithOptions,
+  stripSourceOffsets,
   type MarkdownNode,
   type MarkdownNodeWithSourceOffsets,
   type MarkdownNodeWithoutSourceOffsets,
@@ -47,8 +48,17 @@ const onError: NonNullable<MarkdownProps["onError"]> = (
 ) => {
   const message: string = error.message;
   const errorPhase: MarkdownErrorPhase = phase;
+  const phaseLabel: string = (() => {
+    switch (errorPhase) {
+      case "parse":
+      case "before-plugin":
+      case "after-plugin":
+      case "transform":
+        return errorPhase;
+    }
+  })();
   const source: string | undefined = pluginName;
-  void [message, errorPhase, source];
+  void [message, errorPhase, phaseLabel, source];
 };
 
 const markdownProps = {
@@ -91,6 +101,13 @@ const noOffsetNode: MarkdownNodeWithoutSourceOffsets = parseMarkdownWithOptions(
   "# Lean",
   { sourceOffsets: false },
 );
+const strippedNode: MarkdownNodeWithoutSourceOffsets =
+  stripSourceOffsets(rootNode);
+const strippedHasNoOffsets: "beg" extends keyof ReturnType<
+  typeof stripSourceOffsets
+>
+  ? never
+  : true = true;
 const sessionNode: MarkdownNode = parseMarkdownSession(session);
 const offset: number = offsetNode.beg;
 // @ts-expect-error — sourceOffsets:false does not expose source ranges
@@ -116,6 +133,8 @@ void [
   rootNode,
   leanNode,
   noOffsetNode,
+  strippedNode,
+  strippedHasNoOffsets,
   sessionNode,
   offset,
   complexityCode,

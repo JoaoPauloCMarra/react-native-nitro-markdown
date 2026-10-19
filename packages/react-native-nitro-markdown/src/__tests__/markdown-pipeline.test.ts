@@ -538,6 +538,44 @@ describe("Markdown plugin pipeline", () => {
     );
   });
 
+  it("throwing astTransform reports onError phase transform in production", () => {
+    const globals = globalThis as { __DEV__?: boolean };
+    const originalDev = globals.__DEV__;
+    globals.__DEV__ = false;
+    const failure = new Error("transform boom");
+    const onError = jest.fn();
+    const onParseComplete = jest.fn();
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+    const consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation();
+
+    try {
+      act(() => {
+        create(
+          createElement(Markdown, {
+            astTransform: () => {
+              throw failure;
+            },
+            onError,
+            onParseComplete,
+            children: "kept text",
+          }),
+        );
+      });
+    } finally {
+      consoleErrorSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
+      if (originalDev === undefined) delete globals.__DEV__;
+      else globals.__DEV__ = originalDev;
+    }
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0]![0]).toBe(failure);
+    expect(onError.mock.calls[0]![1]).toBe("transform");
+    expect(onParseComplete).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "kept text\n\n" }),
+    );
+  });
+
   it("preserves unchanged sourceAst child identity between renders", () => {
     const firstParagraph: MarkdownNode = {
       type: "paragraph",

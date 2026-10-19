@@ -259,7 +259,7 @@
       "statusId": "smoke-probe",
       "expectedText": ":fail=0:",
       "assertion": "fail=${countLogs(smokeLogs, \"fail\")}",
-      "claimLimit": "Counts the smoke log rows; each row's own detail is not asserted separately, and SKIP rows are allowed.",
+      "claimLimit": "Counts the PASS, FAIL and SKIP rows; the summary row is not counted, each row's own detail is not asserted separately, and SKIP rows are allowed.",
       "trigger": "screen-load"
     },
     {
@@ -494,12 +494,12 @@
       "id": "render.a11y-labels",
       "coverage": "replay-asserted",
       "kind": "public-api",
-      "transport": "The table renderer exposes its header-derived accessibilityLabel.",
+      "transport": "The table renderer exposes each header cell to accessibility on its own; the container has no collapsing label.",
       "suite": "e2e/qa-render-contracts.ad",
       "source": "apps/example/app/e2e-render-contracts.tsx",
       "trigger": "screen-load",
       "statusId": "table-surface",
-      "expectedText": "Table: Alpha, Beta",
+      "expectedText": "Beta",
       "assertion": "TABLE_MARKDOWN = \"| Alpha | Beta |"
     },
     {
@@ -531,12 +531,12 @@
       "id": "render.table-cells",
       "coverage": "replay-asserted",
       "kind": "public-api",
-      "transport": "A default table with a header, a link-only cell, a code cell and a bold cell renders through the table cell path and exposes its header-derived accessibilityLabel.",
+      "transport": "A default table with a header, a link-only cell, a code cell and a bold cell renders through the table cell path and exposes a body cell to accessibility on its own.",
       "suite": "e2e/qa-render-contracts.ad",
       "source": "apps/example/app/e2e-render-contracts.tsx",
       "trigger": "screen-load",
       "statusId": "table-cells-surface",
-      "expectedText": "Table: Head, Docs, code, bold",
+      "expectedText": "b1",
       "assertion": "TABLE_CELLS_MARKDOWN = tableCellsMarkdown(\"Head\")"
     },
     {

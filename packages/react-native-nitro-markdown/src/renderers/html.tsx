@@ -7,7 +7,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from "react-native";
-import { getCachedStyles } from "./style-cache";
+import { createThemedStyles } from "./style-cache";
 import { useMarkdownContext } from "../MarkdownContext";
 import { getMonoFontFamily, type MarkdownTheme } from "../theme";
 
@@ -23,7 +23,7 @@ type HtmlBlockProps = {
 
 export const HtmlInline: FC<HtmlInlineProps> = ({ content, style }) => {
   const { theme } = useMarkdownContext();
-  const styles = getCachedStyles(htmlStylesCache, theme, createHtmlStyles);
+  const styles = getHtmlStyles(theme);
 
   if (!content) return null;
 
@@ -32,7 +32,7 @@ export const HtmlInline: FC<HtmlInlineProps> = ({ content, style }) => {
 
 export const HtmlBlock: FC<HtmlBlockProps> = ({ content, style }) => {
   const { theme } = useMarkdownContext();
-  const styles = getCachedStyles(htmlStylesCache, theme, createHtmlStyles);
+  const styles = getHtmlStyles(theme);
 
   if (!content) return null;
 
@@ -42,10 +42,6 @@ export const HtmlBlock: FC<HtmlBlockProps> = ({ content, style }) => {
     </View>
   );
 };
-
-type HtmlStyles = ReturnType<typeof createHtmlStyles>;
-
-const htmlStylesCache = new WeakMap<MarkdownTheme, HtmlStyles>();
 
 const createHtmlStyles = (theme: MarkdownTheme) =>
   StyleSheet.create({
@@ -66,3 +62,5 @@ const createHtmlStyles = (theme: MarkdownTheme) =>
       ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
   });
+
+const getHtmlStyles = createThemedStyles(createHtmlStyles);

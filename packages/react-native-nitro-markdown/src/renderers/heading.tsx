@@ -1,6 +1,6 @@
 import type { FC, ReactNode } from "react";
 import { Text, StyleSheet, Platform, type TextStyle } from "react-native";
-import { getCachedStyles } from "./style-cache";
+import { createThemedStyles } from "./style-cache";
 import { useMarkdownContext } from "../MarkdownContext";
 import type { MarkdownTheme } from "../theme";
 
@@ -22,7 +22,7 @@ const ANDROID_SYSTEM_FONTS = new Set([
 
 export const Heading: FC<HeadingProps> = ({ level, children, style }) => {
   const { theme } = useMarkdownContext();
-  const styles = getCachedStyles(stylesCache, theme, createStyles);
+  const styles = getHeadingStyles(theme);
 
   const headingStyles = [
     styles.heading,
@@ -40,10 +40,6 @@ export const Heading: FC<HeadingProps> = ({ level, children, style }) => {
     </Text>
   );
 };
-
-type HeadingStyles = ReturnType<typeof createStyles>;
-
-const stylesCache = new WeakMap<MarkdownTheme, HeadingStyles>();
 
 const getHeadingWeight = (theme: MarkdownTheme) =>
   theme.headingWeight ??
@@ -96,3 +92,5 @@ const createStyles = (theme: MarkdownTheme) =>
       color: theme.colors.textMuted,
     },
   });
+
+const getHeadingStyles = createThemedStyles(createStyles);

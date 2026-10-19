@@ -6,17 +6,19 @@ import {
 } from "../headless";
 import type { ParserOptions } from "../Markdown.nitro";
 import type { MarkdownPlugin } from "../markdown";
-import {
-  cloneMarkdownNode as cloneValidatedMarkdownNode,
-  freezeMarkdownNode,
-} from "./freeze-ast";
+import { cloneMarkdownNode, freezeMarkdownNode } from "./freeze-ast";
 
-export type MarkdownErrorPhase = "parse" | "before-plugin" | "after-plugin";
+export type MarkdownErrorPhase =
+  | "parse"
+  | "before-plugin"
+  | "after-plugin"
+  | "transform";
 
 export const ERROR_PHASE = {
   PARSE: "parse",
   BEFORE_PLUGIN: "before-plugin",
   AFTER_PLUGIN: "after-plugin",
+  TRANSFORM: "transform",
 } as const;
 
 export function hashString(str: string): number {
@@ -69,14 +71,11 @@ export const warnInDev = (message: string, error?: unknown): void => {
   }
 };
 
-export const cloneMarkdownNode = (node: MarkdownNode): MarkdownNode =>
-  cloneValidatedMarkdownNode(node);
-
 export const materializeMarkdownNode = (
   node: MarkdownNode,
   freezeAst = false,
 ): MarkdownNode => {
-  const clone = cloneValidatedMarkdownNode(node);
+  const clone = cloneMarkdownNode(node);
   return freezeAst ? freezeMarkdownNode(clone) : clone;
 };
 
@@ -118,30 +117,15 @@ export const normalizeParserOptions = (
     : (normalized as ParserOptions);
 };
 
-const parseParserOptionValue = (
-  key: keyof ParserOptions,
-  token: string,
-): boolean | number | undefined => {
-  if (token === "default") return undefined;
-  if (key === "maxInputLength") return Number(token);
-  return token === "1";
-};
-
 export const useStableParserOptions = (
   options?: ParserOptions,
 ): ParserOptions | undefined => {
   const optionsKey = getParserOptionsKey(options);
-  return useMemo(() => {
-    const decoded: Record<string, boolean | number> = {};
-    optionsKey.split("|").forEach((entry, index) => {
-      const key = PARSER_OPTION_KEYS[index]!;
-      const value = parseParserOptionValue(key, entry.slice(key.length + 1));
-      if (value !== undefined) decoded[key] = value;
-    });
-    return Object.keys(decoded).length === 0
-      ? undefined
-      : (decoded as ParserOptions);
-  }, [optionsKey]);
+  return useMemo(
+    () => normalizeParserOptions(options),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [optionsKey],
+  );
 };
 
 export const parseWithNativeParser = (

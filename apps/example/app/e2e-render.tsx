@@ -102,17 +102,7 @@ const E2E_PLUGINS: MarkdownPlugin[] = [
   },
 ];
 
-type SpecimenId =
-  | "kitchen"
-  | "dark"
-  | "minimal"
-  | "custom"
-  | "virtualized"
-  | "unicode"
-  | "html"
-  | "plugin";
-
-const SPECIMEN_IDS: readonly SpecimenId[] = [
+const SPECIMEN_IDS = [
   "kitchen",
   "dark",
   "minimal",
@@ -121,7 +111,9 @@ const SPECIMEN_IDS: readonly SpecimenId[] = [
   "unicode",
   "html",
   "plugin",
-];
+] as const;
+
+type SpecimenId = (typeof SPECIMEN_IDS)[number];
 
 export default function MarkdownE2eRenderScreen() {
   const insets = useSafeAreaInsets();
@@ -151,16 +143,9 @@ export default function MarkdownE2eRenderScreen() {
 
   const parseCompleteCallbacks = useMemo(
     () =>
-      ({
-        kitchen: () => markReady("kitchen"),
-        dark: () => markReady("dark"),
-        minimal: () => markReady("minimal"),
-        custom: () => markReady("custom"),
-        virtualized: () => markReady("virtualized"),
-        unicode: () => markReady("unicode"),
-        html: () => markReady("html"),
-        plugin: () => markReady("plugin"),
-      }) satisfies Record<SpecimenId, () => void>,
+      Object.fromEntries(
+        SPECIMEN_IDS.map((id) => [id, () => markReady(id)]),
+      ) as Record<SpecimenId, () => void>,
     [markReady],
   );
 

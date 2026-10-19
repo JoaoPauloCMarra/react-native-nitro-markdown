@@ -8,7 +8,7 @@ import {
   type ViewStyle,
   type TextStyle,
 } from "react-native";
-import { getCachedStyles } from "./style-cache";
+import { createThemedStyles } from "./style-cache";
 import { readTextContent } from "../utils/text-content";
 import { useMarkdownContext } from "../MarkdownContext";
 import {
@@ -21,8 +21,6 @@ import { getMonoFontFamily, type MarkdownTheme } from "../theme";
 
 type TokenStyles = Partial<Record<TokenType, TextStyle>>;
 
-const tokenStylesCache = new WeakMap<MarkdownTheme, TokenStyles>();
-
 const createTokenStyles = (theme: MarkdownTheme): TokenStyles => {
   const styles: TokenStyles = {};
   const colors = theme.colors.codeTokenColors ?? {};
@@ -31,6 +29,8 @@ const createTokenStyles = (theme: MarkdownTheme): TokenStyles => {
   }
   return styles;
 };
+
+const getTokenStyles = createThemedStyles(createTokenStyles);
 
 const mergeTokenRuns = (
   tokens: readonly HighlightedToken[],
@@ -73,16 +73,19 @@ export const CodeBlock: FC<CodeBlockProps> = ({
         : null;
 
   const displayContent = content ?? (node ? readTextContent(node) : "");
-  const tokenStyles = getCachedStyles(tokenStylesCache, theme, createTokenStyles);
-  const highlightedRuns = useMemo(
-    () =>
-      highlighter && language
-        ? mergeTokenRuns(highlighter(language, displayContent), tokenStyles)
-        : null,
-    [displayContent, highlighter, language, tokenStyles],
-  );
+  const tokenStyles = getTokenStyles(theme);
+  const { onError } = ctx;
+  const highlightedRuns = useMemo(() => {
+    if (!highlighter || !language) return null;
+    try {
+      return mergeTokenRuns(highlighter(language, displayContent), tokenStyles);
+    } catch (error) {
+      onError?.(error, "transform");
+      return null;
+    }
+  }, [displayContent, highlighter, language, tokenStyles, onError]);
 
-  const styles = getCachedStyles(codeBlockStylesCache, theme, createCodeStyles);
+  const styles = getCodeBlockStyles(theme);
 
   const showLanguage = theme.showCodeLanguage && language;
 
@@ -136,19 +139,9 @@ export const InlineCode: FC<InlineCodeProps> = ({
   const displayContent =
     content ?? children ?? (node ? readTextContent(node) : "");
 
-  const styles = getCachedStyles(
-    inlineCodeStylesCache,
-    theme,
-    createInlineStyles,
-  );
+  const styles = getInlineCodeStyles(theme);
   return <Text style={[styles.codeInline, style]}>{displayContent}</Text>;
 };
-
-type CodeBlockStyles = ReturnType<typeof createCodeStyles>;
-type InlineCodeStyles = ReturnType<typeof createInlineStyles>;
-
-const codeBlockStylesCache = new WeakMap<MarkdownTheme, CodeBlockStyles>();
-const inlineCodeStylesCache = new WeakMap<MarkdownTheme, InlineCodeStyles>();
 
 const createCodeStyles = (theme: MarkdownTheme) =>
   StyleSheet.create({
@@ -167,7 +160,7 @@ const createCodeStyles = (theme: MarkdownTheme) =>
       marginBottom: theme.spacing.s,
       textTransform: "uppercase",
       letterSpacing: 0.5,
-      fontFamily: theme.fontFamilies.mono,
+      fontFamily: getMonoFontFamily(theme),
       ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
     codeBlockText: {
@@ -178,6 +171,8 @@ const createCodeStyles = (theme: MarkdownTheme) =>
       ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
   });
+
+const getCodeBlockStyles = createThemedStyles(createCodeStyles);
 
 const createInlineStyles = (theme: MarkdownTheme) =>
   StyleSheet.create({
@@ -192,3 +187,5 @@ const createInlineStyles = (theme: MarkdownTheme) =>
       ...(Platform.OS === "android" && { includeFontPadding: false }),
     },
   });
+
+const getInlineCodeStyles = createThemedStyles(createInlineStyles);

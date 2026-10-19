@@ -33,6 +33,10 @@ function createFixture() {
     fileURLToPath(new URL("./setup.js", import.meta.url)),
     join(scriptDir, "setup.js"),
   );
+  copyFileSync(
+    fileURLToPath(new URL("./console-log.js", import.meta.url)),
+    join(scriptDir, "console-log.js"),
+  );
 
   const commandLog = join(root, "commands.log");
   const bunShim = join(binaryDir, "bun");

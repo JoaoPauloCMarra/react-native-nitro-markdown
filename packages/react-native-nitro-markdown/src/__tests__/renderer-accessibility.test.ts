@@ -1,6 +1,11 @@
 import "./setup";
 import { createElement } from "react";
-import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import {
+  act,
+  create,
+  type ReactTestInstance,
+  type ReactTestRenderer,
+} from "react-test-renderer";
 import { Markdown } from "../markdown";
 import type { MarkdownNode } from "../headless";
 import { mockParser } from "./setup";
@@ -50,6 +55,9 @@ const sourceAst: MarkdownNode = {
     },
   ],
 };
+
+const textOf = (node: ReactTestInstance | string): string =>
+  typeof node === "string" ? node : node.children.map(textOf).join(" ");
 
 function renderMarkdown(ast: MarkdownNode, props: Record<string, unknown> = {}) {
   let renderer: ReactTestRenderer | null = null;
@@ -201,7 +209,7 @@ describe("Markdown renderer accessibility", () => {
     expect(list.props.removeClippedSubviews).toBe(false);
   });
 
-  it("labels tables with a grid role and header summary", () => {
+  it("table exposes body cells", () => {
     const tableAst: MarkdownNode = {
       type: "document",
       children: [
@@ -256,25 +264,25 @@ describe("Markdown renderer accessibility", () => {
       const grid = renderer.root.find(
         (node) => node.type === hostType("View") && node.props.role === "grid",
       );
-      expect(grid.props.accessibilityLabel).toBe("Table: Name, Age");
+      expect(grid.props.accessible).not.toBe(true);
+      expect(grid.props.accessibilityLabel).toBeUndefined();
+      const content = textOf(grid);
+      for (const text of ["Name", "Age", "Ada", "36"]) {
+        expect(content).toContain(text);
+      }
     } finally {
       act(() => renderer.unmount());
     }
   });
 
-  it("cleans markdown markers from image accessibility labels", () => {
+  it("image label keeps literal characters", () => {
+    const alt = "my_file_name costs $5 in C#";
     const imageAst: MarkdownNode = {
       type: "document",
       children: [
         {
           type: "paragraph",
-          children: [
-            {
-              type: "image",
-              href: "javascript:alert(1)",
-              alt: "**Bold** `code` _italic_",
-            },
-          ],
+          children: [{ type: "image", href: "javascript:alert(1)", alt }],
         },
       ],
     };
@@ -284,7 +292,11 @@ describe("Markdown renderer accessibility", () => {
       (node) =>
         node.type === hostType("View") && node.props.accessibilityRole === "image",
     );
-    expect(image.props.accessibilityLabel).toBe("Bold code italic");
+    expect(image.props.accessibilityLabel).toBe(alt);
+    const texts = image
+      .findAll((node) => node.type === hostType("Text"))
+      .map((node) => node.props.children);
+    expect(texts).toContain(alt);
   });
 
   it("renders a custom errorText when parsing fails", () => {

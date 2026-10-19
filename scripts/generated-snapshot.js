@@ -15,6 +15,7 @@ const {
   writeFile,
 } = require("node:fs/promises");
 const path = require("node:path");
+const { isOutsideRelative } = require("./path-guards.js");
 
 const defaultFsOps = {
   chmod,
@@ -102,12 +103,7 @@ function resolveSnapshotRoot(packageParent, generatedSubdirectory) {
   const segments = assertGeneratedSubdirectory(generatedSubdirectory);
   const root = path.resolve(parent, ...segments);
   const relative = path.relative(parent, root);
-  if (
-    relative.length === 0 ||
-    path.isAbsolute(relative) ||
-    relative === ".." ||
-    relative.startsWith(`..${path.sep}`)
-  ) {
+  if (relative.length === 0 || isOutsideRelative(relative)) {
     throw new Error("Generated snapshot directory must stay beneath its package parent");
   }
   return { parent, root, segments };
@@ -147,12 +143,7 @@ async function assertSafeSnapshotRoot(packageParent, generatedSubdirectory) {
     }
     const realCurrent = await fsOps.realpath(current);
     const relative = path.relative(realParent, realCurrent);
-    if (
-      relative.length === 0 ||
-      path.isAbsolute(relative) ||
-      relative === ".." ||
-      relative.startsWith(`..${path.sep}`)
-    ) {
+    if (relative.length === 0 || isOutsideRelative(relative)) {
       throw new Error("Generated snapshot path escapes its package parent");
     }
   }
@@ -190,9 +181,7 @@ function resolveSnapshotEntry(root, relativePath) {
   if (
     target === root ||
     relativeToRoot.length === 0 ||
-    path.isAbsolute(relativeToRoot) ||
-    relativeToRoot === ".." ||
-    relativeToRoot.startsWith(`..${path.sep}`)
+    isOutsideRelative(relativeToRoot)
   ) {
     throw new Error(`Snapshot entry escapes its root: ${JSON.stringify(relativePath)}`);
   }
@@ -402,12 +391,7 @@ async function createSiblingTemporaryDirectory(parent, label) {
   const prefix = path.join(parent, `.${path.basename(parent)}.${label}-`);
   const temporary = await fsOps.mkdtemp(prefix);
   const relative = path.relative(parent, temporary);
-  if (
-    !relative ||
-    path.isAbsolute(relative) ||
-    relative === ".." ||
-    relative.startsWith(`..${path.sep}`)
-  ) {
+  if (!relative || isOutsideRelative(relative)) {
     await fsOps.rm(temporary, { force: true, recursive: true }).catch(() => {});
     throw new Error("Snapshot temporary directory escaped its package parent");
   }
@@ -422,12 +406,7 @@ async function createSiblingTemporaryDirectory(parent, label) {
 function snapshotTarget(root, segments) {
   const target = path.resolve(root, ...segments);
   const relative = path.relative(root, target);
-  if (
-    !relative ||
-    path.isAbsolute(relative) ||
-    relative === ".." ||
-    relative.startsWith(`..${path.sep}`)
-  ) {
+  if (!relative || isOutsideRelative(relative)) {
     throw new Error("Snapshot entry escaped its temporary root");
   }
   return target;
@@ -620,14 +599,7 @@ function changedFiles(expected, actual) {
 }
 
 module.exports = {
-  MAX_SNAPSHOT_DEPTH,
-  MAX_SNAPSHOT_ENTRIES,
-  MAX_SNAPSHOT_FILE_BYTES,
-  MAX_SNAPSHOT_KEY_LENGTH,
-  MAX_SNAPSHOT_SYMLINK_BYTES,
-  MAX_SNAPSHOT_TOTAL_BYTES,
   changedFiles,
-  resolveSnapshotRoot,
   restoreDirectorySnapshot,
   snapshotsMatch,
   snapshotDirectory,

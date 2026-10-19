@@ -1,6 +1,7 @@
 #define NITRO_MARKDOWN_TESTING
 #include "NitroMD4CParser.hpp"
 #include "MarkdownTypes.hpp"
+#include "SourceOffsetMap.hpp"
 #include "flatten.hpp"
 #include "FlattenCorpus.hpp"
 #include "ConformanceCorpus.hpp"
@@ -8,6 +9,7 @@
 #include "../bindings/HybridMarkdownParser.hpp"
 #include "../bindings/HybridMarkdownSession.hpp"
 #include "../nitromd/nitromd.h"
+#include <NitroModules/NitroLogger.hpp>
 #include <iostream>
 #include <set>
 #include <cassert>
@@ -271,9 +273,9 @@ public:
 
     static void testFlattenCorpus() {
         MD4CParser parser;
-        ParserOptions options{true, true};
         for (const auto& entry : kFlattenCorpus) {
             std::string input(entry.markdown);
+            ParserOptions options = optionsFromJson(entry.optionsJson);
             auto ast = parser.parse(input, options);
             std::string actual = flattenNodeText(ast);
             std::string expected(entry.expected);
@@ -995,9 +997,20 @@ private:
         auto counts = session->addListener([&laterCalls](double, double) {
             laterCalls++;
         });
+        (void)::margelo::nitro::Logger::takeEntriesForTest();
         TestRunner::assertTrue(
             session->append("abc") == 3.0 && laterCalls == 1,
             "Session listener exceptions do not block later listeners"
+        );
+        const auto logged = ::margelo::nitro::Logger::takeEntriesForTest();
+        TestRunner::assertTrue(
+            logged.size() == 2 &&
+                logged[0].level == ::margelo::nitro::LogLevel::Error &&
+                logged[0].tag == "NitroMarkdown" &&
+                logged[0].message == "Listener callback threw an exception: listener failure" &&
+                logged[1].level == ::margelo::nitro::LogLevel::Error &&
+                logged[1].message == "Listener callback threw an unknown exception",
+            "session listener exception is logged, not thrown"
         );
         throwsStd();
         throwsOther();
@@ -3006,9 +3019,14 @@ private:
             "CallbackGuards: leaveSpan null userdata");
         TestRunner::assertEqual("1", std::to_string(MD4CParser::textNullUserdataForTest()),
             "CallbackGuards: text null userdata");
-        TestRunner::assertEqual("0", std::to_string(MD4CParser::offsetBeforeBaseForTest()),
+        char buffer[2] = {'a', 'b'};
+        SourceOffsetMap beforeBase;
+        beforeBase.reset(buffer + 1, 1, true);
+        TestRunner::assertEqual("0", std::to_string(beforeBase.byteIndexOf(buffer)),
             "CallbackGuards: offset before base");
-        TestRunner::assertEqual("0", std::to_string(MD4CParser::offsetPastBaseForTest()),
+        SourceOffsetMap pastBase;
+        pastBase.reset(buffer, 0, true);
+        TestRunner::assertEqual("0", std::to_string(pastBase.byteIndexOf(buffer + 1)),
             "CallbackGuards: offset past base");
     }
 
@@ -5068,9 +5086,9 @@ private:
             }
         }
         TestRunner::assertEqual(
-            "15848312858691512385",
+            "9657236393481092679",
             std::to_string(hash),
-            "Golden: production-flag JSON, offsets and plain text are byte-identical to the previous release output (updated for the md4c 0.6.0 reference-definition rule fix)"
+            "Golden: production-flag JSON, offsets and plain text are byte-identical to the previous release output (updated for the md4c 0.6.0 reference-definition rule fix; plain text updated for inline math, html blocks, image titles and Unicode trim)"
         );
     }
 
@@ -5116,6 +5134,37 @@ private:
         return offsets;
     }
 
+    static std::vector<OFF> sourceOffsetsOf(const std::string& text) {
+        SourceOffsetMap map;
+        map.reset(text.data(), text.size(), true);
+        std::vector<OFF> offsets;
+        offsets.reserve(text.size() + 2);
+        for (size_t index = 0; index <= text.size() + 1; index++) {
+            offsets.push_back(map.offsetOf(index));
+        }
+        return offsets;
+    }
+
+    static std::vector<OFF> sourceOffsetsOf(
+        const std::string& text,
+        const std::vector<size_t>& byteOffsets
+    ) {
+        SourceOffsetMap map;
+        map.reset(text.data(), text.size(), true);
+        std::vector<OFF> offsets;
+        offsets.reserve(byteOffsets.size());
+        for (const size_t byteOffset : byteOffsets) {
+            offsets.push_back(map.offsetOf(byteOffset));
+        }
+        return offsets;
+    }
+
+    static size_t sourceOffsetMapBytesOf(const std::string& text) {
+        SourceOffsetMap map;
+        map.reset(text.data(), text.size(), true);
+        return map.checkpointBytes();
+    }
+
     static void testSourceOffsetMappingMatchesReference() {
         std::vector<std::string> documents = hostileDocuments();
         for (auto& document : unicodeDocuments()) documents.push_back(std::move(document));
@@ -5141,7 +5190,7 @@ private:
         size_t checkedOffsets = 0;
         std::string firstMismatch;
         for (const auto& document : documents) {
-            const std::vector<OFF> actual = MD4CParser::sourceOffsetsForTest(document);
+            const std::vector<OFF> actual = sourceOffsetsOf(document);
             const std::vector<OFF> expected = referenceSourceOffsets(document);
             checkedOffsets += expected.size();
             if (actual != expected) {
@@ -5164,14 +5213,14 @@ private:
             std::vector<size_t> order(expected.size());
             for (size_t index = 0; index < order.size(); index++) order[index] = index;
             std::shuffle(order.begin(), order.end(), rng);
-            const std::vector<OFF> actual = MD4CParser::sourceOffsetsForTest(document, order);
+            const std::vector<OFF> actual = sourceOffsetsOf(document, order);
             for (size_t index = 0; index < order.size(); index++) {
                 if (actual[index] != expected[order[index]]) {
                     shuffledMismatches++;
                     break;
                 }
             }
-            if (MD4CParser::sourceOffsetMapBytesForTest(document) > document.size() / 8 + 16) {
+            if (sourceOffsetMapBytesOf(document) > document.size() / 8 + 16) {
                 oversizedMaps++;
             }
         }
@@ -5187,12 +5236,12 @@ private:
         );
         TestRunner::assertEqual(
             "0",
-            std::to_string(MD4CParser::sourceOffsetMapBytesForTest(std::string(4096, 'a'))),
+            std::to_string(sourceOffsetMapBytesOf(std::string(4096, 'a'))),
             "Offset map: ASCII needs no table"
         );
         TestRunner::assertEqual(
             "0",
-            std::to_string(MD4CParser::sourceOffsetMapBytesForTest(std::string(4096, '\xFF'))),
+            std::to_string(sourceOffsetMapBytesOf(std::string(4096, '\xFF'))),
             "Offset map: input without valid multibyte sequences needs no table"
         );
         constexpr size_t kMapProbeBytes = 3 * 1024 * 1024;
@@ -5205,7 +5254,7 @@ private:
             std::string("a\xF0\x9F\x98\x80"),
         }) {
             const std::string text = repeatToSize(unit, kMapProbeBytes);
-            const size_t mapBytes = MD4CParser::sourceOffsetMapBytesForTest(text);
+            const size_t mapBytes = sourceOffsetMapBytesOf(text);
             TestRunner::assertTrue(
                 mapBytes > 0 && mapBytes <= text.size() / 16 + 16,
                 "Offset map: " + jsonEscape(unit) + " text uses at most one sixteenth of the input (" +

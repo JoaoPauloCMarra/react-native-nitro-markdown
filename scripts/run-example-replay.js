@@ -4,7 +4,12 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { isIP } = require("node:net");
-const { FLOW_ID_PATTERN, validateSuite } = require("./replay-manifest");
+const { isOutsideRelative } = require("./path-guards");
+const {
+  FLOW_ID_PATTERN,
+  hasManifestHeader,
+  validateSuite,
+} = require("./replay-manifest");
 
 const projectRoot = path.resolve(__dirname, "..");
 const coveragePath = path.join(
@@ -159,7 +164,7 @@ function readSuites(
 ) {
   const root = path.resolve(path.dirname(manifestFile), "..");
   const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8"));
-  if (manifest.version !== 1 || !Array.isArray(manifest.suites)) {
+  if (!hasManifestHeader(manifest)) {
     throw new Error(
       "Markdown replay coverage manifest must use version 1 and list suites",
     );
@@ -198,12 +203,7 @@ function readSuites(
 
 function isWithinDirectory(parent, candidate) {
   const relative = path.relative(path.resolve(parent), path.resolve(candidate));
-  return (
-    relative === "" ||
-    (!relative.startsWith(`..${path.sep}`) &&
-      relative !== ".." &&
-      !path.isAbsolute(relative))
-  );
+  return relative === "" || !isOutsideRelative(relative);
 }
 
 function createArtifactsDirectory(makeTempDirectory = fs.mkdtempSync) {

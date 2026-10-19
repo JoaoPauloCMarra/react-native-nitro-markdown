@@ -1,5 +1,6 @@
 import "./setup";
 import { parseMarkdown, getFlattenedText } from "../headless";
+import type { MarkdownNode } from "../headless";
 import { mockParser } from "./setup";
 
 import corpus from "../__fixtures__/flatten-corpus.json";
@@ -8,7 +9,7 @@ describe("flatten differential corpus (JS getFlattenedText)", () => {
   beforeEach(() => jest.clearAllMocks());
 
   it.each(corpus)("flattens $name", (entry) => {
-    const ast = parseMarkdown(entry.markdown);
+    const ast = "ast" in entry ? (entry.ast as MarkdownNode) : parseMarkdown(entry.markdown);
     expect(getFlattenedText(ast)).toBe(entry.expected);
   });
 

@@ -1,4 +1,5 @@
 #include "NitroMD4CParser.hpp"
+#include "SourceOffsetMap.hpp"
 #include "flatten.hpp"
 #include "../nitromd/nitromd.h"
 
@@ -20,112 +21,12 @@ namespace {
 
 // Hard input cap: oversized documents fail deterministically instead of
 // exhausting memory. The JavaScript boundary enforces the same cap earlier.
-static constexpr size_t kMaxInputBytes = 10 * 1024 * 1024;
 static constexpr size_t kMinImageAltBudgetBytes = 4096;
 
 static_assert(
     kMaxInputBytes <= static_cast<size_t>(std::numeric_limits<MD_SIZE>::max()),
     "The input cap must fit the md4c size type"
 );
-
-// Safe pointer offset calculation — guards against out-of-allocation arithmetic.
-// md4c callbacks receive pointers into the input buffer, so arithmetic is valid
-// as long as the input string is stable. This check catches any edge cases.
-static MD_OFFSET safeOffset(const char* text, const char* base, size_t baseSize) noexcept {
-    if (text < base) return 0;
-    ptrdiff_t diff = text - base;
-    if (diff < 0 || static_cast<size_t>(diff) > baseSize) return 0;
-    // Check MD_OFFSET won't truncate
-    if (static_cast<size_t>(diff) > static_cast<size_t>(std::numeric_limits<MD_OFFSET>::max())) return 0;
-    return static_cast<MD_OFFSET>(diff);
-}
-
-static size_t utf8SequenceLength(
-    const unsigned char* bytes,
-    size_t remaining
-) noexcept {
-    const unsigned char first = bytes[0];
-    const auto isContinuation = [](unsigned char value) {
-        return (value & 0xC0) == 0x80;
-    };
-
-    if (first <= 0x7F) return 1;
-    if (
-        first >= 0xC2 &&
-        first <= 0xDF &&
-        remaining >= 2 &&
-        isContinuation(bytes[1])
-    ) {
-        return 2;
-    }
-    if (
-        first >= 0xE0 &&
-        first <= 0xEF &&
-        remaining >= 3 &&
-        isContinuation(bytes[1]) &&
-        isContinuation(bytes[2]) &&
-        !(first == 0xE0 && bytes[1] < 0xA0) &&
-        !(first == 0xED && bytes[1] >= 0xA0)
-    ) {
-        return 3;
-    }
-    if (
-        first >= 0xF0 &&
-        first <= 0xF4 &&
-        remaining >= 4 &&
-        isContinuation(bytes[1]) &&
-        isContinuation(bytes[2]) &&
-        isContinuation(bytes[3]) &&
-        !(first == 0xF0 && bytes[1] < 0x90) &&
-        !(first == 0xF4 && bytes[1] >= 0x90)
-    ) {
-        return 4;
-    }
-    return 1;
-}
-
-static constexpr size_t kOffsetCheckpointStride = 64;
-static constexpr uint32_t kOffsetCheckpointBackShift = 28;
-static constexpr uint32_t kOffsetCheckpointUtf16Mask =
-    (uint32_t{1} << kOffsetCheckpointBackShift) - 1;
-
-static_assert(
-    kMaxInputBytes <= kOffsetCheckpointUtf16Mask,
-    "UTF-16 offset checkpoints store offsets in 28 bits"
-);
-
-static std::vector<uint32_t> createUtf16OffsetCheckpoints(
-    const char* text,
-    size_t size
-) {
-    const auto* bytes = reinterpret_cast<const unsigned char*>(text);
-    size_t firstHighByte = 0;
-    while (firstHighByte < size && bytes[firstHighByte] < 0x80) firstHighByte++;
-    if (firstHighByte == size) return {};
-
-    std::vector<uint32_t> checkpoints;
-    checkpoints.reserve(size / kOffsetCheckpointStride + 1);
-    size_t byteIndex = 0;
-    size_t utf16Index = 0;
-    size_t nextCheckpoint = 0;
-    while (byteIndex < size) {
-        const size_t sequenceLength =
-            utf8SequenceLength(bytes + byteIndex, size - byteIndex);
-        const size_t sequenceEnd = byteIndex + sequenceLength;
-        while (nextCheckpoint < sequenceEnd) {
-            checkpoints.push_back(
-                static_cast<uint32_t>(utf16Index) |
-                (static_cast<uint32_t>(nextCheckpoint - byteIndex)
-                    << kOffsetCheckpointBackShift)
-            );
-            nextCheckpoint += kOffsetCheckpointStride;
-        }
-        utf16Index += sequenceLength == 4 ? 2 : 1;
-        byteIndex = sequenceEnd;
-    }
-    if (utf16Index == size) return {};
-    return checkpoints;
-}
 
 [[noreturn]] static void throwParseFailure(int result, const char* parserLog) {
     if (std::strstr(parserLog, "alloc() failed") != nullptr) {
@@ -188,11 +89,7 @@ public:
     std::string currentText;
     const char* inputText = nullptr;
     size_t inputTextSize = 0;
-    std::vector<uint32_t> sourceOffsetCheckpoints;
-    mutable size_t sourceOffsetCursorByte = 0;
-    mutable size_t sourceOffsetCursorUtf16 = 0;
-    bool sourceOffsetsTracked = false;
-    bool sourceOffsetsIdentity = false;
+    SourceOffsetMap offsets;
     OFF currentTextBeg = 0;
     OFF lastTextEnd = 0;
     size_t lastTextByteEnd = 0;
@@ -202,28 +99,18 @@ public:
     size_t imageAltBytes = 0;
     size_t parseBaseOffset = 0;
     bool forceCallbackFailure = false;
-    std::string callbackError;
     std::exception_ptr callbackException;
     char parserLog[128] = {0};
     size_t nodeCount = 0;
 
     std::shared_ptr<MarkdownNode> makeNode(NodeType type) {
         if (nodeCount >= kMaxAstNodes) {
-            callbackError = astNodeBudgetExceededMessage();
-            throw std::runtime_error(callbackError);
+            throw std::runtime_error(astNodeBudgetExceededMessage());
         }
         nodeCount += 1;
         return std::make_shared<MarkdownNode>(type);
     }
 
-    void addChild(
-        const std::shared_ptr<MarkdownNode>& parent,
-        std::shared_ptr<MarkdownNode> child
-    ) {
-        if (!parent || !child) return;
-        parent->addChild(std::move(child));
-    }
-    
     void reset() {
         nodeCount = 0;
         root = makeNode(NodeType::Document);
@@ -240,7 +127,6 @@ public:
         imageAltBytes = 0;
         parseBaseOffset = 0;
         forceCallbackFailure = false;
-        callbackError.clear();
         callbackException = nullptr;
         parserLog[0] = '\0';
     }
@@ -259,47 +145,7 @@ public:
         inputText = text;
         inputTextSize = size;
         nextBreakSearchByteOffset = 0;
-        sourceOffsetCheckpoints.clear();
-        sourceOffsetCursorByte = 0;
-        sourceOffsetCursorUtf16 = 0;
-        sourceOffsetsTracked = trackOffsets;
-        sourceOffsetsIdentity = false;
-        if (!trackOffsets) return;
-
-        sourceOffsetCheckpoints = createUtf16OffsetCheckpoints(text, size);
-        sourceOffsetsIdentity = sourceOffsetCheckpoints.empty();
-    }
-
-    OFF sourceOffset(size_t byteOffset) const {
-        const size_t index =
-            byteOffset > inputTextSize ? inputTextSize : byteOffset;
-        if (!sourceOffsetsTracked) return 0;
-        if (sourceOffsetsIdentity) return static_cast<OFF>(index);
-
-        size_t byteIndex = sourceOffsetCursorByte;
-        size_t utf16Index = sourceOffsetCursorUtf16;
-        if (index < byteIndex || index - byteIndex >= kOffsetCheckpointStride) {
-            const size_t checkpoint = std::min(
-                index / kOffsetCheckpointStride,
-                sourceOffsetCheckpoints.size() - 1
-            );
-            const uint32_t packed = sourceOffsetCheckpoints[checkpoint];
-            byteIndex = checkpoint * kOffsetCheckpointStride -
-                (packed >> kOffsetCheckpointBackShift);
-            utf16Index = packed & kOffsetCheckpointUtf16Mask;
-        }
-
-        const auto* bytes = reinterpret_cast<const unsigned char*>(inputText);
-        while (byteIndex < inputTextSize) {
-            const size_t sequenceLength =
-                utf8SequenceLength(bytes + byteIndex, inputTextSize - byteIndex);
-            if (index < byteIndex + sequenceLength) break;
-            byteIndex += sequenceLength;
-            utf16Index += sequenceLength == 4 ? 2 : 1;
-        }
-        sourceOffsetCursorByte = byteIndex;
-        sourceOffsetCursorUtf16 = utf16Index;
-        return static_cast<OFF>(utf16Index);
+        offsets.reset(text, size, trackOffsets);
     }
 
     void noteEnterOffset(MD_OFFSET byteOffset) {
@@ -310,9 +156,7 @@ public:
     }
 
     std::pair<OFF, OFF> sourceRange(const char* text, MD_SIZE size) {
-        size_t byteBeg = static_cast<size_t>(
-            safeOffset(text, inputText, inputTextSize)
-        );
+        size_t byteBeg = offsets.byteIndexOf(text);
         if (byteBeg == 0 && text != inputText) {
             byteBeg = std::max(lastTextByteEnd, lastEnterByteOffset);
         }
@@ -321,8 +165,8 @@ public:
             byteEnd = inputTextSize;
         }
         lastTextByteEnd = byteEnd;
-        lastTextEnd = sourceOffset(byteEnd);
-        return {sourceOffset(byteBeg), lastTextEnd};
+        lastTextEnd = offsets.offsetOf(byteEnd);
+        return {offsets.offsetOf(byteBeg), lastTextEnd};
     }
 
     std::shared_ptr<MarkdownNode> makeTableCell(
@@ -343,15 +187,14 @@ public:
     void appendBreakNode(NodeType type, bool hardBreak) {
         flushText();
         const auto [beg, end] = sourceBreakRange(hardBreak);
-        if (nodeStack.empty()) return;
         auto node = makeNode(type);
         node->beg = beg;
         node->end = end;
-        addChild(nodeStack.top(), std::move(node));
+        nodeStack.top()->addChild(std::move(node));
     }
 
     std::pair<OFF, OFF> sourceBreakRange(bool hardBreak) {
-        if (!sourceOffsetsTracked) return {0, 0};
+        if (!offsets.tracked()) return {0, 0};
 
         const size_t searchBeg = std::min(
             std::max({
@@ -399,47 +242,37 @@ public:
 
         nextBreakSearchByteOffset = byteEnd;
         lastTextByteEnd = byteEnd;
-        lastTextEnd = sourceOffset(byteEnd);
-        return {sourceOffset(byteBeg), lastTextEnd};
+        lastTextEnd = offsets.offsetOf(byteEnd);
+        return {offsets.offsetOf(byteBeg), lastTextEnd};
     }
     
     void flushText() {
         if (!currentText.empty()) {
-            if (!nodeStack.empty()) {
-                auto textNode = makeNode(NodeType::Text);
-                textNode->content = std::move(currentText);
-                textNode->beg = currentTextBeg;
-                textNode->end = lastTextEnd;
-                addChild(nodeStack.top(), std::move(textNode));
-                currentText.clear();
-            } else {
-#if defined(NITROMARKDOWN_DEBUG) || defined(DEBUG)
-                // This indicates a parser state bug - text available but no node to attach it to
-                fprintf(stderr, "[NitroMarkdown] Warning: flushText called with empty nodeStack, text dropped: %.50s\n", currentText.c_str());
-#endif
-                currentText.clear();
-            }
+            auto textNode = makeNode(NodeType::Text);
+            textNode->content = std::move(currentText);
+            textNode->beg = currentTextBeg;
+            textNode->end = lastTextEnd;
+            nodeStack.top()->addChild(std::move(textNode));
+            currentText.clear();
         }
     }
     
     void pushNode(std::shared_ptr<MarkdownNode> node, OFF beg = 0) {
         flushText();
-        if (node && !nodeStack.empty()) {
-            if (nodeStack.size() >= kMaxAstDepth) {
-                callbackError =
-                    "Markdown AST depth exceeds the maximum of " +
-                    std::to_string(kMaxAstDepth);
-                throw std::runtime_error(callbackError);
-            }
-            const auto& parent = nodeStack.top();
-            OFF floor = parent->beg;
-            if (!parent->children.empty() && parent->children.back()) {
-                floor = std::max(floor, parent->children.back()->end);
-            }
-            node->beg = std::max(beg, floor);
-            addChild(parent, node);
-            nodeStack.push(std::move(node));
+        if (nodeStack.size() >= kMaxAstDepth) {
+            throw std::runtime_error(
+                "Markdown AST depth exceeds the maximum of " +
+                std::to_string(kMaxAstDepth)
+            );
         }
+        const auto& parent = nodeStack.top();
+        OFF floor = parent->beg;
+        if (!parent->children.empty() && parent->children.back()) {
+            floor = std::max(floor, parent->children.back()->end);
+        }
+        node->beg = std::max(beg, floor);
+        parent->addChild(node);
+        nodeStack.push(std::move(node));
     }
     
     static OFF containedEnd(const MarkdownNode& node, OFF end) {
@@ -460,22 +293,17 @@ public:
 
     std::string flattenImageAlt(const MarkdownNode& image) {
         std::string alt;
-        try {
-            for (const auto& child : image.children) {
-                alt += flattenNodeText(child);
-            }
-        } catch (const std::exception& error) {
-            callbackError = error.what();
-            throw;
+        for (const auto& child : image.children) {
+            alt += flattenNodeText(child);
         }
         alt += currentText;
         const size_t maxImageAltBytes =
             std::max(inputTextSize, kMinImageAltBudgetBytes) * 2;
         if (alt.size() > maxImageAltBytes - std::min(imageAltBytes, maxImageAltBytes)) {
-            callbackError =
+            throw std::runtime_error(
                 "Markdown flattened text exceeds the maximum of " +
-                std::to_string(maxImageAltBytes) + " bytes";
-            throw std::runtime_error(callbackError);
+                std::to_string(maxImageAltBytes) + " bytes"
+            );
         }
         imageAltBytes += alt.size();
         return alt;
@@ -528,7 +356,7 @@ public:
         if (impl->forceCallbackFailure) return 7;
         off += static_cast<MD_OFFSET>(impl->parseBaseOffset);
         impl->noteEnterOffset(off);
-        off = impl->sourceOffset(off);
+        off = impl->offsets.offsetOf(off);
 
         switch (type) {
             case MD_BLOCK_DOC:
@@ -599,11 +427,7 @@ public:
                 break;
             }
 
-            case MD_BLOCK_FOOTNOTE_DEF: {
-                impl->pushNode(impl->makeNode(NodeType::Paragraph), off);
-                break;
-            }
-
+            case MD_BLOCK_FOOTNOTE_DEF:
             case MD_BLOCK_P: {
                 impl->pushNode(impl->makeNode(NodeType::Paragraph), off);
                 break;
@@ -657,7 +481,7 @@ public:
         auto* impl = static_cast<Impl*>(userdata);
         if (impl == nullptr) return 1; // Signal error to md4c
         off += static_cast<MD_OFFSET>(impl->parseBaseOffset);
-        off = impl->sourceOffset(off);
+        off = impl->offsets.offsetOf(off);
 
         switch (type) {
             case MD_BLOCK_DOC:
@@ -682,7 +506,7 @@ public:
         if (impl == nullptr) return 1; // Signal error to md4c
         off += static_cast<MD_OFFSET>(impl->parseBaseOffset);
         impl->noteEnterOffset(off);
-        off = impl->sourceOffset(off);
+        off = impl->offsets.offsetOf(off);
 
         switch (type) {
             case MD_SPAN_EM: {
@@ -769,27 +593,25 @@ public:
             impl->lastSpanByteEnd,
             std::min(static_cast<size_t>(off), impl->inputTextSize)
         );
-        off = impl->sourceOffset(off);
+        off = impl->offsets.offsetOf(off);
 
         if (!isMappedSpan(type)) return 0;
 
-        if (!impl->nodeStack.empty()) {
-            auto currentNode = impl->nodeStack.top();
+        auto currentNode = impl->nodeStack.top();
 
-            switch (type) {
-                case MD_SPAN_CODE:
-                    currentNode->content = impl->currentText;
-                    impl->currentText.clear();
-                    break;
+        switch (type) {
+            case MD_SPAN_CODE:
+                currentNode->content = impl->currentText;
+                impl->currentText.clear();
+                break;
 
-                case MD_SPAN_IMG:
-                    currentNode->alt = impl->flattenImageAlt(*currentNode);
-                    impl->currentText.clear();
-                    break;
+            case MD_SPAN_IMG:
+                currentNode->alt = impl->flattenImageAlt(*currentNode);
+                impl->currentText.clear();
+                break;
 
-                default:
-                    break;
-            }
+            default:
+                break;
         }
 
         impl->popNode(off);
@@ -825,7 +647,7 @@ public:
 
             case MD_TEXT_HTML:
                 impl->flushText();
-                if (!impl->nodeStack.empty()) {
+                {
                     const auto [beg, end] = impl->sourceRange(text, size);
 
                     if (impl->nodeStack.top()->type == NodeType::HtmlBlock) {
@@ -843,7 +665,7 @@ public:
                     node->content = std::string(text, size);
                     node->beg = beg;
                     node->end = end;
-                    impl->addChild(impl->nodeStack.top(), node);
+                    impl->nodeStack.top()->addChild(std::move(node));
                 }
                 break;
 
@@ -984,52 +806,12 @@ int MD4CParser::textNullUserdataForTest() {
     return Impl::text(MD_TEXT_NORMAL, "x", 1, nullptr);
 }
 
-std::vector<OFF> MD4CParser::sourceOffsetsForTest(const std::string& text) {
-    Impl impl;
-    impl.setInput(text.data(), text.size(), true);
-    std::vector<OFF> offsets;
-    offsets.reserve(text.size() + 2);
-    for (size_t index = 0; index <= text.size() + 1; index++) {
-        offsets.push_back(impl.sourceOffset(index));
-    }
-    return offsets;
-}
-
-std::vector<OFF> MD4CParser::sourceOffsetsForTest(
-    const std::string& text,
-    const std::vector<size_t>& byteOffsets
-) {
-    Impl impl;
-    impl.setInput(text.data(), text.size(), true);
-    std::vector<OFF> offsets;
-    offsets.reserve(byteOffsets.size());
-    for (const size_t byteOffset : byteOffsets) {
-        offsets.push_back(impl.sourceOffset(byteOffset));
-    }
-    return offsets;
-}
-
 std::string MD4CParser::parseFailureMessageForTest(int result, const char* parserLog) {
     try {
         throwParseFailure(result, parserLog);
     } catch (const std::exception& error) {
         return error.what();
     }
-}
-
-size_t MD4CParser::sourceOffsetMapBytesForTest(const std::string& text) {
-    return createUtf16OffsetCheckpoints(text.data(), text.size()).capacity() *
-        sizeof(uint32_t);
-}
-
-int MD4CParser::offsetBeforeBaseForTest() {
-    char buffer[2] = {'a', 'b'};
-    return safeOffset(buffer, buffer + 1, 1);
-}
-
-int MD4CParser::offsetPastBaseForTest() {
-    char buffer[2] = {'a', 'b'};
-    return safeOffset(buffer + 1, buffer, 0);
 }
 #endif
 

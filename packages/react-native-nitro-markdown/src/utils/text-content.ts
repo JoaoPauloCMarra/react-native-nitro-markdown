@@ -73,10 +73,11 @@ export const readFlattenedText = (node: MarkdownNode): string => {
     if (
       current.type === "text" ||
       current.type === "code_inline" ||
-      current.type === "math_inline" ||
       current.type === "html_inline"
     ) {
       value = current.content ?? "";
+    } else if (current.type === "math_inline") {
+      value = current.content ?? frame.parts.join("");
     } else if (
       current.type === "code_block" ||
       current.type === "math_block" ||

@@ -1,5 +1,5 @@
 import type { MarkdownNode, MarkdownNodeType } from "../headless";
-import { invalidAstError } from "../errors";
+import { invalidAstError, utf8ByteLength } from "../errors";
 
 export const MAX_AST_DEPTH = 256;
 export const MAX_AST_NODES = 100_000;
@@ -158,30 +158,6 @@ function keyName(key: PropertyKey): string {
     throw invalidAstError("AST key exceeds the maximum length");
   }
   return key;
-}
-
-function utf8ByteLength(value: string): number {
-  let bytes = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
-    if (code <= 0x7f) {
-      bytes += 1;
-    } else if (code <= 0x7ff) {
-      bytes += 2;
-    } else if (code >= 0xd800 && code <= 0xdbff) {
-      const next = value.charCodeAt(index + 1);
-      if (next >= 0xdc00 && next <= 0xdfff) {
-        bytes += 4;
-        index += 1;
-      } else {
-        bytes += 3;
-      }
-    } else {
-      bytes += 3;
-    }
-    if (bytes > MAX_AST_STRING_BYTES) break;
-  }
-  return bytes;
 }
 
 function assertString(value: unknown, label: string, state: AstState): void {

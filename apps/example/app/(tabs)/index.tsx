@@ -32,6 +32,7 @@ import {
 } from "react-native-nitro-markdown";
 import { useLocalSearchParams } from "expo-router";
 import { mathRenderers } from "react-native-nitro-markdown/math";
+import { collectNodeTypes, hasSourceOffsets } from "../../ast-utils";
 import {
   BenchBar,
   ExampleActionButton,
@@ -129,7 +130,8 @@ const formatRatio = (slow: number | null, fast: number | null): string =>
 
 type LogEntry = {
   text: string;
-  type: "header" | "pass" | "fail" | "info" | "skip" | "spacer";
+  type: "header" | "pass" | "fail" | "info" | "skip" | "spacer" | "summary";
+  failed?: boolean;
 };
 
 const countLogs = (logs: readonly LogEntry[], type: LogEntry["type"]): number =>
@@ -174,14 +176,17 @@ function useLayoutTimer<Payload>() {
   return { target, measure, onLayout };
 }
 
+type ParseStats = {
+  average: number;
+  p50: number;
+  p95: number;
+  iterations: number;
+};
+
 type BenchmarkResults = {
-  nitroTime: number;
-  nitroP50: number;
-  nitroP95: number;
-  nitroIterations: number;
-  nitroNoOffsetsTime: number;
-  nitroNoOffsetsP50: number;
-  nitroNoOffsetsP95: number;
+  nitro: ParseStats | null;
+  nitroNoOffsets: ParseStats | null;
+  stepErrors: string[];
   mathjaxTime: number | null;
   ratexTime: number | null;
   nitroRenderTime: number | null;
@@ -255,357 +260,291 @@ const getPercentile = (values: number[], percentile: number): number => {
   return sorted[index] ?? 0;
 };
 
-function collectNodeTypes(ast: MarkdownNode): Set<string> {
-  const allTypes = new Set<string>();
-  const walk = (node: MarkdownNode) => {
-    allTypes.add(node.type);
-    node.children?.forEach(walk);
-  };
-  walk(ast);
-  return allTypes;
+class SmokeFailure {
+  constructor(readonly detail?: string) {}
 }
 
-async function runSmokeTests(): Promise<LogEntry[]> {
-  const logs: LogEntry[] = [];
-  const supportsNativeRuntime = NATIVE_RUNTIME_PLATFORMS.includes(
-    Platform.OS as (typeof NATIVE_RUNTIME_PLATFORMS)[number],
-  );
+type SmokeOutcome = string | void | SmokeFailure;
 
-  const pass = (name: string, detail?: string) => {
-    logs.push({
-      text: `PASS  ${name}${detail ? ` — ${detail}` : ""}`,
-      type: "pass",
-    });
-  };
-  const fail = (name: string, detail?: string) => {
-    logs.push({
-      text: `FAIL  ${name}${detail ? ` — ${detail}` : ""}`,
-      type: "fail",
-    });
-  };
-  const info = (name: string, detail?: string) => {
-    logs.push({
-      text: `INFO  ${name}${detail ? ` — ${detail}` : ""}`,
-      type: "info",
-    });
-  };
-  const skip = (name: string, detail?: string) => {
-    logs.push({
-      text: `SKIP  ${name}${detail ? ` — ${detail}` : ""}`,
-      type: "skip",
-    });
-  };
+const verdict = (
+  ok: boolean,
+  passDetail?: string,
+  failDetail?: string,
+): SmokeOutcome => (ok ? passDetail : new SmokeFailure(failDetail));
+
+function createSmokeLog() {
+  const logs: LogEntry[] = [];
+  const line =
+    (label: string, type: "pass" | "fail" | "info" | "skip") =>
+    (name: string, detail?: string) => {
+      logs.push({ text: `${label}  ${name}${detail ? ` — ${detail}` : ""}`, type });
+    };
+  const pass = line("PASS", "pass");
+  const fail = line("FAIL", "fail");
+  const info = line("INFO", "info");
+  const skip = line("SKIP", "skip");
   const header = (text: string) => {
     logs.push({ text, type: "header" });
   };
   const spacer = () => {
     logs.push({ text: "", type: "spacer" });
   };
+  const check = async (
+    name: string,
+    run: () => SmokeOutcome | Promise<SmokeOutcome>,
+  ) => {
+    try {
+      const outcome = await run();
+      if (outcome instanceof SmokeFailure) fail(name, outcome.detail);
+      else pass(name, typeof outcome === "string" ? outcome : undefined);
+    } catch (e) {
+      fail(name, String(e));
+    }
+  };
+  return { logs, pass, fail, info, skip, header, spacer, check };
+}
+
+async function runSmokeTests(): Promise<LogEntry[]> {
+  const { logs, pass, fail, info, skip, header, spacer, check } =
+    createSmokeLog();
+  const supportsNativeRuntime = NATIVE_RUNTIME_PLATFORMS.includes(
+    Platform.OS as (typeof NATIVE_RUNTIME_PLATFORMS)[number],
+  );
 
   header("HEADLESS API");
   info("Current platform", Platform.OS);
 
-  try {
+  await check("parseMarkdown", () => {
     const ast = parseMarkdown("# Hello\n\nWorld");
-    if (ast.type === "document" && (ast.children?.length ?? 0) > 0) {
-      pass(
-        "parseMarkdown",
-        `root=${ast.type}, children=${ast.children?.length}`,
-      );
-    } else {
-      fail("parseMarkdown", "unexpected AST shape");
-    }
-  } catch (e) {
-    fail("parseMarkdown", String(e));
-  }
+    return verdict(
+      ast.type === "document" && (ast.children?.length ?? 0) > 0,
+      `root=${ast.type}, children=${ast.children?.length}`,
+      "unexpected AST shape",
+    );
+  });
 
-  try {
+  await check("parseMarkdownWithOptions", () => {
     const ast = parseMarkdownWithOptions("# Hello", { gfm: true });
-    if (ast.type === "document" && (ast.children?.length ?? 0) > 0) {
-      pass("parseMarkdownWithOptions");
-    } else {
-      fail("parseMarkdownWithOptions", "unexpected AST shape");
-    }
-  } catch (e) {
-    fail("parseMarkdownWithOptions", String(e));
-  }
+    return verdict(
+      ast.type === "document" && (ast.children?.length ?? 0) > 0,
+      undefined,
+      "unexpected AST shape",
+    );
+  });
 
-  try {
+  await check("parseMarkdown + GFM tables", () => {
     const gfmAst = parseMarkdown("| A |\n|---|\n| B |", { gfm: true });
-    if (gfmAst.children?.some((c) => c.type === "table")) {
-      pass("parseMarkdown + GFM tables");
-    } else {
-      fail("parseMarkdown + GFM tables", "no table node found");
-    }
-  } catch (e) {
-    fail("parseMarkdown + GFM tables", String(e));
-  }
+    return verdict(
+      gfmAst.children?.some((c) => c.type === "table") ?? false,
+      undefined,
+      "no table node found",
+    );
+  });
 
-  try {
+  await check("parseMarkdown + GFM disabled", () => {
     const gfmOffAst = parseMarkdown("| A |\n|---|\n| B |", { gfm: false });
-    if (!collectNodeTypes(gfmOffAst).has("table")) {
-      pass("parseMarkdown + GFM disabled", "table syntax stays plain");
-    } else {
-      fail("parseMarkdown + GFM disabled", "unexpected table node");
-    }
-  } catch (e) {
-    fail("parseMarkdown + GFM disabled", String(e));
-  }
+    return verdict(
+      !collectNodeTypes(gfmOffAst).has("table"),
+      "table syntax stays plain",
+      "unexpected table node",
+    );
+  });
 
-  try {
+  await check("parseMarkdown + math", () => {
     const mathAst = parseMarkdown("$$x^2$$", { math: true });
-    if (JSON.stringify(mathAst).includes("math_block")) {
-      pass("parseMarkdown + math");
-    } else {
-      fail("parseMarkdown + math", "no math_block node");
-    }
-  } catch (e) {
-    fail("parseMarkdown + math", String(e));
-  }
+    return verdict(
+      JSON.stringify(mathAst).includes("math_block"),
+      undefined,
+      "no math_block node",
+    );
+  });
 
-  try {
+  await check("parseMarkdown + math disabled", () => {
     const mathOffAst = parseMarkdown("$x^2$", { math: false });
-    if (!collectNodeTypes(mathOffAst).has("math_inline")) {
-      pass("parseMarkdown + math disabled", "dollar spans stay plain");
-    } else {
-      fail("parseMarkdown + math disabled", "unexpected math_inline node");
-    }
-  } catch (e) {
-    fail("parseMarkdown + math disabled", String(e));
-  }
+    return verdict(
+      !collectNodeTypes(mathOffAst).has("math_inline"),
+      "dollar spans stay plain",
+      "unexpected math_inline node",
+    );
+  });
 
-  try {
-    const hasOffsets = (node: MarkdownNode): boolean =>
-      node.beg !== undefined ||
-      node.end !== undefined ||
-      (node.children?.some(hasOffsets) ?? false);
+  await check("parseMarkdown + sourceOffsets:false", () => {
     const withOffsets = parseMarkdown("# Hello\n\nWorld");
     const leanAst = parseMarkdownWithOptions("# Hello\n\nWorld", {
       sourceOffsets: false,
     });
-    if (hasOffsets(withOffsets) && !hasOffsets(leanAst)) {
-      pass(
-        "parseMarkdown + sourceOffsets:false",
-        "beg/end omitted natively",
-      );
-    } else {
-      fail(
-        "parseMarkdown + sourceOffsets:false",
-        hasOffsets(leanAst)
-          ? "offsets still present"
-          : "default missing offsets",
-      );
-    }
-  } catch (e) {
-    fail("parseMarkdown + sourceOffsets:false", String(e));
-  }
-
-  try {
-    const htmlDefaultAst = parseMarkdown("Hello <span>inline</span>");
-    const htmlDefaultTypes = collectNodeTypes(htmlDefaultAst);
-    if (
-      !htmlDefaultTypes.has("html_inline") &&
-      !htmlDefaultTypes.has("html_block")
-    ) {
-      pass("parseMarkdown + HTML default", "raw HTML AST disabled");
-    } else {
-      fail("parseMarkdown + HTML default", "unexpected raw HTML node");
-    }
-  } catch (e) {
-    fail("parseMarkdown + HTML default", String(e));
-  }
-
-  try {
-    const htmlAst = parseMarkdown(
-      "Hello <span>inline</span>\n\n<div>block</div>",
-      { html: true },
+    return verdict(
+      hasSourceOffsets(withOffsets) && !hasSourceOffsets(leanAst),
+      "beg/end omitted natively",
+      hasSourceOffsets(leanAst)
+        ? "offsets still present"
+        : "default missing offsets",
     );
-    const allTypes = collectNodeTypes(htmlAst);
+  });
 
-    if (allTypes.has("html_inline") && allTypes.has("html_block")) {
-      pass("parseMarkdown + HTML", "html_inline + html_block");
-    } else {
-      fail("parseMarkdown + HTML", "missing raw HTML nodes");
-    }
-  } catch (e) {
-    fail("parseMarkdown + HTML", String(e));
-  }
+  await check("parseMarkdown + HTML default", () => {
+    const htmlDefaultTypes = collectNodeTypes(
+      parseMarkdown("Hello <span>inline</span>"),
+    );
+    return verdict(
+      !htmlDefaultTypes.has("html_inline") &&
+        !htmlDefaultTypes.has("html_block"),
+      "raw HTML AST disabled",
+      "unexpected raw HTML node",
+    );
+  });
 
-  try {
+  await check("parseMarkdown + HTML", () => {
+    const allTypes = collectNodeTypes(
+      parseMarkdown("Hello <span>inline</span>\n\n<div>block</div>", {
+        html: true,
+      }),
+    );
+    return verdict(
+      allTypes.has("html_inline") && allTypes.has("html_block"),
+      "html_inline + html_block",
+      "missing raw HTML nodes",
+    );
+  });
+
+  await check("extractPlainText", () => {
     const plain = extractPlainText("**bold** and *italic*");
-    if (plain.includes("bold") && plain.includes("italic")) {
-      pass("extractPlainText", `"${plain.trim().slice(0, 40)}"`);
-    } else {
-      fail("extractPlainText", `got "${plain.trim().slice(0, 40)}"`);
-    }
-  } catch (e) {
-    fail("extractPlainText", String(e));
-  }
+    const excerpt = plain.trim().slice(0, 40);
+    return verdict(
+      plain.includes("bold") && plain.includes("italic"),
+      `"${excerpt}"`,
+      `got "${excerpt}"`,
+    );
+  });
 
-  try {
+  await check("extractPlainTextWithOptions", () => {
     const plain = extractPlainTextWithOptions("| A |\n|---|\n| B |", {
       gfm: true,
     });
-    if (plain.includes("A") && plain.includes("B")) {
-      pass("extractPlainTextWithOptions", `"${plain.trim().slice(0, 40)}"`);
-    } else {
-      fail("extractPlainTextWithOptions", `got "${plain.trim().slice(0, 40)}"`);
-    }
-  } catch (e) {
-    fail("extractPlainTextWithOptions", String(e));
-  }
+    const excerpt = plain.trim().slice(0, 40);
+    return verdict(
+      plain.includes("A") && plain.includes("B"),
+      `"${excerpt}"`,
+      `got "${excerpt}"`,
+    );
+  });
 
-  try {
-    parseMarkdownWithOptions("12345", { maxInputLength: 4 });
-    fail("maxInputLength", "oversized input was accepted");
-  } catch (e) {
-    if (e instanceof MarkdownError && e.code === "input_too_large") {
-      pass("maxInputLength", "oversized input rejected with typed error");
-    } else {
-      fail("maxInputLength", String(e));
+  await check("maxInputLength", () => {
+    try {
+      parseMarkdownWithOptions("12345", { maxInputLength: 4 });
+    } catch (e) {
+      return e instanceof MarkdownError && e.code === "input_too_large"
+        ? "oversized input rejected with typed error"
+        : new SmokeFailure(String(e));
     }
-  }
+    return new SmokeFailure("oversized input was accepted");
+  });
 
-  try {
-    const ast = parseMarkdown("# Hello\n\nWorld");
-    const flat = getFlattenedText(ast);
-    if (flat.includes("Hello") && flat.includes("World")) {
-      pass("getFlattenedText");
-    } else {
-      fail("getFlattenedText", `got "${flat.slice(0, 40)}"`);
-    }
-  } catch (e) {
-    fail("getFlattenedText", String(e));
-  }
+  await check("getFlattenedText", () => {
+    const flat = getFlattenedText(parseMarkdown("# Hello\n\nWorld"));
+    return verdict(
+      flat.includes("Hello") && flat.includes("World"),
+      undefined,
+      `got "${flat.slice(0, 40)}"`,
+    );
+  });
 
-  try {
-    const ast = parseMarkdown("test");
-    const stripped = stripSourceOffsets(ast);
-    if (!("beg" in stripped) && !("end" in stripped)) {
-      pass("stripSourceOffsets");
-    } else {
-      fail("stripSourceOffsets", "offsets still present");
-    }
-  } catch (e) {
-    fail("stripSourceOffsets", String(e));
-  }
+  await check("stripSourceOffsets", () => {
+    const stripped = stripSourceOffsets(parseMarkdown("test"));
+    return verdict(
+      !("beg" in stripped) && !("end" in stripped),
+      undefined,
+      "offsets still present",
+    );
+  });
 
   spacer();
 
   header("PLATFORM SUPPORT");
 
-  if (supportsNativeRuntime) {
-    pass("Native parser runtime", `${Platform.OS} supported`);
-    pass("MarkdownSession runtime", `${Platform.OS} supported`);
-    pass("Streaming runtime", `${Platform.OS} supported`);
-  } else {
-    skip("Native parser runtime", `${Platform.OS} is not supported by this example`);
-    skip("MarkdownSession runtime", `${Platform.OS} is not supported by this example`);
-    skip("Streaming runtime", `${Platform.OS} is not supported by this example`);
+  for (const feature of [
+    "Native parser runtime",
+    "MarkdownSession runtime",
+    "Streaming runtime",
+  ]) {
+    if (supportsNativeRuntime) pass(feature, `${Platform.OS} supported`);
+    else skip(feature, `${Platform.OS} is not supported by this example`);
   }
 
   spacer();
 
   header("THEMES & STYLING");
 
-  try {
+  await check("mergeThemes", () => {
     const merged = mergeThemes(defaultMarkdownTheme, {
       colors: { link: "#ff0000" },
       fontSizes: { h1: 40 },
     });
-    if (
+    return verdict(
       merged.colors.link === "#ff0000" &&
-      merged.fontSizes.h1 === 40 &&
-      merged.colors.surface === defaultMarkdownTheme.colors.surface
-    ) {
-      pass("mergeThemes", "partial merge preserves base");
-    } else {
-      fail("mergeThemes", "unexpected merge result");
-    }
-  } catch (e) {
-    fail("mergeThemes", String(e));
-  }
+        merged.fontSizes.h1 === 40 &&
+        merged.colors.surface === defaultMarkdownTheme.colors.surface,
+      "partial merge preserves base",
+      "unexpected merge result",
+    );
+  });
 
-  try {
+  await check("mergeThemes codeTokenColors", () => {
     const merged = mergeThemes(defaultMarkdownTheme, {
       colors: { codeTokenColors: { keyword: "#ff0000" } },
     });
-    if (
+    return verdict(
       merged.colors.codeTokenColors?.keyword === "#ff0000" &&
-      merged.colors.codeTokenColors?.string ===
-        defaultMarkdownTheme.colors.codeTokenColors?.string
-    ) {
-      pass("mergeThemes codeTokenColors", "partial token map preserves defaults");
-    } else {
-      fail("mergeThemes codeTokenColors", "partial token map replaced defaults");
-    }
-  } catch (e) {
-    fail("mergeThemes codeTokenColors", String(e));
-  }
+        merged.colors.codeTokenColors?.string ===
+          defaultMarkdownTheme.colors.codeTokenColors?.string,
+      "partial token map preserves defaults",
+      "partial token map replaced defaults",
+    );
+  });
 
-  try {
-    if (
+  await check("defaultMarkdownTheme exported", () =>
+    verdict(
       typeof defaultMarkdownTheme.colors.text === "string" &&
-      typeof defaultMarkdownTheme.fontSizes.m === "number"
-    ) {
-      pass("defaultMarkdownTheme exported");
-    } else {
-      fail("defaultMarkdownTheme", "missing expected fields");
-    }
-  } catch (e) {
-    fail("defaultMarkdownTheme", String(e));
-  }
+        typeof defaultMarkdownTheme.fontSizes.m === "number",
+      undefined,
+      "missing expected fields",
+    ),
+  );
 
-  try {
-    if (
+  await check("minimalMarkdownTheme", () =>
+    verdict(
       minimalMarkdownTheme.spacing.m === 0 &&
-      minimalMarkdownTheme.fontFamilies.regular === undefined
-    ) {
-      pass("minimalMarkdownTheme", "zero spacing, no font family");
-    } else {
-      fail("minimalMarkdownTheme", "unexpected values");
-    }
-  } catch (e) {
-    fail("minimalMarkdownTheme", String(e));
-  }
+        minimalMarkdownTheme.fontFamilies.regular === undefined,
+      "zero spacing, no font family",
+      "unexpected values",
+    ),
+  );
 
   spacer();
 
   header("RENDER COMPONENTS");
 
-  try {
-    if (typeof Markdown === "function") {
-      pass("Markdown component export");
-    } else {
-      fail("Markdown component export", typeof Markdown);
-    }
-  } catch (e) {
-    fail("Markdown component export", String(e));
-  }
+  await check("Markdown component export", () =>
+    verdict(typeof Markdown === "function", undefined, typeof Markdown),
+  );
 
-  try {
-    if (typeof MarkdownStream === "function") {
-      pass("MarkdownStream component export");
-    } else {
-      fail("MarkdownStream component export", typeof MarkdownStream);
-    }
-  } catch (e) {
-    fail("MarkdownStream component export", String(e));
-  }
+  await check("MarkdownStream component export", () =>
+    verdict(
+      typeof MarkdownStream === "function",
+      undefined,
+      typeof MarkdownStream,
+    ),
+  );
 
-  try {
+  await check("defaultHighlighter", () => {
     const tokens = defaultHighlighter("ts", "const answer = 42;");
-    if (
+    return verdict(
       tokens.some((token) => token.type === "keyword") &&
-      tokens.some((token) => token.type === "number")
-    ) {
-      pass("defaultHighlighter", `${tokens.length} tokens`);
-    } else {
-      fail("defaultHighlighter", "missing keyword/number tokens");
-    }
-  } catch (e) {
-    fail("defaultHighlighter", String(e));
-  }
+        tokens.some((token) => token.type === "number"),
+      `${tokens.length} tokens`,
+      "missing keyword/number tokens",
+    );
+  });
 
   spacer();
 
@@ -627,46 +566,48 @@ async function runSmokeTests(): Promise<LogEntry[]> {
     "```ts\nconst x = 1;\n```",
     "$E=mc^2$",
     "$$x^2$$",
+    "a  \nb\nc",
   ].join("\n\n");
 
-  try {
-    const ast = parseMarkdown(allFeaturesMd, { gfm: true, math: true });
-    const allTypes = collectNodeTypes(ast);
+  const expectedNodeTypes = [
+    "document",
+    "heading",
+    "paragraph",
+    "text",
+    "bold",
+    "italic",
+    "strikethrough",
+    "code_inline",
+    "link",
+    "image",
+    "blockquote",
+    "horizontal_rule",
+    "list",
+    "list_item",
+    "task_list_item",
+    "table",
+    "table_head",
+    "table_body",
+    "table_row",
+    "table_cell",
+    "code_block",
+    "math_inline",
+    "math_block",
+    "line_break",
+    "soft_break",
+  ];
 
-    const expected = [
-      "document",
-      "heading",
-      "paragraph",
-      "text",
-      "bold",
-      "italic",
-      "strikethrough",
-      "code_inline",
-      "link",
-      "image",
-      "blockquote",
-      "horizontal_rule",
-      "list",
-      "list_item",
-      "task_list_item",
-      "table",
-      "table_head",
-      "table_body",
-      "table_row",
-      "table_cell",
-      "code_block",
-      "math_inline",
-      "math_block",
-    ];
-    const missing = expected.filter((t) => !allTypes.has(t));
-    if (missing.length === 0) {
-      pass("All 23 node types present", `${allTypes.size} types`);
-    } else {
-      fail("Missing node types", missing.join(", "));
-    }
-  } catch (e) {
-    fail("AST node coverage", String(e));
-  }
+  await check(`All ${expectedNodeTypes.length} node types present`, () => {
+    const allTypes = collectNodeTypes(
+      parseMarkdown(allFeaturesMd, { gfm: true, math: true }),
+    );
+    const missing = expectedNodeTypes.filter((t) => !allTypes.has(t));
+    return verdict(
+      missing.length === 0,
+      `${allTypes.size} types`,
+      `missing ${missing.join(", ")}`,
+    );
+  });
 
   spacer();
 
@@ -680,7 +621,7 @@ async function runSmokeTests(): Promise<LogEntry[]> {
 
   header("AST TRANSFORM");
 
-  try {
+  await check("astTransform", () => {
     const ast = parseMarkdown("Launch :rocket: now!");
     const walkTransform = (node: MarkdownNode): MarkdownNode => ({
       ...node,
@@ -690,16 +631,9 @@ async function runSmokeTests(): Promise<LogEntry[]> {
           : node.content,
       children: node.children?.map(walkTransform),
     });
-    const transformed = walkTransform(ast);
-    const text = getFlattenedText(transformed);
-    if (text.includes("[emoji]")) {
-      pass("astTransform", `"${text.trim()}"`);
-    } else {
-      fail("astTransform");
-    }
-  } catch (e) {
-    fail("astTransform", String(e));
-  }
+    const text = getFlattenedText(walkTransform(ast));
+    return verdict(text.includes("[emoji]"), `"${text.trim()}"`);
+  });
 
   spacer();
 
@@ -707,80 +641,83 @@ async function runSmokeTests(): Promise<LogEntry[]> {
 
   if (!supportsNativeRuntime) {
     skip("MarkdownSession methods", `${Platform.OS} is not supported`);
-  } else try {
-    const session = createMarkdownSession();
-    session.append("Hello ");
-    session.append("**world**");
-    const text = session.getAllText();
-    if (text === "Hello **world**") {
-      pass("session.append + getAllText");
-    } else {
-      fail("session.append + getAllText", `got "${text}"`);
-    }
+  } else {
+    try {
+      const session = createMarkdownSession();
+      try {
+        session.append("Hello ");
+        session.append("**world**");
+        await check("session.append + getAllText", () => {
+          const text = session.getAllText();
+          return verdict(
+            text === "Hello **world**",
+            undefined,
+            `got "${text}"`,
+          );
+        });
 
-    const range = session.getTextRange(0, 5);
-    if (range === "Hello") {
-      pass("session.getTextRange");
-    } else {
-      fail("session.getTextRange", `got "${range}"`);
-    }
+        await check("session.getTextRange", () => {
+          const range = session.getTextRange(0, 5);
+          return verdict(range === "Hello", undefined, `got "${range}"`);
+        });
 
-    session.reset("fresh");
-    if (session.getAllText() === "fresh") {
-      pass("session.reset");
-    } else {
-      fail("session.reset");
-    }
+        await check("session.reset", () => {
+          session.reset("fresh");
+          return verdict(session.getAllText() === "fresh");
+        });
 
-    session.replace(0, 5, "new text");
-    if (session.getAllText() === "new text") {
-      pass("session.replace");
-    } else {
-      fail("session.replace", `got "${session.getAllText()}"`);
-    }
+        await check("session.replace", () => {
+          session.replace(0, 5, "new text");
+          return verdict(
+            session.getAllText() === "new text",
+            undefined,
+            `got "${session.getAllText()}"`,
+          );
+        });
 
-    const listenerResult = await new Promise<{
-      called: boolean;
-      from: number;
-      to: number;
-    }>((resolve) => {
-      const unsub = session.addListener((from: number, to: number) => {
-        unsub();
-        resolve({ called: true, from, to });
-      });
-      session.append("!");
-      setTimeout(() => {
-        resolve({ called: false, from: -1, to: -1 });
-      }, 500);
-    });
-    if (
-      listenerResult.called &&
-      listenerResult.from >= 0 &&
-      listenerResult.to > listenerResult.from
-    ) {
-      pass("session.addListener");
-    } else {
-      fail(
-        "session.addListener",
-        `called=${listenerResult.called} from=${listenerResult.from} to=${listenerResult.to}`,
-      );
-    }
+        await check("session.addListener", async () => {
+          const listenerResult = await new Promise<{
+            called: boolean;
+            from: number;
+            to: number;
+          }>((resolve) => {
+            const unsub = session.addListener((from: number, to: number) => {
+              clearTimeout(timer);
+              unsub();
+              resolve({ called: true, from, to });
+            });
+            const timer = setTimeout(() => {
+              unsub();
+              resolve({ called: false, from: -1, to: -1 });
+            }, 500);
+            session.append("!");
+          });
+          return verdict(
+            listenerResult.called &&
+              listenerResult.from >= 0 &&
+              listenerResult.to > listenerResult.from,
+            undefined,
+            `called=${listenerResult.called} from=${listenerResult.from} to=${listenerResult.to}`,
+          );
+        });
 
-    session.clear();
-    if (session.getAllText() === "") {
-      pass("session.clear");
-    } else {
-      fail("session.clear");
+        await check("session.clear", () => {
+          session.clear();
+          return verdict(session.getAllText() === "");
+        });
+      } finally {
+        session.dispose();
+      }
+    } catch (e) {
+      fail("MarkdownSession", String(e));
     }
-  } catch (e) {
-    fail("MarkdownSession", String(e));
   }
 
   spacer();
 
   header("SOURCE AST");
 
-  try {
+  await check("sourceAst structure valid", () => {
     const preBuilt: MarkdownNode = {
       type: "document",
       children: [
@@ -791,17 +728,12 @@ async function runSmokeTests(): Promise<LogEntry[]> {
         },
       ],
     };
-    if (
-      preBuilt.type === "document" &&
-      preBuilt.children?.[0]?.type === "heading"
-    ) {
-      pass("sourceAst structure valid");
-    } else {
-      fail("sourceAst structure");
-    }
-  } catch (e) {
-    fail("sourceAst", String(e));
-  }
+    return verdict(
+      preBuilt.type === "document" && preBuilt.children?.[0]?.type === "heading",
+      undefined,
+      "unexpected structure",
+    );
+  });
 
   spacer();
 
@@ -815,7 +747,8 @@ async function runSmokeTests(): Promise<LogEntry[]> {
     text: `${passed}/${total} passed${failed > 0 ? ` (${failed} failed)` : ""}${
       skipped > 0 ? `, ${skipped} unsupported` : ""
     }`,
-    type: failed > 0 ? "fail" : "pass",
+    type: "summary",
+    failed: failed > 0,
   });
 
   return logs;
@@ -905,14 +838,16 @@ export default function BenchmarkScreen() {
     setError(null);
     setIsBenchmarkRunning(true);
 
+    const stepErrors: string[] = [];
     const isolate = async <T,>(
+      step: string,
       run: () => T | Promise<T>,
-      fallback: T,
-    ): Promise<T> => {
+    ): Promise<T | null> => {
       try {
         return await run();
-      } catch {
-        return fallback;
+      } catch (e) {
+        stepErrors.push(`${step}: ${e instanceof Error ? e.message : String(e)}`);
+        return null;
       } finally {
         await wait(60);
       }
@@ -920,44 +855,28 @@ export default function BenchmarkScreen() {
 
     await wait(60);
 
-    const nitroBenchmark = await isolate(() => runNitroBenchmark(true), {
-      average: NaN,
-      p50: NaN,
-      p95: NaN,
-      iterations: 0,
-    });
-    const nitroNoOffsetsBenchmark = await isolate(
-      () => runNitroBenchmark(false),
-      {
-        average: NaN,
-        p50: NaN,
-        p95: NaN,
-        iterations: 0,
-      },
+    const nitro = await isolate("Nitro parse", () => runNitroBenchmark(true));
+    const nitroNoOffsets = await isolate("Nitro parse (no offsets)", () =>
+      runNitroBenchmark(false),
     );
 
-    const mathjaxTime = await isolate(
-      () => latexTimer.measure("legacy-mathjax"),
-      null,
+    const mathjaxTime = await isolate("Legacy MathJax render", () =>
+      latexTimer.measure("legacy-mathjax"),
     );
-    const ratexTime = await isolate(() => latexTimer.measure("ratex"), null);
-    const nitroRenderTime = await isolate(
-      () => measureRenderMedian("nitro"),
-      null,
+    const ratexTime = await isolate("RaTeX render", () =>
+      latexTimer.measure("ratex"),
     );
-    const nitroFirstScreenTime = await isolate(
-      () => measureRenderMedian("nitro-long"),
-      null,
+    const nitroRenderTime = await isolate("Nitro mount to layout", () =>
+      measureRenderMedian("nitro"),
+    );
+    const nitroFirstScreenTime = await isolate("Nitro first screen", () =>
+      measureRenderMedian("nitro-long"),
     );
 
     setBenchmarkResults({
-      nitroTime: nitroBenchmark.average,
-      nitroP50: nitroBenchmark.p50,
-      nitroP95: nitroBenchmark.p95,
-      nitroIterations: nitroBenchmark.iterations,
-      nitroNoOffsetsTime: nitroNoOffsetsBenchmark.average,
-      nitroNoOffsetsP50: nitroNoOffsetsBenchmark.p50,
-      nitroNoOffsetsP95: nitroNoOffsetsBenchmark.p95,
+      nitro,
+      nitroNoOffsets,
+      stepErrors,
       mathjaxTime,
       ratexTime,
       nitroRenderTime,
@@ -965,6 +884,11 @@ export default function BenchmarkScreen() {
     });
     setIsBenchmarkRunning(false);
   };
+
+  const parseMaxMs = Math.max(
+    benchmarkResults?.nitro?.average ?? 0,
+    benchmarkResults?.nitroNoOffsets?.average ?? 0,
+  );
 
   const smokeProbeLabel = error
     ? "smoke:error;"
@@ -1033,6 +957,8 @@ export default function BenchmarkScreen() {
                     log.type === "fail" && styles.logFail,
                     log.type === "info" && styles.logInfo,
                     log.type === "skip" && styles.logSkip,
+                    log.type === "summary" &&
+                      (log.failed ? styles.logFail : styles.logPass),
                   ]}
                 >
                   {log.text}
@@ -1057,28 +983,54 @@ export default function BenchmarkScreen() {
                 Nitro-only device measurement. JavaScript baselines run in
                 isolated Node workers with a separate fixture record.
               </Text>
-              <BenchBar
-                label="Nitro C++"
-                ms={benchmarkResults.nitroTime}
-                maxMs={Math.max(benchmarkResults.nitroTime, benchmarkResults.nitroNoOffsetsTime ?? 0)}
-                highlight
-              />
-              <BenchBar
-                label="Nitro C++ · no offsets"
-                ms={benchmarkResults.nitroNoOffsetsTime ?? 0}
-                maxMs={Math.max(benchmarkResults.nitroTime, benchmarkResults.nitroNoOffsetsTime ?? 0)}
-                ratio={`${formatRatio(benchmarkResults.nitroTime, benchmarkResults.nitroNoOffsetsTime ?? 0)}`}
-              />
-              <Text style={styles.metricNote}>
-                Nitro p50 / p95 over {benchmarkResults.nitroIterations} runs:{" "}
-                {benchmarkResults.nitroP50.toFixed(1)} /{" "}
-                {benchmarkResults.nitroP95.toFixed(1)}ms.
-              </Text>
-              <Text style={styles.metricNote}>
-                No-offset p50 / p95: {(benchmarkResults.nitroNoOffsetsP50 ?? 0).toFixed(1)} /{" "}
-                {(benchmarkResults.nitroNoOffsetsP95 ?? 0).toFixed(1)}ms. This is the renderer fast path; public parse defaults retain offsets.
-              </Text>
+              {benchmarkResults.nitro ? (
+                <BenchBar
+                  label="Nitro C++"
+                  ms={benchmarkResults.nitro.average}
+                  maxMs={parseMaxMs}
+                  highlight
+                />
+              ) : null}
+              {benchmarkResults.nitroNoOffsets ? (
+                <BenchBar
+                  label="Nitro C++ · no offsets"
+                  ms={benchmarkResults.nitroNoOffsets.average}
+                  maxMs={parseMaxMs}
+                  ratio={
+                    benchmarkResults.nitro
+                      ? formatRatio(
+                          benchmarkResults.nitro.average,
+                          benchmarkResults.nitroNoOffsets.average,
+                        )
+                      : undefined
+                  }
+                />
+              ) : null}
+              {benchmarkResults.nitro ? (
+                <Text style={styles.metricNote}>
+                  Nitro p50 / p95 over {benchmarkResults.nitro.iterations} runs:{" "}
+                  {benchmarkResults.nitro.p50.toFixed(1)} /{" "}
+                  {benchmarkResults.nitro.p95.toFixed(1)}ms.
+                </Text>
+              ) : null}
+              {benchmarkResults.nitroNoOffsets ? (
+                <Text style={styles.metricNote}>
+                  No-offset p50 / p95: {benchmarkResults.nitroNoOffsets.p50.toFixed(1)} /{" "}
+                  {benchmarkResults.nitroNoOffsets.p95.toFixed(1)}ms. This is the renderer fast path; public parse defaults retain offsets.
+                </Text>
+              ) : null}
             </View>
+
+            {benchmarkResults.stepErrors.length > 0 ? (
+              <ExamplePanel style={styles.errorBox}>
+                <Text style={styles.errorTitle}>Failed steps</Text>
+                {benchmarkResults.stepErrors.map((message) => (
+                  <Text key={message} style={styles.errorMessage}>
+                    {message}
+                  </Text>
+                ))}
+              </ExamplePanel>
+            ) : null}
 
             <View style={styles.resultGroup}>
               <Text style={styles.resultGroupTitle}>Math renderer</Text>

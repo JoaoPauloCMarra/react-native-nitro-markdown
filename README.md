@@ -4,8 +4,8 @@
 [![npm downloads](https://img.shields.io/npm/dm/react-native-nitro-markdown?color=22c55e&label=downloads)](https://www.npmjs.com/package/react-native-nitro-markdown)
 [![CI](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/actions/workflows/ci.yml/badge.svg)](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/react-native-nitro-markdown?color=007ec6)](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/LICENSE)
-[![React Native](https://img.shields.io/badge/react--native-0.86.3-61dafb)](https://reactnative.dev/docs/0.86/getting-started-without-a-framework)
-[![Expo](https://img.shields.io/badge/expo-SDK%2057%20%28RN%200.86.3%29-000020)](https://docs.expo.dev/versions/v57.0.0/)
+[![React Native](https://img.shields.io/badge/react--native-0.88.0-61dafb)](https://reactnative.dev/docs/0.88/getting-started-without-a-framework)
+[![Expo](https://img.shields.io/badge/expo-SDK%2058%20%28RN%200.88.0%29-000020)](https://docs.expo.dev/versions/v58.0.0/)
 [![Nitro Modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.37.0%20%3C0.38.0-black)](https://nitro.margelo.com/)
 [![TypeScript](https://img.shields.io/badge/typescript-6.0-3178c6)](https://www.typescriptlang.org/)
 
@@ -68,7 +68,7 @@ install the optional peer `ratex-react-native` and pass the renderers from the
 `/math` subpath:
 
 ```sh
-bunx expo install ratex-react-native@0.1.14   # or: bun add ratex-react-native@0.1.14
+bunx expo install ratex-react-native@0.1.15   # or: bun add ratex-react-native@0.1.15
 ```
 
 ```tsx
@@ -80,7 +80,7 @@ import { mathRenderers } from "react-native-nitro-markdown/math";
 </Markdown>;
 ```
 
-`ratex-react-native@0.1.14` requires React Native `>=0.84` and React `>=19.2`.
+`ratex-react-native@0.1.15` requires React Native `>=0.84` and React `>=19.2`.
 On React Native 0.77–0.83, skip it; math stays readable as monospace text. The
 main entry and `/headless` never load `ratex-react-native`.
 
@@ -289,7 +289,7 @@ default code token colors. Compose with `mergeThemes`. Full guide:
 | `parseCache`             | `true`                     | Reuse parsed ASTs for repeated content. The cache is scoped per `<Markdown>` instance (max 32 entries) and only holds documents up to 24,000 UTF-16 characters; longer documents are not cached or counted. Per-instance hit/miss/eviction counters are reported via `onParseComplete`'s `cacheStats`. |
 | `sourceAst`              | `undefined`                | Render a pre-parsed AST instead of parsing `children`.                                                                                                                                                                                                                                              |
 | `onParsingInProgress`    | `undefined`                | Deprecated compatibility callback invoked after the current parse render commits. Use `onParseComplete` or `MarkdownStream` state for new code.                                                                                                                                                     |
-| `onError`                | `undefined`                | Receive parser and plugin failures as `(error, phase, pluginName?)`. Native parse and session failures are typed `MarkdownError`s with stable `code` and `source`.                                                                                                                                  |
+| `onError`                | `undefined`                | Receive parser, plugin, `astTransform` and `highlightCode` failures as `(error, phase, pluginName?)`; transform and highlighter failures use phase `"transform"`. Native parse and session failures are typed `MarkdownError`s with stable `code` and `source`.                                                                                                                                  |
 | `errorText`              | `"Error parsing markdown"` | Localized text rendered when parsing fails.                                                                                                                                                                                                                                                         |
 | `imageOptions`           | `undefined`                | Image URL policy: `allowedProtocols`, `allowedHosts`, and `remoteImages: "deny"` to block remote image loading entirely.                                                                                                                                                                            |
 | `highlightCode`          | `false`                    | Built-in code syntax highlighting (fixture-backed languages: JS/TS family, Python, shell).                                                                                                                                                                                                          |
@@ -343,7 +343,7 @@ compatibility path. The package's advantage is the full React Native path,
 native parsing without a JS parser dependency, streaming, and long-document
 virtualization; no universal "fastest" result should be inferred from one
 fixture. Reproduce device numbers by running the example app and tapping
-**Run Benchmark**, and reproduce the isolated JS baseline with `bun run benchmark`.
+**Run Benchmark**, and reproduce the isolated JS baseline with `bun run benchmark:compare`.
 Methodology and the full capability matrix:
 **[Comparison & benchmarks](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/comparison.md)**.
 
@@ -415,16 +415,16 @@ for the error-code contract.
 
 | Dependency                                                                | Supported                                                                                                      |
 | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| [React Native](https://reactnative.dev/)                                  | `>=0.77` (New Architecture; Nitro 0.37 minimum). Tested on `0.86.3`; RN `0.87` Strict TypeScript compatibility check |
-| [Expo](https://docs.expo.dev/versions/v57.0.0/)                           | SDK `>=53` development builds. Tested on SDK 57 (`57.0.26`, RN `0.86.3`)                                        |
+| [React Native](https://reactnative.dev/)                                  | `>=0.77` (New Architecture; Nitro 0.37 minimum). Tested on `0.88.0`; RN `0.87` Strict TypeScript compatibility check |
+| [Expo](https://docs.expo.dev/versions/v58.0.0/)                           | SDK `>=53` development builds. Tested on SDK 58 (`58.0.16`, RN `0.88.0`)                                        |
 | [Nitro Modules](https://www.npmjs.com/package/react-native-nitro-modules) | `>=0.37.0 <0.38.0`                                                                                             |
-| [RaTeX React Native](https://www.npmjs.com/package/ratex-react-native)    | Optional, only for `react-native-nitro-markdown/math`. `0.1.14` needs RN `>=0.84` and React `>=19.2`            |
-| iOS                                                                       | The app's React Native iOS floor (`min_ios_version_supported`, 15.1 on RN 0.77–0.86)                           |
+| [RaTeX React Native](https://www.npmjs.com/package/ratex-react-native)    | Optional, only for `react-native-nitro-markdown/math`. `0.1.15` needs RN `>=0.84` and React `>=19.2`            |
+| iOS                                                                       | The app's React Native iOS floor (`min_ios_version_supported`, 15.1 on RN 0.77–0.88)                           |
 | Android                                                                   | `minSdkVersion` 24                                                                                             |
 | Platforms                                                                 | iOS, Android (Web not supported)                                                                               |
 
 Supports React Native >= 0.77 / Expo SDK >= 53 (the Nitro Modules 0.37
-minimum); tested on React Native 0.86.3 / Expo SDK 57. `check:ci` also
+minimum); tested on React Native 0.88.0 / Expo SDK 58. `check:ci` also
 compiles the public source against React Native `0.87.0`'s Strict TypeScript
 API. Do not override the React Native version selected by Expo.
 
@@ -502,7 +502,7 @@ bun run example:smoke:ios
 typecheck (including test files), JS tests, C++
 tests, and script tests. `check:ci` is the single CI gate: it adds version
 alignment, the harness (codegen check, public types, size budgets, coverage,
-benchmark, C++ coverage), React Native 0.87 type compatibility, C++ sanitizers
+C++ coverage), React Native 0.87 type compatibility, C++ sanitizers
 and the package audit; it does not launch a native app. `release:preflight`
 adds example checks and an auth-free pack check; it does not publish or release
 the package. Prebuild generates native projects, the Android/iOS build commands

@@ -6,7 +6,6 @@ import type { MarkdownPlugin } from "../markdown";
 import {
   applyAfterParsePlugins,
   applyBeforeParsePlugins,
-  cloneMarkdownNode,
   getParserOptionsKey,
   hashString,
   materializeMarkdownNode,
@@ -21,6 +20,7 @@ import {
 import {
   MAX_AST_DEPTH,
   MAX_AST_STRING_BYTES,
+  cloneMarkdownNode,
   freezeMarkdownNode,
 } from "../utils/freeze-ast";
 import { mockParser } from "./setup";
