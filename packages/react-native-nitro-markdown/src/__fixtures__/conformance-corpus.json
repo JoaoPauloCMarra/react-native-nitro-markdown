@@ -305,6 +305,26 @@
     }
   },
   {
+    "name": "fenced-code-unclosed",
+    "markdown": "```js\nvar a",
+    "options": {},
+    "expected": {
+      "type": "document",
+      "children": [
+        {
+          "type": "code_block",
+          "language": "js",
+          "children": [
+            {
+              "type": "text",
+              "content": "var a\n"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
     "name": "unordered-list",
     "markdown": "- one\n- two",
     "options": {},

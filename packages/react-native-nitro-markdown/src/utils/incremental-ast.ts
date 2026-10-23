@@ -130,25 +130,53 @@ const getNodeAtPath = (
   return current;
 };
 
+const VERBATIM_BLOCK_TYPES = new Set(["code_block", "math_block"]);
+
+// The parser ends every code and display-math line with "\n", including a
+// last line that has no line ending in the source yet. Text appended to that
+// line goes before the newline, and the new last line keeps one. A trailing
+// "\r" may be half of a CRLF, so that append takes a full parse.
+const appendVerbatimText = (
+  content: string,
+  appendedChunk: string,
+  previousText: string,
+): string | null => {
+  if (!content.endsWith("\n") || previousText.endsWith("\r")) return null;
+  const base = endsAtBlockBoundary(previousText)
+    ? content
+    : content.slice(0, -1);
+  return endsAtBlockBoundary(appendedChunk)
+    ? base + appendedChunk
+    : `${base}${appendedChunk}\n`;
+};
+
 const appendPlainTextToAst = (
   ast: MarkdownNode,
   appendedChunk: string,
-  previousTextLength: number,
+  previousText: string,
 ): MarkdownNode | null => {
   if (appendedChunk.length === 0) return ast;
   const path = findTrailingLeafPath(ast);
   const leaf = getNodeAtPath(ast, path);
   if (leaf?.type !== "text") return null;
-  if (typeof leaf.end !== "number" || leaf.end !== previousTextLength) {
+  if (typeof leaf.end !== "number" || leaf.end !== previousText.length) {
     return null;
   }
+
+  const parent = getNodeAtPath(ast, path.slice(0, -1));
+  const content = leaf.content ?? "";
+  const nextContent =
+    parent && VERBATIM_BLOCK_TYPES.has(parent.type)
+      ? appendVerbatimText(content, appendedChunk, previousText)
+      : content + appendedChunk;
+  if (nextContent === null) return null;
 
   const delta = appendedChunk.length;
   const update = (node: MarkdownNode, depth: number): MarkdownNode => {
     if (depth === path.length) {
       return {
         ...node,
-        content: (node.content ?? "") + appendedChunk,
+        content: nextContent,
         ...(typeof node.end === "number"
           ? { end: node.end + delta }
           : {}),
@@ -306,7 +334,7 @@ export const getNextStreamAst = ({
     const textAppendedAst = appendPlainTextToAst(
       previousAst,
       appendedChunk,
-      previousText.length,
+      previousText,
     );
     if (textAppendedAst) {
       return materializeIncrementalAst(textAppendedAst, options);
@@ -323,7 +351,7 @@ export const getNextStreamAst = ({
     const fencedTextAppendAst = appendPlainTextToAst(
       previousAst,
       appendedChunk,
-      previousText.length,
+      previousText,
     );
     if (fencedTextAppendAst) {
       return materializeIncrementalAst(fencedTextAppendAst, options);
