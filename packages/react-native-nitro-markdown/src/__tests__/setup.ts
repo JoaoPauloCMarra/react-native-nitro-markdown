@@ -192,7 +192,7 @@ function createMockAst(text: string, mathEnabled: boolean): MarkdownNode {
               spanned(
                 {
                   type: "text",
-                  content: codeLines.map((entry) => entry.content).join("\n"),
+                  content: codeLines.map((entry) => `${entry.content}\n`).join(""),
                 },
                 textBeg,
                 textEnd,

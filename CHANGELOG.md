@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [Unreleased]
+
+### Breaking changes
+
+None.
+
+### Fixed
+
+- `MarkdownStream` keeps text streamed into a code block or `$$` math block on the line it belongs to. An incremental append placed it after the block's final line break, so `sum(` followed by `items` rendered on two lines until the next full parse.
+
 ## [0.16.0] - 2026-10-15
 
 ### Breaking changes

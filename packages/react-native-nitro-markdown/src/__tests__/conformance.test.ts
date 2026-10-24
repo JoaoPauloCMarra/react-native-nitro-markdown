@@ -12,6 +12,9 @@ const MOCK_SUPPORTED = new Set([
   "heading-6",
   "blockquote",
   "horizontal-rule",
+  "fenced-code",
+  "fenced-code-unclosed",
+  "standalone-math-block",
   "unicode",
   "html-disabled-default",
 ]);
