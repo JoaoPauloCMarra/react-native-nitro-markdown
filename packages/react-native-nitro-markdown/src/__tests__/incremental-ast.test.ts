@@ -260,6 +260,45 @@ describe("incremental AST", () => {
     expect(getTextContent(nextAst)).toContain("const b = 2;");
   });
 
+  it.each([
+    ["```ts\nconst to", "tal = 1"],
+    ["```ts\nconst to", "tal = 1\nlet next"],
+    ["```ts\nconst total = 1\n", "let next"],
+    ["~~~\nalpha", " beta\n"],
+    ["Intro\n\n$$\nE =", " mc^2"],
+  ])("matches a full parse for %j plus %j in a code or math block", (previousText, chunk) => {
+    const previousAst = parseWithNativeParser(previousText);
+    const nextText = previousText + chunk;
+    jest.clearAllMocks();
+
+    const nextAst = getNextStreamAst({ previousAst, previousText, nextText });
+
+    expect(mockParser.parse).not.toHaveBeenCalled();
+    expect(nextAst).toEqual(parseWithNativeParser(nextText));
+  });
+
+  it.each([
+    ["a full parse", false],
+    ["an incremental append", true],
+  ])("reparses a code block when a CRLF is split across chunks after %s", (_label, incremental) => {
+    const startText = "```ts\nconst a";
+    const previousText = `${startText} = 1\r`;
+    const nextText = `${previousText}\nconst b`;
+    const previousAst = incremental
+      ? getNextStreamAst({
+          previousAst: parseWithNativeParser(startText),
+          previousText: startText,
+          nextText: previousText,
+        })
+      : parseWithNativeParser(previousText);
+    jest.clearAllMocks();
+
+    const nextAst = getNextStreamAst({ previousAst, previousText, nextText });
+
+    expect(mockParser.parse).toHaveBeenCalledTimes(1);
+    expect(nextAst).toEqual(parseWithNativeParser(nextText));
+  });
+
   it("falls back to full parse when fenced code append cannot update the trailing leaf", () => {
     const previousText = "Intro\n\n```ts\nconst a = 1;\n";
     const previousAst = cloneMarkdownNode(parseWithNativeParser(previousText));
