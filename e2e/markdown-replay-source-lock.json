@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "runtimeSourceSha256": "230ad4685b1c07d8a54127582c7ad5a26daa4761b1ec98b0e2fbd1f883260860",
+  "runtimeSourceSha256": "94833c5974daa03f281ffc43b19328d383dc3b2760bcf8a78d3827ed3ad4673b",
   "runtimeSourceFiles": [
     "apps/example/app.config.js",
     "apps/example/app/(tabs)/_layout.tsx",
