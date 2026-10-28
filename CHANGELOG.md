@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
-## [Unreleased]
+## [0.16.1] - 2026-10-28
 
 ### Breaking changes
 
@@ -18,6 +18,10 @@ None.
 ### Fixed
 
 - `MarkdownStream` keeps text streamed into a code block or `$$` math block on the line it belongs to. An incremental append placed it after the block's final line break, so `sum(` followed by `items` rendered on two lines until the next full parse.
+
+### Compatibility
+
+- Tested with Expo SDK 58 (`expo` 58.0.20, React Native 0.88.0, React 19.3.0).
 
 ## [0.16.0] - 2026-10-15
 

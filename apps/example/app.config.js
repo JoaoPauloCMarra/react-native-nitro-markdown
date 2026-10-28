@@ -39,7 +39,6 @@ module.exports = {
           },
           "ios": {
             "deploymentTarget": "16.4",
-            "enableSceneSupport": true,
             "ccacheEnabled": true
           }
         }
