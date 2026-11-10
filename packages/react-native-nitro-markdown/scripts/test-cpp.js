@@ -346,12 +346,14 @@ async function main() {
     "prototype",
     "templates",
   ];
-  for (const headerDir of nitroHeaderDirs) {
-    const sourceDir = path.join(nitroCppRoot, headerDir);
-    if (!fs.existsSync(sourceDir)) continue;
-    for (const file of fs.readdirSync(sourceDir)) {
-      if (!file.endsWith(".h") && !file.endsWith(".hpp")) continue;
-      fs.copyFileSync(path.join(sourceDir, file), path.join(nitroVirtualDir, file));
+  for (const cppRoot of [nitroCppRoot, path.join(nitroCppRoot, "core")]) {
+    for (const headerDir of nitroHeaderDirs) {
+      const sourceDir = path.join(cppRoot, headerDir);
+      if (!fs.existsSync(sourceDir)) continue;
+      for (const file of fs.readdirSync(sourceDir)) {
+        if (!file.endsWith(".h") && !file.endsWith(".hpp")) continue;
+        fs.copyFileSync(path.join(sourceDir, file), path.join(nitroVirtualDir, file));
+      }
     }
   }
   fs.writeFileSync(

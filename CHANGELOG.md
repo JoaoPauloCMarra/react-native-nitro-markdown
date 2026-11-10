@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [0.16.2] - 2026-11-10
+
+### Breaking changes
+
+None.
+
+### Changed
+
+- Updates the dependency baseline within the current majors: Nitro Modules and Nitrogen 0.37.2, React Native 0.88.1, Expo SDK 58 patch releases (`expo` 58.0.23), `react-native-safe-area-context` 5.11.1 and `marked` 18.2.0 (development only). Generated Nitro bindings change only in header comments. Peer dependency ranges are unchanged.
+
+### Compatibility
+
+- Tested with Expo SDK 58 (`expo` 58.0.23, React Native 0.88.1, React 19.3.0).
+
 ## [0.16.1] - 2026-10-28
 
 ### Breaking changes

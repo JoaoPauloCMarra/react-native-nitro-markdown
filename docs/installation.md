@@ -8,7 +8,7 @@ custom native build. It cannot run in Expo Go.
 
 | Dependency                                                                             | Minimum                                                                   |
 | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| React Native                                                                           | `>=0.77` (New Architecture / Fabric; Nitro 0.37 minimum); tested on `0.88.0` |
+| React Native                                                                           | `>=0.77` (New Architecture / Fabric; Nitro 0.37 minimum); tested on `0.88.1` |
 | Expo                                                                                   | SDK `>=53` development build; tested on SDK 58                            |
 | [react-native-nitro-modules](https://www.npmjs.com/package/react-native-nitro-modules) | `>=0.37.0 <0.38.0` (peer dependency)                                      |
 | [ratex-react-native](https://www.npmjs.com/package/ratex-react-native)                 | Optional peer. Only needed for the `react-native-nitro-markdown/math` subpath. |
@@ -17,12 +17,12 @@ custom native build. It cannot run in Expo Go.
 
 `react-native-nitro-modules` is a required peer dependency because parsing runs
 in native code. Supports React Native >= 0.77 / Expo SDK >= 53 (the Nitro
-Modules 0.37 minimum); tested on React Native 0.88.0 / Expo SDK 58.
+Modules 0.37 minimum); tested on React Native 0.88.1 / Expo SDK 58.
 
 ## Expo (development build)
 
 ```sh
-bunx expo install react-native-nitro-markdown react-native-nitro-modules@0.37.1
+bunx expo install react-native-nitro-markdown react-native-nitro-modules@0.37.2
 bunx expo prebuild
 bunx expo run:ios   # or run:android
 ```
@@ -35,7 +35,7 @@ upgrading the package so the native projects pick up the new module.
 ## Bare React Native
 
 ```sh
-bun add react-native-nitro-markdown react-native-nitro-modules@0.37.1
+bun add react-native-nitro-markdown react-native-nitro-modules@0.37.2
 cd ios && bundle exec pod install
 ```
 

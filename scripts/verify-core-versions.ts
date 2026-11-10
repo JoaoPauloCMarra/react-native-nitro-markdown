@@ -44,17 +44,17 @@ expectValue(
   "package workspace React Native",
   developmentDependency(root, "react-native") ??
     developmentDependency(packageManifest, "react-native"),
-  "0.88.0",
+  "0.88.1",
 );
 expectValue(
   "example Expo",
   dependencyValue(example, "dependencies", "expo"),
-  "~58.0.20",
+  "~58.0.23",
 );
 expectValue(
   "example React Native",
   dependencyValue(example, "dependencies", "react-native"),
-  "0.88.0",
+  "0.88.1",
 );
 expectValue(
   "example React",
@@ -64,19 +64,19 @@ expectValue(
 expectValue(
   "example Nitro Modules",
   dependencyValue(example, "dependencies", "react-native-nitro-modules"),
-  "0.37.1",
+  "0.37.2",
 );
 expectValue(
   "Nitrogen",
   developmentDependency(root, "nitrogen") ??
     developmentDependency(packageManifest, "nitrogen"),
-  "0.37.1",
+  "0.37.2",
 );
 expectValue(
   "Nitro Modules",
   developmentDependency(root, "react-native-nitro-modules") ??
     developmentDependency(packageManifest, "react-native-nitro-modules"),
-  "0.37.1",
+  "0.37.2",
 );
 expectValue(
   "Nitro peer range",
@@ -94,15 +94,15 @@ expectValue(
   rootOverrides != null && typeof rootOverrides === "object"
     ? (rootOverrides as JsonRecord)["expo"]
     : undefined,
-  "~58.0.20",
+  "~58.0.23",
 );
 if (
   rootOverrides != null &&
   typeof rootOverrides === "object" &&
-  (rootOverrides as JsonRecord)["react-native"] !== "0.88.0"
+  (rootOverrides as JsonRecord)["react-native"] !== "0.88.1"
 ) {
   failures.push(
-    "root overrides.react-native must stay pinned to 0.88.0 for the Expo SDK 58 workspace",
+    "root overrides.react-native must stay pinned to 0.88.1 for the Expo SDK 58 workspace",
   );
 }
 
@@ -111,18 +111,18 @@ for (const manifest of [root, packageManifest]) {
     manifest,
     "@react-native/babel-preset",
   );
-  if (babelPreset !== undefined && babelPreset !== "^0.88.0") {
+  if (babelPreset !== undefined && babelPreset !== "^0.88.1") {
     failures.push(
-      `@react-native/babel-preset must use ^0.88.0, got "${String(babelPreset)}"`,
+      `@react-native/babel-preset must use ^0.88.1, got "${String(babelPreset)}"`,
     );
   }
   const jestPreset = developmentDependency(
     manifest,
     "@react-native/jest-preset",
   );
-  if (jestPreset !== undefined && jestPreset !== "0.88.0") {
+  if (jestPreset !== undefined && jestPreset !== "0.88.1") {
     failures.push(
-      `@react-native/jest-preset must use 0.88.0, got "${String(jestPreset)}"`,
+      `@react-native/jest-preset must use 0.88.1, got "${String(jestPreset)}"`,
     );
   }
 }

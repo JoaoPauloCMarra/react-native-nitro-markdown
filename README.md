@@ -4,8 +4,8 @@
 [![npm downloads](https://img.shields.io/npm/dm/react-native-nitro-markdown?color=22c55e&label=downloads)](https://www.npmjs.com/package/react-native-nitro-markdown)
 [![CI](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/actions/workflows/ci.yml/badge.svg)](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/react-native-nitro-markdown?color=007ec6)](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/LICENSE)
-[![React Native](https://img.shields.io/badge/react--native-0.88.0-61dafb)](https://reactnative.dev/docs/0.88/getting-started-without-a-framework)
-[![Expo](https://img.shields.io/badge/expo-SDK%2058%20%28RN%200.88.0%29-000020)](https://docs.expo.dev/versions/v58.0.0/)
+[![React Native](https://img.shields.io/badge/react--native-0.88.1-61dafb)](https://reactnative.dev/docs/0.88/getting-started-without-a-framework)
+[![Expo](https://img.shields.io/badge/expo-SDK%2058%20%28RN%200.88.1%29-000020)](https://docs.expo.dev/versions/v58.0.0/)
 [![Nitro Modules](https://img.shields.io/badge/nitro--modules-%3E%3D0.37.0%20%3C0.38.0-black)](https://nitro.margelo.com/)
 [![TypeScript](https://img.shields.io/badge/typescript-6.0-3178c6)](https://www.typescriptlang.org/)
 
@@ -48,12 +48,12 @@ Native components — giving you a native parser boundary with component flexibi
 ## Install
 
 ```sh
-bun add react-native-nitro-markdown react-native-nitro-modules@0.37.1
+bun add react-native-nitro-markdown react-native-nitro-modules@0.37.2
 ```
 
 ```sh
 # Expo development build
-bunx expo install react-native-nitro-markdown react-native-nitro-modules@0.37.1
+bunx expo install react-native-nitro-markdown react-native-nitro-modules@0.37.2
 bunx expo prebuild
 ```
 
@@ -415,8 +415,8 @@ for the error-code contract.
 
 | Dependency                                                                | Supported                                                                                                      |
 | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| [React Native](https://reactnative.dev/)                                  | `>=0.77` (New Architecture; Nitro 0.37 minimum). Tested on `0.88.0`; RN `0.87` Strict TypeScript compatibility check |
-| [Expo](https://docs.expo.dev/versions/v58.0.0/)                           | SDK `>=53` development builds. Tested on SDK 58 (`58.0.20`, RN `0.88.0`)                                        |
+| [React Native](https://reactnative.dev/)                                  | `>=0.77` (New Architecture; Nitro 0.37 minimum). Tested on `0.88.1`; RN `0.87` Strict TypeScript compatibility check |
+| [Expo](https://docs.expo.dev/versions/v58.0.0/)                           | SDK `>=53` development builds. Tested on SDK 58 (`58.0.23`, RN `0.88.1`)                                        |
 | [Nitro Modules](https://www.npmjs.com/package/react-native-nitro-modules) | `>=0.37.0 <0.38.0`                                                                                             |
 | [RaTeX React Native](https://www.npmjs.com/package/ratex-react-native)    | Optional, only for `react-native-nitro-markdown/math`. `0.1.15` needs RN `>=0.84` and React `>=19.2`            |
 | iOS                                                                       | The app's React Native iOS floor (`min_ios_version_supported`, 15.1 on RN 0.77–0.88)                           |
@@ -424,7 +424,7 @@ for the error-code contract.
 | Platforms                                                                 | iOS, Android (Web not supported)                                                                               |
 
 Supports React Native >= 0.77 / Expo SDK >= 53 (the Nitro Modules 0.37
-minimum); tested on React Native 0.88.0 / Expo SDK 58. `check:ci` also
+minimum); tested on React Native 0.88.1 / Expo SDK 58. `check:ci` also
 compiles the public source against React Native `0.87.0`'s Strict TypeScript
 API. Do not override the React Native version selected by Expo.
 
