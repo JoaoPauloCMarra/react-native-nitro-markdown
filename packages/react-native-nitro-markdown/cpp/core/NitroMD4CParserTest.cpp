@@ -2174,6 +2174,24 @@ private:
                 crlfCode->children[0]->content.value_or("") == "const a = 1;\nconst b = 2;\n",
             "CrlfCode: carriage returns are dropped at line ends"
         );
+
+        // The stream reads a top-level fence's indent from the block offset.
+        ParserOptions offsetOptions = options;
+        offsetOptions.sourceOffsets = true;
+        auto indentedResult = parser.parse("para\n\n  ```ts\n  a\n", offsetOptions);
+        auto indentedCode = findFirstNode(indentedResult, NodeType::CodeBlock);
+        TestRunner::assertTrue(
+            indentedCode != nullptr && indentedCode->beg == 8,
+            "FenceOffset: an indented top-level fence begins on its opener line"
+        );
+        auto afterListResult = parser.parse(
+            "1. a\n\n   ```sh\n   x\n   ```\n\n```py\na = 1\n", offsetOptions);
+        TestRunner::assertTrue(
+            afterListResult != nullptr && afterListResult->children.size() == 2 &&
+                afterListResult->children[1]->type == NodeType::CodeBlock &&
+                afterListResult->children[1]->beg == 28,
+            "FenceOffset: a column-0 fence after a list begins at its line start"
+        );
     }
 
     static void testStrikethrough() {

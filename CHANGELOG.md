@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [0.16.4] - 2026-11-18
+
+### Breaking changes
+
+None.
+
+### Fixed
+
+- In 0.16.3, after one indented fence anywhere in the stream (for example a code block inside a list item), every later multi-line chunk in a top-level code or display-math block took a full parse. Top-level blocks whose opener starts at column 0 are incremental again. Rendered output is unchanged.
+
 ## [0.16.3] - 2026-11-18
 
 ### Breaking changes

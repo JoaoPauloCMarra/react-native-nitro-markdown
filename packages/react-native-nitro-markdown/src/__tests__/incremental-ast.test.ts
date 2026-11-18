@@ -531,7 +531,8 @@ describe("incremental AST", () => {
         beg: 0,
         end: previousText.length,
         children: [
-          { type: "list", ordered: true, start: 1, beg: 0, end: listPart.length },
+          // Offsets from the native parser: the list ends before its closing fence.
+          { type: "list", ordered: true, start: 1, beg: 2, end: 20 },
           {
             type: "code_block",
             language: "py",

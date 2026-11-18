@@ -142,17 +142,15 @@ const WHITESPACE_ONLY_LINE_PATTERN = /^[ \t]*$/;
 // The parser strips fence and container indent at the start of every code
 // line and drops "\r". The fast path matches it only for a direct child of the
 // document whose opener starts at column 0, and only when the chunk has no
-// "\r" and does not begin or continue a blank-so-far line. `openerText` is the
-// source between the previous block and the code text; it holds the opener.
+// "\r" and does not begin or continue a blank-so-far line.
 const canAppendVerbatimLines = (
   path: readonly number[],
   appendedChunk: string,
   previousText: string,
-  openerText: string,
+  opensIndented: boolean,
 ): boolean => {
   if (appendedChunk.includes("\r")) return false;
-  const stripsIndent =
-    path.length !== 2 || INDENTED_VERBATIM_OPENER_PATTERN.test(openerText);
+  const stripsIndent = path.length !== 2 || opensIndented;
   if (!stripsIndent) return true;
   return (
     !appendedChunk.includes("\n") &&
@@ -165,10 +163,12 @@ const appendVerbatimText = (
   appendedChunk: string,
   previousText: string,
   path: readonly number[],
-  openerText: string,
+  opensIndented: boolean,
 ): string | null => {
   if (!content.endsWith("\n") || previousText.endsWith("\r")) return null;
-  if (!canAppendVerbatimLines(path, appendedChunk, previousText, openerText)) {
+  if (
+    !canAppendVerbatimLines(path, appendedChunk, previousText, opensIndented)
+  ) {
     return null;
   }
   const base = endsAtBlockBoundary(previousText)
@@ -179,19 +179,20 @@ const appendVerbatimText = (
     : `${base}${appendedChunk}\n`;
 };
 
+// A block's `beg` is on its opener line (the native parser puts it on the
+// fence, after any indent), so an indented opener line starts with a space.
 // Without offsets the whole text is checked, which can only add full parses.
-const getTopLevelOpenerText = (
+const topLevelBlockOpensIndented = (
   ast: MarkdownNode,
   path: readonly number[],
-  leaf: MarkdownNode,
   previousText: string,
-): string => {
-  const blockIndex = path[0] ?? 0;
-  const start = blockIndex > 0 ? ast.children?.[blockIndex - 1]?.end : 0;
-  if (typeof start !== "number" || typeof leaf.beg !== "number") {
-    return previousText;
+): boolean => {
+  const beg = ast.children?.[path[0] ?? 0]?.beg;
+  if (typeof beg !== "number") {
+    return INDENTED_VERBATIM_OPENER_PATTERN.test(previousText);
   }
-  return previousText.slice(start, leaf.beg);
+  const lineStart = previousText.lastIndexOf("\n", beg - 1) + 1;
+  return previousText[lineStart] === " ";
 };
 
 const appendPlainTextToAst = (
@@ -216,7 +217,7 @@ const appendPlainTextToAst = (
           appendedChunk,
           previousText,
           path,
-          getTopLevelOpenerText(ast, path, leaf, previousText),
+          topLevelBlockOpensIndented(ast, path, previousText),
         )
       : content + appendedChunk;
   if (nextContent === null) return null;
