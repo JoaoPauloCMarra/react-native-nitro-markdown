@@ -17,7 +17,12 @@ import {
   type ViewStyle,
 } from "react-native";
 import type { MarkdownNode } from "./headless";
-import { cloneMarkdownNode } from "./utils/freeze-ast";
+import {
+  cloneInternalAst,
+  cloneMarkdownNode,
+  isInternalAst,
+  type InternalAstCloneCache,
+} from "./utils/freeze-ast";
 import { readFlattenedText } from "./utils/text-content";
 import type { ParserOptions } from "./Markdown.nitro";
 import {
@@ -315,6 +320,7 @@ export const Markdown: FC<MarkdownProps> = ({
 
   const parseAstCacheRef = useRef<Map<string, ParseAstCacheEntry> | null>(null);
   const validatedSourceAstRef = useRef<MarkdownNode | null>(null);
+  const internalAstClonesRef = useRef<InternalAstCloneCache>(new WeakMap());
   const cacheStatsRef = useRef({ hits: 0, misses: 0, evictions: 0 });
   if (parseAstCacheRef.current === null) {
     parseAstCacheRef.current = new Map();
@@ -324,6 +330,20 @@ export const Markdown: FC<MarkdownProps> = ({
   const parseResult = useMemo(() => {
     try {
       let safeSourceAst: MarkdownNode | undefined;
+      if (
+        sourceAst &&
+        isInternalAst(sourceAst) &&
+        !astTransform &&
+        (!plugins || plugins.length === 0) &&
+        !hasParseCompleteHandler
+      ) {
+        const internalAst =
+          !hasCustomRenderers || stableParserOptions?.freezeAst === true
+            ? sourceAst
+            : cloneInternalAst(sourceAst, internalAstClonesRef.current);
+        validatedSourceAstRef.current = null;
+        return { ast: internalAst };
+      }
       if (sourceAst) {
         const clonedSourceAst = cloneMarkdownNode(sourceAst);
         const previousSourceAst = validatedSourceAstRef.current;

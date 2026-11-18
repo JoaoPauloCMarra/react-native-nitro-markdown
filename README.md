@@ -68,7 +68,7 @@ install the optional peer `ratex-react-native` and pass the renderers from the
 `/math` subpath:
 
 ```sh
-bunx expo install ratex-react-native@0.1.15   # or: bun add ratex-react-native@0.1.15
+bunx expo install ratex-react-native@0.1.16   # or: bun add ratex-react-native@0.1.16
 ```
 
 ```tsx
@@ -80,7 +80,7 @@ import { mathRenderers } from "react-native-nitro-markdown/math";
 </Markdown>;
 ```
 
-`ratex-react-native@0.1.15` requires React Native `>=0.84` and React `>=19.2`.
+`ratex-react-native@0.1.16` requires React Native `>=0.84` and React `>=19.2`.
 On React Native 0.77–0.83, skip it; math stays readable as monospace text. The
 main entry and `/headless` never load `ratex-react-native`.
 
@@ -416,9 +416,9 @@ for the error-code contract.
 | Dependency                                                                | Supported                                                                                                      |
 | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | [React Native](https://reactnative.dev/)                                  | `>=0.77` (New Architecture; Nitro 0.37 minimum). Tested on `0.88.1`; RN `0.87` Strict TypeScript compatibility check |
-| [Expo](https://docs.expo.dev/versions/v58.0.0/)                           | SDK `>=53` development builds. Tested on SDK 58 (`58.0.23`, RN `0.88.1`)                                        |
+| [Expo](https://docs.expo.dev/versions/v58.0.0/)                           | SDK `>=53` development builds. Tested on SDK 58 (`58.0.26`, RN `0.88.1`)                                        |
 | [Nitro Modules](https://www.npmjs.com/package/react-native-nitro-modules) | `>=0.37.0 <0.38.0`                                                                                             |
-| [RaTeX React Native](https://www.npmjs.com/package/ratex-react-native)    | Optional, only for `react-native-nitro-markdown/math`. `0.1.15` needs RN `>=0.84` and React `>=19.2`            |
+| [RaTeX React Native](https://www.npmjs.com/package/ratex-react-native)    | Optional, only for `react-native-nitro-markdown/math`. `0.1.16` needs RN `>=0.84` and React `>=19.2`            |
 | iOS                                                                       | The app's React Native iOS floor (`min_ios_version_supported`, 15.1 on RN 0.77–0.88)                           |
 | Android                                                                   | `minSdkVersion` 24                                                                                             |
 | Platforms                                                                 | iOS, Android (Web not supported)                                                                               |

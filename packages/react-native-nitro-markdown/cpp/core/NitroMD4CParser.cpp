@@ -19,8 +19,6 @@ namespace NitroMarkdown {
 
 namespace {
 
-// Hard input cap: oversized documents fail deterministically instead of
-// exhausting memory. The JavaScript boundary enforces the same cap earlier.
 static constexpr size_t kMinImageAltBudgetBytes = 4096;
 
 static_assert(

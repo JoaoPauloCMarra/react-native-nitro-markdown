@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BUN_VERSION: "1.4.3"
+  BUN_VERSION: "1.4.4"
   NODE_VERSION: "24"
   NPM_VERSION: "12.2.0"
   PACKAGE_DIR: packages/react-native-nitro-markdown

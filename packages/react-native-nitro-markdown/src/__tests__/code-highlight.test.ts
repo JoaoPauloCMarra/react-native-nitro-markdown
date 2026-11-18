@@ -111,6 +111,25 @@ describe("defaultHighlighter", () => {
     expect(joinTokenTexts(tokens)).toBe(code);
   });
 
+  it("tokenizes multi-line blocks with both comment styles independently across calls", () => {
+    const comments = (tokens: HighlightedToken[]) =>
+      tokens.filter((t) => t.type === "comment").map((t) => t.text);
+    const jsCode = 'const a = "x"; // one\nlet b = 2; // two\nb++;';
+    const pyCode = 'a = "x"  # one\nb = 2  # two\nb += 1';
+
+    for (let round = 0; round < 2; round++) {
+      const js = defaultHighlighter("javascript", jsCode);
+      const py = defaultHighlighter("python", pyCode);
+      const sh = defaultHighlighter("bash", pyCode);
+
+      expect(comments(js)).toEqual(["// one", "// two"]);
+      expect(comments(py)).toEqual(["# one", "# two"]);
+      expect(comments(sh)).toEqual(["# one", "# two"]);
+      expect(joinTokenTexts(js)).toBe(jsCode);
+      expect(joinTokenTexts(py)).toBe(pyCode);
+    }
+  });
+
   it("inserts newline tokens between lines", () => {
     const code = "a\nb";
     const tokens = defaultHighlighter("javascript", code);

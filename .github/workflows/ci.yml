@@ -9,7 +9,7 @@ on:
 
 env:
   TZ: UTC
-  BUN_VERSION: "1.4.3"
+  BUN_VERSION: "1.4.4"
   NODE_VERSION: "24"
 
 permissions:
@@ -40,6 +40,12 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
           no-cache: true
+
+      - name: Cache Bun packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
 
       - name: Install C++ coverage tools
         run: |

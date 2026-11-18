@@ -380,6 +380,7 @@ public:
 
         // Regression and feature coverage tests
         testCodeBlockHasTextChildren();
+        testListItemCodeBlockStripsIndentAndCarriageReturn();
         testStrikethrough();
         testMathInline();
         testMathBlock();
@@ -2151,6 +2152,28 @@ private:
         }
         TestRunner::assertTrue(allText.find("print('hello')") != std::string::npos,
             "CodeBlock: text children contain code content");
+    }
+
+    static void testListItemCodeBlockStripsIndentAndCarriageReturn() {
+        MD4CParser parser;
+        ParserOptions options{true, true};
+        auto listItemResult = parser.parse("1. a\n\n   ```bash\n   npm i\n   npm\n", options);
+        auto listCode = findFirstNode(listItemResult, NodeType::CodeBlock);
+        TestRunner::assertNotNull(listCode.get(), "ListItemCode: code_block node");
+        TestRunner::assertTrue(
+            listCode != nullptr && listCode->children.size() == 1 &&
+                listCode->children[0]->content.value_or("") == "npm i\nnpm\n",
+            "ListItemCode: list-item and fence indent are stripped from code lines"
+        );
+
+        auto crlfResult = parser.parse("```ts\r\nconst a = 1;\r\nconst b = 2;\r\n```\r\n", options);
+        auto crlfCode = findFirstNode(crlfResult, NodeType::CodeBlock);
+        TestRunner::assertNotNull(crlfCode.get(), "CrlfCode: code_block node");
+        TestRunner::assertTrue(
+            crlfCode != nullptr && crlfCode->children.size() == 1 &&
+                crlfCode->children[0]->content.value_or("") == "const a = 1;\nconst b = 2;\n",
+            "CrlfCode: carriage returns are dropped at line ends"
+        );
     }
 
     static void testStrikethrough() {

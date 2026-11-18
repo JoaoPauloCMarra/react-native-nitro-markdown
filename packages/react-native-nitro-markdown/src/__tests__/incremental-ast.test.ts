@@ -341,7 +341,7 @@ describe("incremental AST", () => {
   });
 
   it.each([
-    ["```ts\r\nconst a = 1;\r\n", "const b = 2;\r\n", false],
+    ["```ts\r\nconst a = 1;\r\n", "const b = 2;\r\n", true],
     ["~~~ts\nconst a = 1;\n", "const b = 2;\n", false],
     ["```ts\nconst a = 1;\n", "```\n", true],
     ["~~~ts\nconst a = 1;\n", "~~~\n", true],
@@ -407,6 +407,193 @@ describe("incremental AST", () => {
     },
   );
 
+  describe("verbatim blocks that strip indent or carriage returns", () => {
+    const listText = "1. a\n\n   ```bash\n   npm i";
+    const buildListAst = (text: string): MarkdownNode => ({
+      type: "document",
+      beg: 0,
+      end: text.length,
+      children: [
+        {
+          type: "list",
+          ordered: true,
+          start: 1,
+          beg: 0,
+          end: text.length,
+          children: [
+            {
+              type: "list_item",
+              beg: 0,
+              end: text.length,
+              children: [
+                {
+                  type: "paragraph",
+                  beg: 3,
+                  end: 4,
+                  children: [{ type: "text", content: "a", beg: 3, end: 4 }],
+                },
+                {
+                  type: "code_block",
+                  language: "bash",
+                  beg: 8,
+                  end: text.length,
+                  children: [
+                    {
+                      type: "text",
+                      content: "npm i\n",
+                      beg: 18,
+                      end: text.length,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    it.each([["\n"], ["\r\n"], ["x\ny"]])(
+      "full-parses a list-item code block when %j is appended",
+      (chunk) => {
+        const parseCurrent = jest.fn(() =>
+          parseWithNativeParser(listText + chunk),
+        );
+
+        getNextStreamAst({
+          previousAst: buildListAst(listText),
+          previousText: listText,
+          nextText: listText + chunk,
+          parseCurrent,
+        });
+
+        expect(parseCurrent).toHaveBeenCalledTimes(1);
+      },
+    );
+
+    it.each([
+      ["\n", "   "],
+      ["\n   ", "npm"],
+    ])(
+      "full-parses a list-item code block line that starts with %j then %j",
+      (lineStart, chunk) => {
+        const previousText = listText + lineStart;
+        const parseCurrent = jest.fn(() =>
+          parseWithNativeParser(previousText + chunk),
+        );
+
+        getNextStreamAst({
+          previousAst: buildListAst(previousText),
+          previousText,
+          nextText: previousText + chunk,
+          parseCurrent,
+        });
+
+        expect(parseCurrent).toHaveBeenCalledTimes(1);
+      },
+    );
+
+    it("keeps same-line appends in a list-item code block incremental", () => {
+      const parseCurrent = jest.fn();
+
+      getNextStreamAst({
+        previousAst: buildListAst(listText),
+        previousText: listText,
+        nextText: `${listText} --save`,
+        parseCurrent,
+      });
+
+      expect(parseCurrent).not.toHaveBeenCalled();
+    });
+
+    it("full-parses an indented top-level fence on a new line", () => {
+      const previousText = "  ```ts\n  const a = 1;";
+      const parseCurrent = jest.fn(() =>
+        parseWithNativeParser(`${previousText}\n`),
+      );
+
+      getNextStreamAst({
+        previousAst: parseWithNativeParser(previousText),
+        previousText,
+        nextText: `${previousText}\n`,
+        parseCurrent,
+      });
+
+      expect(parseCurrent).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps a column-0 fence incremental after an earlier indented fence", () => {
+      const listPart = "1. a\n\n   ```sh\n   x\n   ```\n";
+      const previousText = `${listPart}\n\`\`\`py\na = 1\n`;
+      const contentBeg = previousText.length - "a = 1\n".length;
+      const previousAst: MarkdownNode = {
+        type: "document",
+        beg: 0,
+        end: previousText.length,
+        children: [
+          { type: "list", ordered: true, start: 1, beg: 0, end: listPart.length },
+          {
+            type: "code_block",
+            language: "py",
+            beg: listPart.length + 1,
+            end: previousText.length,
+            children: [
+              {
+                type: "text",
+                content: "a = 1\n",
+                beg: contentBeg,
+                end: previousText.length,
+              },
+            ],
+          },
+        ],
+      };
+      const parseCurrent = jest.fn();
+
+      const next = getNextStreamAst({
+        previousAst,
+        previousText,
+        nextText: `${previousText}b = 2\nc = 3\n`,
+        parseCurrent,
+      });
+
+      expect(parseCurrent).not.toHaveBeenCalled();
+      expect(next.children?.[1]?.children?.[0]?.content).toBe(
+        "a = 1\nb = 2\nc = 3\n",
+      );
+    });
+
+    it("full-parses a CRLF chunk in a column-0 fence", () => {
+      const previousText = "```ts\nconst a = 1;\n";
+      const parseCurrent = jest.fn(() =>
+        parseWithNativeParser(`${previousText}const b = 2;\r\n`),
+      );
+
+      getNextStreamAst({
+        previousAst: parseWithNativeParser(previousText),
+        previousText,
+        nextText: `${previousText}const b = 2;\r\n`,
+        parseCurrent,
+      });
+
+      expect(parseCurrent).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps new-line chunks in a column-0 top-level fence incremental", () => {
+      const previousText = "Intro\n\n```ts\nconst a = 1;";
+      const parseCurrent = jest.fn();
+
+      getNextStreamAst({
+        previousAst: parseWithNativeParser(previousText),
+        previousText,
+        nextText: `${previousText}\nconst b = 2;`,
+        parseCurrent,
+      });
+
+      expect(parseCurrent).not.toHaveBeenCalled();
+    });
+  });
+
   it("keeps the incremental path for trailing text that cannot start a block", () => {
     const previousText = "Total:\n12 apples";
     const previousAst = parseWithNativeParser(previousText);
@@ -419,5 +606,43 @@ describe("incremental AST", () => {
     });
 
     expect(mockParser.parse).not.toHaveBeenCalled();
+  });
+
+  describe("thematic break openers split across chunks", () => {
+    it.each([
+      ["--", "-"],
+      ["- -", " -"],
+      ["- - ", "-"],
+      ["* *", " *"],
+      ["**", "*"],
+      ["__", "_"],
+    ])("full-parses %j followed by %j", (trailingLine, chunk) => {
+      const previousText = `Hello\n\n${trailingLine}`;
+      const nextText = `${previousText}${chunk}`;
+      const parseCurrent = jest.fn(() => parseWithNativeParser(nextText));
+
+      getNextStreamAst({
+        previousAst: parseWithNativeParser(previousText),
+        previousText,
+        nextText,
+        parseCurrent,
+      });
+
+      expect(parseCurrent).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps ordinary hyphenated text on the incremental path", () => {
+      const previousText = "Hello\n\nwell-known --";
+      const parseCurrent = jest.fn();
+
+      getNextStreamAst({
+        previousAst: parseWithNativeParser(previousText),
+        previousText,
+        nextText: `${previousText}- rest`,
+        parseCurrent,
+      });
+
+      expect(parseCurrent).not.toHaveBeenCalled();
+    });
   });
 });

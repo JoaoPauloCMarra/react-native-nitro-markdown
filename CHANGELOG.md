@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [0.16.3] - 2026-11-18
+
+### Breaking changes
+
+None.
+
+### Fixed
+
+- Streamed code and display-math blocks inside list items, blockquotes or indented fences no longer show extra indentation, and streamed CRLF code lines no longer show stray carriage returns, before the closing fence arrives. The streamed result now matches a full parse.
+- Streaming a horizontal rule in pieces (`--` then `-`, or `- -` then ` -`) now renders a rule, as a full parse does, instead of a paragraph that stays wrong until the next full parse. Ordinary text appends stay incremental.
+
+### Changed
+
+- Syntax highlighting no longer builds a new regular expression for every code line. Highlight output is unchanged.
+- `MarkdownStream` no longer validates and deep-copies its own AST on every flush when no plugin, `astTransform` or `onParseComplete` is set. With custom renderers it copies only the nodes that changed since the last flush. Measured on an iPhone 17 simulator dev build over the example's token stream (about 34 seconds, 169 flushes, with the `./math` renderers): `Markdown` render self time fell from 534 ms to 42 ms, the slowest flush from 15.9 ms to 0.5 ms, and total React render time from 1,345 ms to 724 ms. Simulator numbers are indicative.
+- Tested with Expo SDK 58 (`expo` 58.0.26, React Native 0.88.1, React 19.3.0) and `ratex-react-native` 0.1.16 for `react-native-nitro-markdown/math`. Peer dependency ranges are unchanged.
+
 ## [0.16.2] - 2026-11-10
 
 ### Breaking changes

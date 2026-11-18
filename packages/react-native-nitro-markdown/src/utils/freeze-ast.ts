@@ -532,3 +532,33 @@ export function cloneMarkdownNode(node: MarkdownNode): MarkdownNode {
   assertAcyclicMarkdownNode(clonedRoot);
   return clonedRoot;
 }
+
+const internalAstRoots = new WeakSet<object>();
+
+export function markInternalAst(ast: MarkdownNode): MarkdownNode {
+  internalAstRoots.add(ast);
+  return ast;
+}
+
+export type InternalAstCloneCache = WeakMap<object, MarkdownNode>;
+
+// One cache per consumer: two consumers must never share clone objects.
+export function cloneInternalAst(
+  node: MarkdownNode,
+  cache: InternalAstCloneCache,
+): MarkdownNode {
+  const cached = cache.get(node);
+  if (cached) return cached;
+  const clone: MarkdownNode = { ...node };
+  if (Array.isArray(node.children)) {
+    clone.children = node.children.map((child) =>
+      cloneInternalAst(child, cache),
+    );
+  }
+  cache.set(node, clone);
+  return clone;
+}
+
+export function isInternalAst(ast: MarkdownNode): boolean {
+  return internalAstRoots.has(ast);
+}
