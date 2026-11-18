@@ -1,7 +1,6 @@
 #include "SourceOffsetMap.hpp"
 
 #include <algorithm>
-#include <limits>
 
 namespace NitroMarkdown {
 
@@ -147,7 +146,6 @@ std::size_t SourceOffsetMap::byteIndexOf(const char* position) const noexcept {
     if (position < text_) return 0;
     const std::ptrdiff_t diff = position - text_;
     if (diff < 0 || static_cast<std::size_t>(diff) > size_) return 0;
-    if (static_cast<std::size_t>(diff) > static_cast<std::size_t>(std::numeric_limits<MD_OFFSET>::max())) return 0;
     return static_cast<std::size_t>(diff);
 }
 

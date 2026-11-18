@@ -20,7 +20,7 @@ import {
   type MarkdownSessionController,
 } from "./use-markdown-stream";
 import { getNextStreamAst } from "./utils/incremental-ast";
-import { freezeMarkdownNode } from "./utils/freeze-ast";
+import { freezeMarkdownNode, markInternalAst } from "./utils/freeze-ast";
 import {
   parseWithNativeParser,
   safeOnError,
@@ -568,7 +568,9 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
   if (onError) markdownProps.onError = onError;
   if (options) markdownProps.options = options;
   if (plugins) markdownProps.plugins = plugins;
-  if (streamState.sourceAst) markdownProps.sourceAst = streamState.sourceAst;
+  if (streamState.sourceAst) {
+    markdownProps.sourceAst = markInternalAst(streamState.sourceAst);
+  }
 
   if (renderMarkdown) {
     return renderMarkdown({

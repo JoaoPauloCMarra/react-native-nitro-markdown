@@ -147,6 +147,17 @@ export const SUPPORTED_HIGHLIGHT_LANGUAGES: readonly string[] = [
   ...LANGUAGE_PROFILES.keys(),
 ];
 
+const createTokenRegex = (lineComment: LanguageProfile["lineComment"]): RegExp =>
+  new RegExp(
+    `("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'|\`(?:[^\`\\\\]|\\\\.)*\`)|(\\b\\d+(?:\\.\\d+)?\\b)|(${lineComment}[^\\n]*)|([a-zA-Z_$][a-zA-Z0-9_$]*)|([+\\-*/%=<>!&|^~?:]+)|([(\\)\\[\\]{},;.])|(\\s+)|(.)`,
+    "g",
+  );
+
+const TOKEN_REGEXES: Record<LanguageProfile["lineComment"], RegExp> = {
+  "//": createTokenRegex("//"),
+  "#": createTokenRegex("#"),
+};
+
 function tokenizeLine(
   line: string,
   profile: LanguageProfile,
@@ -161,11 +172,8 @@ function tokenizeLine(
     return [{ text: line, type: "comment" }];
   }
 
-  const commentPattern = `${lineComment}[^\\n]*`;
-  const tokenRegex = new RegExp(
-    `("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'|\`(?:[^\`\\\\]|\\\\.)*\`)|(\\b\\d+(?:\\.\\d+)?\\b)|(${commentPattern})|([a-zA-Z_$][a-zA-Z0-9_$]*)|([+\\-*/%=<>!&|^~?:]+)|([(\\)\\[\\]{},;.])|(\\s+)|(.)`,
-    "g",
-  );
+  const tokenRegex = TOKEN_REGEXES[lineComment];
+  tokenRegex.lastIndex = 0;
 
   let match: RegExpExecArray | null;
   while ((match = tokenRegex.exec(line)) !== null) {

@@ -25,6 +25,7 @@ wait text "async=initializing>available;"
 wait text "reason=beforeParse-plugin;"
 wait text "streamerr=parse;"
 scroll down
+wait "stable"
 press id="link-press-target"
 wait text "link=https://example.test:blocked;"
 close

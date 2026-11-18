@@ -66,7 +66,7 @@ const getTrailingLine = (text: string): string => {
 };
 
 const AMBIGUOUS_BLOCK_START_PATTERN =
-  /^ {0,3}(?:[*+-]|\d{1,9}[.)]?|#{1,6})[ \t]*$/;
+  /^ {0,3}(?:(?:[*+-][ \t]*)+|(?:\d{1,9}[.)]?|#{1,6})[ \t]*)$/;
 
 const hasAmbiguousBlockStart = (previousText: string): boolean => {
   return AMBIGUOUS_BLOCK_START_PATTERN.test(getTrailingLine(previousText));
@@ -136,18 +136,62 @@ const VERBATIM_BLOCK_TYPES = new Set(["code_block", "math_block"]);
 // last line that has no line ending in the source yet. Text appended to that
 // line goes before the newline, and the new last line keeps one. A trailing
 // "\r" may be half of a CRLF, so that append takes a full parse.
+const INDENTED_VERBATIM_OPENER_PATTERN = /(?:^|\n) +(?:```|~~~|\$\$)/;
+const WHITESPACE_ONLY_LINE_PATTERN = /^[ \t]*$/;
+
+// The parser strips fence and container indent at the start of every code
+// line and drops "\r". The fast path matches it only for a direct child of the
+// document whose opener starts at column 0, and only when the chunk has no
+// "\r" and does not begin or continue a blank-so-far line. `openerText` is the
+// source between the previous block and the code text; it holds the opener.
+const canAppendVerbatimLines = (
+  path: readonly number[],
+  appendedChunk: string,
+  previousText: string,
+  openerText: string,
+): boolean => {
+  if (appendedChunk.includes("\r")) return false;
+  const stripsIndent =
+    path.length !== 2 || INDENTED_VERBATIM_OPENER_PATTERN.test(openerText);
+  if (!stripsIndent) return true;
+  return (
+    !appendedChunk.includes("\n") &&
+    !WHITESPACE_ONLY_LINE_PATTERN.test(getTrailingLine(previousText))
+  );
+};
+
 const appendVerbatimText = (
   content: string,
   appendedChunk: string,
   previousText: string,
+  path: readonly number[],
+  openerText: string,
 ): string | null => {
   if (!content.endsWith("\n") || previousText.endsWith("\r")) return null;
+  if (!canAppendVerbatimLines(path, appendedChunk, previousText, openerText)) {
+    return null;
+  }
   const base = endsAtBlockBoundary(previousText)
     ? content
     : content.slice(0, -1);
   return endsAtBlockBoundary(appendedChunk)
     ? base + appendedChunk
     : `${base}${appendedChunk}\n`;
+};
+
+// Without offsets the whole text is checked, which can only add full parses.
+const getTopLevelOpenerText = (
+  ast: MarkdownNode,
+  path: readonly number[],
+  leaf: MarkdownNode,
+  previousText: string,
+): string => {
+  const blockIndex = path[0] ?? 0;
+  const start = blockIndex > 0 ? ast.children?.[blockIndex - 1]?.end : 0;
+  if (typeof start !== "number" || typeof leaf.beg !== "number") {
+    return previousText;
+  }
+  return previousText.slice(start, leaf.beg);
 };
 
 const appendPlainTextToAst = (
@@ -167,7 +211,13 @@ const appendPlainTextToAst = (
   const content = leaf.content ?? "";
   const nextContent =
     parent && VERBATIM_BLOCK_TYPES.has(parent.type)
-      ? appendVerbatimText(content, appendedChunk, previousText)
+      ? appendVerbatimText(
+          content,
+          appendedChunk,
+          previousText,
+          path,
+          getTopLevelOpenerText(ast, path, leaf, previousText),
+        )
       : content + appendedChunk;
   if (nextContent === null) return null;
 
