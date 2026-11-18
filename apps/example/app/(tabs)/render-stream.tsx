@@ -97,6 +97,7 @@ Nitro Markdown streams by:
 1. Keeping the text buffer in a native session
 2. Reading only the changed range after each batch
 3. Appending plain text to the previous AST when that is safe, and re-parsing otherwise
+4. Holding back a table row, a math block or an image line that is still arriving (\`streaming\`)
 
 ## Deep Dive
 
@@ -152,6 +153,7 @@ type MarkdownRendererPanelProps = {
   session: ReturnType<typeof useMarkdownSession>;
   hasContent: boolean;
   mode: StreamRenderMode;
+  streaming: boolean;
 };
 
 type RawPreviewPanelProps = {
@@ -297,6 +299,7 @@ const MarkdownRendererPanel = memo(function MarkdownRendererPanel({
   session,
   hasContent,
   mode,
+  streaming,
 }: MarkdownRendererPanelProps) {
   const markdownScrollViewRef = useRef<ComponentRef<typeof ScrollView>>(null);
 
@@ -343,6 +346,7 @@ const MarkdownRendererPanel = memo(function MarkdownRendererPanel({
             renderers={mathRenderers}
             updateStrategy="raf"
             useTransitionUpdates
+            streaming={streaming}
           />
         ) : mode === "custom" ? (
           <MarkdownStream
@@ -677,6 +681,7 @@ export default function TokenStreamScreen() {
             session={session}
             hasContent={hasStreamContent}
             mode={renderMode}
+            streaming={isStreamMode}
           />
         ) : null}
       </ScrollView>

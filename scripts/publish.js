@@ -219,6 +219,7 @@ async function validatePackedFiles() {
     "CHANGELOG.md",
     "SECURITY.md",
     "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
     ".watchmanconfig",
     "android/build.gradle",
     "cpp/bindings/HybridMarkdownSession.cpp",

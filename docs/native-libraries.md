@@ -9,6 +9,7 @@ C++ JSON writer plus `JSON.parse` on the JavaScript side.
 | --- | --- | --- |
 | md4c | `cpp/core/NitroMD4CParser` | CommonMark/GFM AST already matches the public node types. |
 | Streaming `JsonWriter` | `HybridMarkdownParser.cpp` | Writes JSON while walking the AST, without building an intermediate DOM tree. |
+| enriched-markdown stream filter (ported source, MIT) | `cpp/core/StreamText`, `StreamBoundary`, `StreamFilter` | Finds the unfinished last block of a stream and hides the parts that have not finished arriving. Text in, text out: it does not touch md4c or the AST contract. Notice in `THIRD_PARTY_NOTICES.md`. |
 
 ## Evaluated and not shipped
 

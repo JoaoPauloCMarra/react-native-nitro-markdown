@@ -3,6 +3,22 @@ import type { ParserOptions } from "../Markdown.nitro";
 
 export type MarkdownSessionListener = (from: number, to: number) => void;
 
+/**
+ * What to do with a block at the end of a stream that has not finished
+ * arriving. `"progressive"` shows what can render; `"hidden"` waits for the
+ * whole block.
+ */
+export type StreamBlockMode = "progressive" | "hidden";
+
+export interface StreamViewRequest {
+  /** Tables. Default `"progressive"`. */
+  tables?: StreamBlockMode;
+  /** Fenced code blocks. Default `"progressive"`. */
+  codeBlocks?: StreamBlockMode;
+  /** A line that is only an image or a link. Default `"progressive"`. */
+  media?: StreamBlockMode;
+}
+
 export interface MarkdownSession extends HybridObject<{
   ios: "c++";
   android: "c++";
@@ -24,6 +40,14 @@ export interface MarkdownSession extends HybridObject<{
   parse(): string;
   /** Parses the current native buffer with parser options. */
   parseWithOptions(options: ParserOptions): string;
+  /**
+   * Parses the buffer as it should show while it is still streaming: the
+   * finished blocks as written, then the last block without the parts that
+   * have not finished arriving. Returns the JSON string
+   * `{"modified":boolean,"plainTail":boolean,"openCodeFence":boolean,"document":MarkdownNode}`.
+   * When `modified` is false, `document` is what `parseWithOptions` returns.
+   */
+  parseStreamView(options: ParserOptions, request: StreamViewRequest): string;
 
   highlightPosition: number;
 

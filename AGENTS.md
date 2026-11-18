@@ -70,6 +70,8 @@
 - `MarkdownSession.reset(text)` replaces full buffer and resets `highlightPosition`; `replace(from, to, text)` is partial. Both emit range events.
 - If any plugin uses `beforeParse`, incremental AST optimization is disabled.
 - Keep stream fixes in package internals, not in demo app logic.
+- `streaming` (default `false`) routes every stream parse through the native `parseStreamView`, which hides the unfinished parts of the last block (`cpp/core/StreamBoundary`, `StreamFilter`, `StreamView`). With it on, the JS plain-text fast path runs only when the last native result was unmodified and had `plainTail: true`. Finished blocks are always shown as written.
+- `cpp/core/Stream{Text,Boundary,Filter}` are ported from enriched-markdown (MIT). Keep the attribution headers and `THIRD_PARTY_NOTICES.md` in sync when they change.
 
 ## Renderer Notes
 

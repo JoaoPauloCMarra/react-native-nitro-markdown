@@ -94,6 +94,10 @@ export { MathInline, MathBlock } from "./renderers/math";
 
 export { createMarkdownSession } from "./MarkdownSession";
 export type { MarkdownSession } from "./MarkdownSession";
+export type {
+  StreamBlockMode,
+  StreamViewRequest,
+} from "./specs/MarkdownSession.nitro";
 export { useMarkdownSession, useStream } from "./use-markdown-stream";
 export type { MarkdownSessionController } from "./use-markdown-stream";
 

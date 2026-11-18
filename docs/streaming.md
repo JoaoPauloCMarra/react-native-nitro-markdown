@@ -97,6 +97,54 @@ UTF-8 bytes and are rejected even though they are only 4,000,000 UTF-16 units.
 If any plugin defines `beforeParse`, incremental AST reuse is disabled so the
 full pipeline runs correctly (see `sourceAstStatus` below).
 
+## Unfinished blocks
+
+While text is still arriving, the last block is often half-written: a table
+with one row, an image whose URL has not ended, an open `$$` block. Set
+`streaming` to `true` while the stream runs, and such a block is held back
+instead of showing as raw syntax. Set it to `false` when the stream ends.
+
+```tsx
+<MarkdownStream
+  session={session}
+  streaming={isStreaming}
+  streamingOptions={{ tables: "progressive", codeBlocks: "progressive", media: "hidden" }}
+/>
+```
+
+`streaming` is `false` by default, and then nothing in this section applies.
+
+| Block | `"progressive"` (default) | `"hidden"` |
+| --- | --- | --- |
+| `tables` | A finished header row shows as a table at once. A last row that is still arriving is left out. | The table waits until a blank line follows it. |
+| `codeBlocks` | An open fence shows as soon as its opening line has ended. | The fence waits for its closing line. |
+| `media` (a line that is only `![alt](url)` or `[label](url)`) | The line shows when its syntax is complete. | The line waits until a blank line or another block follows it. |
+
+Two rules have no option: an image or link line whose syntax is still open is
+always held back, and a `$$` block is held back until its closing `$$`.
+
+Things to know:
+
+- Only the last block is affected. A block that a blank line has ended shows as
+  written.
+- Turn `streaming` off when the stream ends. A stream that ends inside a block
+  (an unclosed `$$`, a table in `"hidden"` mode with no blank line after it)
+  shows that block only then.
+- A half-written link or emphasis inside a sentence is not changed.
+- `text` (from `useMarkdownStreamState` or `renderMarkdown`) is always the
+  source. `sourceAst` is the view, so near the end the two can differ. The
+  `beg`/`end` of a node the view added (the placeholder delimiter row of a
+  table) stop at the source length.
+- `openCodeFence` in the stream state is `true` while the view ends inside an
+  open fence. A custom renderer can use it to wait with syntax highlighting.
+- With a `beforeParse` plugin, `<Markdown>` parses `text` itself, so `streaming`
+  has no effect.
+- A plain-text append still skips the parser, but only when nothing is held
+  back and the last block holds no Markdown syntax character.
+- The rules are ported from
+  [enriched-markdown](https://github.com/software-mansion/enriched-markdown)
+  (MIT).
+
 ## Block groups
 
 Every flush gives the document a new list of top-level blocks. If each block

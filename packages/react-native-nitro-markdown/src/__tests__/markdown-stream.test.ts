@@ -63,7 +63,10 @@ function createSession({
         listener = null;
       };
     }),
-  } as MarkdownSession & { emit: SessionListener; setAllText: (text: string) => void };
+  } as unknown as MarkdownSession & {
+    emit: SessionListener;
+    setAllText: (text: string) => void;
+  };
 }
 
 type CommittedStreamValue = {

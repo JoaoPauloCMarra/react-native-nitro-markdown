@@ -1,5 +1,6 @@
 #include "HybridMarkdownSession.hpp"
 #include "../core/MarkdownJson.hpp"
+#include "../core/StreamView.hpp"
 
 #include <NitroModules/NitroLogger.hpp>
 
@@ -80,6 +81,12 @@ bool isIncompleteUtf8Prefix(const unsigned char* bytes, size_t remaining) noexce
         return remaining == 2 || isContinuation(bytes[2]);
     }
     return false;
+}
+
+::NitroMarkdown::StreamBlockMode toInternalBlockMode(const std::optional<StreamBlockMode>& mode) {
+    return mode == StreamBlockMode::HIDDEN
+        ? ::NitroMarkdown::StreamBlockMode::Hidden
+        : ::NitroMarkdown::StreamBlockMode::Progressive;
 }
 
 std::string numberString(double value) {
@@ -191,6 +198,25 @@ std::string HybridMarkdownSession::parseWithOptions(const ParserOptions& options
     std::lock_guard<std::mutex> lock(mutex_);
     ensureActiveLocked();
     return ::NitroMarkdown::parseMarkdownToJson(buffer_, toInternalParserOptions(options));
+}
+
+std::string HybridMarkdownSession::parseStreamView(
+    const ParserOptions& options,
+    const StreamViewRequest& request
+) {
+    const ::NitroMarkdown::StreamViewOptions view{
+        toInternalBlockMode(request.tables),
+        toInternalBlockMode(request.codeBlocks),
+        toInternalBlockMode(request.media),
+    };
+    std::lock_guard<std::mutex> lock(mutex_);
+    ensureActiveLocked();
+    return ::NitroMarkdown::parseStreamViewToJson(
+        buffer_,
+        bufferUtf16Length_,
+        toInternalParserOptions(options),
+        view
+    );
 }
 
 std::function<void()> HybridMarkdownSession::addListener(

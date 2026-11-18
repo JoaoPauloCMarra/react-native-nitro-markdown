@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [0.18.0] - 2026-11-18
+
+### Breaking changes
+
+None.
+
+### Added
+
+- `MarkdownStream` and `useMarkdownStreamState` take `streaming` (default `false`). While it is `true`, a last block that has not finished arriving is held back instead of showing as raw syntax: an image or link line whose syntax is still open, a `$$` block without its closing `$$`, and the last row of a table while it is arriving. A finished table header row shows as a table at once. Set it to `false` when the stream ends.
+- `streamingOptions` (`tables`, `codeBlocks`, `media`, each `"progressive"` or `"hidden"`) picks whether a table, a fenced code block, and a complete image or link line show as they arrive or wait until they are finished.
+- `MarkdownStreamState.openCodeFence` is `true` while `streaming` is on and the view ends inside an open fenced code block. Code that builds a `MarkdownStreamState` object by hand (a test double) needs the new field.
+- `MarkdownSession.parseStreamView(options, request)`, the native call behind `streaming`, and the types `StreamViewRequest` and `StreamBlockMode`. A hand-written object typed as `MarkdownSession` now needs this method; `MarkdownStream` still works with a session object that does not have it.
+- The package ships `THIRD_PARTY_NOTICES.md`. The stream rules are ported from enriched-markdown (MIT).
+
+### Changed
+
+- With `streaming` on, a plain-text append skips the parser only when nothing is held back and the last block holds no Markdown syntax character. With `streaming` off, nothing changes.
+
 ## [0.17.0] - 2026-11-18
 
 ### Breaking changes

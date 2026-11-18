@@ -41,7 +41,14 @@ policy. Protocol restrictions and `remoteImages: "deny"` still apply.
 
 `updateStrategy`, `updateIntervalMs`, `useTransitionUpdates`,
 `incrementalParsing`, `initialParseMode` (`"sync"` default or `"async"` for
-large initial content), `options`, `plugins`, `onError`, `renderMarkdown`.
+large initial content), `streaming` (default `false`) and `streamingOptions`
+(`StreamViewRequest`: `tables`, `codeBlocks`, `media`, each `"progressive"` or
+`"hidden"`; see [Streaming](./streaming.md#unfinished-blocks)), `options`,
+`plugins`, `onError`, `renderMarkdown`.
+
+`MarkdownSession.parseStreamView(options, request)` is the native call behind
+`streaming`. It returns the JSON string
+`{"modified":boolean,"plainTail":boolean,"openCodeFence":boolean,"document":MarkdownNode}`.
 
 ## Hooks & sessions
 
@@ -150,7 +157,7 @@ trees so mutation of one consumer result cannot poison another cached result.
 `MarkdownSessionController`, `MarkdownStreamProps`,
 `MarkdownStreamRenderProps`, `MarkdownStreamState`,
 `MarkdownStreamSourceAstStatus`, `MarkdownStreamSourceAstDisabledReason`,
-`UseMarkdownStreamStateOptions`, `CodeHighlighter`, `HighlightedToken`,
+`UseMarkdownStreamStateOptions`, `StreamViewRequest`, `StreamBlockMode`, `CodeHighlighter`, `HighlightedToken`,
 `TokenType`, `UrlSafetyOptions`, `MarkdownError`, `MarkdownErrorCode`,
 `MarkdownErrorSource`, `BaseCustomRendererProps`, `EnhancedRendererProps`,
 `MarkdownContextValue`, `CustomRendererProps`.

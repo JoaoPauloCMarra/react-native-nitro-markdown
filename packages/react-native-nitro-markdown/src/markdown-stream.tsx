@@ -4,6 +4,7 @@ import {
   useRef,
   useCallback,
   useLayoutEffect,
+  useMemo,
   startTransition,
   type FC,
   type ReactNode,
@@ -14,13 +15,22 @@ import {
 } from "./headless";
 import type { ParserOptions } from "./Markdown.nitro";
 import { Markdown, type MarkdownPlugin, type MarkdownProps } from "./markdown";
-import type { MarkdownSession } from "./specs/MarkdownSession.nitro";
+import type {
+  MarkdownSession,
+  StreamViewRequest,
+} from "./specs/MarkdownSession.nitro";
 import {
   resolveMarkdownSession,
   type MarkdownSessionController,
 } from "./use-markdown-stream";
 import { getNextStreamAst } from "./utils/incremental-ast";
 import { freezeMarkdownNode, markInternalAst } from "./utils/freeze-ast";
+import {
+  parseSessionView,
+  SOURCE_VIEW,
+  type StreamParse,
+  type StreamViewState,
+} from "./utils/stream-view";
 import {
   parseWithNativeParser,
   safeOnError,
@@ -77,12 +87,16 @@ const resolveStreamText = ({
   return session.getAllText();
 };
 
+const canAppendInJs = (view: StreamViewState): boolean =>
+  view.kind === "source" || view.appendable;
+
 type StreamRenderState = {
   session: MarkdownSession;
   text: string;
   ast: MarkdownNode | null;
+  view: StreamViewState;
   initializedBy?: {
-    parseSession: (knownText?: string) => MarkdownNode;
+    parseSession: (knownText?: string) => StreamParse;
     createEmptyAst: () => MarkdownNode;
     hasBeforeParsePlugins: boolean;
   };
@@ -133,6 +147,19 @@ export type UseMarkdownStreamStateOptions = {
    */
   initialParseMode?: "sync" | "async";
   /**
+   * Set to true while text is still arriving. A block at the end that has
+   * not finished arriving (a table row, an image or link line, a `$$` block,
+   * an open code fence in `"hidden"` mode) is then held back instead of
+   * showing as raw syntax. Set it to false when the stream ends, or the last
+   * block can stay hidden. Has no effect with a `beforeParse` plugin.
+   * @default false
+   */
+  streaming?: boolean;
+  /**
+   * How each kind of unfinished block shows while `streaming` is true.
+   */
+  streamingOptions?: StreamViewRequest;
+  /**
    * Parser options used for the stream source AST.
    */
   options?: ParserOptions;
@@ -148,6 +175,11 @@ export type MarkdownStreamState = {
   sourceAst?: MarkdownNode;
   sourceAstStatus: MarkdownStreamSourceAstStatus;
   sourceAstDisabledReason?: MarkdownStreamSourceAstDisabledReason;
+  /**
+   * True while `streaming` is on and `sourceAst` ends inside a fenced code
+   * block whose closing fence has not arrived.
+   */
+  openCodeFence: boolean;
 };
 
 export type MarkdownStreamRenderProps = MarkdownStreamState & {
@@ -165,6 +197,8 @@ export function useMarkdownStreamState({
   useTransitionUpdates = false,
   incrementalParsing = true,
   initialParseMode = "sync",
+  streaming = false,
+  streamingOptions,
   options,
   onError,
   plugins,
@@ -175,14 +209,34 @@ export function useMarkdownStreamState({
     parserOptions != null
       ? typeof activeSession.parseWithOptions === "function"
       : typeof activeSession.parse === "function";
+  const hideTables = streamingOptions?.tables === "hidden";
+  const hideCodeBlocks = streamingOptions?.codeBlocks === "hidden";
+  const hideMedia = streamingOptions?.media === "hidden";
+  const viewRequest = useMemo<StreamViewRequest | null>(() => {
+    if (!streaming) return null;
+    return {
+      ...(hideTables ? { tables: "hidden" } : {}),
+      ...(hideCodeBlocks ? { codeBlocks: "hidden" } : {}),
+      ...(hideMedia ? { media: "hidden" } : {}),
+    };
+  }, [streaming, hideTables, hideCodeBlocks, hideMedia]);
   const parseSession = useCallback(
-    (knownText?: string): MarkdownNode => {
-      if (canParseSessionNatively || knownText === undefined) {
-        return parseMarkdownSession(activeSession, parserOptions);
+    (knownText?: string): StreamParse => {
+      if (viewRequest) {
+        return parseSessionView(activeSession, parserOptions, viewRequest);
       }
-      return parseWithNativeParser(knownText, parserOptions);
+      if (canParseSessionNatively || knownText === undefined) {
+        return {
+          ast: parseMarkdownSession(activeSession, parserOptions),
+          view: SOURCE_VIEW,
+        };
+      }
+      return {
+        ast: parseWithNativeParser(knownText, parserOptions),
+        view: SOURCE_VIEW,
+      };
     },
-    [activeSession, canParseSessionNatively, parserOptions],
+    [activeSession, canParseSessionNatively, parserOptions, viewRequest],
   );
   const createEmptyAst = useCallback((): MarkdownNode => {
     const ast: MarkdownNode = {
@@ -204,12 +258,14 @@ export function useMarkdownStreamState({
         session: activeSession,
         text: initialText,
         ast: null,
+        view: SOURCE_VIEW,
       };
     }
     let initialAst: MarkdownNode | null = createEmptyAst();
+    let initialView = SOURCE_VIEW;
     if (!hasBeforeParsePlugins) {
       try {
-        initialAst = parseSession(initialText);
+        ({ ast: initialAst, view: initialView } = parseSession(initialText));
       } catch (error) {
         safeOnError(onError, error, "parse");
         initialAst = null;
@@ -219,6 +275,7 @@ export function useMarkdownStreamState({
       session: activeSession,
       text: initialText,
       ast: initialAst,
+      view: initialView,
     };
   });
   if (renderState.session !== activeSession) {
@@ -230,10 +287,12 @@ export function useMarkdownStreamState({
     }
     if (replacementText !== null) {
       let replacementAst: MarkdownNode | null = createEmptyAst();
+      let replacementView = SOURCE_VIEW;
       let parseFailure: { error: unknown } | undefined;
       if (!hasBeforeParsePlugins) {
         try {
-          replacementAst = parseSession(replacementText);
+          ({ ast: replacementAst, view: replacementView } =
+            parseSession(replacementText));
         } catch (error) {
           replacementAst = null;
           parseFailure = { error };
@@ -243,6 +302,7 @@ export function useMarkdownStreamState({
         session: activeSession,
         text: replacementText,
         ast: replacementAst,
+        view: replacementView,
         initializedBy: { parseSession, createEmptyAst, hasBeforeParsePlugins },
         ...(parseFailure ? { parseFailure } : {}),
       });
@@ -312,6 +372,7 @@ export function useMarkdownStreamState({
         session: derivedState.session,
         text: derivedState.text,
         ast: derivedState.ast,
+        view: derivedState.view,
       };
       if (derivedState.parseFailure) {
         safeOnError(
@@ -330,9 +391,10 @@ export function useMarkdownStreamState({
       return;
     }
     let initialAst: MarkdownNode | null = createEmptyAst();
+    let initialView = SOURCE_VIEW;
     if (!hasBeforeParsePlugins) {
       try {
-        initialAst = parseSession(initialText);
+        ({ ast: initialAst, view: initialView } = parseSession(initialText));
       } catch (error) {
         safeOnError(onErrorRef.current, error, "parse");
         initialAst = null;
@@ -343,6 +405,7 @@ export function useMarkdownStreamState({
       session: activeSession,
       text: initialText,
       ast: initialAst,
+      view: initialView,
     };
     renderStateRef.current = initialState;
     setRenderState(initialState);
@@ -399,20 +462,27 @@ export function useMarkdownStreamState({
       if (latest === previousState.text) return;
 
       let nextAst: MarkdownNode | null;
+      let nextView = previousState.view;
+      const parseLatest = (): MarkdownNode => {
+        const parsed = parseSession(latest);
+        nextView = parsed.view;
+        return parsed.ast;
+      };
       try {
         if (hasBeforeParsePlugins) {
           nextAst = previousState.ast;
         } else if (previousState.ast) {
           nextAst = getNextStreamAst({
-            allowIncremental,
+            allowIncremental:
+              allowIncremental && canAppendInJs(previousState.view),
             nextText: latest,
             previousAst: previousState.ast,
             previousText: previousState.text,
-            parseCurrent: () => parseSession(latest),
+            parseCurrent: parseLatest,
             ...(parserOptions ? { options: parserOptions } : {}),
           });
         } else {
-          nextAst = parseSession(latest);
+          nextAst = parseLatest();
         }
       } catch (error) {
         if (isCurrentSubscription()) {
@@ -425,6 +495,7 @@ export function useMarkdownStreamState({
         session: activeSession,
         text: latest,
         ast: nextAst,
+        view: nextView,
       };
       renderStateRef.current = nextState;
       if (!mountedRef.current) return;
@@ -522,6 +593,10 @@ export function useMarkdownStreamState({
   const streamState: MarkdownStreamState = {
     text: stateMatchesSession ? renderState.text : "",
     sourceAstStatus: sourceAstAvailable ? "available" : "disabled",
+    openCodeFence:
+      sourceAstAvailable &&
+      renderState.view.kind === "view" &&
+      renderState.view.openCodeFence,
   };
   if (!stateMatchesSession) {
     streamState.sourceAstDisabledReason = "initializing";
@@ -544,6 +619,8 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
   useTransitionUpdates = false,
   incrementalParsing = true,
   initialParseMode = "sync",
+  streaming = false,
+  streamingOptions,
   options,
   onError,
   plugins,
@@ -557,6 +634,8 @@ export const MarkdownStream: FC<MarkdownStreamProps> = ({
     useTransitionUpdates,
     incrementalParsing,
     initialParseMode,
+    streaming,
+    ...(streamingOptions ? { streamingOptions } : {}),
     ...(onError ? { onError } : {}),
     ...(options ? { options } : {}),
     ...(plugins ? { plugins } : {}),
