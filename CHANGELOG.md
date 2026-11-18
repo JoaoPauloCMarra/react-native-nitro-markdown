@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [0.17.0] - 2026-11-18
+
+### Breaking changes
+
+None.
+
+### Changed
+
+- The default document renderer now puts its top-level blocks in plain wrapper views of 32 blocks. Before, every block was a direct child of one view, so each `MarkdownStream` flush made React and the native layout walk the whole document. Measured on an Android emulator (arm64, release build, Hermes), one flush that appends a paragraph, median of 12 flushes in two runs: 17.3 to 18.8 ms before and 8.5 to 10.8 ms after on an 80 KB document (960 blocks), and 52.1 to 58.4 ms before and 25.8 to 26.0 ms after on 240 KB. No measurable difference at 8 KB. Emulator numbers are indicative.
+- What you can see of this change: the rendered tree has one more view level under the document view, which matters to a test that walks or snapshots the tree. A block can sit one device pixel higher or lower than in 0.16.4; the content height is the same.
+- The blocks stay direct children of the document view when `styles.document` is set (so a `gap` or `flexDirection` there keeps its meaning), when a top-level node is inline, or with a custom `document` renderer.
+
 ## [0.16.4] - 2026-11-18
 
 ### Breaking changes
