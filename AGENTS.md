@@ -76,6 +76,7 @@
 - Default renderers should look consistent on iOS/Android.
 - RaTeX math rendering lives only in the `react-native-nitro-markdown/math` subpath (`mathRenderers`). The main entry and `/headless` must never import `ratex-react-native` (a test and the pack audit enforce this); without the subpath, math renders as monospace text. Keep the previous MathJax/SVG renderer confined to the example benchmark.
 - Use platform-neutral visuals for task checkboxes (no OS glyphs).
+- The default `document` renderer groups its top-level blocks in wrapper views of 32 (`BLOCK_GROUP_SIZE` in `src/node-renderer.tsx`). Group from the first block; never switch a growing document between the flat and the grouped tree. `styles.document`, a top-level inline node, and a custom `document` renderer keep the flat tree.
 - Table renderer renders immediately with estimated widths, then refines after measurement (never gates on layout).
 - Table measurement is debounced to avoid stream-time thrashing.
 - `tableOptions` (`minColumnWidth`, `measurementStabilizeMs`) flows through `MarkdownContext`.

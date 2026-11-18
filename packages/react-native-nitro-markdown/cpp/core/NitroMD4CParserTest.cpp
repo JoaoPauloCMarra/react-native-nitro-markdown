@@ -1,6 +1,7 @@
 #define NITRO_MARKDOWN_TESTING
 #include "NitroMD4CParser.hpp"
 #include "MarkdownTypes.hpp"
+#include "MarkdownJson.hpp"
 #include "SourceOffsetMap.hpp"
 #include "flatten.hpp"
 #include "FlattenCorpus.hpp"
@@ -426,6 +427,7 @@ public:
         testUtf16Offsets();
         testParseLatencyBudgets();
         testHybridSerializationLatency();
+        testStreamFlushCost();
         testLargeDocumentMemoryBudget();
 
         testSourceRangeContainment();
@@ -651,6 +653,58 @@ private:
                       << " p50=" << percentile(timingsMs, 0.50)
                       << "ms p95=" << percentile(timingsMs, 0.95)
                       << "ms payloadBytes=" << payload.size() << std::endl;
+        }
+    }
+
+    static std::string makeStreamPayload(size_t targetBytes) {
+        std::string payload;
+        payload.reserve(targetBytes + 128);
+        size_t index = 0;
+        while (payload.size() < targetBytes) {
+            payload += "Paragraph " + std::to_string(++index) +
+                " with some **bold** text and a longer plain sentence that follows it.\n\n";
+        }
+        payload += "An open last line";
+        return payload;
+    }
+
+    static std::string medianAndRange(std::vector<double> values) {
+        std::sort(values.begin(), values.end());
+        std::ostringstream out;
+        out << percentile(values, 0.50) << "ms [" << values.front() << ".." << values.back() << "]";
+        return out.str();
+    }
+
+    static void testStreamFlushCost() {
+        MD4CParser parser;
+        ParserOptions options;
+        constexpr int kWarmupRuns = 2;
+        constexpr int kTimedRuns = 7;
+        for (const size_t targetBytes : {size_t{8} * 1024, size_t{80} * 1024, size_t{800} * 1024}) {
+            const std::string payload = makeStreamPayload(targetBytes);
+            std::vector<double> parseMs;
+            std::vector<double> jsonMs;
+            size_t jsonBytes = 0;
+            for (int run = 0; run < kWarmupRuns + kTimedRuns; run++) {
+                const auto start = std::chrono::steady_clock::now();
+                auto ast = parser.parse(payload, options);
+                const auto parsed = std::chrono::steady_clock::now();
+                const std::string json = serializeMarkdownJson(ast, payload.size(), true);
+                const auto written = std::chrono::steady_clock::now();
+                jsonBytes = json.size();
+                if (run < kWarmupRuns) continue;
+                parseMs.push_back(std::chrono::duration<double, std::milli>(parsed - start).count());
+                jsonMs.push_back(std::chrono::duration<double, std::milli>(written - parsed).count());
+            }
+            std::cout << "ℹ Perf stream flush bytes=" << payload.size()
+                      << " parse p50=" << medianAndRange(parseMs)
+                      << " json p50=" << medianAndRange(jsonMs)
+                      << " jsonBytes=" << jsonBytes << std::endl;
+            TestRunner::assertTrue(
+                jsonBytes > payload.size(),
+                "Perf stream flush: whole parse wrote the document (" +
+                    std::to_string(payload.size()) + " bytes)"
+            );
         }
     }
 

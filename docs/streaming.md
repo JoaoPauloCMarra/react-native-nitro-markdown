@@ -97,6 +97,41 @@ UTF-8 bytes and are rejected even though they are only 4,000,000 UTF-16 units.
 If any plugin defines `beforeParse`, incremental AST reuse is disabled so the
 full pipeline runs correctly (see `sourceAstStatus` below).
 
+## Block groups
+
+Every flush gives the document a new list of top-level blocks. If each block
+were a direct child of one view, React and the native layout would walk all of
+them on every flush, and the cost would grow with the length of the document.
+The default document renderer therefore puts its top-level blocks in plain
+wrapper views of 32 blocks. A flush then touches one wrapper and the short list
+of wrappers.
+
+Measured on an Android emulator (arm64, release build, Hermes), one flush that
+appends a paragraph to a document of that size, median of 12 flushes, two runs:
+
+| Document | Flush before | Flush after |
+| --- | --- | --- |
+| 8 KB (96 blocks) | 2.5 to 3.3 ms | 1.8 to 3.7 ms |
+| 80 KB (960 blocks) | 17.3 to 18.8 ms | 8.5 to 10.8 ms |
+| 240 KB (2,880 blocks) | 52.1 to 58.4 ms | 25.8 to 26.0 ms |
+
+These are emulator numbers and are indicative. A flush that only appends plain
+text (no parser call) went from about 13 to 17 ms to about 4 to 5 ms at 80 KB.
+
+Things to know:
+
+- The wrappers are part of the rendered tree from the first block. A block can
+  sit one device pixel higher or lower than without them; the content height
+  does not change.
+- The blocks stay direct children of the document view when `styles.document`
+  is set, when a top-level node is inline, or when you pass a custom `document`
+  renderer.
+- A document that changes between the two shapes while mounted (for example
+  when `styles.document` goes from unset to set) remounts all of its blocks.
+- The remaining flush time still grows with the document. For a very long
+  stream that is the primary scroll container, use
+  [`virtualize`](./usage.md#long-documents-virtualization).
+
 ## Large initial content
 
 The first render parses the full session content synchronously by default
