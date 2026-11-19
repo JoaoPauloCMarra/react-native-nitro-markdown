@@ -12,11 +12,15 @@ struct StreamViewOptions {
     StreamBlockMode tables = StreamBlockMode::Progressive;
     StreamBlockMode codeBlocks = StreamBlockMode::Progressive;
     StreamBlockMode media = StreamBlockMode::Progressive;
+    // Close or hold back inline syntax that is still being typed at the end
+    // (`**bold`, `[label](http://…`, `` `code ``). Has no effect when the
+    // parser reads HTML: the repair rules treat `<` inside a line as text.
+    bool repair = true;
 };
 
 // What a stream shows before it has ended: the finished blocks as written,
 // then the unfinished tail without the blocks that have not finished
-// arriving.
+// arriving and with its half-written inline syntax repaired.
 struct StreamViewText {
     // The text to parse. Set only when `modified` is true; otherwise the
     // source itself is what shows.

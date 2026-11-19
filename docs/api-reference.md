@@ -43,7 +43,8 @@ policy. Protocol restrictions and `remoteImages: "deny"` still apply.
 `incrementalParsing`, `initialParseMode` (`"sync"` default or `"async"` for
 large initial content), `streaming` (default `false`) and `streamingOptions`
 (`StreamViewRequest`: `tables`, `codeBlocks`, `media`, each `"progressive"` or
-`"hidden"`; see [Streaming](./streaming.md#unfinished-blocks)), `options`,
+`"hidden"`, and `repair`, default `true`; see
+[Streaming](./streaming.md#unfinished-blocks)), `options`,
 `plugins`, `onError`, `renderMarkdown`.
 
 `MarkdownSession.parseStreamView(options, request)` is the native call behind

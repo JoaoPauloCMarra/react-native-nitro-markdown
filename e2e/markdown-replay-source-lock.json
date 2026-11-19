@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "runtimeSourceSha256": "2a87b35b714ab54f8c9c6f120e8b4e49784c29d04ff0a3753ae6a0056edde3c5",
+  "runtimeSourceSha256": "b8208381406b527cd5fc166bb6e94014adbbf6531b50ee0e658c59c4ea2cc779",
   "runtimeSourceFiles": [
     "apps/example/app.config.js",
     "apps/example/app/(tabs)/_layout.tsx",
@@ -65,6 +65,15 @@
     "packages/react-native-nitro-markdown/cpp/core/flatten.hpp",
     "packages/react-native-nitro-markdown/cpp/nitromd/nitromd.c",
     "packages/react-native-nitro-markdown/cpp/nitromd/nitromd.h",
+    "packages/react-native-nitro-markdown/cpp/repair/MarkdownRepair.cpp",
+    "packages/react-native-nitro-markdown/cpp/repair/MarkdownRepair.hpp",
+    "packages/react-native-nitro-markdown/cpp/repair/RepairEmphasis.cpp",
+    "packages/react-native-nitro-markdown/cpp/repair/RepairExtensions.cpp",
+    "packages/react-native-nitro-markdown/cpp/repair/RepairHandlers.cpp",
+    "packages/react-native-nitro-markdown/cpp/repair/RepairInternal.cpp",
+    "packages/react-native-nitro-markdown/cpp/repair/RepairInternal.hpp",
+    "packages/react-native-nitro-markdown/cpp/repair/RepairWithhold.cpp",
+    "packages/react-native-nitro-markdown/cpp/repair/UnicodeTables.hpp",
     "packages/react-native-nitro-markdown/nitro.json",
     "packages/react-native-nitro-markdown/nitrogen/generated/android/NitroMarkdown+autolinking.gradle",
     "packages/react-native-nitro-markdown/nitrogen/generated/android/NitroMarkdownOnLoad.cpp",

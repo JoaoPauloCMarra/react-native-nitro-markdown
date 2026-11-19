@@ -123,6 +123,30 @@ instead of showing as raw syntax. Set it to `false` when the stream ends.
 Two rules have no option: an image or link line whose syntax is still open is
 always held back, and a `$$` block is held back until its closing `$$`.
 
+### Inline syntax
+
+Inside the last block, inline syntax that is still being typed shows the way
+the finished text will, not as raw markers:
+
+| While this arrives | The view shows |
+| --- | --- |
+| `Hello **wor` | **wor** in bold (the `**` is closed) |
+| `` a `co `` | `co` as code |
+| `a ~~gone` (with `gfm`) | "gone" struck through |
+| `see [the docs](https://e.x/pa` | "see the docs" as text; the link appears when its `)` arrives |
+| `see ![a cat](https://e.x/c` | "see"; the image appears when its `)` arrives |
+| `so $x^2 + y` (with `math`) | "so"; the formula appears when its `$` arrives |
+
+`streamingOptions={{ repair: false }}` turns this off, and then the last block
+shows its inline syntax as written. Repair is also off when
+`options={{ html: true }}`: the rules read `<` inside a line as text, which
+is not how the parser reads it then.
+
+Three rules differ from the module they come from. A `>` after a list marker
+(`- > 5`) is a quote, as in the finished document, and is not escaped. A line
+that starts with an HTML tag is not removed. A `==` at the end is text, not
+the start of a highlight.
+
 Things to know:
 
 - Only the last block is affected. A block that a blank line has ended shows as
@@ -130,20 +154,26 @@ Things to know:
 - Turn `streaming` off when the stream ends. A stream that ends inside a block
   (an unclosed `$$`, a table in `"hidden"` mode with no blank line after it)
   shows that block only then.
-- A half-written link or emphasis inside a sentence is not changed.
+- Inline syntax in a block that has ended is never changed, also when it is
+  not closed.
 - `text` (from `useMarkdownStreamState` or `renderMarkdown`) is always the
   source. `sourceAst` is the view, so near the end the two can differ. The
   `beg`/`end` of a node the view added (the placeholder delimiter row of a
-  table) stop at the source length.
+  table) stop at the source length. In the last block, after a place where
+  repair removed characters (the brackets of a link shown as text), `beg`/`end`
+  are positions in the view, not in `text`. Positions in finished blocks are
+  always positions in `text`.
 - `openCodeFence` in the stream state is `true` while the view ends inside an
   open fence. A custom renderer can use it to wait with syntax highlighting.
 - With a `beforeParse` plugin, `<Markdown>` parses `text` itself, so `streaming`
   has no effect.
 - A plain-text append still skips the parser, but only when nothing is held
-  back and the last block holds no Markdown syntax character.
-- The rules are ported from
+  back or repaired and the last block holds no Markdown syntax character.
+- The block rules are ported from
   [enriched-markdown](https://github.com/software-mansion/enriched-markdown)
-  (MIT).
+  (MIT). The inline rules are its C++ port of
+  [remend](https://github.com/vercel/streamdown/tree/main/packages/remend)
+  (Apache-2.0). See `THIRD_PARTY_NOTICES.md`.
 
 ## Block groups
 

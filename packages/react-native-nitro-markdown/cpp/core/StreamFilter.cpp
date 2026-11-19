@@ -385,11 +385,15 @@ void cutPendingMedia(Document& doc, StreamBlockMode mode, bool terminated) {
     doc.text = doc.text.substr(0, lines[last].offset);
 }
 
-std::string removePendingBlocks(Document doc, const StreamFilterOptions& options, bool terminated) {
+StreamFilterResult removePendingBlocks(
+    Document doc,
+    const StreamFilterOptions& options,
+    bool terminated
+) {
     if (options.math) cutPendingMath(doc);
     cutPendingTable(doc, options, terminated);
     cutPendingMedia(doc, options.media, terminated);
-    return std::string(doc.text).append(doc.appended);
+    return {std::string(doc.text).append(doc.appended), false, doc.appended.size()};
 }
 
 } // namespace
@@ -398,7 +402,7 @@ StreamFilterResult filterStreamTail(std::string_view tail, const StreamFilterOpt
     Lines lines = splitLines(tail);
     const std::size_t openFence = scanFences(lines);
     if (openFence == npos) {
-        return {removePendingBlocks({tail, std::move(lines), {}}, options, false), false};
+        return removePendingBlocks({tail, std::move(lines), {}}, options, false);
     }
 
     // The fence terminates whatever paragraph precedes it, shown or not.
@@ -408,12 +412,13 @@ StreamFilterResult filterStreamTail(std::string_view tail, const StreamFilterOpt
     Document head{tail, std::move(lines), {}};
     const std::size_t fenceOffset = head.lines[openFence].offset;
     head.cutAtLine(openFence);
-    std::string kept = removePendingBlocks(std::move(head), options, true);
+    // Before a fence the table is terminated, so nothing was added.
+    std::string kept = removePendingBlocks(std::move(head), options, true).text;
     if (options.codeBlocks == StreamBlockMode::Hidden || !openerEnded) {
-        return {std::move(kept), false};
+        return {std::move(kept), false, 0};
     }
     kept.append(tail.substr(fenceOffset));
-    return {std::move(kept), true};
+    return {std::move(kept), true, 0};
 }
 
 } // namespace NitroMarkdown

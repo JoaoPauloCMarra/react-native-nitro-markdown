@@ -17,6 +17,12 @@ export interface StreamViewRequest {
   codeBlocks?: StreamBlockMode;
   /** A line that is only an image or a link. Default `"progressive"`. */
   media?: StreamBlockMode;
+  /**
+   * Close or hold back inline syntax that is still being typed at the end
+   * (`**bold`, `` `code ``, `[label](https://…`). Has no effect when
+   * `ParserOptions.html` is true. Default `true`.
+   */
+  repair?: boolean;
 }
 
 export interface MarkdownSession extends HybridObject<{
@@ -43,7 +49,8 @@ export interface MarkdownSession extends HybridObject<{
   /**
    * Parses the buffer as it should show while it is still streaming: the
    * finished blocks as written, then the last block without the parts that
-   * have not finished arriving. Returns the JSON string
+   * have not finished arriving and with its open inline syntax repaired.
+   * Returns the JSON string
    * `{"modified":boolean,"plainTail":boolean,"openCodeFence":boolean,"document":MarkdownNode}`.
    * When `modified` is false, `document` is what `parseWithOptions` returns.
    */

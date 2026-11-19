@@ -13,6 +13,7 @@
 // All text is UTF-8.
 #pragma once
 
+#include <cstddef>
 #include <string>
 #include <string_view>
 
@@ -33,6 +34,9 @@ struct StreamFilterResult {
     // The text ends inside a fenced code block whose closing fence has not
     // arrived. Only possible with codeBlocks Progressive.
     bool endsInsideOpenCodeFence = false;
+    // How many bytes at the end of `text` the filter added: the delimiter
+    // row of a table whose own is still arriving.
+    std::size_t addedBytes = 0;
 };
 
 // What to show of `tail`, the text after the last finished block:

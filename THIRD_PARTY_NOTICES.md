@@ -17,6 +17,10 @@ in the header of both files. See `cpp/nitromd/UPSTREAM.md`.
 `5bcfe94d0e06d15f810e34a14f3544698ab40488`), with the changes named in each
 file header.
 
+`cpp/repair/*` is copied from the same commit (`packages/core/cpp/repair`).
+The only change is the root namespace, `Markdown` to `NitroMarkdownRepair`,
+named in each file header.
+
 ```
 MIT License
 
@@ -38,4 +42,29 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+```
+
+## remend
+
+`cpp/repair/*` is a C++ port of
+[remend](https://github.com/vercel/streamdown/tree/main/packages/remend) 1.3.1
+by Vercel, made by the enriched-markdown authors. It is a changed version of
+remend: the differences are listed in the header of
+`cpp/repair/MarkdownRepair.hpp`. remend is licensed under the Apache License,
+Version 2.0. The full licence text is in `cpp/repair/LICENSE-APACHE-2.0.txt`.
+
+```
+Copyright 2023 Vercel, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 ```

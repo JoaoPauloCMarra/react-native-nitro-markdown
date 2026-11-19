@@ -208,6 +208,7 @@ std::string HybridMarkdownSession::parseStreamView(
         toInternalBlockMode(request.tables),
         toInternalBlockMode(request.codeBlocks),
         toInternalBlockMode(request.media),
+        request.repair.value_or(true),
     };
     std::lock_guard<std::mutex> lock(mutex_);
     ensureActiveLocked();

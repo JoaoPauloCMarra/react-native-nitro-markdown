@@ -72,6 +72,8 @@
 - Keep stream fixes in package internals, not in demo app logic.
 - `streaming` (default `false`) routes every stream parse through the native `parseStreamView`, which hides the unfinished parts of the last block (`cpp/core/StreamBoundary`, `StreamFilter`, `StreamView`). With it on, the JS plain-text fast path runs only when the last native result was unmodified and had `plainTail: true`. Finished blocks are always shown as written.
 - `cpp/core/Stream{Text,Boundary,Filter}` are ported from enriched-markdown (MIT). Keep the attribution headers and `THIRD_PARTY_NOTICES.md` in sync when they change.
+- `cpp/repair` (inline repair of the stream tail) is copied from enriched-markdown, a C++ port of remend (Apache-2.0). Do not edit it: only the namespace differs from upstream. Put nitro-specific behavior in `cpp/core/StreamView.cpp` (`repairOptionsFor`, `repairOnlyCutText`). Its upstream suite runs inside `test:cpp` (`cpp/core/MarkdownRepairTest.cpp`, `RepairReferenceCasesTest.cpp`).
+- Repair runs only on the unfinished tail, and not when `ParserOptions.html` is true or `streamingOptions.repair` is false. A view that repair changed is `modified`, so the JS plain-text fast path waits for an unmodified view.
 
 ## Renderer Notes
 

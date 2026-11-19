@@ -13,6 +13,7 @@ set(CPP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 file(GLOB MD4C_SOURCES "${CPP_ROOT}/nitromd/*.c")
 file(GLOB CORE_SOURCES "${CPP_ROOT}/core/*.cpp")
 file(GLOB BINDING_SOURCES "${CPP_ROOT}/bindings/*.cpp")
+file(GLOB REPAIR_SOURCES "${CPP_ROOT}/repair/*.cpp")
 file(GLOB GENERATED_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/../nitrogen/generated/shared/c++/*.cpp")
 # Exclude the test file from the library sources
 list(FILTER CORE_SOURCES EXCLUDE REGEX ".*Test\.cpp$")
@@ -22,6 +23,7 @@ add_library(MD4CCore STATIC
     ${MD4C_SOURCES}
     ${CORE_SOURCES}
     ${BINDING_SOURCES}
+    ${REPAIR_SOURCES}
     ${GENERATED_SOURCES}
 )
 
@@ -44,6 +46,8 @@ target_compile_definitions(MD4CCore PRIVATE
 # Create the test executable
 add_executable(MD4CParserTest
     core/NitroMD4CParserTest.cpp
+    core/MarkdownRepairTest.cpp
+    core/RepairReferenceCasesTest.cpp
 )
 
 # Link the test executable to the core library

@@ -169,6 +169,24 @@ describe("MarkdownStream streaming view", () => {
     expect(viewCalls(session)).toEqual([[{}, { media: "hidden" }]]);
   });
 
+  it("sends repair only when it is turned off", () => {
+    const repaired = createViewSession("hello");
+    renderStream({
+      session: repaired,
+      streaming: true,
+      streamingOptions: { repair: true },
+    });
+    const asWritten = createViewSession("hello");
+    renderStream({
+      session: asWritten,
+      streaming: true,
+      streamingOptions: { repair: false },
+    });
+
+    expect(viewCalls(repaired)).toEqual([[{}, {}]]);
+    expect(viewCalls(asWritten)).toEqual([[{}, { repair: false }]]);
+  });
+
   it("appends plain text without a native call when the tail is plain and unchanged", () => {
     const session = createViewSession("hello");
     renderStream({ session, streaming: true });
@@ -184,6 +202,14 @@ describe("MarkdownStream streaming view", () => {
     const session = createViewSession("hello *", { ...PLAIN, plainTail: false });
     renderStream({ session, streaming: true });
     flushAppend(session, "world");
+
+    expect(viewCalls(session)).toHaveLength(2);
+  });
+
+  it("asks for a new view when a chunk can finish a list marker", () => {
+    const session = createViewSession("intro\n12");
+    renderStream({ session, streaming: true });
+    flushAppend(session, ".");
 
     expect(viewCalls(session)).toHaveLength(2);
   });

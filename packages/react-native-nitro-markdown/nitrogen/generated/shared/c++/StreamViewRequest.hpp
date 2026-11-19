@@ -44,10 +44,11 @@ namespace margelo::nitro::Markdown {
     std::optional<StreamBlockMode> tables     SWIFT_PRIVATE;
     std::optional<StreamBlockMode> codeBlocks     SWIFT_PRIVATE;
     std::optional<StreamBlockMode> media     SWIFT_PRIVATE;
+    std::optional<bool> repair     SWIFT_PRIVATE;
 
   public:
     StreamViewRequest() = default;
-    explicit StreamViewRequest(std::optional<StreamBlockMode> tables, std::optional<StreamBlockMode> codeBlocks, std::optional<StreamBlockMode> media): tables(tables), codeBlocks(codeBlocks), media(media) {}
+    explicit StreamViewRequest(std::optional<StreamBlockMode> tables, std::optional<StreamBlockMode> codeBlocks, std::optional<StreamBlockMode> media, std::optional<bool> repair): tables(tables), codeBlocks(codeBlocks), media(media), repair(repair) {}
 
   public:
     friend bool operator==(const StreamViewRequest& lhs, const StreamViewRequest& rhs) = default;
@@ -65,7 +66,8 @@ namespace margelo::nitro {
       return margelo::nitro::Markdown::StreamViewRequest(
         JSIConverter<std::optional<margelo::nitro::Markdown::StreamBlockMode>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "tables"))),
         JSIConverter<std::optional<margelo::nitro::Markdown::StreamBlockMode>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "codeBlocks"))),
-        JSIConverter<std::optional<margelo::nitro::Markdown::StreamBlockMode>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "media")))
+        JSIConverter<std::optional<margelo::nitro::Markdown::StreamBlockMode>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "media"))),
+        JSIConverter<std::optional<bool>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "repair")))
       );
     }
     static inline jsi::Value toJSI(jsi::Runtime& runtime, const margelo::nitro::Markdown::StreamViewRequest& arg) {
@@ -73,6 +75,7 @@ namespace margelo::nitro {
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "tables"), JSIConverter<std::optional<margelo::nitro::Markdown::StreamBlockMode>>::toJSI(runtime, arg.tables));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "codeBlocks"), JSIConverter<std::optional<margelo::nitro::Markdown::StreamBlockMode>>::toJSI(runtime, arg.codeBlocks));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "media"), JSIConverter<std::optional<margelo::nitro::Markdown::StreamBlockMode>>::toJSI(runtime, arg.media));
+      obj.setProperty(runtime, PropNameIDCache::get(runtime, "repair"), JSIConverter<std::optional<bool>>::toJSI(runtime, arg.repair));
       return obj;
     }
     static inline bool canConvert(jsi::Runtime& runtime, const jsi::Value& value) {
@@ -86,6 +89,7 @@ namespace margelo::nitro {
       if (!JSIConverter<std::optional<margelo::nitro::Markdown::StreamBlockMode>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "tables")))) return false;
       if (!JSIConverter<std::optional<margelo::nitro::Markdown::StreamBlockMode>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "codeBlocks")))) return false;
       if (!JSIConverter<std::optional<margelo::nitro::Markdown::StreamBlockMode>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "media")))) return false;
+      if (!JSIConverter<std::optional<bool>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "repair")))) return false;
       return true;
     }
   };

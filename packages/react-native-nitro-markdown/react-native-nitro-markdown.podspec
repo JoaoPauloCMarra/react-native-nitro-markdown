@@ -18,7 +18,8 @@ Pod::Spec.new do |s|
     "cpp/**/*.{h,hpp,c,cpp}"
   ]
   s.exclude_files = [
-    "cpp/core/*Test.cpp"
+    "cpp/core/*Test.cpp",
+    "cpp/core/*Test.hpp"
   ]
   s.private_header_files = "cpp/**/*.{h,hpp}"
 

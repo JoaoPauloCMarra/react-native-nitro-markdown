@@ -150,13 +150,16 @@ export type UseMarkdownStreamStateOptions = {
    * Set to true while text is still arriving. A block at the end that has
    * not finished arriving (a table row, an image or link line, a `$$` block,
    * an open code fence in `"hidden"` mode) is then held back instead of
-   * showing as raw syntax. Set it to false when the stream ends, or the last
-   * block can stay hidden. Has no effect with a `beforeParse` plugin.
+   * showing as raw syntax, and inline syntax that is still open (`**bold`,
+   * `` `code ``, a link whose URL is arriving) shows closed. Set it to false
+   * when the stream ends, or the last block can stay hidden. Has no effect
+   * with a `beforeParse` plugin.
    * @default false
    */
   streaming?: boolean;
   /**
-   * How each kind of unfinished block shows while `streaming` is true.
+   * How each kind of unfinished block shows while `streaming` is true, and
+   * whether open inline syntax is repaired.
    */
   streamingOptions?: StreamViewRequest;
   /**
@@ -212,14 +215,16 @@ export function useMarkdownStreamState({
   const hideTables = streamingOptions?.tables === "hidden";
   const hideCodeBlocks = streamingOptions?.codeBlocks === "hidden";
   const hideMedia = streamingOptions?.media === "hidden";
+  const skipRepair = streamingOptions?.repair === false;
   const viewRequest = useMemo<StreamViewRequest | null>(() => {
     if (!streaming) return null;
     return {
       ...(hideTables ? { tables: "hidden" } : {}),
       ...(hideCodeBlocks ? { codeBlocks: "hidden" } : {}),
       ...(hideMedia ? { media: "hidden" } : {}),
+      ...(skipRepair ? { repair: false } : {}),
     };
-  }, [streaming, hideTables, hideCodeBlocks, hideMedia]);
+  }, [streaming, hideTables, hideCodeBlocks, hideMedia, skipRepair]);
   const parseSession = useCallback(
     (knownText?: string): StreamParse => {
       if (viewRequest) {

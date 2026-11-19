@@ -18,14 +18,15 @@ None.
 ### Added
 
 - `MarkdownStream` and `useMarkdownStreamState` take `streaming` (default `false`). While it is `true`, a last block that has not finished arriving is held back instead of showing as raw syntax: an image or link line whose syntax is still open, a `$$` block without its closing `$$`, and the last row of a table while it is arriving. A finished table header row shows as a table at once. Set it to `false` when the stream ends.
+- With `streaming` on, inline syntax that is still being typed in the last block shows the way the finished text will: an open `**`, `*`, `` ` `` or `~~` shows closed, a link whose URL is arriving shows its label as text, and an image or a `$` formula that has not closed waits. `streamingOptions={{ repair: false }}` turns this off. It is also off with `options={{ html: true }}`.
 - `streamingOptions` (`tables`, `codeBlocks`, `media`, each `"progressive"` or `"hidden"`) picks whether a table, a fenced code block, and a complete image or link line show as they arrive or wait until they are finished.
 - `MarkdownStreamState.openCodeFence` is `true` while `streaming` is on and the view ends inside an open fenced code block. Code that builds a `MarkdownStreamState` object by hand (a test double) needs the new field.
 - `MarkdownSession.parseStreamView(options, request)`, the native call behind `streaming`, and the types `StreamViewRequest` and `StreamBlockMode`. A hand-written object typed as `MarkdownSession` now needs this method; `MarkdownStream` still works with a session object that does not have it.
-- The package ships `THIRD_PARTY_NOTICES.md`. The stream rules are ported from enriched-markdown (MIT).
+- The package ships `THIRD_PARTY_NOTICES.md`. The block rules are ported from enriched-markdown (MIT). The inline rules are its C++ port of remend (Apache-2.0); the licence text is in `cpp/repair/`.
 
 ### Changed
 
-- With `streaming` on, a plain-text append skips the parser only when nothing is held back and the last block holds no Markdown syntax character. With `streaming` off, nothing changes.
+- With `streaming` on, a plain-text append skips the parser only when nothing is held back or repaired and the last block holds no Markdown syntax character. With `streaming` off, nothing changes.
 
 ## [0.17.0] - 2026-11-18
 
