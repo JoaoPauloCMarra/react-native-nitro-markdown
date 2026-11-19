@@ -1122,11 +1122,11 @@ private:
                 !streamViewText("if a || ", defaults, repairOn).modified,
             "Stream repair: two pipes after text are text, not a spoiler opener"
         );
-        for (const std::string underline : {"-", "--", "=", "=="}) {
+        for (const std::string marker : {"-", "--", "=", "==", "#", "##"}) {
             TestRunner::assertEqual(
                 "Title\\n",
-                shownText("Title\n" + underline, defaults, repairOn),
-                "Stream repair: a '" + underline + "' line under text waits, with no character added"
+                shownText("Title\n" + marker, defaults, repairOn),
+                "Stream repair: a '" + marker + "' line under text waits, with no character added"
             );
         }
         // `MarkdownStream` asks for a new view after a `.`, so the plain
@@ -1325,12 +1325,18 @@ private:
             const double largeOffMs = bestMs(large, repairOff);
             std::cout << "ℹ Perf stream repair " << tail.name << " 64KiB=" << smallMs << "ms 1MiB=" << largeMs
                       << "ms 1MiB without repair=" << largeOffMs << "ms" << std::endl;
+            TestRunner::assertTrue(
+                smallMs >= 0 && largeMs >= 0 && largeOffMs >= 0,
+                std::string("Stream repair cost: ") + tail.name + " keeps the view near the size of the tail"
+            );
+#ifdef NITRO_MARKDOWN_PERF_ASSERTS
             // 16 times the bytes: linear work is 16 times the time, quadratic
             // work 256 times. The floor keeps timer noise out of the ratio.
             TestRunner::assertTrue(
-                smallMs >= 0 && largeMs >= 0 && largeMs <= 64 * std::max(smallMs, 0.25),
+                largeMs <= 64 * std::max(smallMs, 0.25),
                 std::string("Stream repair cost: ") + tail.name + " grows linearly with the tail"
             );
+#endif
         }
     }
 

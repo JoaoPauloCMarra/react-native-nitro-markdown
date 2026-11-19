@@ -136,16 +136,18 @@ the finished text will, not as raw markers:
 | `see [the docs](https://e.x/pa` | "see the docs" as text; the link appears when its `)` arrives |
 | `see ![a cat](https://e.x/c` | "see"; the image appears when its `)` arrives |
 | `so $x^2 + y` (with `math`) | "so"; the formula appears when its `$` arrives |
+| `intro` then a new line with only `-`, `12.`, `#` or `==` | "intro"; the marker line appears when its content arrives |
 
 `streamingOptions={{ repair: false }}` turns this off, and then the last block
 shows its inline syntax as written. Repair is also off when
 `options={{ html: true }}`: the rules read `<` inside a line as text, which
 is not how the parser reads it then.
 
-Three rules differ from the module they come from. A `>` after a list marker
+Four rules differ from the module they come from. A `>` after a list marker
 (`- > 5`) is a quote, as in the finished document, and is not escaped. A line
-that starts with an HTML tag is not removed. A `==` at the end is text, not
-the start of a highlight.
+that starts with an HTML tag is not removed. A `==` or `||` after text is
+text, not the start of a highlight or a spoiler. No zero-width space is added
+under a line that could become a setext heading.
 
 Things to know:
 
