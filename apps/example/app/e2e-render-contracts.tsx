@@ -10,6 +10,7 @@ import {
   type CodeHighlighter,
   type CustomRenderers,
   type MarkdownErrorPhase,
+  type MarkdownNode,
   type MarkdownParseCompleteResult,
   type MarkdownPlugin,
 } from "react-native-nitro-markdown";
@@ -63,6 +64,41 @@ function StreamParseErrorProbe({ report }: { report: Report }) {
   const onError = useCallback((_error: Error, phase: MarkdownErrorPhase) => report("streamerr", `streamerr=${phase}`), [report]);
   useMarkdownStreamState({ session, options: ERROR_OPTIONS, onError });
   useEffect(() => () => session.dispose(), [session]);
+  return null;
+}
+
+const OPEN_BOLD_SOURCE = "Hello **wor";
+const OPEN_MATH_BLOCK_SOURCE = "Before\n\n$$\nx^2";
+const NO_REPAIR = { repair: false } as const;
+
+function describeStreamView(sourceAst: MarkdownNode | undefined): string {
+  if (!sourceAst) return "none";
+  const text = getFlattenedText(sourceAst);
+  const bold = collectNodeTypes(sourceAst).has("bold") ? "bold" : "plain";
+  return `${bold}:${text.includes("**") ? "raw" : "clean"}`;
+}
+
+function StreamRepairProbe({ report }: { report: Report }) {
+  const [sessions] = useState(() => ({
+    repaired: createMarkdownSession(OPEN_BOLD_SOURCE),
+    asWritten: createMarkdownSession(OPEN_BOLD_SOURCE),
+    openBlock: createMarkdownSession(OPEN_MATH_BLOCK_SOURCE),
+  }));
+  const repaired = useMarkdownStreamState({ session: sessions.repaired, streaming: true });
+  const asWritten = useMarkdownStreamState({ session: sessions.asWritten, streaming: true, streamingOptions: NO_REPAIR });
+  const openBlock = useMarkdownStreamState({ session: sessions.openBlock, options: MATH_OPTIONS, streaming: true });
+  const heldBlock =
+    openBlock.sourceAst &&
+    !collectNodeTypes(openBlock.sourceAst).has("math_block") &&
+    !getFlattenedText(openBlock.sourceAst).includes("x^2")
+      ? "held"
+      : "shown";
+  const token = `repair=${describeStreamView(repaired.sourceAst)}/off=${describeStreamView(asWritten.sourceAst)}/block=${heldBlock}`;
+  useEffect(() => report("repair", token), [report, token]);
+  useEffect(
+    () => () => Object.values(sessions).forEach((session) => session.dispose()),
+    [sessions],
+  );
   return null;
 }
 
@@ -176,6 +212,7 @@ export default function MarkdownRenderContractsScreen() {
         <StreamAsyncProbe report={report} />
         <StreamBeforeParseProbe report={report} />
         <StreamParseErrorProbe report={report} />
+        <StreamRepairProbe report={report} />
         <Markdown renderers={linkRenderers} onLinkPress={onLinkPress}>{"[Press the E2E link target](https://example.test)"}</Markdown>
       </ScrollView>
     </View>

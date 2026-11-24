@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "runtimeSourceSha256": "e1e47005555e3a36ab38983717670d1c5efa9eb6523d69c9ad2059f76da80eeb",
+  "runtimeSourceSha256": "3a67c91ce77dc1201370121c657c5792a86e7e6334bdc375918cafe1cf777933",
   "runtimeSourceFiles": [
     "apps/example/app.config.js",
     "apps/example/app/(tabs)/_layout.tsx",
@@ -136,7 +136,7 @@
     "packages/react-native-nitro-markdown/src/utils/stream-view.ts",
     "packages/react-native-nitro-markdown/src/utils/text-content.ts"
   ],
-  "replayInputsSha256": "e8e3c6ef84c31dace328a3962252c4a711668a519d0ea657e2f6efee628c6b53",
+  "replayInputsSha256": "ded930b1f8a37cbbd8841cfde4fae8455ab6d02d4e8395993ddf37c479045cc0",
   "replayInputs": [
     "e2e/markdown-replay-coverage.json",
     "e2e/qa-api.ad",
