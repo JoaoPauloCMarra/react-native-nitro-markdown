@@ -309,24 +309,26 @@ export const reuseStableAstNodes = (
     };
   }
 
-  let hasChildChange = false;
-  const children = nextChildren.map((nextChild, index) => {
-    const previousChild = previousChildren[index];
-    const child =
-      previousChild === undefined
-        ? nextChild
-        : reuseStableAstNodes(previousChild, nextChild);
-    hasChildChange ||= child !== previousChild;
-    return child;
-  });
+  // Most children of a stable node are reused: allocate the new children
+  // array only at the first child that changed.
+  let children: MarkdownNode[] | null = null;
+  for (let index = 0; index < nextChildren.length; index += 1) {
+    const previousChild = previousChildren[index]!;
+    const child = reuseStableAstNodes(previousChild, nextChildren[index]!);
+    if (children) children.push(child);
+    else if (child !== previousChild) {
+      children = previousChildren.slice(0, index);
+      children.push(child);
+    }
+  }
 
-  if (hasMatchingMetadata && !hasChildChange) {
+  if (hasMatchingMetadata && !children) {
     return previousNode;
   }
 
   return {
     ...nextNode,
-    children,
+    children: children ?? previousChildren.slice(),
   };
 };
 
