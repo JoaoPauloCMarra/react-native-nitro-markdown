@@ -705,9 +705,21 @@ private:
                 parseMs.push_back(std::chrono::duration<double, std::milli>(parsed - start).count());
                 jsonMs.push_back(std::chrono::duration<double, std::milli>(written - parsed).count());
             }
+            std::vector<double> viewMs;
+            const auto payloadUtf16 = utf16LengthForTest(payload);
+            for (int run = 0; run < kWarmupRuns + kTimedRuns; run++) {
+                const auto start = std::chrono::steady_clock::now();
+                const std::string view =
+                    parseStreamViewToJson(payload, payloadUtf16, options, StreamViewOptions{});
+                const auto end = std::chrono::steady_clock::now();
+                TestRunner::assertTrue(!view.empty(), "Perf stream flush: stream view result");
+                if (run < kWarmupRuns) continue;
+                viewMs.push_back(std::chrono::duration<double, std::milli>(end - start).count());
+            }
             std::cout << "ℹ Perf stream flush bytes=" << payload.size()
                       << " parse p50=" << medianAndRange(parseMs)
                       << " json p50=" << medianAndRange(jsonMs)
+                      << " streamView p50=" << medianAndRange(viewMs)
                       << " jsonBytes=" << jsonBytes << std::endl;
             TestRunner::assertTrue(
                 jsonBytes > payload.size(),

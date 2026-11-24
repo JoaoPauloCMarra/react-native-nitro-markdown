@@ -19,6 +19,7 @@ export default function RootLayout() {
         <Stack.Screen name="e2e-api" />
         <Stack.Screen name="e2e-render-contracts" />
         <Stack.Screen name="e2e-text-scale" />
+        <Stack.Screen name="bench-stream" />
       </Stack>
     </SafeAreaProvider>
   );
