@@ -6,6 +6,7 @@ import {
   TableRenderer,
   createMarkdownSession,
   getFlattenedText,
+  parseMarkdown,
   useMarkdownStreamState,
   type CodeHighlighter,
   type CustomRenderers,
@@ -99,6 +100,48 @@ function StreamRepairProbe({ report }: { report: Report }) {
     () => () => Object.values(sessions).forEach((session) => session.dispose()),
     [sessions],
   );
+  return null;
+}
+
+const EMPHASIS_TAIL_SOURCE = "Hello **bold** wor";
+const EMPHASIS_TAIL_APPEND = "ld more";
+
+type NodeShape = [string, string | undefined, NodeShape[]];
+const shapeOf = (node: MarkdownNode): NodeShape => [node.type, node.content, (node.children ?? []).map(shapeOf)];
+
+// A plain append to a tail with closed emphasis takes the JS path: no new
+// native view, and the same tree as a parse of the whole text.
+function StreamEmphasisAppendProbe({ report }: { report: Report }) {
+  const [probe] = useState(() => {
+    const session = createMarkdownSession(EMPHASIS_TAIL_SOURCE);
+    const counter = { views: 0 };
+    const counted = new Proxy(session, {
+      get(target, key) {
+        const value: unknown = Reflect.get(target, key);
+        if (typeof value !== "function") return value;
+        if (key !== "parseStreamView") return value.bind(target);
+        return (...args: unknown[]) => {
+          counter.views += 1;
+          return value.apply(target, args);
+        };
+      },
+    });
+    return { session, counted, counter };
+  });
+  const state = useMarkdownStreamState({ session: probe.counted, streaming: true });
+  useEffect(() => {
+    probe.session.append(EMPHASIS_TAIL_APPEND);
+  }, [probe]);
+  useEffect(() => () => probe.session.dispose(), [probe]);
+  const full = EMPHASIS_TAIL_SOURCE + EMPHASIS_TAIL_APPEND;
+  const ast = state.sourceAst;
+  const token =
+    ast && getFlattenedText(ast).includes("more")
+      ? `emphasisappend=${JSON.stringify(shapeOf(ast)) === JSON.stringify(shapeOf(parseMarkdown(full))) ? "same" : "diff"}:views=${probe.counter.views}`
+      : undefined;
+  useEffect(() => {
+    if (token) report("emphasisappend", token);
+  }, [report, token]);
   return null;
 }
 
@@ -213,6 +256,7 @@ export default function MarkdownRenderContractsScreen() {
         <StreamBeforeParseProbe report={report} />
         <StreamParseErrorProbe report={report} />
         <StreamRepairProbe report={report} />
+        <StreamEmphasisAppendProbe report={report} />
         <Markdown renderers={linkRenderers} onLinkPress={onLinkPress}>{"[Press the E2E link target](https://example.test)"}</Markdown>
       </ScrollView>
     </View>

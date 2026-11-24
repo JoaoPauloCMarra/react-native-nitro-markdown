@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "runtimeSourceSha256": "3a67c91ce77dc1201370121c657c5792a86e7e6334bdc375918cafe1cf777933",
+  "runtimeSourceSha256": "803dfc61df023e4ec414021564475a491383e325289921697a316d569e82cd71",
   "runtimeSourceFiles": [
     "apps/example/app.config.js",
     "apps/example/app/(tabs)/_layout.tsx",
@@ -10,6 +10,7 @@
     "apps/example/app/(tabs)/render-default.tsx",
     "apps/example/app/(tabs)/render-stream.tsx",
     "apps/example/app/_layout.tsx",
+    "apps/example/app/bench-stream.tsx",
     "apps/example/app/e2e-api.tsx",
     "apps/example/app/e2e-contracts.tsx",
     "apps/example/app/e2e-render-contracts.tsx",
@@ -136,7 +137,7 @@
     "packages/react-native-nitro-markdown/src/utils/stream-view.ts",
     "packages/react-native-nitro-markdown/src/utils/text-content.ts"
   ],
-  "replayInputsSha256": "ded930b1f8a37cbbd8841cfde4fae8455ab6d02d4e8395993ddf37c479045cc0",
+  "replayInputsSha256": "fa4c1dc7e6659f996577f28ae094ee6b54c230e9e5412f9520b123ce5c866039",
   "replayInputs": [
     "e2e/markdown-replay-coverage.json",
     "e2e/qa-api.ad",

@@ -613,6 +613,18 @@
       "assertion": "streamingOptions: NO_REPAIR"
     },
     {
+      "id": "stream.view-emphasis-append",
+      "coverage": "replay-asserted",
+      "kind": "public-api",
+      "transport": "With streaming on, plain text appended to a last paragraph that holds closed bold is added without a second native stream view, and the tree equals a parse of the whole text.",
+      "suite": "e2e/qa-render-contracts.ad",
+      "source": "apps/example/app/e2e-render-contracts.tsx",
+      "trigger": "screen-load",
+      "statusId": "render-contracts-probe",
+      "expectedText": "emphasisappend=same:views=1;",
+      "assertion": "if (key !== \"parseStreamView\") return value.bind(target);"
+    },
+    {
       "id": "images.http-transport",
       "coverage": "replay-asserted",
       "kind": "public-api",
