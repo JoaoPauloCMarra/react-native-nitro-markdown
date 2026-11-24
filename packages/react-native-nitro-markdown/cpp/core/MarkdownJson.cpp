@@ -1,6 +1,7 @@
 #include "MarkdownJson.hpp"
 #include "flatten.hpp"
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <cstdint>
 #include <limits>
@@ -74,12 +75,22 @@ inline void appendInteger(JsonWriter& output, T value) {
     output.append(std::string_view(buffer, static_cast<size_t>(result.ptr - buffer)));
 }
 
+// Bytes JSON strings must escape: control characters, `"` and `\`.
+constexpr auto kNeedsEscape = [] {
+    std::array<bool, 256> table{};
+    for (size_t c = 0; c < 0x20; c++) table[c] = true;
+    table['"'] = true;
+    table['\\'] = true;
+    return table;
+}();
+
 inline void appendEscapedJsonString(JsonWriter& output, std::string_view input) {
     static constexpr char kHex[] = "0123456789abcdef";
     size_t safeStart = 0;
 
     for (size_t index = 0; index < input.size(); index++) {
         const unsigned char c = static_cast<unsigned char>(input[index]);
+        if (!kNeedsEscape[c]) continue;
         char control[6];
         std::string_view escape;
         switch (c) {
@@ -91,7 +102,6 @@ inline void appendEscapedJsonString(JsonWriter& output, std::string_view input) 
             case '\r': escape = "\\r"; break;
             case '\t': escape = "\\t"; break;
             default:
-                if (c > 0x1f) continue;
                 control[0] = '\\';
                 control[1] = 'u';
                 control[2] = '0';
