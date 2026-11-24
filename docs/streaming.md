@@ -187,17 +187,18 @@ The default document renderer therefore puts its top-level blocks in plain
 wrapper views of 32 blocks. A flush then touches one wrapper and the short list
 of wrappers.
 
-Measured on an Android emulator (arm64, release build, Hermes), one flush that
-appends a paragraph to a document of that size, median of 12 flushes, two runs:
+Measured on an Android emulator (arm64, release build, Hermes) as the time
+from `session.append` to the layout of the grown document, on a 240 KB
+document, median of 12 flushes, two runs per version:
 
-| Document | Flush before | Flush after |
+| Append | 0.16.4 | 0.17.0 |
 | --- | --- | --- |
-| 8 KB (96 blocks) | 2.5 to 3.3 ms | 1.8 to 3.7 ms |
-| 80 KB (960 blocks) | 17.3 to 18.8 ms | 8.5 to 10.8 ms |
-| 240 KB (2,880 blocks) | 52.1 to 58.4 ms | 25.8 to 26.0 ms |
+| A paragraph | 72.8 to 77.3 ms | 44.4 to 50.2 ms |
+| Plain text | 61.3 to 67.6 ms | 33.7 to 39.2 ms |
 
-These are emulator numbers and are indicative. A flush that only appends plain
-text (no parser call) went from about 13 to 17 ms to about 4 to 5 ms at 80 KB.
+These times include frame scheduling and the other changes in 0.17.0. They
+are emulator numbers and are indicative. At 80 KB both versions mostly stay at
+the frame floor of about 34 ms.
 
 Things to know:
 
