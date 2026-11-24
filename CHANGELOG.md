@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
-## [0.17.0] - 2026-11-19
+## [0.17.0] - 2026-11-24
 
 ### Breaking changes
 
