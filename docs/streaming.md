@@ -170,7 +170,8 @@ Things to know:
 - With a `beforeParse` plugin, `<Markdown>` parses `text` itself, so `streaming`
   has no effect.
 - A plain-text append still skips the parser, but only when nothing is held
-  back or repaired and the last block holds no Markdown syntax character.
+  back or repaired and the last block holds no Markdown syntax character other
+  than `*` and `_` runs, and does not end with one.
 - The block rules are ported from
   [enriched-markdown](https://github.com/software-mansion/enriched-markdown)
   (MIT). The inline rules are its C++ port of
