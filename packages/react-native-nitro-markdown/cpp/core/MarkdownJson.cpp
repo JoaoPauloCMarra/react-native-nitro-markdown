@@ -114,29 +114,24 @@ inline void appendEscapedJsonString(JsonWriter& output, std::string_view input) 
     }
 }
 
-inline void appendStringField(JsonWriter& output, const char* key, std::string_view value) {
-    output.push(',');
+// Each field writes its `,"key":` prefix as one literal.
+#define FIELD_PREFIX(key) ",\"" key "\":"
+
+inline void appendStringField(JsonWriter& output, std::string_view prefix, std::string_view value) {
+    output.append(prefix);
     output.push('"');
-    output.append(key);
-    output.append("\":\"");
     appendEscapedJsonString(output, value);
     output.push('"');
 }
 
 template <typename T>
-inline void appendNumberField(JsonWriter& output, const char* key, T value) {
-    output.push(',');
-    output.push('"');
-    output.append(key);
-    output.append("\":");
+inline void appendNumberField(JsonWriter& output, std::string_view prefix, T value) {
+    output.append(prefix);
     appendInteger(output, value);
 }
 
-inline void appendBoolField(JsonWriter& output, const char* key, bool value) {
-    output.push(',');
-    output.push('"');
-    output.append(key);
-    output.append("\":");
+inline void appendBoolField(JsonWriter& output, std::string_view prefix, bool value) {
+    output.append(prefix);
     output.append(value ? "true" : "false");
 }
 
@@ -147,28 +142,27 @@ void appendNodeJson(
 ) {
     if (!node) throw std::runtime_error("Markdown AST contains a null node");
 
-    output.push('{');
-    output.append("\"type\":\"");
+    output.append("{\"type\":\"");
     output.append(nodeTypeToStringView(node->type));
     output.push('"');
 
     if (includeOffsets) {
-        appendNumberField(output, "beg", node->beg);
-        appendNumberField(output, "end", node->end);
+        appendNumberField(output, FIELD_PREFIX("beg"), node->beg);
+        appendNumberField(output, FIELD_PREFIX("end"), node->end);
     }
-    if (node->content.has_value()) appendStringField(output, "content", node->content.value());
-    if (node->level.has_value()) appendNumberField(output, "level", node->level.value());
-    if (node->href.has_value()) appendStringField(output, "href", node->href.value());
-    if (node->title.has_value()) appendStringField(output, "title", node->title.value());
-    if (node->alt.has_value()) appendStringField(output, "alt", node->alt.value());
-    if (node->language.has_value()) appendStringField(output, "language", node->language.value());
-    if (node->ordered.has_value()) appendBoolField(output, "ordered", node->ordered.value());
-    if (node->start.has_value()) appendNumberField(output, "start", node->start.value());
-    if (node->checked.has_value()) appendBoolField(output, "checked", node->checked.value());
-    if (node->isHeader.has_value()) appendBoolField(output, "isHeader", node->isHeader.value());
+    if (node->content.has_value()) appendStringField(output, FIELD_PREFIX("content"), node->content.value());
+    if (node->level.has_value()) appendNumberField(output, FIELD_PREFIX("level"), node->level.value());
+    if (node->href.has_value()) appendStringField(output, FIELD_PREFIX("href"), node->href.value());
+    if (node->title.has_value()) appendStringField(output, FIELD_PREFIX("title"), node->title.value());
+    if (node->alt.has_value()) appendStringField(output, FIELD_PREFIX("alt"), node->alt.value());
+    if (node->language.has_value()) appendStringField(output, FIELD_PREFIX("language"), node->language.value());
+    if (node->ordered.has_value()) appendBoolField(output, FIELD_PREFIX("ordered"), node->ordered.value());
+    if (node->start.has_value()) appendNumberField(output, FIELD_PREFIX("start"), node->start.value());
+    if (node->checked.has_value()) appendBoolField(output, FIELD_PREFIX("checked"), node->checked.value());
+    if (node->isHeader.has_value()) appendBoolField(output, FIELD_PREFIX("isHeader"), node->isHeader.value());
     if (node->align.has_value()) {
         const std::string_view alignStr = textAlignToStringView(node->align.value());
-        if (!alignStr.empty()) appendStringField(output, "align", alignStr);
+        if (!alignStr.empty()) appendStringField(output, FIELD_PREFIX("align"), alignStr);
     }
 
     if (!node->children.empty()) {
@@ -182,6 +176,8 @@ void appendNodeJson(
 
     output.push('}');
 }
+
+#undef FIELD_PREFIX
 
 } // namespace
 
