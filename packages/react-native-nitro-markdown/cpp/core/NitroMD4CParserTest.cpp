@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <cstring>
 #include <random>
+#include <regex>
 #include <sstream>
 #include <string>
 #include <algorithm>
@@ -1284,6 +1285,130 @@ private:
         testStreamViewRepairCost();
     }
 
+    // Every ASCII byte, with the JSON escaping RFC 8259 asks for.
+    static void testJsonEscapesEveryAsciiByte() {
+        std::string content;
+        std::string expected = "{\"type\":\"text\",\"content\":\"";
+        for (int byte = 0; byte < 0x80; byte++) {
+            const char c = static_cast<char>(byte);
+            content.push_back(c);
+            switch (c) {
+                case '"': expected += "\\\""; break;
+                case '\\': expected += "\\\\"; break;
+                case '\b': expected += "\\b"; break;
+                case '\f': expected += "\\f"; break;
+                case '\n': expected += "\\n"; break;
+                case '\r': expected += "\\r"; break;
+                case '\t': expected += "\\t"; break;
+                default:
+                    if (byte < 0x20) {
+                        char escaped[7];
+                        std::snprintf(escaped, sizeof(escaped), "\\u%04x", byte);
+                        expected += escaped;
+                    } else {
+                        expected.push_back(c);
+                    }
+            }
+        }
+        expected += "\"}";
+        auto node = std::make_shared<MarkdownNode>(NodeType::Text);
+        node->content = content;
+        TestRunner::assertEqual(
+            expected, serializeMarkdownJson(node, content.size(), false), "JSON: every ASCII byte is escaped as RFC 8259 asks"
+        );
+    }
+
+    // An appendable view lets `MarkdownStream` add plain chunks in JS, one
+    // after another, without a new view. Each state those appends reach must
+    // still be an unmodified, appendable view. Sources come from a small
+    // alphabet around `*` and `_` runs, the characters an appendable tail may
+    // hold.
+    static void testStreamViewEmphasisAppend() {
+        static const std::vector<std::string> alphabet = {
+            "a", "b", " ", "*", "**", "_", "__", "\n", "2", "-", "\\", ".", "`", "~",
+        };
+        // Chunks without the characters PLAIN_TEXT_APPEND_PATTERN in
+        // src/utils/incremental-ast.ts treats as structural.
+        static const std::vector<std::string> chunks = {
+            " word", "x", " ", ".", ":", "'", "\\", "7", "-", "=", "==", " =", "&", "\"",
+        };
+        StreamViewOptions repairOff;
+        repairOff.repair = false;
+        const std::vector<StreamViewOptions> modes = {StreamViewOptions{}, repairOff};
+        MD4CParser parser;
+        uint32_t state = 0xE3A5u;
+        const auto next = [&state]() {
+            state = state * 1664525u + 1013904223u;
+            return state >> 8;
+        };
+        const auto appendable = [](const StreamViewText& view, const std::string& text) {
+            return !view.modified && view.plainTail && !text.empty() && text.back() != '\n' &&
+                text.back() != '\r';
+        };
+        // AMBIGUOUS_BLOCK_START_PATTERN in src/utils/incremental-ast.ts: a
+        // trailing line that may still become a list item or heading takes a
+        // native parse, not a JS append.
+        static const std::regex ambiguousBlockStart(
+            R"(^ {0,3}(?:(?:[*+-][ \t]*)+|(?:\d{1,9}[.)]?|#{1,6})[ \t]*)$)"
+        );
+        const auto appendsInJs = [](const std::string& text) {
+            const size_t lineBreak = text.find_last_of("\r\n");
+            const std::string line = lineBreak == std::string::npos ? text : text.substr(lineBreak + 1);
+            return !std::regex_match(line, ambiguousBlockStart);
+        };
+        size_t startStates = 0;
+        size_t spacedRuns = 0;
+        size_t intrawordRuns = 0;
+        size_t steps = 0;
+        std::string firstFailure;
+        for (size_t sample = 0; sample < 12000; sample++) {
+            std::string source;
+            const size_t length = 1 + next() % 14;
+            for (size_t index = 0; index < length; index++) source += alphabet[next() % alphabet.size()];
+            ParserOptions options;
+            options.gfm = (sample & 1) == 0;
+            for (const auto& mode : modes) {
+                const StreamViewText view = streamViewText(source, options, mode);
+                if (!appendable(view, source) || !appendsInJs(source) ||
+                    !endsInTextLeaf(*parser.parse(source, options), utf16LengthForTest(source))) {
+                    continue;
+                }
+                startStates++;
+                const size_t finished =
+                    finishedBlocksEnd(source, StreamBoundaryOptions{options.math, options.html});
+                const std::string tail = source.substr(finished);
+                for (size_t at = 0; at < tail.size(); at++) {
+                    if (tail[at] != '*' && tail[at] != '_') continue;
+                    const bool wordBefore = at > 0 && std::isalnum(static_cast<unsigned char>(tail[at - 1]));
+                    const bool wordAfter =
+                        at + 1 < tail.size() && std::isalnum(static_cast<unsigned char>(tail[at + 1]));
+                    if (wordBefore && wordAfter) intrawordRuns++;
+                    if (at + 2 < tail.size() && tail[at + 1] == ' ' && tail[at + 2] != ' ') spacedRuns++;
+                }
+                std::string grown = source;
+                for (int step = 0; step < 3; step++) {
+                    if (step > 0 && !appendsInJs(grown)) break;
+                    grown += chunks[next() % chunks.size()];
+                    steps++;
+                    const StreamViewText after = streamViewText(grown, options, mode);
+                    if (!appendable(after, grown) && firstFailure.empty()) {
+                        firstFailure = jsonEscape(source) + " -> " + jsonEscape(grown);
+                    }
+                }
+            }
+        }
+        std::cout << "ℹ Stream view emphasis append: " << startStates << " appendable states, " << steps
+                  << " appends, " << spacedRuns << " spaced runs, " << intrawordRuns << " intraword runs"
+                  << std::endl;
+        TestRunner::assertEqual(
+            "", firstFailure, "Stream view: plain appends keep an emphasis tail unmodified and appendable"
+        );
+        TestRunner::assertTrue(
+            startStates > 1000 && spacedRuns > 100 && intrawordRuns > 100,
+            "Stream view: the emphasis append fuzz reaches spaced and intraword runs"
+        );
+    }
+
     // One unfinished block of any size is repaired on every flush, inside a
     // synchronous call, so the repair must stay linear in the tail.
     static void testStreamViewRepairCost() {
@@ -1604,6 +1729,8 @@ private:
         );
 
         testStreamViewRepair();
+        testStreamViewEmphasisAppend();
+        testJsonEscapesEveryAsciiByte();
 
         using ::margelo::nitro::Markdown::HybridMarkdownSession;
         using NativeParserOptions = ::margelo::nitro::Markdown::ParserOptions;

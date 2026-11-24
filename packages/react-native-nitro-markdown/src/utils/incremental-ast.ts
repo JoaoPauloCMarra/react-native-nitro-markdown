@@ -313,8 +313,12 @@ export const reuseStableAstNodes = (
   // array only at the first child that changed.
   let children: MarkdownNode[] | null = null;
   for (let index = 0; index < nextChildren.length; index += 1) {
-    const previousChild = previousChildren[index]!;
-    const child = reuseStableAstNodes(previousChild, nextChildren[index]!);
+    const previousChild = previousChildren[index];
+    const nextChild = nextChildren[index]!;
+    const child =
+      previousChild === undefined
+        ? nextChild
+        : reuseStableAstNodes(previousChild, nextChild);
     if (children) children.push(child);
     else if (child !== previousChild) {
       children = previousChildren.slice(0, index);
