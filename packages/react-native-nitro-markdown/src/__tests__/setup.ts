@@ -351,7 +351,8 @@ function createMockSession() {
     parseStreamView: jest.fn((options: MockParserOptions, _request: object) => {
       assertActive();
       const tail = buffer.slice(buffer.lastIndexOf("\n\n") + 1);
-      const plainTail = !/[`*_~[\]#!<>()|$]/.test(tail);
+      // Same rule as isPlainTail in cpp/core/StreamView.cpp.
+      const plainTail = !/[`~[\]#!<>()|$]/.test(tail) && !/[*_]$/.test(tail);
       return `{"modified":false,"plainTail":${plainTail},"openCodeFence":false,"document":${mockParser.parseWithOptions(
         buffer,
         options,

@@ -26,11 +26,18 @@ const SETTLE_MS = 120;
 const PARSE_RUNS = 10;
 const MOUNT_RUNS = 5;
 
-type Config = { sizeKb: number; streaming: boolean };
-type Phase = "structural" | "plain";
+type Config = { sizeKb: number; streaming: boolean; pass: "a" | "b" };
+// "plain" appends to a tail that holds `**bold**`; "clean" to a tail with no
+// syntax characters, the case where the stream view can append in JS.
+type Phase = "structural" | "plain" | "clean";
+const PHASES: Phase[] = ["structural", "plain", "clean"];
+const TAIL_BY_PHASE: Record<Exclude<Phase, "structural">, string> = {
+  plain: "Tail paragraph with some **bold** text",
+  clean: "Tail paragraph with plain words only",
+};
 
 const CONFIGS: Config[] = SIZES_KB.flatMap((sizeKb) =>
-  MODES.map((streaming) => ({ sizeKb, streaming })),
+  MODES.map((streaming, index) => ({ sizeKb, streaming, pass: index < 2 ? "a" : "b" })),
 );
 
 function buildDocument(sizeKb: number): { text: string; count: number } {
@@ -103,9 +110,6 @@ export default function BenchStreamScreen() {
   useEffect(() => {
     let cancelled = false;
     const results: string[] = [];
-    const samplesByLabel = new Map<string, number[]>();
-    const addSamples = (label: string, samples: number[]) =>
-      samplesByLabel.set(label, [...(samplesByLabel.get(label) ?? []), ...samples]);
     let failures = 0;
 
     const runConfig = async (config: Config, key: number) => {
@@ -116,13 +120,30 @@ export default function BenchStreamScreen() {
       setActive({ config, session, key });
       if ((await mounted) === null) failures += 1;
       await wait(400);
+      const label = `s${config.sizeKb}${config.streaming ? "on" : "off"}${config.pass}`;
+
+      // JS-thread cost of one flush parse, below the frame quantization of
+      // the append-to-layout samples.
+      const nativeMs: number[] = [];
+      const jsonMs: number[] = [];
+      for (let run = 0; run < PARSE_RUNS; run += 1) {
+        const startedAt = global.performance.now();
+        const json = config.streaming ? session.parseStreamView({}, {}) : session.parse();
+        const parsedAt = global.performance.now();
+        JSON.parse(json);
+        nativeMs.push(parsedAt - startedAt);
+        jsonMs.push(global.performance.now() - parsedAt);
+      }
+      results.push(`${label}native=${format(nativeMs)}`, `${label}json=${format(jsonMs)}`);
 
       const measure = async (phase: Phase): Promise<number[]> => {
         const samples: number[] = [];
+        if (phase !== "structural") {
+          session.append(`${TAIL_BY_PHASE[phase]} ${count}`);
+          await wait(SETTLE_MS * 2);
+        }
         for (let index = 0; index <= APPENDS; index += 1) {
           const chunk = phase === "structural" ? PARAGRAPH(count + index) : PLAIN_CHUNK;
-          if (phase === "plain" && index === 0) session.append(PARAGRAPH(count + 100).trimEnd());
-          if (phase === "plain" && index === 0) await wait(SETTLE_MS * 2);
           const grown = waitForGrowth(5000);
           const startedAt = global.performance.now();
           session.append(chunk);
@@ -135,11 +156,11 @@ export default function BenchStreamScreen() {
         return samples;
       };
 
-      const structural = await measure("structural");
-      const plain = await measure("plain");
-      const label = `s${config.sizeKb}${config.streaming ? "on" : "off"}`;
-      addSamples(label, structural);
-      addSamples(`${label}plain`, plain);
+      for (const phase of PHASES) {
+        const samples = await measure(phase);
+        results.push(`${label}${phase === "structural" ? "" : phase}=${format(samples)}`);
+        if (phase === "plain") session.append("\n\n");
+      }
       setActive(null);
       await wait(200);
       session.dispose();
@@ -177,7 +198,6 @@ export default function BenchStreamScreen() {
         if (cancelled) return;
         await runConfig(config, index);
       }
-      for (const [label, samples] of samplesByLabel) results.push(`${label}=${format(samples)}`);
       if (!cancelled) setStatus(`bench:done;fail=${failures};${results.map((r) => `${r};`).join("")}`);
     })();
 

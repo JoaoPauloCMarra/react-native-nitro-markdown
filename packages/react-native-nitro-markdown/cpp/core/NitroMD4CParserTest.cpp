@@ -1360,6 +1360,11 @@ private:
             "> citação\n> - item 😀\n>   continuação\n\n$$\nx^2\n$$\n\n~~fim~~",
             "line one  \nline two\\\nline three\r\nline four\rline five",
             "intro\n\n![alt 😀](https://e.x/i.png \"t\")\n\n[label](https://e.x/ü)\n\nend\n",
+            // `*` and `_` runs in an unfinished paragraph, which can stay
+            // appendable.
+            "Texto **negrito** e *itálico* e __forte__ e _fraco_ e snake_case e a * b e 2*3*4 fim",
+            "- item **a** b\n- *c* d e\n\nfoo**bar**baz e _a_b_ e *a **b** c* e ***x*** y e **a*b**c",
+            "*a* b *\n* c\n**\nd __e__f_ g ** h * i",
         };
         std::vector<std::string> streams = documents;
         for (auto& fragmentDocument : makeFragmentCorpus(120, 0x51EA)) {
@@ -1388,6 +1393,7 @@ private:
         size_t plainTailWithChange = 0;
         size_t addedCharacters = 0;
         size_t appendableViews = 0;
+        size_t appendableEmphasisViews = 0;
         size_t plainAppendChanges = 0;
         std::string firstFailure;
         const auto fail = [&firstFailure](const std::string& what, const std::string& source) {
@@ -1441,6 +1447,9 @@ private:
                             if (shown.plainTail && !endsWithLineBreak &&
                                 endsInTextLeaf(*parser.parse(source, options), sourceLength)) {
                                 appendableViews++;
+                                if (source.find_first_of("*_", finished) != std::string::npos) {
+                                    appendableEmphasisViews++;
+                                }
                                 for (const auto& chunk : plainChunks) {
                                     const StreamViewText next =
                                         streamViewText(source + chunk, options, mode);
@@ -1495,6 +1504,11 @@ private:
             appendableViews > 100 && plainAppendChanges == 0,
             "Stream view: plain text appended to an unmodified plain tail leaves the view as the source (" +
                 std::to_string(appendableViews) + " views, " + std::to_string(plainAppendChanges) + " changed)"
+        );
+        TestRunner::assertTrue(
+            appendableEmphasisViews > 100,
+            "Stream view: a tail with `*` or `_` runs stays appendable (" +
+                std::to_string(appendableEmphasisViews) + " views)"
         );
         TestRunner::assertTrue(
             modifiedMismatches == 0,

@@ -13,11 +13,16 @@ namespace NitroMarkdown {
 
 namespace {
 
-// The characters `MarkdownStream` treats as a structural append
-// (PLAIN_TEXT_APPEND_PATTERN in src/utils/incremental-ast.ts), without the
-// line breaks.
+// A tail that plain text can extend without a new view. Plain text has none
+// of the characters `MarkdownStream` treats as a structural append
+// (PLAIN_TEXT_APPEND_PATTERN in src/utils/incremental-ast.ts). The tail may
+// hold `*` and `_` runs: whether a run opens or closes depends on the
+// characters on both sides of it, and both are already in the tail unless the
+// run ends it. The view must also be unmodified, so repair left every run as
+// written.
 bool isPlainTail(std::string_view tail) {
-    return tail.find_first_of("`*_~[]#!<>()|$") == std::string_view::npos;
+    if (tail.find_first_of("`~[]#!<>()|$") != std::string_view::npos) return false;
+    return tail.empty() || (tail.back() != '*' && tail.back() != '_');
 }
 
 void clampOffsets(MarkdownNode& node, OFF limit) {
