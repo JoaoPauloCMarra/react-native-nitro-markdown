@@ -72,6 +72,12 @@ their keys have no effect. Table styles apply to the matching table part:
 `table_head` and `table_body` wrap the header and body rows, `table_row` styles
 each row, and `table_cell` styles each cell container.
 
+The default document renders its top-level blocks inside plain wrapper views,
+32 blocks to a view (see [Streaming](./streaming.md#block-groups)). When
+`styles.document` is set, the blocks are direct children of the document view
+again, so a `gap` or `flexDirection` in that style applies to the blocks
+themselves.
+
 ## Custom renderers
 
 Replace the component used for any node type. Renderers receive parsed nodes

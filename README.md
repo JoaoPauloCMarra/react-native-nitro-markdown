@@ -158,7 +158,11 @@ export function StreamingMessage({
 appends take an incremental path; structural updates re-parse with stable AST
 node reuse. Failed updates call `onError(error, "parse")` and retain the last
 valid render. For very large initial content, pass `initialParseMode="async"`
-so the first frame renders without parsing. Full guide:
+so the first frame renders without parsing. Pass `streaming={isStreaming}` to
+hold back a last block that has not finished arriving (a table row, an image
+or link line, an open `$$` block) instead of showing its raw syntax, and to
+show inline syntax that is still open (`**bold`, a link whose URL is arriving)
+the way the finished text will. Full guide:
 **[Streaming](https://github.com/JoaoPauloCMarra/react-native-nitro-markdown/blob/main/docs/streaming.md)**.
 
 Session ranges use JavaScript UTF-16 units. An index inside a surrogate pair

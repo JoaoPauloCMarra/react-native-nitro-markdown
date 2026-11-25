@@ -23,6 +23,7 @@ namespace margelo::nitro::Markdown {
       prototype.registerHybridMethod("getTextRange", &HybridMarkdownSessionSpec::getTextRange);
       prototype.registerHybridMethod("parse", &HybridMarkdownSessionSpec::parse);
       prototype.registerHybridMethod("parseWithOptions", &HybridMarkdownSessionSpec::parseWithOptions);
+      prototype.registerHybridMethod("parseStreamView", &HybridMarkdownSessionSpec::parseStreamView);
       prototype.registerHybridMethod("addListener", &HybridMarkdownSessionSpec::addListener);
       prototype.registerHybridMethod("reset", &HybridMarkdownSessionSpec::reset);
       prototype.registerHybridMethod("replace", &HybridMarkdownSessionSpec::replace);

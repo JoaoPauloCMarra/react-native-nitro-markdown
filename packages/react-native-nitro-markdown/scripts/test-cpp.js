@@ -525,7 +525,7 @@ private:
       .map((file) => `"${path.join(buildDir, file)}"`)
       .join(" ");
     const profilePath = path.join(buildDir, "coverage.profdata");
-    const coveredSources = ["core", "bindings"]
+    const coveredSources = ["core", "bindings", "repair"]
       .flatMap((directory) =>
         fs
           .readdirSync(path.join(cppDir, directory))

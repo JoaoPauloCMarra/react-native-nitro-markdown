@@ -70,12 +70,17 @@
 - `MarkdownSession.reset(text)` replaces full buffer and resets `highlightPosition`; `replace(from, to, text)` is partial. Both emit range events.
 - If any plugin uses `beforeParse`, incremental AST optimization is disabled.
 - Keep stream fixes in package internals, not in demo app logic.
+- `streaming` (default `false`) routes every stream parse through the native `parseStreamView`, which hides the unfinished parts of the last block (`cpp/core/StreamBoundary`, `StreamFilter`, `StreamView`). With it on, the JS plain-text fast path runs only when the last native result was unmodified and had `plainTail: true`. Finished blocks are always shown as written.
+- `cpp/core/Stream{Text,Boundary,Filter}` are ported from enriched-markdown (MIT). Keep the attribution headers and `THIRD_PARTY_NOTICES.md` in sync when they change.
+- `cpp/repair` (inline repair of the stream tail) is copied from enriched-markdown, a C++ port of remend (Apache-2.0). Do not edit it: only the namespace differs from upstream. Put nitro-specific behavior in `cpp/core/StreamView.cpp` (`repairOptionsFor`, `repairOnlyCutText`). Its upstream suite runs inside `test:cpp` (`cpp/core/MarkdownRepairTest.cpp`, `RepairReferenceCasesTest.cpp`).
+- Repair runs only on the unfinished tail, and not when `ParserOptions.html` is true or `streamingOptions.repair` is false. A view that repair changed is `modified`, so the JS plain-text fast path waits for an unmodified view.
 
 ## Renderer Notes
 
 - Default renderers should look consistent on iOS/Android.
 - RaTeX math rendering lives only in the `react-native-nitro-markdown/math` subpath (`mathRenderers`). The main entry and `/headless` must never import `ratex-react-native` (a test and the pack audit enforce this); without the subpath, math renders as monospace text. Keep the previous MathJax/SVG renderer confined to the example benchmark.
 - Use platform-neutral visuals for task checkboxes (no OS glyphs).
+- The default `document` renderer groups its top-level blocks in wrapper views of 32 (`BLOCK_GROUP_SIZE` in `src/node-renderer.tsx`). Group from the first block; never switch a growing document between the flat and the grouped tree. `styles.document`, a top-level inline node, and a custom `document` renderer keep the flat tree.
 - Table renderer renders immediately with estimated widths, then refines after measurement (never gates on layout).
 - Table measurement is debounced to avoid stream-time thrashing.
 - `tableOptions` (`minColumnWidth`, `measurementStabilizeMs`) flows through `MarkdownContext`.

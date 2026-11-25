@@ -6,10 +6,12 @@ import {
   TableRenderer,
   createMarkdownSession,
   getFlattenedText,
+  parseMarkdown,
   useMarkdownStreamState,
   type CodeHighlighter,
   type CustomRenderers,
   type MarkdownErrorPhase,
+  type MarkdownNode,
   type MarkdownParseCompleteResult,
   type MarkdownPlugin,
 } from "react-native-nitro-markdown";
@@ -63,6 +65,83 @@ function StreamParseErrorProbe({ report }: { report: Report }) {
   const onError = useCallback((_error: Error, phase: MarkdownErrorPhase) => report("streamerr", `streamerr=${phase}`), [report]);
   useMarkdownStreamState({ session, options: ERROR_OPTIONS, onError });
   useEffect(() => () => session.dispose(), [session]);
+  return null;
+}
+
+const OPEN_BOLD_SOURCE = "Hello **wor";
+const OPEN_MATH_BLOCK_SOURCE = "Before\n\n$$\nx^2";
+const NO_REPAIR = { repair: false } as const;
+
+function describeStreamView(sourceAst: MarkdownNode | undefined): string {
+  if (!sourceAst) return "none";
+  const text = getFlattenedText(sourceAst);
+  const bold = collectNodeTypes(sourceAst).has("bold") ? "bold" : "plain";
+  return `${bold}:${text.includes("**") ? "raw" : "clean"}`;
+}
+
+function StreamRepairProbe({ report }: { report: Report }) {
+  const [sessions] = useState(() => ({
+    repaired: createMarkdownSession(OPEN_BOLD_SOURCE),
+    asWritten: createMarkdownSession(OPEN_BOLD_SOURCE),
+    openBlock: createMarkdownSession(OPEN_MATH_BLOCK_SOURCE),
+  }));
+  const repaired = useMarkdownStreamState({ session: sessions.repaired, streaming: true });
+  const asWritten = useMarkdownStreamState({ session: sessions.asWritten, streaming: true, streamingOptions: NO_REPAIR });
+  const openBlock = useMarkdownStreamState({ session: sessions.openBlock, options: MATH_OPTIONS, streaming: true });
+  const heldBlock =
+    openBlock.sourceAst &&
+    !collectNodeTypes(openBlock.sourceAst).has("math_block") &&
+    !getFlattenedText(openBlock.sourceAst).includes("x^2")
+      ? "held"
+      : "shown";
+  const token = `repair=${describeStreamView(repaired.sourceAst)}/off=${describeStreamView(asWritten.sourceAst)}/block=${heldBlock}`;
+  useEffect(() => report("repair", token), [report, token]);
+  useEffect(
+    () => () => Object.values(sessions).forEach((session) => session.dispose()),
+    [sessions],
+  );
+  return null;
+}
+
+const EMPHASIS_TAIL_SOURCE = "Hello **bold** wor";
+const EMPHASIS_TAIL_APPEND = "ld more";
+
+type NodeShape = [string, string | undefined, NodeShape[]];
+const shapeOf = (node: MarkdownNode): NodeShape => [node.type, node.content, (node.children ?? []).map(shapeOf)];
+
+// A plain append to a tail with closed emphasis takes the JS path: no new
+// native view, and the same tree as a parse of the whole text.
+function StreamEmphasisAppendProbe({ report }: { report: Report }) {
+  const [probe] = useState(() => {
+    const session = createMarkdownSession(EMPHASIS_TAIL_SOURCE);
+    const counter = { views: 0 };
+    const counted = new Proxy(session, {
+      get(target, key) {
+        const value: unknown = Reflect.get(target, key);
+        if (typeof value !== "function") return value;
+        if (key !== "parseStreamView") return value.bind(target);
+        return (...args: unknown[]) => {
+          counter.views += 1;
+          return value.apply(target, args);
+        };
+      },
+    });
+    return { session, counted, counter };
+  });
+  const state = useMarkdownStreamState({ session: probe.counted, streaming: true });
+  useEffect(() => {
+    probe.session.append(EMPHASIS_TAIL_APPEND);
+  }, [probe]);
+  useEffect(() => () => probe.session.dispose(), [probe]);
+  const full = EMPHASIS_TAIL_SOURCE + EMPHASIS_TAIL_APPEND;
+  const ast = state.sourceAst;
+  const token =
+    ast && getFlattenedText(ast).includes("more")
+      ? `emphasisappend=${JSON.stringify(shapeOf(ast)) === JSON.stringify(shapeOf(parseMarkdown(full))) ? "same" : "diff"}:views=${probe.counter.views}`
+      : undefined;
+  useEffect(() => {
+    if (token) report("emphasisappend", token);
+  }, [report, token]);
   return null;
 }
 
@@ -176,6 +255,8 @@ export default function MarkdownRenderContractsScreen() {
         <StreamAsyncProbe report={report} />
         <StreamBeforeParseProbe report={report} />
         <StreamParseErrorProbe report={report} />
+        <StreamRepairProbe report={report} />
+        <StreamEmphasisAppendProbe report={report} />
         <Markdown renderers={linkRenderers} onLinkPress={onLinkPress}>{"[Press the E2E link target](https://example.test)"}</Markdown>
       </ScrollView>
     </View>

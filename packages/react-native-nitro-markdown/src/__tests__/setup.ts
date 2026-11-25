@@ -346,6 +346,18 @@ function createMockSession() {
       assertActive();
       return mockParser.parseWithOptions(buffer, options);
     }),
+    // The mock hides nothing: it reports the buffer as written, with the
+    // plain-tail flag of the text after the last blank line.
+    parseStreamView: jest.fn((options: MockParserOptions, _request: object) => {
+      assertActive();
+      const tail = buffer.slice(buffer.lastIndexOf("\n\n") + 1);
+      // Same rule as isPlainTail in cpp/core/StreamView.cpp.
+      const plainTail = !/[`~[\]#!<>()|$]/.test(tail) && !/[*_]$/.test(tail);
+      return `{"modified":false,"plainTail":${plainTail},"openCodeFence":false,"document":${mockParser.parseWithOptions(
+        buffer,
+        options,
+      )}}`;
+    }),
     getTextRange: jest.fn((from: number, to: number) => {
       assertActive();
       if (!Number.isFinite(from) || !Number.isFinite(to) || from < 0 || to < 0 || from > to) {

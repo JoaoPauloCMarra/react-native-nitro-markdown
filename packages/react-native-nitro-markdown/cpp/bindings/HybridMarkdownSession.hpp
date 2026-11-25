@@ -26,6 +26,10 @@ public:
     std::string getTextRange(double from, double to) override;
     std::string parse() override;
     std::string parseWithOptions(const ParserOptions& options) override;
+    std::string parseStreamView(
+        const ParserOptions& options,
+        const StreamViewRequest& request
+    ) override;
     std::function<void()> addListener(
         const std::function<void(double, double)>& listener
     ) override;

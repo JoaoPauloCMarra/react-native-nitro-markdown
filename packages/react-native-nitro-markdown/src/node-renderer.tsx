@@ -297,12 +297,29 @@ const NodeRendererComponent: FC<NodeRendererProps> = ({
   }
 
   switch (node.type) {
-    case "document":
+    case "document": {
+      const blocks = node.children;
+      if (blocks && canGroupDocumentBlocks(blocks, nodeStyles?.document)) {
+        const groups: ReactNode[] = [];
+        for (let start = 0; start < blocks.length; start += BLOCK_GROUP_SIZE) {
+          groups.push(
+            <BlockGroup
+              key={start}
+              nodes={blocks}
+              start={start}
+              end={Math.min(start + BLOCK_GROUP_SIZE, blocks.length)}
+              depth={depth}
+            />,
+          );
+        }
+        return <View style={baseStyles.document}>{groups}</View>;
+      }
       return (
         <View style={[baseStyles.document, nodeStyles?.document]}>
           {renderChildren(node.children, false, false)}
         </View>
       );
+    }
 
     case "heading":
       return (
@@ -546,6 +563,59 @@ export const NodeRenderer = memo(NodeRendererComponent, (previousProps, nextProp
     previousProps.parentIsText === nextProps.parentIsText
   );
 }) as FC<NodeRendererProps>;
+
+const BLOCK_GROUP_SIZE = 32;
+
+// Never add a block-count threshold here: a document that switches between
+// the flat and the grouped tree while it grows remounts every block.
+const canGroupDocumentBlocks = (
+  blocks: readonly MarkdownNode[],
+  documentStyle: unknown,
+): boolean => {
+  if (documentStyle) return false;
+  for (const block of blocks) {
+    if (isInline(block.type)) return false;
+  }
+  return true;
+};
+
+type BlockGroupProps = {
+  nodes: readonly MarkdownNode[];
+  start: number;
+  end: number;
+  depth: number;
+};
+
+const BlockGroupComponent: FC<BlockGroupProps> = ({ nodes, start, end, depth }) => {
+  const elements: ReactNode[] = [];
+  for (let index = start; index < end; index += 1) {
+    const child = nodes[index]!;
+    elements.push(
+      <NodeRenderer
+        key={`${child.type}-${index}`}
+        node={child}
+        depth={depth + 1}
+        inListItem={false}
+        parentIsText={false}
+      />,
+    );
+  }
+  return <View>{elements}</View>;
+};
+
+const BlockGroup = memo(BlockGroupComponent, (previousProps, nextProps) => {
+  if (
+    previousProps.start !== nextProps.start ||
+    previousProps.end !== nextProps.end ||
+    previousProps.depth !== nextProps.depth
+  ) {
+    return false;
+  }
+  for (let index = nextProps.start; index < nextProps.end; index += 1) {
+    if (previousProps.nodes[index] !== nextProps.nodes[index]) return false;
+  }
+  return true;
+});
 
 export type BaseStyles = ReturnType<typeof createBaseStyles>;
 

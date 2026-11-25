@@ -87,7 +87,9 @@ function runAndroidExpo() {
     "android/app/build/outputs/apk/debug/app-debug.apk",
   );
   tryRun("adb", ["uninstall", packageName], { stdio: "ignore" });
-  run("adb", ["install", apk], { stdio: "inherit" });
+  // -g grants the runtime permissions the dev client asks for on first
+  // launch; without it a permission dialog covers the app.
+  run("adb", ["install", "-g", apk], { stdio: "inherit" });
   run(
     "adb",
     [

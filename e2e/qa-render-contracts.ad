@@ -24,6 +24,8 @@ wait text "E2Emath^{2}"
 wait text "async=initializing>available;"
 wait text "reason=beforeParse-plugin;"
 wait text "streamerr=parse;"
+wait text "repair=bold:clean/off=plain:raw/block=held;"
+wait text "emphasisappend=same:views=1;"
 scroll down
 wait "stable"
 press id="link-press-target"

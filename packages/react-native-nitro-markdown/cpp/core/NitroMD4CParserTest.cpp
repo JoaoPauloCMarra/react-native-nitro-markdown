@@ -1,7 +1,12 @@
 #define NITRO_MARKDOWN_TESTING
 #include "NitroMD4CParser.hpp"
 #include "MarkdownTypes.hpp"
+#include "MarkdownJson.hpp"
 #include "SourceOffsetMap.hpp"
+#include "StreamBoundary.hpp"
+#include "StreamFilter.hpp"
+#include "StreamView.hpp"
+#include "MarkdownRepairTest.hpp"
 #include "flatten.hpp"
 #include "FlattenCorpus.hpp"
 #include "ConformanceCorpus.hpp"
@@ -16,6 +21,7 @@
 #include <cstdint>
 #include <cstring>
 #include <random>
+#include <regex>
 #include <sstream>
 #include <string>
 #include <algorithm>
@@ -426,7 +432,13 @@ public:
         testUtf16Offsets();
         testParseLatencyBudgets();
         testHybridSerializationLatency();
+        testStreamFlushCost();
         testLargeDocumentMemoryBudget();
+
+        testStreamBoundary();
+        testStreamFilter();
+        testStreamView();
+        testMarkdownRepairPort();
 
         testSourceRangeContainment();
         testImageAltFlattensSubtree();
@@ -654,6 +666,70 @@ private:
         }
     }
 
+    static std::string makeStreamPayload(size_t targetBytes) {
+        std::string payload;
+        payload.reserve(targetBytes + 128);
+        size_t index = 0;
+        while (payload.size() < targetBytes) {
+            payload += "Paragraph " + std::to_string(++index) +
+                " with some **bold** text and a longer plain sentence that follows it.\n\n";
+        }
+        payload += "An open last line";
+        return payload;
+    }
+
+    static std::string medianAndRange(std::vector<double> values) {
+        std::sort(values.begin(), values.end());
+        std::ostringstream out;
+        out << percentile(values, 0.50) << "ms [" << values.front() << ".." << values.back() << "]";
+        return out.str();
+    }
+
+    static void testStreamFlushCost() {
+        MD4CParser parser;
+        ParserOptions options;
+        constexpr int kWarmupRuns = 2;
+        constexpr int kTimedRuns = 7;
+        for (const size_t targetBytes : {size_t{8} * 1024, size_t{80} * 1024, size_t{800} * 1024}) {
+            const std::string payload = makeStreamPayload(targetBytes);
+            std::vector<double> parseMs;
+            std::vector<double> jsonMs;
+            size_t jsonBytes = 0;
+            for (int run = 0; run < kWarmupRuns + kTimedRuns; run++) {
+                const auto start = std::chrono::steady_clock::now();
+                auto ast = parser.parse(payload, options);
+                const auto parsed = std::chrono::steady_clock::now();
+                const std::string json = serializeMarkdownJson(ast, payload.size(), true);
+                const auto written = std::chrono::steady_clock::now();
+                jsonBytes = json.size();
+                if (run < kWarmupRuns) continue;
+                parseMs.push_back(std::chrono::duration<double, std::milli>(parsed - start).count());
+                jsonMs.push_back(std::chrono::duration<double, std::milli>(written - parsed).count());
+            }
+            std::vector<double> viewMs;
+            const auto payloadUtf16 = utf16LengthForTest(payload);
+            for (int run = 0; run < kWarmupRuns + kTimedRuns; run++) {
+                const auto start = std::chrono::steady_clock::now();
+                const std::string view =
+                    parseStreamViewToJson(payload, payloadUtf16, options, StreamViewOptions{});
+                const auto end = std::chrono::steady_clock::now();
+                TestRunner::assertTrue(!view.empty(), "Perf stream flush: stream view result");
+                if (run < kWarmupRuns) continue;
+                viewMs.push_back(std::chrono::duration<double, std::milli>(end - start).count());
+            }
+            std::cout << "ℹ Perf stream flush bytes=" << payload.size()
+                      << " parse p50=" << medianAndRange(parseMs)
+                      << " json p50=" << medianAndRange(jsonMs)
+                      << " streamView p50=" << medianAndRange(viewMs)
+                      << " jsonBytes=" << jsonBytes << std::endl;
+            TestRunner::assertTrue(
+                jsonBytes > payload.size(),
+                "Perf stream flush: whole parse wrote the document (" +
+                    std::to_string(payload.size()) + " bytes)"
+            );
+        }
+    }
+
     static void testLargeDocumentMemoryBudget() {
         MD4CParser parser;
         ParserOptions options{true, true};
@@ -739,6 +815,976 @@ private:
             corpus.push_back(std::move(document));
         }
         return corpus;
+    }
+
+    static void testStreamBoundary() {
+        const StreamBoundaryOptions math{true, false};
+        const StreamBoundaryOptions noMath{false, false};
+        const StreamBoundaryOptions html{true, true};
+        struct Case {
+            const char* name;
+            std::string text;
+            StreamBoundaryOptions options;
+            size_t expected;
+        };
+        const std::vector<Case> cases = {
+            {"empty text", "", math, 0},
+            {"one paragraph", "a\nb", math, 0},
+            {"the last paragraph after a blank line", "a\n\nb\n\nc", math, 6},
+            {"a line that is still arriving", "a\n\nb", math, 3},
+            {"a blank line with a carriage return", "a\r\n\r\nb", math, 5},
+            {"lines that end with a lone carriage return", "para\r\rnext", math, 6},
+            {"a list item never starts the tail", "a\n\n- b", math, 0},
+            {"an ordered item never starts the tail", "a\n\n1. b", math, 0},
+            {"an indented line never starts the tail", "a\n\n  b", math, 0},
+            {"a reference definition never starts the tail", "a\n\n[x]: /u", math, 0},
+            {"an HTML line never starts the tail", "a\n\n<div>", math, 0},
+            {"a quote line starts the tail", "a\n\n> q", math, 3},
+            {"a heading starts the tail", "a\n\n# h", math, 3},
+            {"nothing inside an open fence", "a\n\n```\ncode\n\nb", math, 0},
+            {"the paragraph after a closed fence", "a\n\n```\ncode\n```\n\nb", math, 17},
+            {"a last line that may become a fence", "a\n\n`", math, 0},
+            {"a last line that may become a tilde fence", "a\n\n~", math, 0},
+            {"a finished line that starts with a backtick", "a\n\n`c` d\n", math, 3},
+            {"a last line that may become math", "a\n\n$", math, 0},
+            {"a dollar line without math", "a\n\n$", noMath, 3},
+            {"the opener of an open math block", "a\n\n$$\nx\n\nb", math, 3},
+            {"no math block without math", "a\n\n$$\nx\n\nb", noMath, 9},
+            {"the paragraph after a closed math block", "a\n\n$$\nx\n$$\n\nb", math, 12},
+            {"a deeper-indented $$ holds the tail back", "a\n\n    $$\nx\n\nb", math, 0},
+            {"nothing inside an open HTML comment", "a\n\n<!--\n\nb", html, 0},
+            {"an HTML comment is prose without HTML", "a\n\n<!--\n\nb", math, 9},
+            {"the paragraph after a closed HTML comment", "a\n\n<!-- c -->\n\nb", html, 15},
+        };
+        for (const auto& entry : cases) {
+            TestRunner::assertEqual(
+                std::to_string(entry.expected),
+                std::to_string(finishedBlocksEnd(entry.text, entry.options)),
+                std::string("Stream boundary: ") + entry.name
+            );
+        }
+
+        TestRunner::assertTrue(
+            startsTopLevelBlock("# h") && startsTopLevelBlock("> q") && startsTopLevelBlock("x") &&
+                startsTopLevelBlock("|a|") && startsTopLevelBlock("```"),
+            "Stream boundary: a heading, a quote, text, a table row and a fence start a block"
+        );
+        TestRunner::assertTrue(
+            !startsTopLevelBlock("") && !startsTopLevelBlock(" x") && !startsTopLevelBlock("\tx") &&
+                !startsTopLevelBlock("- x") && !startsTopLevelBlock("* x") &&
+                !startsTopLevelBlock("+ x") && !startsTopLevelBlock("[x") &&
+                !startsTopLevelBlock("<x") && !startsTopLevelBlock("1x"),
+            "Stream boundary: indent, list markers, brackets, HTML and digits do not start a block"
+        );
+    }
+
+    static void testStreamFilter() {
+        const StreamFilterOptions progressive;
+        StreamFilterOptions hiddenTables;
+        hiddenTables.tables = StreamBlockMode::Hidden;
+        StreamFilterOptions hiddenCode;
+        hiddenCode.codeBlocks = StreamBlockMode::Hidden;
+        StreamFilterOptions hiddenMedia;
+        hiddenMedia.media = StreamBlockMode::Hidden;
+        StreamFilterOptions noTables;
+        noTables.gfmTables = false;
+        StreamFilterOptions noMath;
+        noMath.math = false;
+        struct Case {
+            const char* name;
+            std::string tail;
+            StreamFilterOptions options;
+            std::string expected;
+            bool openFence;
+        };
+        const std::vector<Case> cases = {
+            {"empty text is kept", "", progressive, "", false},
+            {"prose is kept", "Hello **wor", progressive, "Hello **wor", false},
+            {"inline syntax inside prose is kept", "See [the docs](http://x", progressive,
+                "See [the docs](http://x", false},
+            {"an open math block is cut at its opener", "a\n\n$$\nx^2", progressive, "a\n\n", false},
+            {"a closed math block is kept", "$$\nx\n$$\n", progressive, "$$\nx\n$$\n", false},
+            {"an open $$ is prose without math", "a\n\n$$\nx^2", noMath, "a\n\n$$\nx^2", false},
+            {"a finished header row gets a delimiter row", "| a | b |\n", progressive,
+                "| a | b |\n| --- | --- |", false},
+            {"a quoted header row keeps its quote marker", "> | a |\n", progressive,
+                "> | a |\n> | --- |", false},
+            {"a header row that is still arriving is cut", "| a | b", progressive, "", false},
+            {"a delimiter row that is still arriving keeps the added one", "| a | b |\n| --", progressive,
+                "| a | b |\n| --- | --- |", false},
+            {"a header row with a code span waits for its delimiter row", "| `a|b` |\n", progressive,
+                "", false},
+            {"an open table is cut in hidden mode", "| a |\n| - |\n| 1 |\n", hiddenTables, "", false},
+            {"a table followed by a blank line is kept in hidden mode", "| a |\n| - |\n| 1 |\n\n",
+                hiddenTables, "| a |\n| - |\n| 1 |\n\n", false},
+            {"an incomplete last row is cut", "| a | b |\n| - | - |\n| 1 | 2 |\n| 3 ", progressive,
+                "| a | b |\n| - | - |\n| 1 | 2 |\n", false},
+            {"a complete last row is kept", "| a | b |\n| - | - |\n| 1 | 2 |", progressive,
+                "| a | b |\n| - | - |\n| 1 | 2 |", false},
+            {"a row of pipes is prose without tables", "| a | b |\n", noTables, "| a | b |\n", false},
+            {"prose that holds a pipe is kept", "a | b\n", progressive, "a | b\n", false},
+            {"text after a table that ended with lone carriage returns is kept",
+                "| a |\r| - |\r\rHello world", progressive, "| a |\r| - |\r\rHello world", false},
+            {"a header row that ended with a carriage return gets a delimiter row", "| a |\r",
+                progressive, "| a |\r| --- |", false},
+            {"a fence line with text after its marker does not close the fence", "```\nx\n```abc",
+                progressive, "```\nx\n```abc", true},
+            {"an image that is still arriving is cut", "text\n\n![alt](http://x", progressive,
+                "text\n\n", false},
+            {"a lone ! may become an image", "text\n\n!", progressive, "text\n\n", false},
+            {"a complete image is kept", "![alt](http://x)", progressive, "![alt](http://x)", false},
+            {"a complete image waits for a blank line in hidden mode", "![alt](http://x)", hiddenMedia,
+                "", false},
+            {"a complete image after a blank line is kept in hidden mode", "![alt](http://x)\n\n",
+                hiddenMedia, "![alt](http://x)\n\n", false},
+            {"a link line that is still arriving is cut", "[label](http://x", progressive, "", false},
+            {"a link label that may get a destination is cut", "[label]", progressive, "", false},
+            {"a link line with a title that is still arriving is cut", "[l](/u \"ti", progressive,
+                "", false},
+            {"a bracketed word followed by prose is kept", "[INFO] done", progressive, "[INFO] done",
+                false},
+            {"a task box is kept", "[ ] task", progressive, "[ ] task", false},
+            {"a reference definition is kept", "[x]: /u", progressive, "[x]: /u", false},
+            {"a link inside a list item is kept", "- [link](http", progressive, "- [link](http", false},
+            {"an indented image line is kept", "    ![a](b", progressive, "    ![a](b", false},
+            {"an open fence is kept once its opener line ended", "a\n\n```js\nconst", progressive,
+                "a\n\n```js\nconst", true},
+            {"a fence whose opener line is still arriving is cut", "a\n\n```j", progressive, "a\n\n",
+                false},
+            {"an open fence is cut in hidden mode", "a\n\n```js\nconst", hiddenCode, "a\n\n", false},
+            {"a closed fence is kept in hidden mode", "```js\nx\n```\n", hiddenCode, "```js\nx\n```\n",
+                false},
+            {"a table row inside an open fence is kept", "```\n| a |\n", progressive, "```\n| a |\n",
+                true},
+            {"an image before an open fence is kept", "![a](b)\n```\nx", hiddenMedia, "![a](b)\n```\nx",
+                true},
+        };
+        for (const auto& entry : cases) {
+            const StreamFilterResult result = filterStreamTail(entry.tail, entry.options);
+            TestRunner::assertEqual(
+                jsonEscape(entry.expected),
+                jsonEscape(result.text),
+                std::string("Stream filter: ") + entry.name
+            );
+            TestRunner::assertTrue(
+                result.endsInsideOpenCodeFence == entry.openFence,
+                std::string("Stream filter: ") + entry.name + " (open fence flag)"
+            );
+        }
+    }
+
+    static void testMarkdownRepairPort() {
+        const NitroMarkdownRepairTests::Result result = NitroMarkdownRepairTests::runAll();
+        TestRunner::assertTrue(
+            result.testCases > 20 && result.checks > 700,
+            "Markdown repair: the ported suite ran (" + std::to_string(result.testCases) + " cases, " +
+                std::to_string(result.checks) + " checks)"
+        );
+        TestRunner::assertEqual("", result.firstFailure, "Markdown repair: no failing check");
+        TestRunner::assertTrue(
+            result.failures == 0,
+            "Markdown repair: " + std::to_string(result.failures) + " failed checks"
+        );
+    }
+
+    // The condition under which `appendPlainTextToAst` (src/utils/incremental-ast.ts)
+    // adds a chunk to the tree without a parse: the last leaf is text that
+    // ends where the source ends.
+    static bool endsInTextLeaf(const MarkdownNode& root, OFF sourceLength) {
+        const MarkdownNode* leaf = &root;
+        while (!leaf->children.empty() && leaf->children.back()) leaf = leaf->children.back().get();
+        return leaf->type == NodeType::Text && leaf->end == sourceLength;
+    }
+
+    static void collectTextLines(const MarkdownNode& node, std::string& out) {
+        if (node.type == NodeType::Text && node.content) out.append(*node.content).push_back('\n');
+        for (const auto& child : node.children) {
+            if (child) collectTextLines(*child, out);
+        }
+    }
+
+    // Link and image syntax shown as literal text that the finished document
+    // does not show as text. Follows enriched-markdown's
+    // tests/streaming_session_fuzz.cpp, with md4c as the oracle.
+    static bool leaksLinkSyntax(const std::string& fragment, const std::string& wholeText) {
+        for (const std::string marker : {"](", "!["}) {
+            size_t at = fragment.find(marker);
+            while (at != std::string::npos) {
+                const size_t from = at >= 8 ? at - 8 : 0;
+                if (wholeText.find(fragment.substr(from, at - from + marker.size())) == std::string::npos) {
+                    return true;
+                }
+                at = fragment.find(marker, at + 1);
+            }
+        }
+        return false;
+    }
+
+    static void testStreamViewRepair() {
+        const auto shownText = [](const std::string& source, const ParserOptions& options,
+                                  const StreamViewOptions& view) {
+            const StreamViewText shown = streamViewText(source, options, view);
+            return jsonEscape(shown.modified ? shown.text : source);
+        };
+        const ParserOptions defaults;
+        const StreamViewOptions repairOn;
+        StreamViewOptions repairOff;
+        repairOff.repair = false;
+
+        TestRunner::assertEqual(
+            "Hello **wor**",
+            shownText("Hello **wor", defaults, repairOn),
+            "Stream repair: open bold closes"
+        );
+        TestRunner::assertEqual(
+            "done\\n\\nHello **wor**",
+            shownText("done\n\nHello **wor", defaults, repairOn),
+            "Stream repair: finished blocks stay as written before a repaired tail"
+        );
+        TestRunner::assertEqual(
+            "a `co`",
+            shownText("a `co", defaults, repairOn),
+            "Stream repair: open inline code closes"
+        );
+        TestRunner::assertEqual(
+            "a ~~gone~~",
+            shownText("a ~~gone", defaults, repairOn),
+            "Stream repair: open strikethrough closes with gfm"
+        );
+        ParserOptions noGfm;
+        noGfm.gfm = false;
+        TestRunner::assertEqual(
+            "a ~~gone",
+            shownText("a ~~gone", noGfm, repairOn),
+            "Stream repair: strikethrough stays as written without gfm"
+        );
+        const std::string openLink = shownText("see [the docs](https://e.x/pa", defaults, repairOn);
+        TestRunner::assertTrue(
+            openLink.find("the docs") != std::string::npos && openLink.find("](") == std::string::npos &&
+                openLink.find("e.x") == std::string::npos,
+            "Stream repair: a link whose URL is arriving shows its label only (" + openLink + ")"
+        );
+        const std::string openImage = shownText("see ![a cat](https://e.x/c", defaults, repairOn);
+        TestRunner::assertTrue(
+            openImage.find("![") == std::string::npos && openImage.find("e.x") == std::string::npos,
+            "Stream repair: an image whose URL is arriving is held back (" + openImage + ")"
+        );
+        ParserOptions noMath;
+        noMath.math = false;
+        TestRunner::assertEqual(
+            "Price $5 and *x*",
+            shownText("Price $5 and *x", noMath, repairOn),
+            "Stream repair: with math off a dollar sign is text and emphasis still closes"
+        );
+        const std::string openMath = shownText("so $x^2 + y", defaults, repairOn);
+        TestRunner::assertTrue(
+            openMath.find('$') == std::string::npos,
+            "Stream repair: inline math that has not closed is held back (" + openMath + ")"
+        );
+        ParserOptions html;
+        html.html = true;
+        TestRunner::assertTrue(
+            !streamViewText("Hello **wor", html, repairOn).modified,
+            "Stream repair: off when the parser reads HTML"
+        );
+        TestRunner::assertTrue(
+            !streamViewText("Hello **wor", defaults, repairOff).modified,
+            "Stream repair: off when the caller turns it off"
+        );
+        TestRunner::assertTrue(
+            !streamViewText("Hello ", defaults, repairOn).modified &&
+                streamViewText("Hello ", defaults, repairOn).plainTail,
+            "Stream repair: a trailing space alone leaves the view as the source"
+        );
+        TestRunner::assertTrue(
+            !streamViewText("Hello **bold** and `code` done", defaults, repairOn).modified,
+            "Stream repair: complete inline syntax is left as written"
+        );
+        TestRunner::assertEqual(
+            "| a | b |\\n| --- | --- |",
+            shownText("| a | b |\n", defaults, repairOn),
+            "Stream repair: a clean header row still shows as a table"
+        );
+        TestRunner::assertEqual(
+            "",
+            shownText("| a **b |\n", defaults, repairOn),
+            "Stream repair: a header row that repair would change is held back"
+        );
+        TestRunner::assertEqual(
+            "intro\\r\\n\\r\\n",
+            shownText("intro\r\n\r\n| a **b |\r\n", defaults, repairOn),
+            "Stream repair: a held-back header row leaves the blocks before it"
+        );
+        TestRunner::assertEqual(
+            "- item\\n\\n  | a | b |\\n  | --- | --- |",
+            shownText("- item\n\n  | a | b |\n", defaults, repairOn),
+            "Stream repair: a clean header row after other lines of the tail shows as a table"
+        );
+        TestRunner::assertEqual(
+            "- item\\n\\n",
+            shownText("- item\n\n  | a **b |\n", defaults, repairOn),
+            "Stream repair: a held-back header row leaves the lines of the tail before it"
+        );
+        TestRunner::assertTrue(
+            !streamViewText("if a ==", defaults, repairOn).modified &&
+                !streamViewText("Title\n====", defaults, repairOn).modified,
+            "Stream repair: a run of equals signs is text or an underline, not a highlight opener"
+        );
+        TestRunner::assertTrue(
+            !streamViewText("if a ||", defaults, repairOn).modified &&
+                !streamViewText("if a || ", defaults, repairOn).modified,
+            "Stream repair: two pipes after text are text, not a spoiler opener"
+        );
+        for (const std::string marker : {"-", "--", "=", "==", "#", "##"}) {
+            TestRunner::assertEqual(
+                "Title\\n",
+                shownText("Title\n" + marker, defaults, repairOn),
+                "Stream repair: a '" + marker + "' line under text waits, with no character added"
+            );
+        }
+        // `MarkdownStream` asks for a new view after a `.`, so the plain
+        // text `12` before it can stay a plain tail.
+        TestRunner::assertTrue(
+            !streamViewText("intro\n12", defaults, repairOn).modified &&
+                streamViewText("intro\n12", defaults, repairOn).plainTail,
+            "Stream repair: digits at the end are plain text"
+        );
+        TestRunner::assertEqual(
+            "intro\\n",
+            shownText("intro\n12.", defaults, repairOn),
+            "Stream repair: a list marker with no content waits"
+        );
+        TestRunner::assertEqual(
+            "intro **bold\\n| a | b |**\\n",
+            shownText("intro **bold\n| a | b |\n", defaults, repairOn),
+            "Stream repair: a pipe line under a paragraph is text, and bold closes at its end"
+        );
+        TestRunner::assertTrue(
+            !streamViewText("Title\n---", defaults, repairOn).modified &&
+                !streamViewText("Title\n===", defaults, repairOn).modified,
+            "Stream repair: a setext underline of three characters shows as written"
+        );
+        TestRunner::assertEqual(
+            "Title\\n\\n",
+            shownText("Title\n\n==", defaults, repairOn),
+            "Stream repair: a line of two equals signs waits"
+        );
+        const std::string openFence = "```js\nconst a = \"**x";
+        TestRunner::assertTrue(
+            !streamViewText(openFence, defaults, repairOn).modified &&
+                streamViewText(openFence, defaults, repairOn).openCodeFence,
+            "Stream repair: text inside an open fence is left as written"
+        );
+
+        const std::vector<std::string> documents = {
+            "# Day two\n\nWe saw **the gates** and the [torii path](https://e.com/inari \"The gates\") before\n"
+            "the crowds, then read about [the shrine][inari] over tea.\n\n"
+            "![Torii at dawn](https://e.com/img/torii.jpg)\n\n"
+            "> A quote with a [link](https://e.com/q) and an image:\n> ![Bamboo](https://e.com/img/bamboo.jpg)\n\n"
+            "- Matcha at a [tea house](https://e.com/tea)\n- Lunch: `kitsune[0](udon)` and [noodles](<https://e.com/a b>)\n\n"
+            "A label that [wraps over\ntwo lines](https://e.com/wrapped) and goes on.\n\n"
+            "[Itinerary.pdf](https://e.com/files/itinerary.pdf)\n\n"
+            "```md\n![not an image](https://e.com/x)\n```\n\n"
+            "> ```js\n> const link = \"[a](b)\";\n> ```\n\n"
+            "Prices were [about 500 yen][prices], see [notes] and "
+            "[![thumb](https://e.com/t.jpg)](https://e.com/full.jpg).\n\n"
+            "[inari]: https://e.com/inari\n[prices]: https://e.com/prices\n[notes]: https://e.com/notes\n",
+            "# Título 😀\n\nTexto **negrito** e `código` com 中文字 e [link](https://e.x/ü \"tí\").\n",
+            "intro\n\n![alt 😀](https://e.x/i.png \"t\")\n\n[label](https://e.x/ü)\n\nend\n",
+            "| a | [b](https://e.x/b) |\n|:--|--:|\n| ![i](https://e.x/i.png) | `[x](y)` |\n\ntail *with [a link](https://e.x)*\n",
+        };
+        MD4CParser parser;
+        size_t views = 0;
+        size_t repairedViews = 0;
+        size_t leaks = 0;
+        std::string firstLeak;
+        const StreamViewOptions hidden{StreamBlockMode::Hidden, StreamBlockMode::Hidden, StreamBlockMode::Hidden};
+        for (const auto& document : documents) {
+            std::string wholeText;
+            collectTextLines(*parser.parse(document, defaults), wholeText);
+            for (const auto& mode : {repairOn, hidden}) {
+                std::string source;
+                for (const auto& piece : splitByCodePoint(document)) {
+                    source += piece;
+                    views++;
+                    const StreamViewText shown = streamViewText(source, defaults, mode);
+                    if (shown.modified) repairedViews++;
+                    std::string text;
+                    collectTextLines(*parser.parse(shown.modified ? shown.text : source, defaults), text);
+                    size_t lineStart = 0;
+                    while (lineStart < text.size()) {
+                        const size_t lineEnd = text.find('\n', lineStart);
+                        if (leaksLinkSyntax(text.substr(lineStart, lineEnd - lineStart), wholeText)) {
+                            leaks++;
+                            if (firstLeak.empty()) {
+                                firstLeak = jsonEscape(text.substr(lineStart, lineEnd - lineStart)) + " after " +
+                                    jsonEscape(source.substr(source.size() > 40 ? source.size() - 40 : 0));
+                            }
+                            break;
+                        }
+                        lineStart = lineEnd + 1;
+                    }
+                }
+            }
+        }
+        TestRunner::assertEqual("", firstLeak, "Stream repair: no link or image syntax shows as text");
+        TestRunner::assertTrue(
+            leaks == 0 && repairedViews > 200,
+            "Stream repair: every streamed prefix shows links and images as the finished document does (" +
+                std::to_string(views) + " views, " + std::to_string(repairedViews) + " changed)"
+        );
+
+        const std::vector<std::string> hostile = {
+            std::string("**a\xC0\xAF" "b"),
+            std::string("[a\xE0\x80\xAF](b"),
+            std::string("`a\xED\xA0\x80" "b"),
+            std::string("$a\xF4\x90\x80\x80" "b"),
+            std::string("**a\xC3"),
+            std::string("~~a\xE4\xB8"),
+            std::string("![a\xF0\x9F\x98"),
+            std::string("*\x80\xBF"),
+            std::string("\xFF\xFE\xF8 _x"),
+            std::string("a\0*b*\0[c](\0", 11),
+            std::string("\xEF\xBB\xBF# h **x"),
+            std::string("a\r\n**b\r\n\r\n# h\r\n| a **b |\r\n"),
+            std::string("a\r*b\r\r# h\r[c](d\r"),
+            std::string("**\xF0\x9F\x98\x80\xF0\x9F"),
+            std::string("\xE2\x80\x8B**a [\xE2\x80\x8B](\xE2"),
+        };
+        size_t hostileViews = 0;
+        std::string firstHostileFailure;
+        for (const auto& input : hostile) {
+            for (size_t length = 1; length <= input.size(); length++) {
+                const std::string source = input.substr(0, length);
+                for (const bool math : {true, false}) {
+                    ParserOptions options;
+                    options.math = math;
+                    hostileViews++;
+                    const std::string error = errorOf([&]() {
+                        const StreamViewText shown = streamViewText(source, options, repairOn);
+                        const size_t finished =
+                            finishedBlocksEnd(source, StreamBoundaryOptions{options.math, options.html});
+                        if (shown.modified && shown.text.compare(0, finished, source, 0, finished) != 0) {
+                            throw std::runtime_error("finished blocks changed");
+                        }
+                        (void)parser.parse(shown.modified ? shown.text : source, options);
+                    });
+                    if (!error.empty() && firstHostileFailure.empty()) {
+                        firstHostileFailure = error + ": " + jsonEscape(source);
+                    }
+                }
+            }
+        }
+        TestRunner::assertEqual(
+            "",
+            firstHostileFailure,
+            "Stream repair: every byte prefix of the hostile inputs gives a view that parses (" +
+                std::to_string(hostileViews) + " views)"
+        );
+
+        testStreamViewRepairCost();
+    }
+
+    // Every ASCII byte, with the JSON escaping RFC 8259 asks for.
+    static void testJsonEscapesEveryAsciiByte() {
+        std::string content;
+        std::string expected = "{\"type\":\"text\",\"content\":\"";
+        for (int byte = 0; byte < 0x80; byte++) {
+            const char c = static_cast<char>(byte);
+            content.push_back(c);
+            switch (c) {
+                case '"': expected += "\\\""; break;
+                case '\\': expected += "\\\\"; break;
+                case '\b': expected += "\\b"; break;
+                case '\f': expected += "\\f"; break;
+                case '\n': expected += "\\n"; break;
+                case '\r': expected += "\\r"; break;
+                case '\t': expected += "\\t"; break;
+                default:
+                    if (byte < 0x20) {
+                        char escaped[7];
+                        std::snprintf(escaped, sizeof(escaped), "\\u%04x", byte);
+                        expected += escaped;
+                    } else {
+                        expected.push_back(c);
+                    }
+            }
+        }
+        expected += "\"}";
+        auto node = std::make_shared<MarkdownNode>(NodeType::Text);
+        node->content = content;
+        TestRunner::assertEqual(
+            expected, serializeMarkdownJson(node, content.size(), false), "JSON: every ASCII byte is escaped as RFC 8259 asks"
+        );
+    }
+
+    // An appendable view lets `MarkdownStream` add plain chunks in JS, one
+    // after another, without a new view. Each state those appends reach must
+    // still be an unmodified, appendable view. Sources come from a small
+    // alphabet around `*` and `_` runs, the characters an appendable tail may
+    // hold.
+    static void testStreamViewEmphasisAppend() {
+        static const std::vector<std::string> alphabet = {
+            "a", "b", " ", "*", "**", "_", "__", "\n", "2", "-", "\\", ".", "`", "~",
+        };
+        // Chunks without the characters PLAIN_TEXT_APPEND_PATTERN in
+        // src/utils/incremental-ast.ts treats as structural.
+        static const std::vector<std::string> chunks = {
+            " word", "x", " ", ".", ":", "'", "\\", "7", "-", "=", "==", " =", "&", "\"",
+        };
+        StreamViewOptions repairOff;
+        repairOff.repair = false;
+        const std::vector<StreamViewOptions> modes = {StreamViewOptions{}, repairOff};
+        MD4CParser parser;
+        uint32_t state = 0xE3A5u;
+        const auto next = [&state]() {
+            state = state * 1664525u + 1013904223u;
+            return state >> 8;
+        };
+        const auto appendable = [](const StreamViewText& view, const std::string& text) {
+            return !view.modified && view.plainTail && !text.empty() && text.back() != '\n' &&
+                text.back() != '\r';
+        };
+        // AMBIGUOUS_BLOCK_START_PATTERN in src/utils/incremental-ast.ts: a
+        // trailing line that may still become a list item or heading takes a
+        // native parse, not a JS append.
+        static const std::regex ambiguousBlockStart(
+            R"(^ {0,3}(?:(?:[*+-][ \t]*)+|(?:\d{1,9}[.)]?|#{1,6})[ \t]*)$)"
+        );
+        const auto appendsInJs = [](const std::string& text) {
+            const size_t lineBreak = text.find_last_of("\r\n");
+            const std::string line = lineBreak == std::string::npos ? text : text.substr(lineBreak + 1);
+            return !std::regex_match(line, ambiguousBlockStart);
+        };
+        size_t startStates = 0;
+        size_t spacedRuns = 0;
+        size_t intrawordRuns = 0;
+        size_t steps = 0;
+        std::string firstFailure;
+        for (size_t sample = 0; sample < 12000; sample++) {
+            std::string source;
+            const size_t length = 1 + next() % 14;
+            for (size_t index = 0; index < length; index++) source += alphabet[next() % alphabet.size()];
+            ParserOptions options;
+            options.gfm = (sample & 1) == 0;
+            for (const auto& mode : modes) {
+                const StreamViewText view = streamViewText(source, options, mode);
+                if (!appendable(view, source) || !appendsInJs(source) ||
+                    !endsInTextLeaf(*parser.parse(source, options), utf16LengthForTest(source))) {
+                    continue;
+                }
+                startStates++;
+                const size_t finished =
+                    finishedBlocksEnd(source, StreamBoundaryOptions{options.math, options.html});
+                const std::string tail = source.substr(finished);
+                for (size_t at = 0; at < tail.size(); at++) {
+                    if (tail[at] != '*' && tail[at] != '_') continue;
+                    const bool wordBefore = at > 0 && std::isalnum(static_cast<unsigned char>(tail[at - 1]));
+                    const bool wordAfter =
+                        at + 1 < tail.size() && std::isalnum(static_cast<unsigned char>(tail[at + 1]));
+                    if (wordBefore && wordAfter) intrawordRuns++;
+                    if (at + 2 < tail.size() && tail[at + 1] == ' ' && tail[at + 2] != ' ') spacedRuns++;
+                }
+                std::string grown = source;
+                for (int step = 0; step < 3; step++) {
+                    if (step > 0 && !appendsInJs(grown)) break;
+                    grown += chunks[next() % chunks.size()];
+                    steps++;
+                    const StreamViewText after = streamViewText(grown, options, mode);
+                    if (!appendable(after, grown) && firstFailure.empty()) {
+                        firstFailure = jsonEscape(source) + " -> " + jsonEscape(grown);
+                    }
+                }
+            }
+        }
+        std::cout << "ℹ Stream view emphasis append: " << startStates << " appendable states, " << steps
+                  << " appends, " << spacedRuns << " spaced runs, " << intrawordRuns << " intraword runs"
+                  << std::endl;
+        TestRunner::assertEqual(
+            "", firstFailure, "Stream view: plain appends keep an emphasis tail unmodified and appendable"
+        );
+        TestRunner::assertTrue(
+            startStates > 1000 && spacedRuns > 100 && intrawordRuns > 100,
+            "Stream view: the emphasis append fuzz reaches spaced and intraword runs"
+        );
+    }
+
+    // One unfinished block of any size is repaired on every flush, inside a
+    // synchronous call, so the repair must stay linear in the tail.
+    static void testStreamViewRepairCost() {
+        struct Tail {
+            const char* name;
+            std::string unit;
+        };
+        const std::vector<Tail> tails = {
+            {"short lines", "a\n"},
+            {"list items", "- a\n"},
+            {"dash lines", "-\n"},
+            {"equals lines", "=\n"},
+            {"hash lines", "#\n"},
+            {"quote markers", "> "},
+            {"emphasis pairs", "*a* "},
+            {"bold openers", "**a "},
+            {"mixed emphasis openers", "*a_ "},
+            {"unclosed code spans", "`a "},
+            {"open brackets", "["},
+            {"unclosed inline links", "[a]("},
+            {"unclosed images", "![a]("},
+            {"bracket pairs", "[]"},
+            {"math openers", "$a "},
+            {"strikethrough openers", "~~a "},
+            {"pipes", "|a"},
+            {"equals pairs", "== "},
+            {"NUL bytes", std::string(1, '\0')},
+        };
+        constexpr size_t kSmall = 64 * 1024;
+        constexpr size_t kLarge = 1024 * 1024;
+        const ParserOptions options;
+        StreamViewOptions repairOff;
+        repairOff.repair = false;
+        const auto bestMs = [&](const std::string& source, const StreamViewOptions& view) {
+            double best = 0;
+            for (int run = 0; run < 3; run++) {
+                const auto start = std::chrono::steady_clock::now();
+                const StreamViewText shown = streamViewText(source, options, view);
+                const auto end = std::chrono::steady_clock::now();
+                const double ms = std::chrono::duration<double, std::milli>(end - start).count();
+                if (run == 0 || ms < best) best = ms;
+                if (shown.text.size() > 2 * source.size() + 64) return -1.0;
+            }
+            return best;
+        };
+        for (const auto& tail : tails) {
+            const std::string small = repeatToSize(tail.unit, kSmall) + "x";
+            const std::string large = repeatToSize(tail.unit, kLarge) + "x";
+            const double smallMs = bestMs(small, StreamViewOptions{});
+            const double largeMs = bestMs(large, StreamViewOptions{});
+            const double largeOffMs = bestMs(large, repairOff);
+            std::cout << "ℹ Perf stream repair " << tail.name << " 64KiB=" << smallMs << "ms 1MiB=" << largeMs
+                      << "ms 1MiB without repair=" << largeOffMs << "ms" << std::endl;
+            TestRunner::assertTrue(
+                smallMs >= 0 && largeMs >= 0 && largeOffMs >= 0,
+                std::string("Stream repair cost: ") + tail.name + " keeps the view near the size of the tail"
+            );
+#ifdef NITRO_MARKDOWN_PERF_ASSERTS
+            // 16 times the bytes: linear work is 16 times the time, quadratic
+            // work 256 times. The floor keeps timer noise out of the ratio.
+            TestRunner::assertTrue(
+                largeMs <= 64 * std::max(smallMs, 0.25),
+                std::string("Stream repair cost: ") + tail.name + " grows linearly with the tail"
+            );
+#endif
+        }
+    }
+
+    static void testStreamView() {
+        const std::vector<std::string> documents = {
+            "# Título 😀\n\nTexto **negrito** e `código` com 中文字 e [link](https://e.x/ü \"tí\").\n",
+            "```ts\nconst a = \"😀\";\n// é\n```\n\ntail",
+            "| a | b |\n|:--|--:|\n| 😀 | é |\n| 中 | `x` |\n\n- [ ] tarefa\n- [x] feita\n",
+            "> citação\n> - item 😀\n>   continuação\n\n$$\nx^2\n$$\n\n~~fim~~",
+            "line one  \nline two\\\nline three\r\nline four\rline five",
+            "intro\n\n![alt 😀](https://e.x/i.png \"t\")\n\n[label](https://e.x/ü)\n\nend\n",
+            // `*` and `_` runs in an unfinished paragraph, which can stay
+            // appendable.
+            "Texto **negrito** e *itálico* e __forte__ e _fraco_ e snake_case e a * b e 2*3*4 fim",
+            "- item **a** b\n- *c* d e\n\nfoo**bar**baz e _a_b_ e *a **b** c* e ***x*** y e **a*b**c",
+            "*a* b *\n* c\n**\nd __e__f_ g ** h * i",
+        };
+        std::vector<std::string> streams = documents;
+        for (auto& fragmentDocument : makeFragmentCorpus(120, 0x51EA)) {
+            streams.push_back(std::move(fragmentDocument));
+        }
+
+        const StreamBlockMode shownMode = StreamBlockMode::Progressive;
+        const StreamBlockMode hiddenMode = StreamBlockMode::Hidden;
+        const std::vector<StreamViewOptions> modes = {
+            StreamViewOptions{},
+            StreamViewOptions{hiddenMode, hiddenMode, hiddenMode},
+            StreamViewOptions{shownMode, shownMode, shownMode, false},
+            StreamViewOptions{hiddenMode, hiddenMode, hiddenMode, false},
+        };
+        // Chunks `MarkdownStream` adds in JS without a native parse when the
+        // text before them does not end with a line break.
+        const std::vector<std::string> plainChunks = {" word", "x", " ", "-", "=", "==", " =="};
+        MD4CParser parser;
+        size_t views = 0;
+        size_t modifiedViews = 0;
+        size_t throwing = 0;
+        size_t prefixMismatches = 0;
+        size_t unmodifiedMismatches = 0;
+        size_t modifiedMismatches = 0;
+        size_t offsetViolations = 0;
+        size_t plainTailWithChange = 0;
+        size_t addedCharacters = 0;
+        size_t appendableViews = 0;
+        size_t appendableEmphasisViews = 0;
+        size_t plainAppendChanges = 0;
+        std::string firstFailure;
+        const auto fail = [&firstFailure](const std::string& what, const std::string& source) {
+            if (firstFailure.empty()) firstFailure = what + ": " + jsonEscape(source);
+        };
+        for (const auto& document : streams) {
+            for (size_t optionSet = 0; optionSet < 4; optionSet++) {
+                ParserOptions options;
+                options.gfm = (optionSet & 1) == 0;
+                options.math = (optionSet & 2) == 0;
+                for (const auto& mode : modes) {
+                    std::string source;
+                    for (const auto& piece : splitByCodePoint(document)) {
+                        source += piece;
+                        views++;
+                        const OFF sourceLength = utf16LengthForTest(source);
+                        std::string json;
+                        const std::string error = errorOf([&]() {
+                            json = parseStreamViewToJson(source, sourceLength, options, mode);
+                        });
+                        if (!error.empty()) {
+                            throwing++;
+                            fail("threw " + error, source);
+                            continue;
+                        }
+                        const StreamViewText shown = streamViewText(source, options, mode);
+                        const size_t finished =
+                            finishedBlocksEnd(source, StreamBoundaryOptions{options.math, options.html});
+                        if (shown.modified && shown.text.compare(0, finished, source, 0, finished) != 0) {
+                            prefixMismatches++;
+                            fail("finished blocks changed", source);
+                        }
+                        if (shown.modified && shown.plainTail && !mode.repair) {
+                            plainTailWithChange++;
+                            fail("plain tail was changed", source);
+                        }
+                        if (shown.text.find("\xE2\x80\x8B") != std::string::npos) {
+                            addedCharacters++;
+                            fail("the view holds a zero-width space", source);
+                        }
+                        const std::string head = std::string("{\"modified\":") +
+                            (shown.modified ? "true" : "false") + ",\"plainTail\":" +
+                            (shown.plainTail ? "true" : "false") + ",\"openCodeFence\":" +
+                            (shown.openCodeFence ? "true" : "false") + ",\"document\":";
+                        if (!shown.modified) {
+                            if (json != head + parseMarkdownToJson(source, options) + "}") {
+                                unmodifiedMismatches++;
+                                fail("unmodified view differs from the plain parse", source);
+                            }
+                            const bool endsWithLineBreak = source.back() == '\n' || source.back() == '\r';
+                            if (shown.plainTail && !endsWithLineBreak &&
+                                endsInTextLeaf(*parser.parse(source, options), sourceLength)) {
+                                appendableViews++;
+                                if (source.find_first_of("*_", finished) != std::string::npos) {
+                                    appendableEmphasisViews++;
+                                }
+                                for (const auto& chunk : plainChunks) {
+                                    const StreamViewText next =
+                                        streamViewText(source + chunk, options, mode);
+                                    if (next.modified || !next.plainTail) {
+                                        plainAppendChanges++;
+                                        fail("a plain append of '" + chunk + "' changed the view", source);
+                                    }
+                                }
+                            }
+                            continue;
+                        }
+                        modifiedViews++;
+                        auto ast = parser.parse(shown.text, options);
+                        clampOffsetsToSource(*ast, sourceLength);
+                        if (json != head + serializeMarkdownJson(ast, shown.text.size(), true) + "}") {
+                            modifiedMismatches++;
+                            fail("modified view differs from a parse of its text", source);
+                        }
+                        const std::string violation = offsetViolation(ast, sourceLength, "");
+                        if (!violation.empty()) {
+                            offsetViolations++;
+                            fail("offsets " + violation, source);
+                        }
+                    }
+                }
+            }
+        }
+        TestRunner::assertEqual("", firstFailure, "Stream view: no failing stream state");
+        TestRunner::assertTrue(
+            throwing == 0,
+            "Stream view: every prefix of every stream parses (" + std::to_string(views) + " views)"
+        );
+        TestRunner::assertTrue(
+            modifiedViews > 100,
+            "Stream view: the streams exercise the filter (" + std::to_string(modifiedViews) +
+                " modified views)"
+        );
+        TestRunner::assertTrue(prefixMismatches == 0, "Stream view: finished blocks are shown as written");
+        TestRunner::assertTrue(
+            plainTailWithChange == 0,
+            "Stream view: without repair, a tail without syntax characters is never changed"
+        );
+        TestRunner::assertTrue(
+            addedCharacters == 0,
+            "Stream view: no view holds a zero-width space the source does not have"
+        );
+        TestRunner::assertTrue(
+            unmodifiedMismatches == 0,
+            "Stream view: an unmodified view is the plain parse, byte for byte"
+        );
+        TestRunner::assertTrue(
+            appendableViews > 100 && plainAppendChanges == 0,
+            "Stream view: plain text appended to an unmodified plain tail leaves the view as the source (" +
+                std::to_string(appendableViews) + " views, " + std::to_string(plainAppendChanges) + " changed)"
+        );
+        TestRunner::assertTrue(
+            appendableEmphasisViews > 100,
+            "Stream view: a tail with `*` or `_` runs stays appendable (" +
+                std::to_string(appendableEmphasisViews) + " views)"
+        );
+        TestRunner::assertTrue(
+            modifiedMismatches == 0,
+            "Stream view: a modified view is a parse of the shown text with clamped ranges"
+        );
+        TestRunner::assertTrue(
+            offsetViolations == 0,
+            "Stream view: ranges stay contained and inside the source"
+        );
+
+        const std::string header = "| a | b |\n";
+        const StreamViewText headerView = streamViewText(header, ParserOptions{}, StreamViewOptions{});
+        TestRunner::assertEqual(
+            "| a | b |\\n| --- | --- |",
+            jsonEscape(headerView.text),
+            "Stream view: a finished header row shows as a table"
+        );
+        auto unclamped = parser.parse(headerView.text, ParserOptions{});
+        TestRunner::assertTrue(
+            unclamped->end > utf16LengthForTest(header),
+            "Stream view: the added delimiter row is past the source before the clamp"
+        );
+        const std::string headerJson =
+            parseStreamViewToJson(header, utf16LengthForTest(header), ParserOptions{}, StreamViewOptions{});
+        TestRunner::assertTrue(
+            headerJson.rfind("{\"modified\":true,\"plainTail\":false,\"openCodeFence\":false,"
+                "\"document\":{\"type\":\"document\",\"beg\":0,\"end\":10,", 0) == 0 &&
+                headerJson.find("\"type\":\"table\"") != std::string::npos,
+            "Stream view: the table of a finished header row ends at the source length"
+        );
+
+        const std::string arriving = "| a | b |\n|-";
+        const StreamViewText arrivingView =
+            streamViewText(arriving, ParserOptions{}, StreamViewOptions{});
+        auto arrivingAst = parser.parse(arrivingView.text, ParserOptions{});
+        clampOffsetsToSource(*arrivingAst, utf16LengthForTest(arriving));
+        TestRunner::assertEqual(
+            "",
+            offsetViolation(arrivingAst, utf16LengthForTest(arriving), ""),
+            "Stream view: a table whose delimiter row is arriving keeps contained ranges"
+        );
+
+        const std::string atCap =
+            std::string(kMaxInputBytes - 8, 'a') + "\n\n| a |\n";
+        const StreamViewText atCapView = streamViewText(atCap, ParserOptions{}, StreamViewOptions{});
+        TestRunner::assertTrue(
+            atCap.size() == kMaxInputBytes && !atCapView.modified && atCapView.text.empty(),
+            "Stream view: a view that an added row would push over the input cap shows the source"
+        );
+
+        const std::string finished = "# Title\n\nA paragraph.\n\n";
+        TestRunner::assertEqual(
+            "{\"modified\":false,\"plainTail\":true,\"openCodeFence\":false,\"document\":" +
+                parseMarkdownToJson(finished, ParserOptions{}) + "}",
+            parseStreamViewToJson(finished, utf16LengthForTest(finished), ParserOptions{}, StreamViewOptions{}),
+            "Stream view: a finished document is the plain parse with a plain tail"
+        );
+
+        const std::string openFence = "a\n\n```js\nconst x = 1;";
+        TestRunner::assertTrue(
+            parseStreamViewToJson(openFence, utf16LengthForTest(openFence), ParserOptions{}, StreamViewOptions{})
+                .rfind("{\"modified\":false,\"plainTail\":false,\"openCodeFence\":true,", 0) == 0,
+            "Stream view: an open fence is reported and shown as written"
+        );
+
+        ParserOptions offsetsOff;
+        offsetsOff.sourceOffsets = false;
+        const std::string withoutOffsets =
+            parseStreamViewToJson(header, utf16LengthForTest(header), offsetsOff, StreamViewOptions{});
+        TestRunner::assertTrue(
+            withoutOffsets.find("\"beg\"") == std::string::npos &&
+                withoutOffsets.find("\"type\":\"table\"") != std::string::npos,
+            "Stream view: sourceOffsets false leaves the ranges out"
+        );
+
+        ParserOptions small;
+        small.maxInputLength = 4;
+        const std::string overLimit = "| a | b |\n";
+        TestRunner::assertEqual(
+            errorOf([&]() { (void)parseMarkdownToJson(overLimit, small); }),
+            errorOf([&]() {
+                (void)parseStreamViewToJson(overLimit, utf16LengthForTest(overLimit), small, StreamViewOptions{});
+            }),
+            "Stream view: a source over maxInputLength throws the plain parse error"
+        );
+        small.maxInputLength = 10;
+        TestRunner::assertEqual(
+            "",
+            errorOf([&]() {
+                (void)parseStreamViewToJson(overLimit, utf16LengthForTest(overLimit), small, StreamViewOptions{});
+            }),
+            "Stream view: a view longer than maxInputLength parses when the source is within it"
+        );
+
+        testStreamViewRepair();
+        testStreamViewEmphasisAppend();
+        testJsonEscapesEveryAsciiByte();
+
+        using ::margelo::nitro::Markdown::HybridMarkdownSession;
+        using NativeParserOptions = ::margelo::nitro::Markdown::ParserOptions;
+        using NativeViewRequest = ::margelo::nitro::Markdown::StreamViewRequest;
+        using NativeBlockMode = ::margelo::nitro::Markdown::StreamBlockMode;
+        const std::string streamed = "intro 😀\n\n| a | b |\n| - | - |\n| 1 | 2 |\n";
+        auto session = std::make_shared<HybridMarkdownSession>();
+        session->append(streamed);
+        TestRunner::assertEqual(
+            parseStreamViewToJson(streamed, utf16LengthForTest(streamed), ParserOptions{}, StreamViewOptions{}),
+            session->parseStreamView(NativeParserOptions{}, NativeViewRequest{}),
+            "Stream view: the session shows its buffer with the default modes"
+        );
+        TestRunner::assertEqual(
+            parseStreamViewToJson(
+                streamed,
+                utf16LengthForTest(streamed),
+                ParserOptions{},
+                StreamViewOptions{StreamBlockMode::Hidden, StreamBlockMode::Progressive, StreamBlockMode::Progressive}
+            ),
+            session->parseStreamView(
+                NativeParserOptions{},
+                NativeViewRequest{NativeBlockMode::HIDDEN, std::nullopt, std::nullopt, std::nullopt}
+            ),
+            "Stream view: the session maps a hidden table mode"
+        );
+        TestRunner::assertTrue(
+            session->parseStreamView(
+                NativeParserOptions{},
+                NativeViewRequest{NativeBlockMode::HIDDEN, std::nullopt, std::nullopt, std::nullopt}
+            ).find("\"type\":\"table\"") == std::string::npos &&
+                session->parseStreamView(NativeParserOptions{}, NativeViewRequest{})
+                    .find("\"type\":\"table\"") != std::string::npos,
+            "Stream view: an open table shows in progressive mode and waits in hidden mode"
+        );
+        session->reset("Hello **wor");
+        const std::string repairedJson = session->parseStreamView(NativeParserOptions{}, NativeViewRequest{});
+        const std::string asWrittenJson = session->parseStreamView(
+            NativeParserOptions{},
+            NativeViewRequest{std::nullopt, std::nullopt, std::nullopt, false}
+        );
+        TestRunner::assertTrue(
+            repairedJson.rfind("{\"modified\":true,", 0) == 0 &&
+                repairedJson.find("\"type\":\"bold\"") != std::string::npos &&
+                asWrittenJson.rfind("{\"modified\":false,", 0) == 0 &&
+                asWrittenJson.find("\"type\":\"bold\"") == std::string::npos,
+            "Stream view: the session repairs by default and maps repair false"
+        );
+        session->dispose();
+        TestRunner::assertEqual(
+            "HybridMarkdownSession is destroyed",
+            errorOf([&]() { (void)session->parseStreamView(NativeParserOptions{}, NativeViewRequest{}); }),
+            "Stream view: a disposed session refuses the call"
+        );
     }
 
     static void testSourceRangeContainment() {
@@ -4719,6 +5765,18 @@ private:
             }
         });
         threads.emplace_back([&]() {
+            const ::margelo::nitro::Markdown::ParserOptions options;
+            const ::margelo::nitro::Markdown::StreamViewRequest request;
+            for (size_t index = 0; index < 20; index++) {
+                try {
+                    const std::string view = session->parseStreamView(options, request);
+                    if (view.rfind("{\"modified\":false,", 0) != 0) unexpected.fetch_add(1);
+                } catch (...) {
+                    unexpected.fetch_add(1);
+                }
+            }
+        });
+        threads.emplace_back([&]() {
             for (size_t index = 0; index < 200; index++) {
                 try {
                     auto remove = session->addListener([](double, double) {});
@@ -4765,6 +5823,10 @@ private:
                         (void)session->append("chunk\n");
                         (void)session->getTextRange(0.0, 5.0);
                         (void)session->parse();
+                        (void)session->parseStreamView(
+                            ::margelo::nitro::Markdown::ParserOptions{},
+                            ::margelo::nitro::Markdown::StreamViewRequest{}
+                        );
                         remove();
                         succeeded.fetch_add(1);
                     } catch (const std::runtime_error& error) {

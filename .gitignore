@@ -122,6 +122,7 @@ temp/
 !CONTRIBUTING.md
 !CHANGELOG.md
 !SECURITY.md
+!/THIRD_PARTY_NOTICES.md
 !.github/release-*.md
 !docs/**/*.md
 !**/UPSTREAM.md

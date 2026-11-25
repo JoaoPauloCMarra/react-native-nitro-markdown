@@ -15,9 +15,12 @@
 
 // Forward declaration of `ParserOptions` to properly resolve imports.
 namespace margelo::nitro::Markdown { struct ParserOptions; }
+// Forward declaration of `StreamViewRequest` to properly resolve imports.
+namespace margelo::nitro::Markdown { struct StreamViewRequest; }
 
 #include <string>
 #include "ParserOptions.hpp"
+#include "StreamViewRequest.hpp"
 #include <functional>
 
 namespace margelo::nitro::Markdown {
@@ -59,6 +62,7 @@ namespace margelo::nitro::Markdown {
       virtual std::string getTextRange(double from, double to) = 0;
       virtual std::string parse() = 0;
       virtual std::string parseWithOptions(const ParserOptions& options) = 0;
+      virtual std::string parseStreamView(const ParserOptions& options, const StreamViewRequest& request) = 0;
       virtual std::function<void()> addListener(const std::function<void(double /* from */, double /* to */)>& listener) = 0;
       virtual void reset(const std::string& text) = 0;
       virtual double replace(double from, double to, const std::string& text) = 0;

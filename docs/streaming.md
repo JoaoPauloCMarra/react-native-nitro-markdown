@@ -97,6 +97,123 @@ UTF-8 bytes and are rejected even though they are only 4,000,000 UTF-16 units.
 If any plugin defines `beforeParse`, incremental AST reuse is disabled so the
 full pipeline runs correctly (see `sourceAstStatus` below).
 
+## Unfinished blocks
+
+While text is still arriving, the last block is often half-written: a table
+with one row, an image whose URL has not ended, an open `$$` block. Set
+`streaming` to `true` while the stream runs, and such a block is held back
+instead of showing as raw syntax. Set it to `false` when the stream ends.
+
+```tsx
+<MarkdownStream
+  session={session}
+  streaming={isStreaming}
+  streamingOptions={{ tables: "progressive", codeBlocks: "progressive", media: "hidden" }}
+/>
+```
+
+`streaming` is `false` by default, and then nothing in this section applies.
+
+| Block | `"progressive"` (default) | `"hidden"` |
+| --- | --- | --- |
+| `tables` | A finished header row shows as a table at once. A last row that is still arriving is left out. | The table waits until a blank line follows it. |
+| `codeBlocks` | An open fence shows as soon as its opening line has ended. | The fence waits for its closing line. |
+| `media` (a line that is only `![alt](url)` or `[label](url)`) | The line shows when its syntax is complete. | The line waits until a blank line or another block follows it. |
+
+Two rules have no option: an image or link line whose syntax is still open is
+always held back, and a `$$` block is held back until its closing `$$`.
+
+### Inline syntax
+
+Inside the last block, inline syntax that is still being typed shows the way
+the finished text will, not as raw markers:
+
+| While this arrives | The view shows |
+| --- | --- |
+| `Hello **wor` | **wor** in bold (the `**` is closed) |
+| `` a `co `` | `co` as code |
+| `a ~~gone` (with `gfm`) | "gone" struck through |
+| `see [the docs](https://e.x/pa` | "see the docs" as text; the link appears when its `)` arrives |
+| `see ![a cat](https://e.x/c` | "see"; the image appears when its `)` arrives |
+| `so $x^2 + y` (with `math`) | "so"; the formula appears when its `$` arrives |
+| `intro` then a new line with only `-`, `12.`, `#` or `==` | "intro"; the marker line appears when its content arrives |
+
+`streamingOptions={{ repair: false }}` turns this off, and then the last block
+shows its inline syntax as written. Repair is also off when
+`options={{ html: true }}`: the rules read `<` inside a line as text, which
+is not how the parser reads it then.
+
+Four rules differ from the module they come from. A `>` after a list marker
+(`- > 5`) is a quote, as in the finished document, and is not escaped. A line
+that starts with an HTML tag is not removed. A `==` or `||` after text is
+text, not the start of a highlight or a spoiler. No zero-width space is added
+under a line that could become a setext heading.
+
+Things to know:
+
+- Only the last block is affected. A block that a blank line has ended shows as
+  written.
+- Turn `streaming` off when the stream ends. A stream that ends inside a block
+  (an unclosed `$$`, a table in `"hidden"` mode with no blank line after it)
+  shows that block only then.
+- Inline syntax in a block that has ended is never changed, also when it is
+  not closed.
+- `text` (from `useMarkdownStreamState` or `renderMarkdown`) is always the
+  source. `sourceAst` is the view, so near the end the two can differ. The
+  `beg`/`end` of a node the view added (the placeholder delimiter row of a
+  table) stop at the source length. In the last block, after a place where
+  repair removed characters (the brackets of a link shown as text), `beg`/`end`
+  are positions in the view, not in `text`. Positions in finished blocks are
+  always positions in `text`.
+- `openCodeFence` in the stream state is `true` while the view ends inside an
+  open fence. A custom renderer can use it to wait with syntax highlighting.
+- With a `beforeParse` plugin, `<Markdown>` parses `text` itself, so `streaming`
+  has no effect.
+- A plain-text append still skips the parser, but only when nothing is held
+  back or repaired and the last block holds no Markdown syntax character other
+  than `*` and `_` runs, and does not end with one.
+- The block rules are ported from
+  [enriched-markdown](https://github.com/software-mansion/enriched-markdown)
+  (MIT). The inline rules are its C++ port of
+  [remend](https://github.com/vercel/streamdown/tree/main/packages/remend)
+  (Apache-2.0). See `THIRD_PARTY_NOTICES.md`.
+
+## Block groups
+
+Every flush gives the document a new list of top-level blocks. If each block
+were a direct child of one view, React and the native layout would walk all of
+them on every flush, and the cost would grow with the length of the document.
+The default document renderer therefore puts its top-level blocks in plain
+wrapper views of 32 blocks. A flush then touches one wrapper and the short list
+of wrappers.
+
+Measured on an Android emulator (arm64, release build, Hermes) as the time
+from `session.append` to the layout of the grown document, on a 240 KB
+document, median of 12 flushes, two runs per version:
+
+| Append | 0.16.4 | 0.17.0 |
+| --- | --- | --- |
+| A paragraph | 72.8 to 77.3 ms | 44.4 to 50.2 ms |
+| Plain text | 61.3 to 67.6 ms | 33.7 to 39.2 ms |
+
+These times include frame scheduling and the other changes in 0.17.0. They
+are emulator numbers and are indicative. At 80 KB both versions mostly stay at
+the frame floor of about 34 ms.
+
+Things to know:
+
+- The wrappers are part of the rendered tree from the first block. A block can
+  sit one device pixel higher or lower than without them; the content height
+  does not change.
+- The blocks stay direct children of the document view when `styles.document`
+  is set, when a top-level node is inline, or when you pass a custom `document`
+  renderer.
+- A document that changes between the two shapes while mounted (for example
+  when `styles.document` goes from unset to set) remounts all of its blocks.
+- The remaining flush time still grows with the document. For a very long
+  stream that is the primary scroll container, use
+  [`virtualize`](./usage.md#long-documents-virtualization).
+
 ## Large initial content
 
 The first render parses the full session content synchronously by default

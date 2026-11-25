@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Breaking changes are always listed first in each release section** so upgrades
 stay safe.
 
+## [0.17.0] - 2026-11-25
+
+### Breaking changes
+
+None.
+
+### Added
+
+- `MarkdownStream` and `useMarkdownStreamState` take `streaming` (default `false`). While it is `true`, a last block that has not finished arriving is held back instead of showing as raw syntax: an image or link line whose syntax is still open, a `$$` block without its closing `$$`, and the last row of a table while it is arriving. A finished table header row shows as a table at once. Set it to `false` when the stream ends.
+- With `streaming` on, inline syntax that is still being typed in the last block shows the way the finished text will: an open `**`, `*`, `` ` `` or `~~` shows closed, a link whose URL is arriving shows its label as text, an image or a `$` formula that has not closed waits, and a line that holds only a list, heading or underline marker waits for its content. `streamingOptions={{ repair: false }}` turns this off. It is also off with `options={{ html: true }}`.
+- `streamingOptions` (`tables`, `codeBlocks`, `media`, each `"progressive"` or `"hidden"`) picks whether a table, a fenced code block, and a complete image or link line show as they arrive or wait until they are finished.
+- `MarkdownStreamState.openCodeFence` is `true` while `streaming` is on and the view ends inside an open fenced code block. Code that builds a `MarkdownStreamState` object by hand (a test double) needs the new field.
+- `MarkdownSession.parseStreamView(options, request)`, the native call behind `streaming`, and the types `StreamViewRequest` and `StreamBlockMode`. A hand-written object typed as `MarkdownSession` now needs this method; `MarkdownStream` still works with a session object that does not have it.
+- The package ships `THIRD_PARTY_NOTICES.md`. The block rules are ported from enriched-markdown (MIT). The inline rules are its C++ port of remend (Apache-2.0); the licence text is in `cpp/repair/`.
+
+### Changed
+
+- With `streaming` on, a plain-text append skips the parser only when nothing is held back or repaired and the last block holds no Markdown syntax character other than `*` and `_` runs, and does not end with one. So text that arrives after a finished `**bold**` word in the last paragraph no longer costs a native parse. Measured on an Android emulator (arm64, release build, Hermes), a plain append to a 240 KB document whose last paragraph holds `**bold**`, median of 12 flushes: 50.4 to 51.9 ms before and 34.3 to 36.4 ms after (four runs before, two after), the same as with `streaming` off. With `streaming` off, nothing changes.
+- The native JSON writer is faster. On an Apple silicon Mac, writing the JSON tree of a parsed document went from 0.434 to 0.281 ms for 80 KB and from 4.46 to 2.84 ms for 800 KB (median of 7). A full parse plus JSON of a 180 KB document with source offsets went from 5.57 and 5.68 ms in 0.16.4 to 4.93 and 5.10 ms (two runs each); without source offsets the gain is within noise. On the Android emulator, the native parse call for a 240 KB document went from 3.2 to 3.6 ms in 0.16.4 to 2.7 to 3.0 ms (two runs each). The JSON output is the same, byte for byte.
+- The default document renderer now puts its top-level blocks in plain wrapper views of 32 blocks. Before, every block was a direct child of one view, so each `MarkdownStream` flush made React and the native layout walk the whole document. Measured on an Android emulator (arm64, release build, Hermes) as the time from `session.append` to the layout of the grown document, median of 12 flushes, two runs per version: on a 240 KB document (about 2,900 blocks), appending a paragraph took 72.8 to 77.3 ms in 0.16.4 and 44.4 to 50.2 ms in 0.17.0, and appending plain text took 61.3 to 67.6 ms and 33.7 to 39.2 ms. On 80 KB both versions mostly stay at the frame floor of about 34 ms; 0.16.4 had runs at 37.7 and 46.8 ms. These times include frame scheduling, so they move in steps of about 16.7 ms, and they compare whole releases, so they also include the faster JSON writer below. Emulator numbers are indicative.
+- What you can see of this change: the rendered tree has one more view level under the document view, which matters to a test that walks or snapshots the tree. A block can sit one device pixel higher or lower than in 0.16.4; the content height is the same.
+- The blocks stay direct children of the document view when `styles.document` is set (so a `gap` or `flexDirection` there keeps its meaning), when a top-level node is inline, or with a custom `document` renderer.
+
 ## [0.16.4] - 2026-11-18
 
 ### Breaking changes

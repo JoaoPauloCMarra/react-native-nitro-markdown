@@ -13,6 +13,7 @@ set(CPP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../cpp")
 file(GLOB MD4C_SOURCES "${CPP_ROOT}/nitromd/*.c")
 file(GLOB CORE_SOURCES "${CPP_ROOT}/core/*.cpp")
 file(GLOB BINDING_SOURCES "${CPP_ROOT}/bindings/*.cpp")
+file(GLOB REPAIR_SOURCES "${CPP_ROOT}/repair/*.cpp")
 list(FILTER CORE_SOURCES EXCLUDE REGEX ".*Test\\.cpp$")
 
 # Create the shared library with our sources
@@ -20,6 +21,7 @@ add_library(${PROJECT_NAME} SHARED
     ${MD4C_SOURCES}
     ${CORE_SOURCES}
     ${BINDING_SOURCES}
+    ${REPAIR_SOURCES}
     # JNI adapter
     src/main/cpp/cpp-adapter.cpp
 )

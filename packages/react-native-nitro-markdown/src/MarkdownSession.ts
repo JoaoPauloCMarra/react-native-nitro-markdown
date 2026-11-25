@@ -86,7 +86,9 @@ export function createMarkdownSession(initialText?: string): MarkdownSession {
           return Reflect.apply(value, target, args);
         } catch (error) {
           const errorSource =
-            prop === "parse" || prop === "parseWithOptions"
+            prop === "parse" ||
+            prop === "parseWithOptions" ||
+            prop === "parseStreamView"
               ? "parse"
               : "session";
           throw toMarkdownError(error, errorSource);
